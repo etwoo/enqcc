@@ -56,13 +56,13 @@ lex_one_token(struct string_view *pos, struct token **tok)
 	} else if (c == ';') {
 		cur->token_type = TOKEN_SEMICOLON;
 	} else if (isdigit(c)) {
-		cur->token_type = TOKEN_CONSTANT;
 		cur->val.data = pos->data;
 		do {
 			pos->data++;
 			pos->sz--;
 		} while (isdigit(*pos->data));
 		cur->val.sz = pos->data - cur->val.data;
+		cur->token_type = TOKEN_CONSTANT;
 		check(lex_peek_ok(pos, &cur->val));
 	} else if (isalpha(c) || c == '_') {
 		cur->val.data = pos->data;
