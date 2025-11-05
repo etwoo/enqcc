@@ -20,11 +20,11 @@ lex_alloc(struct token **tok)
 }
 
 static WARN_UNUSED result_t
-lex_alloc_stringview(struct string_view **dst, const struct string_view *src)
+lex_alloc_stringview(struct token *tok, const struct string_view *src)
 {
-	*dst = malloc(sizeof(**dst));
-	check_if(*dst == NULL, ERR_LEX_ALLOC);
-	memcpy(*dst, src, sizeof(**dst));
+	tok->value = malloc(sizeof(*tok->value));
+	check_if(tok->value == NULL, ERR_LEX_ALLOC);
+	memcpy(tok->value, src, sizeof(*tok->value));
 	return RESULT_OK;
 }
 
@@ -73,7 +73,7 @@ lex_one_token(struct string_view *pos, struct token **tok)
 			.data = start,
 			.sz = pos->data - start,
 		};
-		check(lex_alloc_stringview(&cur->value, &prefix));
+		check(lex_alloc_stringview(cur, &prefix));
 		check(lex_peek_ok(pos, cur->value));
 	} else if (isalpha(c) || c == '_') {
 		const char *start = pos->data;
@@ -93,7 +93,7 @@ lex_one_token(struct string_view *pos, struct token **tok)
 			cur->token_type = TOKEN_KEYWORD_INT;
 		} else {
 			cur->token_type = TOKEN_IDENTIFIER;
-			check(lex_alloc_stringview(&cur->value, &prefix));
+			check(lex_alloc_stringview(cur, &prefix));
 		}
 		check(lex_peek_ok(pos, &prefix));
 	} else {
