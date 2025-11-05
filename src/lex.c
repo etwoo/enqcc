@@ -74,7 +74,7 @@ lex_one_token(struct string_view *pos, struct token **tok)
 			.sz = pos->data - start,
 		};
 		check(lex_alloc_stringview(cur, &prefix));
-		check(lex_peek_ok(pos, cur->value));
+		check(lex_peek_ok(pos, &prefix));
 	} else if (isalpha(c) || c == '_') {
 		const char *start = pos->data;
 		do {
