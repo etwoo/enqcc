@@ -20,12 +20,11 @@ lex_alloc(struct token **tok)
 }
 
 static WARN_UNUSED result_t
-lex_alloc_stringview(struct string_view **sv, const char *data, size_t sz)
+lex_alloc_stringview(struct string_view **sv, const struct string_view *prefix)
 {
 	*sv = malloc(sizeof(**sv));
 	check_if(*sv == NULL, ERR_LEX_ALLOC);
-	(*sv)->data = data;
-	(*sv)->sz = sz;
+	memcpy(*sv, prefix, sizeof(**sv));
 	return RESULT_OK;
 }
 
@@ -70,8 +69,11 @@ lex_one_token(struct string_view *pos, struct token **tok)
 			pos->data++;
 			pos->sz--;
 		} while (isdigit(*pos->data));
-		const size_t sz = pos->data - start;
-		check(lex_alloc_stringview(&cur->value, start, sz));
+		const struct string_view prefix = {
+			.data = start,
+			.sz = pos->data - start,
+		};
+		check(lex_alloc_stringview(&cur->value, &prefix));
 		check(lex_peek_ok(pos, cur->value));
 	} else if (isalpha(c) || c == '_') {
 		const char *start = pos->data;
@@ -79,18 +81,21 @@ lex_one_token(struct string_view *pos, struct token **tok)
 			pos->data++;
 			pos->sz--;
 		} while (isalnum(*pos->data) || *pos->data == '_');
-		const size_t sz = pos->data - start;
-		if (0 == strncmp("return", start, sz)) {
+		const struct string_view prefix = {
+			.data = start,
+			.sz = pos->data - start,
+		};
+		if (0 == strncmp("return", prefix.data, prefix.sz)) {
 			cur->token_type = TOKEN_KEYWORD_RETURN;
-		} else if (0 == strncmp("void", start, sz)) {
+		} else if (0 == strncmp("void", prefix.data, prefix.sz)) {
 			cur->token_type = TOKEN_KEYWORD_VOID;
-		} else if (0 == strncmp("int", start, sz)) {
+		} else if (0 == strncmp("int", prefix.data, prefix.sz)) {
 			cur->token_type = TOKEN_KEYWORD_INT;
 		} else {
 			cur->token_type = TOKEN_IDENTIFIER;
-			check(lex_alloc_stringview(&cur->value, start, sz));
-			check(lex_peek_ok(pos, cur->value));
+			check(lex_alloc_stringview(&cur->value, &prefix));
 		}
+		check(lex_peek_ok(pos, &prefix));
 	} else {
 		return make_result(ERR_LEX_NO_MATCH, pos->data, pos->sz);
 	}
