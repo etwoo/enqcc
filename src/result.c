@@ -126,7 +126,7 @@ result_to_str(result_t r)
 	case ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR:
 		s = my_asprintf(
 			"Identifier, constant, or keyword \"%s\" followed by "
-		        "unexpected character '%c' during lex",
+			"unexpected character '%c' during lex",
 			r.msg,
 			r.num);
 		break;
