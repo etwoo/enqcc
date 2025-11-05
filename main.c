@@ -94,7 +94,7 @@ main(int argc, char *argv[])
 		}
 		break;
 	case ACTION_LEX_PARSE:
-		rc = result_to_status(RESULT_OK);
+		// rc = result_to_status(RESULT_OK);
 		break;
 	case ACTION_LEX_PARSE_ASM:
 		rc = result_to_status(RESULT_OK);
