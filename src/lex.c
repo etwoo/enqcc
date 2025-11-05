@@ -48,17 +48,11 @@ lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
 static WARN_UNUSED result_t
 lex_one_token(struct string_view *pos, struct token **tok)
 {
-	const char c = pos->data[0];
-	if (isspace(c)) {
-		pos->data++;
-		pos->sz--;
-		return RESULT_OK;
-	}
-
 	check(lex_alloc(tok));
 	assert(*tok != NULL);
 	struct token *cur = *tok;
 
+	const char c = pos->data[0];
 	if (c == '(') {
 		cur->token_type = TOKEN_PAREN_OPEN;
 	} else if (c == ')') {
@@ -117,7 +111,14 @@ lex_init(const char *src, struct token **tok)
 	check(tmpmap(fd, &code));
 
 	while (code.sz > 0) {
+		if (isspace(code.data[0])) {
+			code.data++;
+			code.sz--;
+			continue;
+		}
 		check(lex_one_token(&code, tok));
+		assert(*tok != NULL);
+		tok = &(*tok)->next;
 	}
 
 	return RESULT_OK;
