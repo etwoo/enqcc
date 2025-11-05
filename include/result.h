@@ -9,6 +9,9 @@
 typedef struct {
 	enum {
 		OK = 0,
+		ERR_LEX_OPEN_SOURCE_FILE,
+		ERR_LEX_ALLOC,
+		ERR_LEX_NO_MATCH,
 		ERR_TMPFILE,
 		ERR_TMPFILE_FILENO,
 		ERR_TMPFILE_DUP,

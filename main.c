@@ -93,7 +93,14 @@ main(int argc, char *argv[])
 		rc = result_to_status(RESULT_OK);
 		break;
 	case ACTION_LEX:
-		rc = result_to_status(RESULT_OK);
+		if (optind >= argc) {
+			to_stderr("Missing input file argument");
+		} else {
+			struct token *tok = NULL;
+			rc = result_to_status(lex_init(argv[optind], &tok));
+			debug_lex_output(tok);
+			lex_free(tok);
+		}
 		break;
 	case ACTION_LEX_PARSE:
 		rc = result_to_status(RESULT_OK);
