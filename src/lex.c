@@ -47,7 +47,7 @@ lex_init(const char *src, struct token **tok)
 	int fd = open(src, O_RDONLY);
 	check_if(fd < 0, ERR_LEX_OPEN_SOURCE_FILE, errno, src);
 
-	struct string_view code; // TODO: munmap in lex_free()
+	struct string_view code = {0}; // TODO: munmap in lex_free()
 	check(tmpmap(fd, &code));
 
 	const char *pos = code.data;
