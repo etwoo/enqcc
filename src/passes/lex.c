@@ -1,3 +1,5 @@
+#include "passes/lex.h"
+
 #include "passes.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
@@ -16,15 +18,6 @@ lex_alloc(struct token **tok)
 	*tok = malloc(sizeof(**tok));
 	check_if(*tok == NULL, ERR_LEX_ALLOC);
 	memset(*tok, 0, sizeof(**tok));
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-lex_alloc_stringview(struct token *tok, const struct string_view *src)
-{
-	tok->value = malloc(sizeof(*tok->value));
-	check_if(tok->value == NULL, ERR_LEX_ALLOC);
-	memcpy(tok->value, src, sizeof(*tok->value));
 	return RESULT_OK;
 }
 
@@ -64,38 +57,30 @@ lex_one_token(struct string_view *pos, struct token **tok)
 		cur->token_type = TOKEN_SEMICOLON;
 	} else if (isdigit(c)) {
 		cur->token_type = TOKEN_CONSTANT;
-		const char *start = pos->data;
+		cur->val.data = pos->data;
 		do {
 			pos->data++;
 			pos->sz--;
 		} while (isdigit(*pos->data));
-		const struct string_view prefix = {
-			.data = start,
-			.sz = pos->data - start,
-		};
-		check(lex_alloc_stringview(cur, &prefix));
-		check(lex_peek_ok(pos, &prefix));
+		cur->val.sz = pos->data - cur->val.data;
+		check(lex_peek_ok(pos, &cur->val));
 	} else if (isalpha(c) || c == '_') {
-		const char *start = pos->data;
+		cur->val.data = pos->data;
 		do {
 			pos->data++;
 			pos->sz--;
 		} while (isalnum(*pos->data) || *pos->data == '_');
-		const struct string_view prefix = {
-			.data = start,
-			.sz = pos->data - start,
-		};
-		if (0 == strncmp("return", prefix.data, prefix.sz)) {
+		cur->val.sz = pos->data - cur->val.data;
+		if (0 == strncmp("return", cur->val.data, cur->val.sz)) {
 			cur->token_type = TOKEN_KEYWORD_RETURN;
-		} else if (0 == strncmp("void", prefix.data, prefix.sz)) {
+		} else if (0 == strncmp("void", cur->val.data, cur->val.sz)) {
 			cur->token_type = TOKEN_KEYWORD_VOID;
-		} else if (0 == strncmp("int", prefix.data, prefix.sz)) {
+		} else if (0 == strncmp("int", cur->val.data, cur->val.sz)) {
 			cur->token_type = TOKEN_KEYWORD_INT;
 		} else {
 			cur->token_type = TOKEN_IDENTIFIER;
-			check(lex_alloc_stringview(cur, &prefix));
 		}
-		check(lex_peek_ok(pos, &prefix));
+		check(lex_peek_ok(pos, &cur->val));
 	} else {
 		return make_result(ERR_LEX_NO_MATCH, pos->data, pos->sz);
 	}
@@ -135,7 +120,6 @@ lex_free(struct token *tok)
 	while (tok != NULL) {
 		struct token *tmp = tok;
 		tok = tok->next;
-		free(tmp->value);
 		free(tmp);
 	}
 }
@@ -145,14 +129,10 @@ lex_debug_one(struct token *tok)
 {
 	switch (tok->token_type) {
 	case TOKEN_IDENTIFIER:
-		debug("IDENTIFIER %.*s",
-		      tok->value ? (int)tok->value->sz : 0,
-		      tok->value ? tok->value->data : "");
+		debug("IDENTIFIER %.*s", (int)tok->val.sz, tok->val.data);
 		break;
 	case TOKEN_CONSTANT:
-		debug("CONSTANT %.*s",
-		      tok->value ? (int)tok->value->sz : 0,
-		      tok->value ? tok->value->data : "");
+		debug("CONSTANT %.*s", (int)tok->val.sz, tok->val.data);
 		break;
 	case TOKEN_KEYWORD_RETURN:
 		debug("KEYWORD return");
