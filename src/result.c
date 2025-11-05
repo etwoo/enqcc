@@ -117,6 +117,86 @@ result_to_str(result_t r)
 	case OK:
 		s = strdup("Success");
 		break;
+	case ERR_CODEGEN_ALLOC:
+		s = strdup("Cannot allocate codegen element");
+		break;
+	case ERR_EMIT_FILE_OPEN:
+		s = my_asprintf("Error opening output file %s: %s",
+		                r.msg,
+		                my_strerror(r));
+		break;
+	case ERR_LEX_OPEN_SOURCE_FILE:
+		s = my_asprintf("Error opening source file %s: %s",
+		                r.msg,
+		                my_strerror(r));
+		break;
+	case ERR_LEX_ALLOC:
+		s = strdup("Cannot allocate token during lex");
+		break;
+	case ERR_LEX_NO_MATCH:
+		s = my_asprintf("No matching expression to lex: %s", r.msg);
+		break;
+	case ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR:
+		s = my_asprintf(
+			"Identifier, constant, or keyword \"%s\" followed by "
+			"unexpected character '%c' during lex",
+			r.msg,
+			r.num);
+		break;
+	case ERR_PARSE_ALLOC:
+		s = strdup("Cannot allocate ast node during parse");
+		break;
+	case ERR_PARSE_CONSTANT_EXPECT_TOKEN_CONSTANT:
+		s = strdup("Parsing constant expr expects TOKEN_CONSTANT");
+		break;
+	case ERR_PARSE_CONSTANT_STRTOLL:
+		s = my_asprintf(
+			"Parsing constant expr %s with strtoll() failed: %s",
+			r.msg,
+			my_strerror(r));
+		break;
+	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT:
+		s = strdup(
+			"Parsing function expects TOKEN_KEYWORD_INT in return "
+			"type position");
+		break;
+	case ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER:
+		s = strdup(
+			"Parsing function expects TOKEN_IDENTIFIER in function "
+			"name position");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN:
+		s = strdup("Parsing function expects TOKEN_PAREN_OPEN before "
+		           "argument list");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_KEYWORD_VOID:
+		s = strdup("Parsing function expects TOKEN_PAREN_VOID as "
+		           "argument list");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing function expects TOKEN_PAREN_CLOSE after "
+		           "argument list");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN:
+		s = strdup("Parsing function expects TOKEN_BRACE_OPEN before "
+		           "function body statement(s)");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE:
+		s = strdup("Parsing function expects TOKEN_BRACE_CLOSE after "
+		           "function body statement(s)");
+		break;
+	case ERR_PARSE_PROG_EXPECT_END:
+		s = strdup("Parsing program expects end of token stream after "
+		           "function definition(s)");
+		break;
+	case ERR_PARSE_STMT_EXPECT_TOKEN_KEYWORD_RETURN:
+		s = strdup("Parsing statement expects TOKEN_KEYWORD_RETURN "
+		           "before expression");
+		break;
+	case ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON:
+		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
+		           "expression");
+		break;
 	case ERR_TMPFILE:
 		s = my_asprintf("Error in tmpfile(): %s", my_strerror(r));
 		break;
