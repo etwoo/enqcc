@@ -58,6 +58,7 @@ lex_init(const char *src, struct token **tok)
 		}
 
 		check(lex_alloc(tok));
+		assert(*tok != NULL);
 		struct token *cur = *tok;
 
 		if (*pos == '(') {
