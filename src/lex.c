@@ -29,11 +29,82 @@ lex_alloc_stringview(struct string_view **sv, const char *data, size_t sz)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED bool
-lex_peek_ok(const char c)
+static WARN_UNUSED result_t
+lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
 {
-	return c == '(' || c == ')' || c == '{' || c == '}' || c == ';' ||
-	       isspace(c);
+	const char c = pos->data[0];
+	const bool ok = (isspace(c) || c == '(' || c == ')' || c == '{' ||
+	                 c == '}' || c == ';');
+	check_if(!ok,
+	         ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR,
+	         c,
+	         prefix->data,
+	         prefix->sz);
+	pos->data--; // allow caller's generic increment to handle last char
+	pos->sz++;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+lex_one_token(struct string_view *pos, struct token **tok)
+{
+	const char c = pos->data[0];
+	if (isspace(c)) {
+		pos->data++;
+		pos->sz--;
+		return RESULT_OK;
+	}
+
+	check(lex_alloc(tok));
+	assert(*tok != NULL);
+	struct token *cur = *tok;
+
+	if (c == '(') {
+		cur->token_type = TOKEN_PAREN_OPEN;
+	} else if (c == ')') {
+		cur->token_type = TOKEN_PAREN_CLOSE;
+	} else if (c == '{') {
+		cur->token_type = TOKEN_BRACE_OPEN;
+	} else if (c == '}') {
+		cur->token_type = TOKEN_BRACE_CLOSE;
+	} else if (c == ';') {
+		cur->token_type = TOKEN_SEMICOLON;
+	} else if (isdigit(c)) {
+		cur->token_type = TOKEN_CONSTANT;
+		const char *start = pos->data;
+		do {
+			pos->data++;
+			pos->sz--;
+		} while (isdigit(*pos->data));
+		const size_t sz = pos->data - start;
+		check(lex_alloc_stringview(&cur->value, start, sz));
+		check(lex_peek_ok(pos, cur->value));
+	} else if (isalpha(c) || c == '_') {
+		const char *start = pos->data;
+		do {
+			pos->data++;
+			pos->sz--;
+		} while (isalnum(*pos->data) || *pos->data == '_');
+		const size_t sz = pos->data - start;
+		if (0 == strncmp("return", start, sz)) {
+			cur->token_type = TOKEN_KEYWORD_RETURN;
+		} else if (0 == strncmp("void", start, sz)) {
+			cur->token_type = TOKEN_KEYWORD_VOID;
+		} else if (0 == strncmp("int", start, sz)) {
+			cur->token_type = TOKEN_KEYWORD_INT;
+		} else {
+			cur->token_type = TOKEN_IDENTIFIER;
+			check(lex_alloc_stringview(&cur->value, start, sz));
+			check(lex_peek_ok(pos, cur->value));
+		}
+	} else {
+		return make_result(ERR_LEX_NO_MATCH, pos->data, pos->sz);
+	}
+
+	pos->data++;
+	pos->sz--;
+
+	return RESULT_OK;
 }
 
 result_t
@@ -45,72 +116,8 @@ lex_init(const char *src, struct token **tok)
 	struct string_view code = {0}; // TODO: munmap in lex_free()
 	check(tmpmap(fd, &code));
 
-	const char *pos = code.data;
-	while (pos < code.data + code.sz) {
-		if (isspace(*pos)) {
-			++pos;
-			continue;
-		}
-
-		check(lex_alloc(tok));
-		assert(*tok != NULL);
-		struct token *cur = *tok;
-
-		if (*pos == '(') {
-			cur->token_type = TOKEN_PAREN_OPEN;
-		} else if (*pos == ')') {
-			cur->token_type = TOKEN_PAREN_CLOSE;
-		} else if (*pos == '{') {
-			cur->token_type = TOKEN_BRACE_OPEN;
-		} else if (*pos == '}') {
-			cur->token_type = TOKEN_BRACE_CLOSE;
-		} else if (*pos == ';') {
-			cur->token_type = TOKEN_SEMICOLON;
-		} else if (isdigit(*pos)) {
-			cur->token_type = TOKEN_CONSTANT;
-			const char *start = pos;
-			do {
-				++pos;
-			} while (isdigit(*pos));
-			const size_t sz = pos - start;
-			check(lex_alloc_stringview(&cur->value, start, sz));
-			check_if(!lex_peek_ok(*pos),
-			         ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR,
-			         *pos,
-			         start,
-			         sz);
-			--pos; // allow generic increment to handle last char
-		} else if (isalpha(*pos) || *pos == '_') {
-			const char *start = pos;
-			do {
-				++pos;
-			} while (isalnum(*pos) || *pos == '_');
-			const size_t sz = pos - start;
-			if (0 == strncmp("return", start, sz)) {
-				cur->token_type = TOKEN_KEYWORD_RETURN;
-			} else if (0 == strncmp("void", start, sz)) {
-				cur->token_type = TOKEN_KEYWORD_VOID;
-			} else if (0 == strncmp("int", start, sz)) {
-				cur->token_type = TOKEN_KEYWORD_INT;
-			} else {
-				cur->token_type = TOKEN_IDENTIFIER;
-				check(lex_alloc_stringview(&cur->value,
-				                           start,
-				                           sz));
-			}
-			check_if(!lex_peek_ok(*pos),
-			         ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR,
-			         *pos,
-			         start,
-			         sz);
-			--pos; // allow generic increment to handle last char
-		} else {
-			const size_t remaining = code.sz - (pos - code.data);
-			return make_result(ERR_LEX_NO_MATCH, pos, remaining);
-		}
-
-		tok = &cur->next;
-		++pos;
+	while (code.sz > 0) {
+		check(lex_one_token(&code, tok));
 	}
 
 	return RESULT_OK;
