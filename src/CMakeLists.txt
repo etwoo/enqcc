@@ -1,3 +1,4 @@
+add_subdirectory(passes)
 add_subdirectory(sys)
 
 target_sources(compiler PRIVATE
