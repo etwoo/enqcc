@@ -1,0 +1,36 @@
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  cppcoreguidelines-*,
+  hicpp-*,
+  misc-*,
+  -misc-include-cleaner,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -readability-identifier-length,
+
+CheckOptions:
+  - {key: bugprone-easily-swappable-parameters.MinimumLength, value: 3}
+  - {key: bugprone-reserved-identifier.AllowedIdentifiers, value: "__llvm_profile_|_GNU_SOURCE"}
+  - {key: readability-function-cognitive-complexity.IgnoreMacros, value: true}
+  - {key: readability-identifier-naming.EnumCase, value: lower_case}
+  - {key: readability-identifier-naming.EnumConstantCase, value: UPPER_CASE}
+  - {key: readability-identifier-naming.FunctionCase, value: lower_case}
+  - {key: readability-identifier-naming.FunctionIgnoredRegexp, value: "__llvm_profile_"}
+  - {key: readability-identifier-naming.GlobalConstantCase, value: UPPER_CASE}
+  - {key: readability-identifier-naming.GlobalVariableCase, value: camelBack}
+  - {key: readability-identifier-naming.GlobalVariablePrefix, value: g}
+  - {key: readability-identifier-naming.ParameterCase, value: lower_case}
+  - {key: readability-identifier-naming.StructCase, value: lower_case}
+  - {key: readability-identifier-naming.TypedefCase, value: lower_case}
+  - {key: readability-identifier-naming.UnionCase, value: lower_case}
+  - {key: readability-identifier-naming.VariableCase, value: lower_case}
+
+# Turn all the warnings from the checks above into errors.
+WarningsAsErrors: '*'
+# Check first-party (non-system, non-vendored) headers.
+HeaderFilterRegex: '.*'
+SystemHeaders: false

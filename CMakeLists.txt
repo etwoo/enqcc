@@ -1,0 +1,125 @@
+cmake_minimum_required(VERSION 3.25)
+project(enqcc)
+
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+include(AddExternalPackages)
+
+add_external_packages()
+
+add_executable(enqcc)
+target_sources(enqcc PUBLIC main.c)
+target_link_libraries(enqcc PRIVATE compiler my_cflags sanitizers)
+
+add_library(compiler)
+target_include_directories(compiler PUBLIC include PRIVATE src)
+target_link_libraries(compiler PRIVATE my_cflags)
+add_subdirectory(src)
+
+if (BUILD_TESTING)
+	# allow test code to call internal C APIs through an INTERFACE
+	add_library(compiler-internals INTERFACE)
+	target_include_directories(compiler-internals INTERFACE src)
+
+	include(CTest)
+	add_subdirectory(tests)
+endif (BUILD_TESTING)
+
+#
+# Set up a custom `fmt` target that runs clang-format.
+#
+# I would prefer to use the builtin cmake integration instead:
+#
+#     set(CMAKE_C_CPPLINT clang-format -Werror --dry-run)
+#
+# ... but unfortunately, this only runs clang-format on *.c files, while
+# ignoring *.h files! If this cmake behavior ever changes, we could probably
+# remove the following custom code and allow clang-format to run implicitly as
+# part of the --build step.
+#
+
+find_program(FORMATTER clang-format)
+
+add_custom_target(fmt COMMAND
+	find ${PROJECT_SOURCE_DIR}
+	-name *.[ch] ! -path ${PROJECT_SOURCE_DIR}/build/*
+	-exec ${FORMATTER} -Werror --dry-run {} +
+	VERBATIM USES_TERMINAL
+)
+
+#
+# Figure out which options the compiler supports, and enable them.
+#
+
+add_library(my_cflags INTERFACE)
+target_compile_features(my_cflags INTERFACE c_std_11)
+
+target_compile_options(my_cflags INTERFACE
+	-Wall
+	-Wextra
+	-pedantic
+	-pipe
+)
+
+if (BUILD_COVERAGE)
+	include(CheckCodeCoverage)
+	check_code_coverage(my_cflags)
+endif (BUILD_COVERAGE)
+
+include(CheckHardened)
+check_hardened(my_cflags)
+
+include(CheckTargetCompileOptions)
+check_target_compile_options(my_cflags -Wimplicit-fallthrough=5)
+
+# Enable some of the options recommended by https://kristerw.blogspot.com
+check_target_compile_options(my_cflags -Wduplicated-branches)
+check_target_compile_options(my_cflags -Wduplicated-cond)
+check_target_compile_options(my_cflags -Wformat=2)
+check_target_compile_options(my_cflags -Wformat-signedness)
+check_target_compile_options(my_cflags -Wlogical-op)
+check_target_compile_options(my_cflags -Wshadow)
+
+# https://developers.redhat.com/blog/2020/03/26/static-analysis-in-gcc-10
+check_target_compile_options(my_cflags -fanalyzer)
+
+# Enable some options copied from the Linux kernel Makefile
+check_target_compile_options(my_cflags -Wmissing-prototypes)
+check_target_compile_options(my_cflags -Wstrict-prototypes)
+
+#
+# Enable sanitizers, except TSan (code currently runs single-threaded)
+#
+
+add_library(sanitizers INTERFACE)
+
+include(CheckSanitizer)
+check_sanitizer(sanitizers -fsanitize=address asan CFLAG_ASAN)
+if (NOT CFLAG_ASAN)
+	check_sanitizer(sanitizers -fsanitize=leak lsan CFLAG_LSAN)
+endif (NOT CFLAG_ASAN)
+check_sanitizer(sanitizers -fsanitize=undefined ubsan CFLAG_UBSAN)
+
+#
+# Quiet warnings under clang like:
+#
+# warning: token pasting of ',' and __VA_ARGS__ .. a GNU extension
+#
+# -pedantic enables the -Wgnu-zero-variadic-macro-arguments diagnostic and
+# detects (mis)use of C language features outside of this project's c_std_*
+# version (including unintended GNU-isms). All that said, we accept with this
+# specific GNU-ism and so suppress this particular warning.
+#
+# warning: -Wl,-z,relro: 'linker' input unused [-Wunused-command-line-argument]
+#
+# We could avoid these warnings entirely by moving these options from CFLAGS TO
+# LDFLAGS, but -Wl,_ seems the most common idiom for providing linker flags (at
+# least going by blog posts online). As a result, I prefer to use -Wl,_ in
+# CFLAGS for ease of future googling.
+#
+
+if (CMAKE_C_COMPILER_ID STREQUAL "Clang")
+	target_compile_options(my_cflags INTERFACE
+		-Wno-gnu-zero-variadic-macro-arguments
+		-Qunused-arguments
+	)
+endif (CMAKE_C_COMPILER_ID STREQUAL "Clang")
