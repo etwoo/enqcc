@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h> /* for memset() */
 
-static result_t
+static WARN_UNUSED result_t
 lex_alloc(struct token **tok)
 {
 	*tok = malloc(sizeof(**tok));
@@ -18,7 +18,7 @@ lex_alloc(struct token **tok)
 	return RESULT_OK;
 }
 
-static result_t
+static WARN_UNUSED result_t
 lex_alloc_stringview(struct string_view **sv, const char *data, size_t sz)
 {
 	*sv = malloc(sizeof(**sv));
