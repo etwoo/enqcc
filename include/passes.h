@@ -3,7 +3,7 @@
 
 #include "result.h"
 
-typedef struct {
+struct token {
 	enum {
 		TOKEN_IDENTIFIER,
 		TOKEN_CONSTANT,
@@ -18,7 +18,7 @@ typedef struct {
 	} token_type;
 	struct string_view *value;
 	struct token *next;
-} token;
+};
 
 result_t lex_init(const char *src, struct token **tok)
 	__attribute__((warn_unused_result));

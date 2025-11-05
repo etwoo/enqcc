@@ -1,3 +1,4 @@
+#include "passes.h"
 #include "result.h"
 
 #include <errno.h>

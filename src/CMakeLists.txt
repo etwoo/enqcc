@@ -1,6 +1,7 @@
 add_subdirectory(sys)
 
 target_sources(compiler PRIVATE
+	lex.c
 	result.c
 )
 
