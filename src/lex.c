@@ -32,13 +32,8 @@ lex_alloc_stringview(struct string_view **sv, const char *data, size_t sz)
 static WARN_UNUSED bool
 lex_peek_ok(const char c)
 {
-	if (isspace(c)) {
-		return true;
-	} else if (c == '(' || c == ')' || c == '{' || c == '}' || c == ';') {
-		return true;
-	} else {
-		return false;
-	}
+	return c == '(' || c == ')' || c == '{' || c == '}' || c == ';' ||
+	       isspace(c);
 }
 
 result_t
@@ -98,10 +93,10 @@ lex_init(const char *src, struct token **tok)
 			} else if (0 == strncmp("int", start, sz)) {
 				cur->token_type = TOKEN_KEYWORD_INT;
 			} else {
+				cur->token_type = TOKEN_IDENTIFIER;
 				check(lex_alloc_stringview(&cur->value,
 				                           start,
 				                           sz));
-				cur->token_type = TOKEN_IDENTIFIER;
 			}
 			check_if(!lex_peek_ok(*pos),
 			         ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR,
