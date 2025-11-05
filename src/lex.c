@@ -20,11 +20,11 @@ lex_alloc(struct token **tok)
 }
 
 static WARN_UNUSED result_t
-lex_alloc_stringview(struct string_view **sv, const struct string_view *prefix)
+lex_alloc_stringview(struct string_view **dst, const struct string_view *src)
 {
-	*sv = malloc(sizeof(**sv));
-	check_if(*sv == NULL, ERR_LEX_ALLOC);
-	memcpy(*sv, prefix, sizeof(**sv));
+	*dst = malloc(sizeof(**dst));
+	check_if(*dst == NULL, ERR_LEX_ALLOC);
+	memcpy(*dst, src, sizeof(**dst));
 	return RESULT_OK;
 }
 
