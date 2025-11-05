@@ -145,12 +145,14 @@ lex_debug_one(struct token *tok)
 {
 	switch (tok->token_type) {
 	case TOKEN_IDENTIFIER:
-		assert(tok->value != NULL);
-		debug("IDENTIFIER %.*s", (int)tok->value->sz, tok->value->data);
+		debug("IDENTIFIER %.*s",
+		      tok->value ? (int)tok->value->sz : 0,
+		      tok->value ? tok->value->data : "");
 		break;
 	case TOKEN_CONSTANT:
-		assert(tok->value != NULL);
-		debug("CONSTANT %.*s", (int)tok->value->sz, tok->value->data);
+		debug("CONSTANT %.*s",
+		      tok->value ? (int)tok->value->sz : 0,
+		      tok->value ? tok->value->data : "");
 		break;
 	case TOKEN_KEYWORD_RETURN:
 		debug("KEYWORD return");
