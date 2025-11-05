@@ -1,0 +1,74 @@
+image: archlinux/archlinux:base-devel
+
+variables:
+  PACKAGE_CMD: "pacman --noconfirm --needed -Sy"
+  PACKAGE_DEFAULT: "clang cmake git"
+  PACKAGE_PER_JOB: ""
+
+.build_dependencies: &build_dependencies
+  before_script:
+    - ${PACKAGE_CMD} ${PACKAGE_DEFAULT} ${PACKAGE_PER_JOB}
+
+build:gcc:
+  <<: *build_dependencies
+  stage: build
+  script:
+    - cmake --preset default -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+    - cmake --build --preset default
+    - ctest --preset default
+  artifacts:
+    when: always
+    reports:
+      junit: ./build/junit.xml
+
+build:clang:
+  <<: *build_dependencies
+  stage: build
+  script:
+    - cmake --preset clang -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+    - cmake --build --preset default
+    - ctest --preset default
+  artifacts:
+    when: always
+    reports:
+      junit: ./build/junit.xml
+
+build:clang-coverage:
+  <<: *build_dependencies
+  stage: build
+  variables:
+    PACKAGE_PER_JOB: "llvm python"
+  script:
+    - cmake --preset coverage -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+    - cmake --build --preset default
+    - ctest --preset default
+    - ./scripts/coverage.sh -E main.c coverage.profraw ./build/coverage.xml
+  coverage: '/^TOTAL.*\s+([\d\.]+\%)$/'
+  artifacts:
+    when: always
+    reports:
+      junit: ./build/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: ./build/coverage.xml
+
+lint:clang-format:
+  <<: *build_dependencies
+  stage: build
+  script:
+    - cmake --preset default
+    - cmake --build --preset default --target fmt
+
+lint:clang-tidy:
+  <<: *build_dependencies
+  stage: build
+  script:
+    - cmake --preset clang -DCMAKE_C_CLANG_TIDY=clang-tidy
+    - cmake --build --preset default
+
+lint:shell:
+  stage: build
+  before_script:
+    - ${PACKAGE_CMD} git shellcheck
+  script:
+    - git ls-files -z '**.sh' | xargs -0 shellcheck --shell=bash
