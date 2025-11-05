@@ -135,7 +135,7 @@ lex_free(struct token *tok)
 }
 
 static void
-debug_lex_one(struct token *tok)
+lex_debug_one(struct token *tok)
 {
 	switch (tok->token_type) {
 	case TOKEN_IDENTIFIER:
@@ -174,10 +174,10 @@ debug_lex_one(struct token *tok)
 }
 
 void
-debug_lex_output(struct token *tok)
+lex_debug_print(struct token *tok)
 {
 	while (tok != NULL) {
-		debug_lex_one(tok);
+		lex_debug_one(tok);
 		tok = tok->next;
 	}
 }

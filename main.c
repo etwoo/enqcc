@@ -89,7 +89,7 @@ main(int argc, char *argv[])
 		} else {
 			struct token *tok = NULL;
 			rc = result_to_status(lex_init(argv[optind], &tok));
-			debug_lex_output(tok);
+			lex_debug_print(tok);
 			lex_free(tok);
 		}
 		break;
