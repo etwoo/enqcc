@@ -135,6 +135,7 @@ lex_free(struct token *tok)
 	while (tok != NULL) {
 		struct token *tmp = tok;
 		tok = tok->next;
+		free(tmp->value);
 		free(tmp);
 	}
 }
