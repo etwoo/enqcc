@@ -123,6 +123,13 @@ result_to_str(result_t r)
 	case ERR_LEX_NO_MATCH:
 		s = my_asprintf("No matching expression to lex: %s", r.msg);
 		break;
+	case ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR:
+		s = my_asprintf(
+			"Identifier, constant, or keyword \"%s\" followed by "
+		        "unexpected character '%c' during lex",
+			r.msg,
+			r.num);
+		break;
 	case ERR_LEX_ALLOC:
 		s = strdup("Cannot allocate token during lex");
 		break;

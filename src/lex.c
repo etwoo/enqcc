@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h> /* for memset() */
 
@@ -26,6 +27,18 @@ lex_alloc_stringview(struct string_view **sv, const char *data, size_t sz)
 	(*sv)->data = data;
 	(*sv)->sz = sz;
 	return RESULT_OK;
+}
+
+static WARN_UNUSED bool
+lex_peek_ok(const char c)
+{
+	if (isspace(c)) {
+		return true;
+	} else if (c == '(' || c == ')' || c == '{' || c == '}' || c == ';') {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 result_t
@@ -64,15 +77,19 @@ lex_init(const char *src, struct token **tok)
 				++pos;
 			} while (isdigit(*pos));
 			const size_t sz = pos - start;
-			--pos; // allow generic increment to handle last char
 			check(lex_alloc_stringview(&cur->value, start, sz));
+			check_if(!lex_peek_ok(*pos),
+			         ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR,
+			         *pos,
+			         start,
+			         sz);
+			--pos; // allow generic increment to handle last char
 		} else if (isalpha(*pos) || *pos == '_') {
 			const char *start = pos;
 			do {
 				++pos;
 			} while (isalnum(*pos) || *pos == '_');
 			const size_t sz = pos - start;
-			--pos; // allow generic increment to handle last char
 			if (0 == strncmp("return", start, sz)) {
 				cur->token_type = TOKEN_KEYWORD_RETURN;
 			} else if (0 == strncmp("void", start, sz)) {
@@ -85,6 +102,12 @@ lex_init(const char *src, struct token **tok)
 				                           sz));
 				cur->token_type = TOKEN_IDENTIFIER;
 			}
+			check_if(!lex_peek_ok(*pos),
+			         ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR,
+			         *pos,
+			         start,
+			         sz);
+			--pos; // allow generic increment to handle last char
 		} else {
 			const size_t remaining = code.sz - (pos - code.data);
 			return make_result(ERR_LEX_NO_MATCH, pos, remaining);
