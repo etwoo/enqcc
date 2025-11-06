@@ -124,6 +124,12 @@ lex_free(struct token *tok)
 	}
 }
 
+void
+lex_cleanup(struct token **tok)
+{
+	lex_free(*tok);
+}
+
 static void
 lex_debug_one(struct token *tok)
 {
