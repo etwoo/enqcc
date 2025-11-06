@@ -32,33 +32,31 @@ emit_asm_operand(const struct asm_operand *operand, int fd)
 }
 
 void
-emit_asm(const struct assembly *g, enum platform plat, int fd)
+emit_asm(const struct assembly *cg, enum platform plat, int fd)
 {
-	if (g == NULL) {
+	if (cg == NULL) {
 		return;
 	}
 
-	const char *fp = plat == PLATFORM_MACOS ? MACOS_FUNC_PREFIX : "";
-	const struct string_view *str = NULL;
-	const struct asm_op *ops = NULL;
+	const char *fprefix = plat == PLATFORM_MACOS ? MACOS_FUNC_PREFIX : "";
 
-	switch (g->statement_type) {
-	case ASM_PROGRAM:
-		dprintf(fd, "\t.globl %smain\n", fp);
-		emit_asm(&((const struct asm_program *)g)->function.base,
-		         plat,
-		         fd);
+	switch (cg->statement_type) {
+	case ASM_PROGRAM: {
+		dprintf(fd, "\t.globl %smain\n", fprefix);
+		const struct asm_program *p = (const struct asm_program *)cg;
+		emit_asm(&p->function.base, plat, fd);
 		break;
-	case ASM_FUNCTION:
-		str = &((const struct asm_function *)g)->identifier;
-		dprintf(fd, "%s%.*s:\n", fp, (int)str->sz, str->data);
-		emit_asm(&((const struct asm_function *)g)->ops->base,
-		         plat,
-		         fd);
+	}
+	case ASM_FUNCTION: {
+		const struct asm_function *f = (const struct asm_function *)cg;
+		const struct string_view *str = &f->identifier;
+		dprintf(fd, "%s%.*s:\n", fprefix, (int)str->sz, str->data);
+		emit_asm(&f->ops->base, plat, fd);
 		break;
-	case ASM_OP_MOV:
+	}
+	case ASM_OP_MOV: {
 		dprintf(fd, "\t%s ", STR_OP_MOV);
-		ops = (const struct asm_op *)g;
+		const struct asm_op *ops = (const struct asm_op *)cg;
 		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
 			if (i > 0) {
 				dprintf(fd, ", ");
@@ -68,9 +66,10 @@ emit_asm(const struct assembly *g, enum platform plat, int fd)
 		dprintf(fd, "\n");
 		emit_asm(&ops->next->base, plat, fd);
 		break;
+	}
 	case ASM_OP_RET:
 		dprintf(fd, "\t%s\n", STR_OP_RET);
-		ops = (const struct asm_op *)g;
+		const struct asm_op *ops = (const struct asm_op *)cg;
 		emit_asm(&ops->next->base, plat, fd);
 		break;
 	}

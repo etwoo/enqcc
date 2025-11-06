@@ -21,17 +21,17 @@ void parse_debug_print(const struct ast *a, size_t indent);
 
 struct assembly;
 
-result_t codegen_init(struct ast *a, struct assembly **generated)
+result_t codegen_init(struct ast *a, struct assembly **cg)
 	__attribute__((warn_unused_result));
-void codegen_free(struct assembly *generated);
-void codegen_cleanup(struct assembly **generated);
-void codegen_debug_print(const struct assembly *g);
+void codegen_free(struct assembly *cg);
+void codegen_cleanup(struct assembly **cg);
+void codegen_debug_print(const struct assembly *cg);
 
 enum platform {
 	PLATFORM_MACOS,
 	PLATFORM_LINUX,
 };
 
-void emit_asm(const struct assembly *g, enum platform plat, int fd);
+void emit_asm(const struct assembly *cg, enum platform plat, int fd);
 
 #endif

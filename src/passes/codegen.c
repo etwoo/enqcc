@@ -59,23 +59,23 @@ codegen_program(struct ast_program *a, struct asm_program *dst)
 }
 
 result_t
-codegen_init(struct ast *a, struct assembly **generated)
+codegen_init(struct ast *a, struct assembly **cg)
 {
 	struct asm_program *program = NULL;
 	codegen_alloc(program);
 	program->base.statement_type = ASM_PROGRAM;
-	*generated = &program->base;
+	*cg = &program->base;
 
 	check(codegen_program((struct ast_program *)a, program));
 	return RESULT_OK;
 }
 
 void
-codegen_free(struct assembly *generated)
+codegen_free(struct assembly *cg)
 {
-	if (generated != NULL) {
-		assert(generated->statement_type == ASM_PROGRAM);
-		struct asm_program *program = (struct asm_program *)generated;
+	if (cg != NULL) {
+		assert(cg->statement_type == ASM_PROGRAM);
+		struct asm_program *program = (struct asm_program *)cg;
 
 		struct asm_op *ops = program->function.ops;
 		while (ops != NULL) {
@@ -84,14 +84,14 @@ codegen_free(struct assembly *generated)
 			free(tmp);
 		}
 
-		free(generated);
+		free(cg);
 	}
 }
 
 void
-codegen_cleanup(struct assembly **generated)
+codegen_cleanup(struct assembly **cg)
 {
-	codegen_free(*generated);
+	codegen_free(*cg);
 }
 
 static void
@@ -108,38 +108,40 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 }
 
 void
-codegen_debug_print(const struct assembly *g)
+codegen_debug_print(const struct assembly *cg)
 {
-	if (g == NULL) {
+	if (cg == NULL) {
 		return;
 	}
 
-	const struct string_view *str = NULL;
-	const struct asm_op *ops = NULL;
-	switch (g->statement_type) {
-	case ASM_PROGRAM:
+	switch (cg->statement_type) {
+	case ASM_PROGRAM: {
 		debug("PROGRAM");
-		codegen_debug_print(
-			&((const struct asm_program *)g)->function.base);
+		const struct asm_program *p = (const struct asm_program *)cg;
+		codegen_debug_print(&p->function.base);
 		break;
-	case ASM_FUNCTION:
-		str = &((const struct asm_function *)g)->identifier;
+	}
+	case ASM_FUNCTION: {
+		const struct asm_function *f = (const struct asm_function *)cg;
+		const struct string_view *str = &f->identifier;
 		debug("FUNCTION %.*s", (int)str->sz, str->data);
-		codegen_debug_print(
-			&((const struct asm_function *)g)->ops->base);
+		codegen_debug_print(&f->ops->base);
 		break;
-	case ASM_OP_MOV:
+	}
+	case ASM_OP_MOV: {
 		debug("MOV");
-		ops = (const struct asm_op *)g;
+		const struct asm_op *ops = (const struct asm_op *)cg;
 		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
 			codegen_debug_print_operand(&ops->args[i]);
 		}
 		codegen_debug_print(&ops->next->base);
 		break;
-	case ASM_OP_RET:
+	}
+	case ASM_OP_RET: {
 		debug("RET");
-		ops = (const struct asm_op *)g;
+		const struct asm_op *ops = (const struct asm_op *)cg;
 		codegen_debug_print(&ops->next->base);
 		break;
+	}
 	}
 }
