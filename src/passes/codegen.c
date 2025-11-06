@@ -17,7 +17,7 @@
 	} while (0)
 
 static WARN_UNUSED result_t
-codegen_statement(struct ast_statement *a, struct asm_op **dst)
+codegen_statement(const struct ast_statement *a, struct asm_op **dst)
 {
 	assert(a->base.node_type == NODE_STATEMENT);
 	assert(a->return_expression.base.node_type == NODE_EXPRESSION);
@@ -39,7 +39,7 @@ codegen_statement(struct ast_statement *a, struct asm_op **dst)
 }
 
 static WARN_UNUSED result_t
-codegen_function(struct ast_function *a, struct asm_function *dst)
+codegen_function(const struct ast_function *a, struct asm_function *dst)
 {
 	assert(a->base.node_type == NODE_FUNCTION);
 	assert(dst->base.statement_type == ASM_FUNCTION);
@@ -49,7 +49,7 @@ codegen_function(struct ast_function *a, struct asm_function *dst)
 }
 
 static WARN_UNUSED result_t
-codegen_program(struct ast_program *a, struct asm_program *dst)
+codegen_program(const struct ast_program *a, struct asm_program *dst)
 {
 	assert(a->base.node_type == NODE_PROGRAM);
 	assert(dst->base.statement_type == ASM_PROGRAM);
@@ -59,14 +59,14 @@ codegen_program(struct ast_program *a, struct asm_program *dst)
 }
 
 result_t
-codegen_init(struct ast *a, struct assembly **cg)
+codegen_init(const struct ast *a, struct assembly **cg)
 {
 	struct asm_program *program = NULL;
 	codegen_alloc(program);
 	program->base.statement_type = ASM_PROGRAM;
 	*cg = &program->base;
 
-	check(codegen_program((struct ast_program *)a, program));
+	check(codegen_program((const struct ast_program *)a, program));
 	return RESULT_OK;
 }
 

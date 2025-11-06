@@ -17,13 +17,13 @@ is_token_type(const struct token *tok, unsigned expected)
 }
 
 static void
-token_consume(struct token **tok)
+token_consume(const struct token **tok)
 {
 	*tok = (*tok)->next;
 }
 
 static WARN_UNUSED result_t
-parse_constant(struct token **tok, struct ast_constant *dst)
+parse_constant(const struct token **tok, struct ast_constant *dst)
 {
 	dst->base.node_type = NODE_CONSTANT_INT;
 
@@ -50,7 +50,7 @@ parse_constant(struct token **tok, struct ast_constant *dst)
 }
 
 static WARN_UNUSED result_t
-parse_expression(struct token **tok, struct ast_expression *dst)
+parse_expression(const struct token **tok, struct ast_expression *dst)
 {
 	dst->base.node_type = NODE_EXPRESSION;
 	check(parse_constant(tok, &dst->constant));
@@ -58,7 +58,7 @@ parse_expression(struct token **tok, struct ast_expression *dst)
 }
 
 static WARN_UNUSED result_t
-parse_statement(struct token **tok, struct ast_statement *dst)
+parse_statement(const struct token **tok, struct ast_statement *dst)
 {
 	dst->base.node_type = NODE_STATEMENT;
 
@@ -78,7 +78,7 @@ parse_statement(struct token **tok, struct ast_statement *dst)
 }
 
 static WARN_UNUSED result_t
-parse_function(struct token **tok, struct ast_function *dst)
+parse_function(const struct token **tok, struct ast_function *dst)
 {
 	dst->base.node_type = NODE_FUNCTION;
 
@@ -125,7 +125,7 @@ parse_function(struct token **tok, struct ast_function *dst)
 }
 
 static WARN_UNUSED result_t
-parse_program(struct token **tok, struct ast_program *dst)
+parse_program(const struct token **tok, struct ast_program *dst)
 {
 	dst->base.node_type = NODE_PROGRAM;
 	check(parse_function(tok, &dst->function));
@@ -133,7 +133,7 @@ parse_program(struct token **tok, struct ast_program *dst)
 }
 
 result_t
-parse_init(struct token *tok, struct ast **a)
+parse_init(const struct token *tok, struct ast **a)
 {
 	struct ast_program program = {0};
 	check(parse_program(&tok, &program));

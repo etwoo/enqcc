@@ -13,7 +13,7 @@ void lex_debug_print(const struct token *tok);
 
 struct ast;
 
-result_t parse_init(struct token *tok, struct ast **a)
+result_t parse_init(const struct token *tok, struct ast **a)
 	__attribute__((warn_unused_result));
 void parse_free(struct ast *a);
 void parse_cleanup(struct ast **a);
@@ -21,7 +21,7 @@ void parse_debug_print(const struct ast *a, size_t indent);
 
 struct assembly;
 
-result_t codegen_init(struct ast *a, struct assembly **cg)
+result_t codegen_init(const struct ast *a, struct assembly **cg)
 	__attribute__((warn_unused_result));
 void codegen_free(struct assembly *cg);
 void codegen_cleanup(struct assembly **cg);
