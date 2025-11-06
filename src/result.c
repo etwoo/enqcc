@@ -125,6 +125,14 @@ result_to_str(result_t r)
 		                r.msg,
 		                my_strerror(r));
 		break;
+	case ERR_IR_ALLOC:
+		s = strdup("Cannot allocate intermediate representation");
+		break;
+	case ERR_IR_EXPECT_AST_NODE_EXPRESSION:
+		s = my_asprintf("Cannot generate IR for AST node of type=%d "
+		                "when expecting NODE_EXPRESSION_*",
+		                r.num);
+		break;
 	case ERR_LEX_OPEN_SOURCE_FILE:
 		s = my_asprintf("Error opening source file %s: %s",
 		                r.msg,
@@ -146,14 +154,19 @@ result_to_str(result_t r)
 	case ERR_PARSE_ALLOC:
 		s = strdup("Cannot allocate ast node during parse");
 		break;
-	case ERR_PARSE_CONSTANT_EXPECT_TOKEN_CONSTANT:
-		s = strdup("Parsing constant expr expects TOKEN_CONSTANT");
-		break;
 	case ERR_PARSE_CONSTANT_STRTOLL:
 		s = my_asprintf(
 			"Parsing constant expr %s with strtoll() failed: %s",
 			r.msg,
 			my_strerror(r));
+		break;
+	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing paren-enclosed expression expects "
+		           "TOKEN_PAREN_CLOSE after expression");
+		break;
+	case ERR_PARSE_EXPR_EXPECT_REASONABLE:
+		s = strdup(
+			"Parsing expression; encountered unreasonable token");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT:
 		s = strdup(

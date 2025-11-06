@@ -3,38 +3,45 @@
 
 #include "sys/string_view.h"
 
-struct assembly {
-	enum {
-		ASM_PROGRAM,
-		ASM_FUNCTION,
-		ASM_OP_MOV,
-		ASM_OP_RET,
-	} statement_type;
-};
-
 struct asm_operand {
 	enum {
+		ASM_OPERAND_NONE,
 		ASM_OPERAND_IMMEDIATE,
-		ASM_OPERAND_REGISTER_EAX,
+		ASM_OPERAND_REGISTER,
+		ASM_OPERAND_PSEUDO_REGISTER,
+		ASM_OPERAND_STACK,
 	} operand_type;
-	long long int num;
+	union {
+		long long int num;
+		enum {
+			ASM_REGISTER_AX,
+			ASM_REGISTER_R10, /* aka scratch */
+			ASM_REGISTER_RSP, /* aka frame pointer */
+		} reg;
+	} u;
 };
 
 struct asm_op {
-	struct assembly base;
+	enum {
+		ASM_OP_MOV,
+		ASM_OP_SUB,
+		ASM_OP_UNARY_NEG,
+		ASM_OP_UNARY_NOT,
+		ASM_OP_RET,
+	} opcode;
 	struct asm_operand args[2];
 	struct asm_op *next;
 };
 
 struct asm_function {
-	struct assembly base;
 	struct string_view identifier;
 	struct asm_op *ops;
 };
 
-struct asm_program {
-	struct assembly base;
+struct assembly {
 	struct asm_function function;
 };
+
+extern const long long int CODEGEN_BYTES_PER_VALUE;
 
 #endif

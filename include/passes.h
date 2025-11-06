@@ -19,9 +19,20 @@ void parse_free(struct ast *a);
 void parse_cleanup(struct ast **a);
 void parse_debug_print(const struct ast *a, size_t indent);
 
+struct intermediate;
+
+result_t ir_init(const struct ast *a, struct intermediate **ir)
+	__attribute__((warn_unused_result));
+void ir_free(struct intermediate *ir);
+void ir_cleanup(struct intermediate **ir);
+void ir_debug_print(const struct intermediate *ir);
+
 struct assembly;
 
-result_t codegen_init(const struct ast *a, struct assembly **cg)
+result_t codegen_init(const struct intermediate *ir, struct assembly **cg)
+	__attribute__((warn_unused_result));
+result_t codegen_stack(struct assembly *cg) __attribute__((warn_unused_result));
+result_t codegen_fixup(const struct intermediate *ir, struct assembly *cg)
 	__attribute__((warn_unused_result));
 void codegen_free(struct assembly *cg);
 void codegen_cleanup(struct assembly **cg);
