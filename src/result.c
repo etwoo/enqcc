@@ -155,6 +155,14 @@ result_to_str(result_t r)
 			r.msg,
 			my_strerror(r));
 		break;
+	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing paren-enclosed expression expects "
+		           "TOKEN_PAREN_CLOSE after expression");
+		break;
+	case ERR_PARSE_EXPR_EXPECT_REASONABLE:
+		s = strdup(
+			"Parsing expression; encountered unreasonable token");
+		break;
 	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT:
 		s = strdup(
 			"Parsing function expects TOKEN_KEYWORD_INT in return "

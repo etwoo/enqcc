@@ -10,6 +10,14 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+#define parse_alloc(dst, init_type)                                            \
+	do {                                                                   \
+		(dst) = malloc(sizeof(*(dst)));                                \
+		check_if((dst) == NULL, ERR_PARSE_ALLOC);                      \
+		memset(dst, 0, sizeof(*(dst)));                                \
+		(dst)->base.node_type = init_type;                             \
+	} while (0)
+
 static WARN_UNUSED bool
 is_token_type(const struct token *tok, unsigned expected)
 {
@@ -50,10 +58,39 @@ parse_constant(const struct token **tok, struct ast_constant *dst)
 }
 
 static WARN_UNUSED result_t
-parse_expression(const struct token **tok, struct ast_expression *dst)
+parse_expression(const struct token **tok, struct ast **dst)
 {
-	dst->base.node_type = NODE_EXPRESSION;
-	check(parse_constant(tok, &dst->constant));
+	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
+
+	if (is_token_type(*tok, TOKEN_CONSTANT)) {
+		struct ast_expression_constant *expr = NULL;
+		parse_alloc(expr, NODE_EXPRESSION_PRIMITIVE);
+		*dst = &expr->base;
+		check(parse_constant(tok, &expr->constant));
+	} else if (is_token_type(*tok, TOKEN_TILDE) ||
+	           is_token_type(*tok, TOKEN_HYPHEN)) {
+		struct ast_expression_unary_op *expr = NULL;
+		parse_alloc(expr,
+		            is_token_type(*tok, TOKEN_TILDE)
+		                    ? NODE_EXPRESSION_UNARY_BITWISE_COMPLEMENT
+		                    : NODE_EXPRESSION_UNARY_NEGATION);
+		token_consume(tok);
+		*dst = &expr->base;
+		check(parse_expression(tok, &expr->operand));
+	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		struct ast_expression_paren_enclosed *expr = NULL;
+		parse_alloc(expr, NODE_EXPRESSION_PAREN_ENCLOSED);
+		token_consume(tok);
+		*dst = &expr->base;
+		check(parse_expression(tok, &expr->enclosed));
+		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			return make_result(
+				ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE);
+		}
+		token_consume(tok);
+	} else {
+		return make_result(ERR_PARSE_EXPR_EXPECT_REASONABLE);
+	}
 	return RESULT_OK;
 }
 
@@ -184,13 +221,32 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_STATEMENT:
 		debug("%*sSTATEMENT", (int)indent, "");
 		parse_debug_print(
-			&((struct ast_statement *)a)->return_expression.base,
+			((struct ast_statement *)a)->return_expression,
 			indent + 1);
 		break;
-	case NODE_EXPRESSION:
-		debug("%*sEXPRESSION", (int)indent, "");
-		parse_debug_print(&((struct ast_expression *)a)->constant.base,
-		                  indent + 1);
+	case NODE_EXPRESSION_PRIMITIVE:
+		debug("%*sEXPRESSION CONSTANT", (int)indent, "");
+		parse_debug_print(
+			&((struct ast_expression_constant *)a)->constant.base,
+			indent + 1);
+		break;
+	case NODE_EXPRESSION_UNARY_NEGATION:
+		debug("%*sEXPRESSION NEGATION", (int)indent, "");
+		parse_debug_print(
+			((struct ast_expression_unary_op *)a)->operand,
+			indent + 1);
+		break;
+	case NODE_EXPRESSION_UNARY_BITWISE_COMPLEMENT:
+		debug("%*sEXPRESSION BITWISE COMPLEMENT", (int)indent, "");
+		parse_debug_print(
+			((struct ast_expression_unary_op *)a)->operand,
+			indent + 1);
+		break;
+	case NODE_EXPRESSION_PAREN_ENCLOSED:
+		debug("%*sEXPRESSION PARENTHESIZED", (int)indent, "");
+		parse_debug_print(
+			((struct ast_expression_paren_enclosed *)a)->enclosed,
+			indent + 1);
 		break;
 	case NODE_IDENTIFIER:
 		s = &((struct ast_identifier *)a)->token;

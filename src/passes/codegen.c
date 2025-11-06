@@ -19,16 +19,18 @@
 static WARN_UNUSED result_t
 codegen_statement(const struct ast_statement *a, struct asm_op **dst)
 {
+	// TODO: add codegen for new expressions like unary ops
+	// TODO: use new intermediate representation for above?
+
 	assert(a->base.node_type == NODE_STATEMENT);
-	assert(a->return_expression.base.node_type == NODE_EXPRESSION);
-	assert(a->return_expression.constant.base.node_type ==
-	       NODE_CONSTANT_INT);
+	// assert(a->return_expression.base.node_type == NODE_EXPRESSION);
+	// assert(a->return_expression.constant.base.node_type == NODE_CONSTANT_INT);
 
 	assert(*dst == NULL);
 	codegen_alloc(*dst);
 	(*dst)->base.statement_type = ASM_OP_MOV;
 	(*dst)->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	(*dst)->args[0].num = a->return_expression.constant.num;
+	// (*dst)->args[0].num = a->return_expression.constant.num;
 	(*dst)->args[1].operand_type = ASM_OPERAND_REGISTER_EAX;
 
 	assert((*dst)->next == NULL);
