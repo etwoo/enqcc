@@ -21,7 +21,7 @@ struct ast_identifier {
 
 struct ast_constant {
 	struct ast base;
-	struct string_view token;
+	long long int num;
 };
 
 struct ast_expression {
@@ -31,7 +31,7 @@ struct ast_expression {
 
 struct ast_statement {
 	struct ast base;
-	struct ast_expression expression;
+	struct ast_expression return_expression;
 };
 
 struct ast_function {

@@ -25,6 +25,6 @@ result_t codegen_init(struct ast *a, struct assembly **generated)
 	__attribute__((warn_unused_result));
 void codegen_free(struct assembly *generated);
 void codegen_cleanup(struct assembly **generated);
-void codegen_debug_print(const struct assembly *generated);
+void codegen_debug_print(const struct assembly *g);
 
 #endif

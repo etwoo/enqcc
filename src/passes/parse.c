@@ -2,7 +2,6 @@
 
 #include "passes.h"
 #include "passes/lex.h"
-#include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
@@ -31,9 +30,22 @@ parse_constant(struct token **tok, struct ast_constant *dst)
 	if (!is_token_type(*tok, TOKEN_CONSTANT)) {
 		return make_result(ERR_PARSE_CONSTANT_EXPECT_TOKEN_CONSTANT);
 	}
-	dst->token = (*tok)->val;
-	token_consume(tok);
 
+	/*
+	 * strtoll() does not update errno on success, so we must clear it
+	 * explicitly if we want a predictable value.
+	 */
+	errno = 0;
+
+	dst->num = strtoll((*tok)->val.data, NULL, 0);
+	if (errno != 0) {
+		return make_result(ERR_PARSE_CONSTANT_STRTOLL,
+		                   errno,
+		                   (*tok)->val.data,
+		                   (*tok)->val.sz);
+	}
+
+	token_consume(tok);
 	return RESULT_OK;
 }
 
@@ -55,7 +67,7 @@ parse_statement(struct token **tok, struct ast_statement *dst)
 	}
 	token_consume(tok);
 
-	check(parse_expression(tok, &dst->expression));
+	check(parse_expression(tok, &dst->return_expression));
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
@@ -171,8 +183,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	case NODE_STATEMENT:
 		debug("%*sSTATEMENT", (int)indent, "");
-		parse_debug_print(&((struct ast_statement *)a)->expression.base,
-		                  indent + 1);
+		parse_debug_print(
+			&((struct ast_statement *)a)->return_expression.base,
+			indent + 1);
 		break;
 	case NODE_EXPRESSION:
 		debug("%*sEXPRESSION", (int)indent, "");
@@ -184,8 +197,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sIDENT %.*s", (int)indent, "", (int)s->sz, s->data);
 		break;
 	case NODE_CONSTANT_INT:
-		s = &((struct ast_constant *)a)->token;
-		debug("%*sCONST %.*s", (int)indent, "", (int)s->sz, s->data);
+		debug("%*sCONSTANT %lld",
+		      (int)indent,
+		      "",
+		      ((struct ast_constant *)a)->num);
 		break;
 	}
 }
