@@ -62,7 +62,15 @@ compile(const char *src, compiler_action action)
 		return RESULT_OK;
 	}
 
-	// asm
+	struct assembly *cg __attribute__((cleanup(codegen_cleanup))) = NULL;
+	check(codegen_init(a, &cg));
+	codegen_debug_print(cg);
+
+	if (action != ACTION_ALL_PASSES) {
+		return RESULT_OK;
+	}
+
+	// emit code to disk
 
 	return RESULT_OK;
 }
@@ -74,7 +82,7 @@ main(int argc, char *argv[])
 
 	int synonym = 0;
 	struct option lo[] = {
-		{"code-gen", no_argument, &synonym, 'c'},
+		{"codegen", no_argument, &synonym, 'c'},
 		{"help", no_argument, &synonym, 'h'},
 		{"lex", no_argument, &synonym, 'l'},
 		{"parse", no_argument, &synonym, 'p'},

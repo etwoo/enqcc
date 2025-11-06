@@ -117,6 +117,9 @@ result_to_str(result_t r)
 	case OK:
 		s = strdup("Success");
 		break;
+	case ERR_CODEGEN_ALLOC:
+		s = strdup("Cannot allocate codegen element");
+		break;
 	case ERR_LEX_OPEN_SOURCE_FILE:
 		s = my_asprintf("Error opening %s: %s", r.msg, my_strerror(r));
 		break;
@@ -138,6 +141,12 @@ result_to_str(result_t r)
 		break;
 	case ERR_PARSE_CONSTANT_EXPECT_TOKEN_CONSTANT:
 		s = strdup("Parsing constant expr expects TOKEN_CONSTANT");
+		break;
+	case ERR_PARSE_CONSTANT_STRTOLL:
+		s = my_asprintf(
+			"Parsing constant expr %s with strtoll() failed: %s",
+			r.msg,
+			my_strerror(r));
 		break;
 	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT:
 		s = strdup(
