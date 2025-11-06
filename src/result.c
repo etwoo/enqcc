@@ -120,8 +120,15 @@ result_to_str(result_t r)
 	case ERR_CODEGEN_ALLOC:
 		s = strdup("Cannot allocate codegen element");
 		break;
+	case ERR_EMIT_FILE_OPEN:
+		s = my_asprintf("Error opening output file %s: %s",
+		                r.msg,
+		                my_strerror(r));
+		break;
 	case ERR_LEX_OPEN_SOURCE_FILE:
-		s = my_asprintf("Error opening %s: %s", r.msg, my_strerror(r));
+		s = my_asprintf("Error opening source file %s: %s",
+		                r.msg,
+		                my_strerror(r));
 		break;
 	case ERR_LEX_ALLOC:
 		s = strdup("Cannot allocate token during lex");

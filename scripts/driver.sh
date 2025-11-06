@@ -20,7 +20,7 @@ CC=$(which gcc)
 NQCC=$(realpath "$0/../../build/enqcc")
 
 $CC -E -P "$INPUT_FILE" -o "$PREPROCESSED_FILE"
-$NQCC "$DRIVER_MODE" "$PREPROCESSED_FILE" "$ASSEMBLY_FILE"
+$NQCC $DRIVER_MODE "$PREPROCESSED_FILE" "$ASSEMBLY_FILE"
 if [ -z "$DRIVER_MODE" ] ; then
 	$CC "$ASSEMBLY_FILE" -o "$OUTPUT_FILE"
 fi

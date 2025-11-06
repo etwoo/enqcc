@@ -2,6 +2,7 @@
 #include "result.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h> /* for getopt_long() */
 #include <stdarg.h>
 #include <stdio.h>
@@ -44,7 +45,7 @@ typedef enum {
 } compiler_action;
 
 static __attribute__((warn_unused_result)) result_t
-compile(const char *src, compiler_action action)
+compile(const char *src, const char *dst, compiler_action action)
 {
 	struct token *tok __attribute__((cleanup(lex_cleanup))) = NULL;
 	check(lex_init(src, &tok));
@@ -70,8 +71,17 @@ compile(const char *src, compiler_action action)
 		return RESULT_OK;
 	}
 
-	// emit code to disk
-
+	const platform platform_choice =
+#ifdef __APPLE__
+		PLATFORM_MACOS
+#else
+		PLATFORM_LINUX
+#endif
+		;
+	int fd = open(dst, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+	check_if(fd < 0, ERR_EMIT_FILE_OPEN, errno);
+	emit_asm(cg, platform_choice, fd);
+	close(fd);
 	return RESULT_OK;
 }
 
@@ -118,10 +128,12 @@ main(int argc, char *argv[])
 	case ACTION_LEX:
 	case ACTION_LEX_PARSE:
 	case ACTION_LEX_PARSE_ASM:
-		if (optind >= argc) {
-			to_stderr("Missing input file argument");
+		if (optind + 1 >= argc) {
+			to_stderr("Missing input/output file argument(s)");
 		} else {
-			rc = result_to_status(compile(argv[optind], action));
+			const char *src = argv[optind];
+			const char *dst = argv[optind + 1];
+			rc = result_to_status(compile(src, dst, action));
 		}
 		break;
 	case ACTION_USAGE_HELP:
