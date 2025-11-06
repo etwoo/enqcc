@@ -6,6 +6,7 @@ Checks: >
   hicpp-*,
   misc-*,
   -misc-include-cleaner,
+  -misc-no-recursion,
   modernize-*,
   performance-*,
   portability-*,

@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <string.h> /* for memset() */
 
 static WARN_UNUSED result_t
 lex_alloc(struct token **tok)
@@ -122,6 +121,12 @@ lex_free(struct token *tok)
 		tok = tok->next;
 		free(tmp);
 	}
+}
+
+void
+lex_cleanup(struct token **tok)
+{
+	lex_free(*tok);
 }
 
 static void

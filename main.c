@@ -34,17 +34,43 @@ result_to_status(result_t r)
 	return EX_OK;
 }
 
+typedef enum {
+	ACTION_ALL_PASSES,
+	ACTION_LEX,
+	ACTION_LEX_PARSE,
+	ACTION_LEX_PARSE_ASM,
+	ACTION_USAGE_HELP,
+	ACTION_USAGE_ERROR,
+} compiler_action;
+
+static __attribute__((warn_unused_result)) result_t
+compile(const char *src, compiler_action action)
+{
+	struct token *tok __attribute__((cleanup(lex_cleanup))) = NULL;
+	check(lex_init(src, &tok));
+	lex_debug_print(tok);
+
+	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE) {
+		return RESULT_OK;
+	}
+
+	struct ast *a __attribute__((cleanup(parse_cleanup))) = NULL;
+	check(parse_init(tok, &a));
+	parse_debug_print(a, 0);
+
+	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_ASM) {
+		return RESULT_OK;
+	}
+
+	// asm
+
+	return RESULT_OK;
+}
+
 int
 main(int argc, char *argv[])
 {
-	enum {
-		ACTION_LEX_PARSE_ASM_EMIT,
-		ACTION_LEX,
-		ACTION_LEX_PARSE,
-		ACTION_LEX_PARSE_ASM,
-		ACTION_USAGE_HELP,
-		ACTION_USAGE_ERROR,
-	} action = 0;
+	compiler_action action = ACTION_ALL_PASSES;
 
 	int synonym = 0;
 	struct option lo[] = {
@@ -80,24 +106,15 @@ main(int argc, char *argv[])
 	FILE *out = stderr; /* assume output to stderr by default */
 
 	switch (action) {
-	case ACTION_LEX_PARSE_ASM_EMIT:
-		rc = result_to_status(RESULT_OK);
-		break;
+	case ACTION_ALL_PASSES:
 	case ACTION_LEX:
+	case ACTION_LEX_PARSE:
+	case ACTION_LEX_PARSE_ASM:
 		if (optind >= argc) {
 			to_stderr("Missing input file argument");
 		} else {
-			struct token *tok = NULL;
-			rc = result_to_status(lex_init(argv[optind], &tok));
-			lex_debug_print(tok);
-			lex_free(tok);
+			rc = result_to_status(compile(argv[optind], action));
 		}
-		break;
-	case ACTION_LEX_PARSE:
-		// rc = result_to_status(RESULT_OK);
-		break;
-	case ACTION_LEX_PARSE_ASM:
-		rc = result_to_status(RESULT_OK);
 		break;
 	case ACTION_USAGE_HELP:
 		rc = EX_OK;
