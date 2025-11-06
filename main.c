@@ -54,7 +54,9 @@ compile(const char *src, compiler_action action)
 		return RESULT_OK;
 	}
 
-	// parse
+	struct ast *a __attribute__((cleanup(parse_cleanup))) = NULL;
+	check(parse_init(tok, &a));
+	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_ASM) {
 		return RESULT_OK;

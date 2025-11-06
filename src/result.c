@@ -133,6 +133,54 @@ result_to_str(result_t r)
 			r.msg,
 			r.num);
 		break;
+	case ERR_PARSE_ALLOC:
+		s = strdup("Cannot allocate ast node during parse");
+		break;
+	case ERR_PARSE_CONSTANT_EXPECT_TOKEN_CONSTANT:
+		s = strdup("Parsing constant expr expects TOKEN_CONSTANT");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT:
+		s = strdup(
+			"Parsing function expects TOKEN_KEYWORD_INT in return "
+			"type position");
+		break;
+	case ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER:
+		s = strdup(
+			"Parsing function expects TOKEN_IDENTIFIER in function "
+			"name position");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN:
+		s = strdup("Parsing function expects TOKEN_PAREN_OPEN before "
+		           "argument list");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_KEYWORD_VOID:
+		s = strdup("Parsing function expects TOKEN_PAREN_VOID as "
+		           "argument list");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing function expects TOKEN_PAREN_CLOSE after "
+		           "argument list");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN:
+		s = strdup("Parsing function expects TOKEN_BRACE_OPEN before "
+		           "function body statement(s)");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE:
+		s = strdup("Parsing function expects TOKEN_BRACE_CLOSE after "
+		           "function body statement(s)");
+		break;
+	case ERR_PARSE_PROG_EXPECT_END:
+		s = strdup("Parsing program expects end of token stream after "
+		           "function definition(s)");
+		break;
+	case ERR_PARSE_STMT_EXPECT_TOKEN_KEYWORD_RETURN:
+		s = strdup("Parsing statement expects TOKEN_KEYWORD_RETURN "
+		           "before expression");
+		break;
+	case ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON:
+		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
+		           "expression");
+		break;
 	case ERR_TMPFILE:
 		s = my_asprintf("Error in tmpfile(): %s", my_strerror(r));
 		break;

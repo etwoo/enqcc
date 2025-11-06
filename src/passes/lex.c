@@ -10,7 +10,6 @@
 #include <fcntl.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <string.h> /* for memset() */
 
 static WARN_UNUSED result_t
 lex_alloc(struct token **tok)
