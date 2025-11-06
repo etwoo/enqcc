@@ -15,6 +15,9 @@ struct token {
 		TOKEN_BRACE_OPEN,
 		TOKEN_BRACE_CLOSE,
 		TOKEN_SEMICOLON,
+		TOKEN_TILDE,
+		TOKEN_HYPHEN_HYPHEN,
+		TOKEN_HYPHEN,
 	} token_type;
 	struct string_view val;
 	struct token *next;

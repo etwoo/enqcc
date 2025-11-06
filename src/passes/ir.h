@@ -1,0 +1,39 @@
+#ifndef COMPILER_PASSES_IR_H
+#define COMPILER_PASSES_IR_H
+
+#include "sys/string_view.h"
+
+struct ir_val {
+	enum {
+		IR_VAL_NONE,
+		IR_VAL_CONSTANT_INT,
+		IR_VAL_TEMPORARY_VARIABLE,
+	} subtype;
+	long long int num; /* numeric value, variable ID, etc */
+};
+
+struct ir_op {
+	enum {
+		IR_OP_UNARY_IDENTITY, /* aka return */
+		IR_OP_UNARY_NEGATE,
+		IR_OP_UNARY_COMPLEMENT,
+	} opcode;
+	struct ir_val args[2];
+	struct ir_op *next;
+};
+
+struct ir_function {
+	struct string_view identifier;
+	struct ir_op *ops;
+};
+
+struct ir_env {
+	long long int generator;
+};
+
+struct intermediate {
+	struct ir_function function;
+	struct ir_env env;
+};
+
+#endif
