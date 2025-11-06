@@ -82,7 +82,7 @@ main(int argc, char *argv[])
 
 	int synonym = 0;
 	struct option lo[] = {
-		{"code-gen", no_argument, &synonym, 'c'},
+		{"codegen", no_argument, &synonym, 'c'},
 		{"help", no_argument, &synonym, 'h'},
 		{"lex", no_argument, &synonym, 'l'},
 		{"parse", no_argument, &synonym, 'p'},
