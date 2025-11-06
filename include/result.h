@@ -10,6 +10,7 @@ typedef struct {
 	enum {
 		OK = 0,
 		ERR_CODEGEN_ALLOC,
+		ERR_EMIT_FILE_OPEN,
 		ERR_LEX_OPEN_SOURCE_FILE,
 		ERR_LEX_ALLOC,
 		ERR_LEX_NO_MATCH,

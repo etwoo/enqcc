@@ -2,6 +2,7 @@
 #include "result.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <getopt.h> /* for getopt_long() */
 #include <stdarg.h>
 #include <stdio.h>
@@ -34,17 +35,17 @@ result_to_status(result_t r)
 	return EX_OK;
 }
 
-typedef enum {
+enum compiler_action {
 	ACTION_ALL_PASSES,
 	ACTION_LEX,
 	ACTION_LEX_PARSE,
 	ACTION_LEX_PARSE_ASM,
 	ACTION_USAGE_HELP,
 	ACTION_USAGE_ERROR,
-} compiler_action;
+};
 
 static __attribute__((warn_unused_result)) result_t
-compile(const char *src, compiler_action action)
+compile(const char *src, const char *dst, enum compiler_action action)
 {
 	struct token *tok __attribute__((cleanup(lex_cleanup))) = NULL;
 	check(lex_init(src, &tok));
@@ -70,18 +71,28 @@ compile(const char *src, compiler_action action)
 		return RESULT_OK;
 	}
 
-	// emit code to disk
-
+	const enum platform platform_choice =
+#ifdef __APPLE__
+		PLATFORM_MACOS
+#else
+		PLATFORM_LINUX
+#endif
+		;
+	int fd = open(dst, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
+	check_if(fd < 0, ERR_EMIT_FILE_OPEN, errno);
+	emit_asm(cg, platform_choice, fd);
+	close(fd);
 	return RESULT_OK;
 }
 
 int
 main(int argc, char *argv[])
 {
-	compiler_action action = ACTION_ALL_PASSES;
+	enum compiler_action action = ACTION_ALL_PASSES;
 
 	int synonym = 0;
 	struct option lo[] = {
+		{"all", no_argument, &synonym, 'a'},
 		{"codegen", no_argument, &synonym, 'c'},
 		{"help", no_argument, &synonym, 'h'},
 		{"lex", no_argument, &synonym, 'l'},
@@ -92,6 +103,9 @@ main(int argc, char *argv[])
 	int opt = 0;
 	while ((opt = getopt_long(argc, argv, "h", lo, NULL)) != -1) {
 		switch (opt == 0 ? synonym : opt) {
+		case 'a':
+			action = MAX(action, ACTION_ALL_PASSES);
+			break;
 		case 'c':
 			action = MAX(action, ACTION_LEX_PARSE_ASM);
 			break;
@@ -118,10 +132,12 @@ main(int argc, char *argv[])
 	case ACTION_LEX:
 	case ACTION_LEX_PARSE:
 	case ACTION_LEX_PARSE_ASM:
-		if (optind >= argc) {
-			to_stderr("Missing input file argument");
+		if (optind + 1 >= argc) {
+			to_stderr("Missing input/output file argument(s)");
 		} else {
-			rc = result_to_status(compile(argv[optind], action));
+			const char *src = argv[optind];
+			const char *dst = argv[optind + 1];
+			rc = result_to_status(compile(src, dst, action));
 		}
 		break;
 	case ACTION_USAGE_HELP:

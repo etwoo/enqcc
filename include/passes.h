@@ -27,4 +27,11 @@ void codegen_free(struct assembly *generated);
 void codegen_cleanup(struct assembly **generated);
 void codegen_debug_print(const struct assembly *g);
 
+enum platform {
+	PLATFORM_MACOS,
+	PLATFORM_LINUX,
+};
+
+void emit_asm(const struct assembly *g, enum platform plat, int fd);
+
 #endif
