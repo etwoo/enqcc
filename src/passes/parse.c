@@ -6,6 +6,7 @@
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
@@ -34,6 +35,7 @@ static WARN_UNUSED result_t
 parse_constant(struct token **tok, struct ast **a)
 {
 	check(parse_alloc(a));
+	assert(*a != NULL);
 	struct ast *node = *a;
 	node->node_type = NODE_CONSTANT_INT;
 
@@ -57,6 +59,7 @@ static WARN_UNUSED result_t
 parse_statement(struct token **tok, struct ast **a)
 {
 	check(parse_alloc(a));
+	assert(*a != NULL);
 	struct ast *node = *a;
 	node->node_type = NODE_STATEMENT;
 
@@ -78,6 +81,7 @@ static WARN_UNUSED result_t
 parse_function(struct token **tok, struct ast **a)
 {
 	check(parse_alloc(a));
+	assert(*a != NULL);
 	struct ast *node = *a;
 	node->node_type = NODE_FUNCTION;
 
@@ -128,6 +132,7 @@ static WARN_UNUSED result_t
 parse_program(struct token **tok, struct ast **a)
 {
 	check(parse_alloc(a));
+	assert(*a != NULL);
 	struct ast *node = *a;
 	node->node_type = NODE_PROGRAM;
 	check(parse_function(tok, &node->children[0]));
