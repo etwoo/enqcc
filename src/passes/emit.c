@@ -3,7 +3,6 @@
 #include "sys/array.h"
 
 #include <stdio.h>
-#include <unistd.h>
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char MACOS_FUNC_PREFIX[] = "_";
@@ -15,7 +14,7 @@ static void
 emit_asm_footer(platform plat, int fd)
 {
 	if (plat == PLATFORM_LINUX) {
-		write(fd, LINUX_NX, sizeof(LINUX_NX) - 1);
+		dprintf(fd, "%s", LINUX_NX);
 	}
 }
 
@@ -62,11 +61,11 @@ emit_asm(const struct assembly *g, platform plat, int fd)
 		ops = (const struct asm_op *)g;
 		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
 			if (i > 0) {
-				write(fd, ", ", 2);
+				dprintf(fd, ", ");
 			}
 			emit_asm_operand(&ops->args[i], fd);
 		}
-		write(fd, "\n", 1);
+		dprintf(fd, "\n");
 		emit_asm(&ops->next->base, plat, fd);
 		break;
 	case ASM_OP_RET:
