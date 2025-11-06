@@ -117,6 +117,13 @@ result_to_str(result_t r)
 	case OK:
 		s = strdup("Success");
 		break;
+	case ERR_CODEGEN_ALLOC:
+		s = strdup("Cannot allocate codegen element");
+		break;
+	case ERR_CODEGEN_PROG_EXPECT_END:
+		s = strdup("Codegen for program expects end of AST nodes after "
+		           "function definition(s)");
+		break;
 	case ERR_LEX_OPEN_SOURCE_FILE:
 		s = my_asprintf("Error opening %s: %s", r.msg, my_strerror(r));
 		break;

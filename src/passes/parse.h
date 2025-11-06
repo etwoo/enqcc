@@ -12,8 +12,37 @@ struct ast {
 		NODE_IDENTIFIER,
 		NODE_CONSTANT_INT,
 	} node_type;
-	struct string_view val;
-	struct ast *children[2];
+};
+
+struct ast_identifier {
+	struct ast base;
+	struct string_view token;
+};
+
+struct ast_constant {
+	struct ast base;
+	struct string_view token;
+};
+
+struct ast_expression {
+	struct ast base;
+	struct ast_constant constant;
+};
+
+struct ast_statement {
+	struct ast base;
+	struct ast_expression expression;
+};
+
+struct ast_function {
+	struct ast base;
+	struct ast_identifier identifier;
+	struct ast_statement statement;
+};
+
+struct ast_program {
+	struct ast base;
+	struct ast_function function;
 };
 
 #endif

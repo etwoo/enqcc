@@ -62,7 +62,15 @@ compile(const char *src, compiler_action action)
 		return RESULT_OK;
 	}
 
-	// asm
+////////struct assembly *cg __attribute__((cleanup(codegen_cleanup))) = NULL;
+////////check(codegen_init(a, &cg));
+////////codegen_debug_print(cg);
+
+	if (action != ACTION_ALL_PASSES) {
+		return RESULT_OK;
+	}
+
+	// emit code to disk
 
 	return RESULT_OK;
 }
