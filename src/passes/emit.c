@@ -11,7 +11,7 @@ static const char STR_OP_RET[] = "ret";
 static const char STR_REGISTER_EAX[] = "%eax";
 
 static void
-emit_asm_footer(platform plat, int fd)
+emit_asm_footer(enum platform plat, int fd)
 {
 	if (plat == PLATFORM_LINUX) {
 		dprintf(fd, "%s", LINUX_NX);
@@ -32,7 +32,7 @@ emit_asm_operand(const struct asm_operand *operand, int fd)
 }
 
 void
-emit_asm(const struct assembly *g, platform plat, int fd)
+emit_asm(const struct assembly *g, enum platform plat, int fd)
 {
 	if (g == NULL) {
 		return;

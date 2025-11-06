@@ -35,17 +35,17 @@ result_to_status(result_t r)
 	return EX_OK;
 }
 
-typedef enum {
+enum compiler_action {
 	ACTION_ALL_PASSES,
 	ACTION_LEX,
 	ACTION_LEX_PARSE,
 	ACTION_LEX_PARSE_ASM,
 	ACTION_USAGE_HELP,
 	ACTION_USAGE_ERROR,
-} compiler_action;
+};
 
 static __attribute__((warn_unused_result)) result_t
-compile(const char *src, const char *dst, compiler_action action)
+compile(const char *src, const char *dst, enum compiler_action action)
 {
 	struct token *tok __attribute__((cleanup(lex_cleanup))) = NULL;
 	check(lex_init(src, &tok));
@@ -71,7 +71,7 @@ compile(const char *src, const char *dst, compiler_action action)
 		return RESULT_OK;
 	}
 
-	const platform platform_choice =
+	const enum platform platform_choice =
 #ifdef __APPLE__
 		PLATFORM_MACOS
 #else
@@ -88,7 +88,7 @@ compile(const char *src, const char *dst, compiler_action action)
 int
 main(int argc, char *argv[])
 {
-	compiler_action action = ACTION_ALL_PASSES;
+	enum compiler_action action = ACTION_ALL_PASSES;
 
 	int synonym = 0;
 	struct option lo[] = {
