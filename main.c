@@ -39,7 +39,8 @@ enum compiler_action {
 	ACTION_ALL_PASSES,
 	ACTION_LEX,
 	ACTION_LEX_PARSE,
-	ACTION_LEX_PARSE_ASM,
+	ACTION_LEX_PARSE_IR,
+	ACTION_LEX_PARSE_IR_ASM,
 	ACTION_USAGE_HELP,
 	ACTION_USAGE_ERROR,
 };
@@ -59,7 +60,16 @@ compile(const char *src, const char *dst, enum compiler_action action)
 	check(parse_init(tok, &a));
 	parse_debug_print(a, 0);
 
-	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_ASM) {
+	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR) {
+		return RESULT_OK;
+	}
+
+	struct intermediate *ir __attribute__((cleanup(ir_cleanup))) = NULL;
+	check(ir_init(a, &ir));
+	ir_debug_print(ir);
+
+	/*
+	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR_ASM) {
 		return RESULT_OK;
 	}
 
@@ -82,6 +92,9 @@ compile(const char *src, const char *dst, enum compiler_action action)
 	check_if(fd < 0, ERR_EMIT_FILE_OPEN, errno);
 	emit_asm(cg, platform_choice, fd);
 	close(fd);
+	*/
+	(void)dst; // TODO: remove
+
 	return RESULT_OK;
 }
 
@@ -97,6 +110,7 @@ main(int argc, char *argv[])
 		{"help", no_argument, &synonym, 'h'},
 		{"lex", no_argument, &synonym, 'l'},
 		{"parse", no_argument, &synonym, 'p'},
+		{"tacky", no_argument, &synonym, 't'},
 		{NULL, 0, NULL, 0},
 	};
 
@@ -107,7 +121,7 @@ main(int argc, char *argv[])
 			action = MAX(action, ACTION_ALL_PASSES);
 			break;
 		case 'c':
-			action = MAX(action, ACTION_LEX_PARSE_ASM);
+			action = MAX(action, ACTION_LEX_PARSE_IR_ASM);
 			break;
 		case 'h':
 			action = MAX(action, ACTION_USAGE_HELP);
@@ -117,6 +131,9 @@ main(int argc, char *argv[])
 			break;
 		case 'p':
 			action = MAX(action, ACTION_LEX_PARSE);
+			break;
+		case 't':
+			action = MAX(action, ACTION_LEX_PARSE_IR);
 			break;
 		default:
 			action = MAX(action, ACTION_USAGE_ERROR);
@@ -131,7 +148,8 @@ main(int argc, char *argv[])
 	case ACTION_ALL_PASSES:
 	case ACTION_LEX:
 	case ACTION_LEX_PARSE:
-	case ACTION_LEX_PARSE_ASM:
+	case ACTION_LEX_PARSE_IR:
+	case ACTION_LEX_PARSE_IR_ASM:
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
