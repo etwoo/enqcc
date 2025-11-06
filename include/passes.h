@@ -9,6 +9,6 @@ result_t lex_init(const char *src, struct token **tok)
 	__attribute__((warn_unused_result));
 void lex_free(struct token *tok);
 void lex_cleanup(struct token **tok); /* use with __attribute__((cleanup)) */
-void lex_debug_print(struct token *tok);
+void lex_debug_print(const struct token *tok);
 
 #endif

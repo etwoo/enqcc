@@ -131,7 +131,7 @@ lex_cleanup(struct token **tok)
 }
 
 static void
-lex_debug_one(struct token *tok)
+lex_debug_one(const struct token *tok)
 {
 	switch (tok->token_type) {
 	case TOKEN_IDENTIFIER:
@@ -168,7 +168,7 @@ lex_debug_one(struct token *tok)
 }
 
 void
-lex_debug_print(struct token *tok)
+lex_debug_print(const struct token *tok)
 {
 	while (tok != NULL) {
 		lex_debug_one(tok);
