@@ -92,6 +92,7 @@ main(int argc, char *argv[])
 
 	int synonym = 0;
 	struct option lo[] = {
+		{"all", no_argument, &synonym, 'a'},
 		{"codegen", no_argument, &synonym, 'c'},
 		{"help", no_argument, &synonym, 'h'},
 		{"lex", no_argument, &synonym, 'l'},
@@ -102,6 +103,9 @@ main(int argc, char *argv[])
 	int opt = 0;
 	while ((opt = getopt_long(argc, argv, "h", lo, NULL)) != -1) {
 		switch (opt == 0 ? synonym : opt) {
+		case 'a':
+			action = MAX(action, ACTION_ALL_PASSES);
+			break;
 		case 'c':
 			action = MAX(action, ACTION_LEX_PARSE_ASM);
 			break;
