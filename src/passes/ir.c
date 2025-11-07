@@ -58,16 +58,16 @@ ir_expression(const struct ast *a, struct ir_op *prev, struct ir_op **dst)
 		struct ir_op *inner_ops = NULL;
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		check(ir_expression(a->u.op_unary.operand, src, &inner_ops));
-		assert(inner_ops != NULL);
+		assert(inner_ops != NULL); // TODO: can this ever happen?
 
 		if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
-			*dst = src;
 			src->next = inner_ops;
-			src = NULL; /* release ownership */
-		} else {
-			*dst = inner_ops;
+			*dst = src;
+			src = NULL; /* release ownership to caller */
+		} else if (inner_ops != NULL) {
 			inner_ops->next = src;
-			src = NULL; /* release ownership */
+			*dst = inner_ops;
+			src = NULL; /* release ownership to caller */
 		}
 		break;
 	}
@@ -75,8 +75,12 @@ ir_expression(const struct ast *a, struct ir_op *prev, struct ir_op **dst)
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expression(a->u.op_unary.operand, prev, dst));
 		break;
-	default:
+	case NODE_IDENTIFIER:
 		// TODO: add support for NODE_IDENTIFIER -> IR struct
+		info("unexpected NODE_IDENTIFIER within %s(): %.*s",
+		     __func__, (int)a->u.str.sz, a->u.str.data);
+		break;
+	default:
 		// TODO: replace msg below with check_if() error
 		info("unexpected non-expr within ast_statement: %u",
 		     a->node_type);
