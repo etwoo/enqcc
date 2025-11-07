@@ -199,10 +199,10 @@ ir_debug_print_one(const struct ir_op *op)
 			       "invalid op with unset operand");
 			break;
 		case IR_VAL_CONSTANT_INT:
-			debug("  CONSTANT(%lld)", op->args[i].num);
+			debug("  CONSTANT %lld", op->args[i].num);
 			break;
 		case IR_VAL_TEMPORARY_VARIABLE:
-			debug("  VARIABLE(tmp.%lld)", op->args[i].num);
+			debug("  VARIABLE tmp.%lld", op->args[i].num);
 			break;
 		}
 	}
