@@ -19,6 +19,7 @@
 static WARN_UNUSED result_t
 codegen_statement(const struct ir_op *src, struct asm_op **dst)
 {
+	// TODO: add support for unary ops: negation, complement, etc
 	assert(src->opcode == IR_OP_UNARY_IDENTITY);
 	assert(src->args[0].subtype == IR_VAL_CONSTANT_INT);
 
