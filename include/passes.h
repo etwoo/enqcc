@@ -29,8 +29,8 @@ void ir_debug_print(const struct intermediate *ir);
 
 struct assembly;
 
-result_t codegen_init(const struct ast *a, // const struct intermediate *ir
-                      struct assembly **cg) __attribute__((warn_unused_result));
+result_t codegen_init(const struct intermediate *ir, struct assembly **cg)
+	__attribute__((warn_unused_result));
 void codegen_free(struct assembly *cg);
 void codegen_cleanup(struct assembly **cg);
 void codegen_debug_print(const struct assembly *cg);

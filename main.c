@@ -68,13 +68,12 @@ compile(const char *src, const char *dst, enum compiler_action action)
 	check(ir_init(a, &ir));
 	ir_debug_print(ir);
 
-	/*
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR_ASM) {
 		return RESULT_OK;
 	}
 
 	struct assembly *cg __attribute__((cleanup(codegen_cleanup))) = NULL;
-	check(codegen_init(a, &cg));
+	check(codegen_init(ir, &cg));
 	codegen_debug_print(cg);
 
 	if (action != ACTION_ALL_PASSES) {
@@ -92,8 +91,6 @@ compile(const char *src, const char *dst, enum compiler_action action)
 	check_if(fd < 0, ERR_EMIT_FILE_OPEN, errno);
 	emit_asm(cg, platform_choice, fd);
 	close(fd);
-	*/
-	(void)dst; // TODO: remove
 
 	return RESULT_OK;
 }

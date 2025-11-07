@@ -1,7 +1,7 @@
 #include "passes/codegen.h"
 
 #include "passes.h"
-#include "passes/parse.h"
+#include "passes/ir.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
@@ -17,20 +17,18 @@
 	} while (0)
 
 static WARN_UNUSED result_t
-codegen_statement(const struct ast *a, struct asm_op **dst)
+codegen_statement(const struct ir_op *src, struct asm_op **dst)
 {
-	// TODO: add codegen for new expressions like unary ops
-	// TODO: use new intermediate representation for above?
-
-	assert(a->node_type == NODE_EXPRESSION_UNARY_IDENTITY);
-	// assert below is probably outdated; TODO: remove
-	assert(a->u.op_unary.operand->node_type == NODE_CONSTANT_INT);
+	assert(src->base.subtype == IR_OP_UNARY_IDENTITY);
+	assert(src->args[0]->subtype == IR_VAL_CONSTANT_INT);
+	const struct ir_val_constant *irp =
+		(const struct ir_val_constant *)src->args[0];
 
 	assert(*dst == NULL);
 	codegen_alloc(*dst);
 	(*dst)->base.statement_type = ASM_OP_MOV;
 	(*dst)->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	// (*dst)->args[0].num = a->return_expression.constant.num;
+	(*dst)->args[0].num = irp->num;
 	(*dst)->args[1].operand_type = ASM_OPERAND_REGISTER_EAX;
 
 	assert((*dst)->next == NULL);
@@ -41,35 +39,36 @@ codegen_statement(const struct ast *a, struct asm_op **dst)
 }
 
 static WARN_UNUSED result_t
-codegen_function(const struct ast *a, struct asm_function *dst)
+codegen_function(const struct intermediate *ir, struct asm_function *dst)
 {
-	assert(a->node_type == NODE_FUNCTION);
+	assert(ir->subtype == IR_FUNCTION);
 	assert(dst->base.statement_type == ASM_FUNCTION);
-	dst->identifier = a->u.function.identifier->u.str;
-	check(codegen_statement(a->u.function.statement, &dst->ops));
+	const struct ir_function *irp = (const struct ir_function *)ir;
+	dst->identifier = irp->identifier;
+	check(codegen_statement(irp->ops, &dst->ops));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-codegen_program(const struct ast *a, struct asm_program *dst)
+codegen_program(const struct intermediate *ir, struct asm_program *dst)
 {
-	assert(a->node_type == NODE_PROGRAM);
+	assert(ir->subtype == IR_PROGRAM);
 	assert(dst->base.statement_type == ASM_PROGRAM);
 	dst->function.base.statement_type = ASM_FUNCTION;
-	check(codegen_function(a->u.program.entrypoint_function,
-	                       &dst->function));
+	const struct ir_program *irp = (const struct ir_program *)ir;
+	check(codegen_function(&irp->function.base, &dst->function));
 	return RESULT_OK;
 }
 
 result_t
-codegen_init(const struct ast *a, struct assembly **cg)
+codegen_init(const struct intermediate *ir, struct assembly **cg)
 {
 	struct asm_program *program = NULL;
 	codegen_alloc(program);
 	program->base.statement_type = ASM_PROGRAM;
 	*cg = &program->base;
 
-	check(codegen_program(a, program));
+	check(codegen_program(ir, program));
 	return RESULT_OK;
 }
 
