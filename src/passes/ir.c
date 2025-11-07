@@ -38,9 +38,22 @@ ir_free_op_list(struct ir_op *cursor)
 }
 
 static void
-ir_op_cleanup(struct ir_op **pp)
+ir_cleanup_op_list(struct ir_op **pp)
 {
 	ir_free_op_list(*pp);
+}
+
+void
+ir_free(struct intermediate *ir)
+{
+	ir_free_op_list(ir ? ir->function.ops : NULL);
+	free(ir);
+}
+
+void
+ir_cleanup(struct intermediate **ir)
+{
+	ir_free(*ir);
 }
 
 static WARN_UNUSED result_t
@@ -65,7 +78,7 @@ static result_t ir_expression(const struct ast *a,
 static WARN_UNUSED result_t
 ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
-	struct ir_op *src __attribute__((cleanup(ir_op_cleanup))) = NULL;
+	struct ir_op *src __attribute__((cleanup(ir_cleanup_op_list))) = NULL;
 	ir_alloc(src);
 
 	switch (a->node_type) {
@@ -80,32 +93,30 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		break;
 	}
 
-	struct ir_op *inner_ops = NULL;
-	// TODO: move ir_free_op_list() back to be closer to ir_free()
-	check(ir_expression(a->u.op_unary.operand,
-	                    &src->args[0],
-	                    &inner_ops,
-	                    env));
+	struct ir_op *inner __attribute__((cleanup(ir_cleanup_op_list))) = NULL;
+	check(ir_expression(a->u.op_unary.operand, &src->args[0], &inner, env));
 
 	src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	src->args[1].num = env->generator++;
 
 	if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
 		assert(src->next == NULL);
-		src->next = inner_ops;
+		src->next = inner;
 		assert(*dst == NULL);
 		*dst = src;
-		src = NULL; /* release ownership to caller */
+		src = NULL;   /* release ownership to caller */
+		inner = NULL; /* release ownership to caller */
 	} else {
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[0].num = src->args[1].num - 1;
 
-		assert(inner_ops != NULL); // TODO: can this happen?
-		ir_append_to_list(inner_ops, src);
+		assert(inner != NULL); // TODO: can this happen?
+		ir_append_to_list(inner, src);
 
 		assert(*dst == NULL);
-		*dst = inner_ops;
-		src = NULL; /* release ownership to caller */
+		*dst = inner;
+		src = NULL;   /* release ownership to caller */
+		inner = NULL; /* release ownership to caller */
 	}
 	return RESULT_OK;
 }
@@ -175,19 +186,6 @@ ir_init(const struct ast *a, struct intermediate **ir)
 	ir_alloc(*ir);
 	check(ir_program(a, *ir));
 	return RESULT_OK;
-}
-
-void
-ir_free(struct intermediate *ir)
-{
-	ir_free_op_list(ir ? ir->function.ops : NULL);
-	free(ir);
-}
-
-void
-ir_cleanup(struct intermediate **ir)
-{
-	ir_free(*ir);
 }
 
 static void
