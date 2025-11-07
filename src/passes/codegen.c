@@ -23,9 +23,8 @@ codegen_statement(const struct ast *a, struct asm_op **dst)
 	// TODO: use new intermediate representation for above?
 
 	assert(a->node_type == NODE_EXPRESSION_UNARY_IDENTITY);
-	// assert(a->return_expression.base.node_type == NODE_EXPRESSION);
-	// assert(a->return_expression.constant.base.node_type ==
-	// NODE_CONSTANT_INT);
+	// assert below is probably outdated; TODO: remove
+	assert(a->u.op_unary.operand->node_type == NODE_CONSTANT_INT);
 
 	assert(*dst == NULL);
 	codegen_alloc(*dst);
