@@ -100,6 +100,13 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	src->args[1].num = env->generator++;
 
 	if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
+		/*
+		 * Reached a terminal constant. Emit IR in this order:
+		 *
+		 * 1) existing ops created by caller
+		 * 2) the present UNARY_OP(opcode, CONSTANT(...), TMPVAR)
+		 * 3) results of recursive invocation of ir_expression()
+		 */
 		assert(src->next == NULL);
 		src->next = inner;
 		assert(*dst == NULL);
@@ -110,6 +117,13 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[0].num = src->args[1].num - 1;
 
+		/*
+		 * Peeked value is not a constant. Emit IR in this order:
+		 *
+		 * 1) existing ops created by caller
+		 * 2) results of recursive invocation of ir_expression()
+		 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
+		 */
 		assert(inner != NULL);
 		ir_append_to_list(inner, src);
 
