@@ -17,14 +17,15 @@
 	} while (0)
 
 static WARN_UNUSED result_t
-codegen_statement(const struct ast_statement *a, struct asm_op **dst)
+codegen_statement(const struct ast *a, struct asm_op **dst)
 {
 	// TODO: add codegen for new expressions like unary ops
 	// TODO: use new intermediate representation for above?
 
-	assert(a->base.node_type == NODE_STATEMENT);
+	assert(a->node_type == NODE_EXPRESSION_UNARY_IDENTITY);
 	// assert(a->return_expression.base.node_type == NODE_EXPRESSION);
-	// assert(a->return_expression.constant.base.node_type == NODE_CONSTANT_INT);
+	// assert(a->return_expression.constant.base.node_type ==
+	// NODE_CONSTANT_INT);
 
 	assert(*dst == NULL);
 	codegen_alloc(*dst);
@@ -41,22 +42,23 @@ codegen_statement(const struct ast_statement *a, struct asm_op **dst)
 }
 
 static WARN_UNUSED result_t
-codegen_function(const struct ast_function *a, struct asm_function *dst)
+codegen_function(const struct ast *a, struct asm_function *dst)
 {
-	assert(a->base.node_type == NODE_FUNCTION);
+	assert(a->node_type == NODE_FUNCTION);
 	assert(dst->base.statement_type == ASM_FUNCTION);
-	dst->identifier = a->identifier.token;
-	check(codegen_statement(&a->statement, &dst->ops));
+	dst->identifier = a->u.function.identifier->u.str;
+	check(codegen_statement(a->u.function.statement, &dst->ops));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-codegen_program(const struct ast_program *a, struct asm_program *dst)
+codegen_program(const struct ast *a, struct asm_program *dst)
 {
-	assert(a->base.node_type == NODE_PROGRAM);
+	assert(a->node_type == NODE_PROGRAM);
 	assert(dst->base.statement_type == ASM_PROGRAM);
 	dst->function.base.statement_type = ASM_FUNCTION;
-	check(codegen_function(&a->function, &dst->function));
+	check(codegen_function(a->u.program.entrypoint_function,
+	                       &dst->function));
 	return RESULT_OK;
 }
 
@@ -68,7 +70,7 @@ codegen_init(const struct ast *a, struct assembly **cg)
 	program->base.statement_type = ASM_PROGRAM;
 	*cg = &program->base;
 
-	check(codegen_program((const struct ast_program *)a, program));
+	check(codegen_program(a, program));
 	return RESULT_OK;
 }
 

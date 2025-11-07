@@ -10,13 +10,16 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define parse_alloc(dst, init_type)                                            \
-	do {                                                                   \
-		(dst) = malloc(sizeof(*(dst)));                                \
-		check_if((dst) == NULL, ERR_PARSE_ALLOC);                      \
-		memset(dst, 0, sizeof(*(dst)));                                \
-		(dst)->base.node_type = init_type;                             \
-	} while (0)
+static WARN_UNUSED result_t
+parse_alloc(struct ast **a, unsigned node_type)
+{
+	assert(a != NULL);
+	*a = malloc(sizeof(**a));
+	check_if(*a == NULL, ERR_LEX_ALLOC);
+	memset(*a, 0, sizeof(**a));
+	(**a).node_type = node_type;
+	return RESULT_OK;
+}
 
 static WARN_UNUSED bool
 is_token_type(const struct token *tok, unsigned expected)
@@ -27,17 +30,15 @@ is_token_type(const struct token *tok, unsigned expected)
 static void
 token_consume(const struct token **tok)
 {
-	*tok = (*tok)->next;
+	*tok = (**tok).next;
 }
 
 static WARN_UNUSED result_t
-parse_constant(const struct token **tok, struct ast_constant *dst)
+parse_constant(const struct token **tok, struct ast **dst)
 {
-	dst->base.node_type = NODE_CONSTANT_INT;
-
-	if (!is_token_type(*tok, TOKEN_CONSTANT)) {
-		return make_result(ERR_PARSE_CONSTANT_EXPECT_TOKEN_CONSTANT);
-	}
+	assert(is_token_type(*tok, TOKEN_CONSTANT));
+	check(parse_alloc(dst, NODE_CONSTANT_INT));
+	assert(dst != NULL && *dst != NULL);
 
 	/*
 	 * strtoll() does not update errno on success, so we must clear it
@@ -45,14 +46,28 @@ parse_constant(const struct token **tok, struct ast_constant *dst)
 	 */
 	errno = 0;
 
-	dst->num = strtoll((*tok)->val.data, NULL, 0);
+	(**dst).u.num = strtoll((**tok).val.data, NULL, 0);
 	if (errno != 0) {
 		return make_result(ERR_PARSE_CONSTANT_STRTOLL,
 		                   errno,
-		                   (*tok)->val.data,
-		                   (*tok)->val.sz);
+		                   (**tok).val.data,
+		                   (**tok).val.sz);
 	}
 
+	token_consume(tok);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_identifier(const struct token **tok, struct ast **dst)
+{
+	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
+	}
+	check(parse_alloc(dst, NODE_IDENTIFIER));
+	assert(dst != NULL && *dst != NULL);
+
+	(**dst).u.str = (**tok).val;
 	token_consume(tok);
 	return RESULT_OK;
 }
@@ -63,26 +78,24 @@ parse_expression(const struct token **tok, struct ast **dst)
 	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
 
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
-		struct ast_expression_constant *expr = NULL;
-		parse_alloc(expr, NODE_EXPRESSION_PRIMITIVE);
-		*dst = &expr->base;
-		check(parse_constant(tok, &expr->constant));
-	} else if (is_token_type(*tok, TOKEN_TILDE) ||
-	           is_token_type(*tok, TOKEN_HYPHEN)) {
-		struct ast_expression_unary_op *expr = NULL;
-		parse_alloc(expr,
-		            is_token_type(*tok, TOKEN_TILDE)
-		                    ? NODE_EXPRESSION_UNARY_BITWISE_COMPLEMENT
-		                    : NODE_EXPRESSION_UNARY_NEGATION);
+		check(parse_alloc(dst, NODE_EXPRESSION_UNARY_IDENTITY));
+		assert(dst != NULL && *dst != NULL);
+		check(parse_constant(tok, &(**dst).u.op_unary.operand));
+	} else if (is_token_type(*tok, TOKEN_TILDE)) {
+		check(parse_alloc(dst, NODE_EXPRESSION_UNARY_COMPLEMENT));
+		assert(dst != NULL && *dst != NULL);
 		token_consume(tok);
-		*dst = &expr->base;
-		check(parse_expression(tok, &expr->operand));
+		check(parse_expression(tok, &(**dst).u.op_unary.operand));
+	} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
+		check(parse_alloc(dst, NODE_EXPRESSION_UNARY_NEGATION));
+		assert(dst != NULL && *dst != NULL);
+		token_consume(tok);
+		check(parse_expression(tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-		struct ast_expression_paren_enclosed *expr = NULL;
-		parse_alloc(expr, NODE_EXPRESSION_PAREN_ENCLOSED);
+		check(parse_alloc(dst, NODE_EXPRESSION_PAREN_ENCLOSED));
+		assert(dst != NULL && *dst != NULL);
 		token_consume(tok);
-		*dst = &expr->base;
-		check(parse_expression(tok, &expr->enclosed));
+		check(parse_expression(tok, &(**dst).u.op_unary.operand));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE);
@@ -95,16 +108,16 @@ parse_expression(const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_statement(const struct token **tok, struct ast_statement *dst)
+parse_statement(const struct token **tok, struct ast **dst)
 {
-	dst->base.node_type = NODE_STATEMENT;
+	check(parse_alloc(dst, NODE_EXPRESSION_UNARY_IDENTITY));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_KEYWORD_RETURN);
 	}
 	token_consume(tok);
 
-	check(parse_expression(tok, &dst->return_expression));
+	check(parse_expression(tok, &(**dst).u.op_unary.operand));
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
@@ -115,21 +128,16 @@ parse_statement(const struct token **tok, struct ast_statement *dst)
 }
 
 static WARN_UNUSED result_t
-parse_function(const struct token **tok, struct ast_function *dst)
+parse_function(const struct token **tok, struct ast **dst)
 {
-	dst->base.node_type = NODE_FUNCTION;
+	check(parse_alloc(dst, NODE_FUNCTION));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
 	}
 	token_consume(tok);
 
-	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
-	}
-	dst->identifier.base.node_type = NODE_IDENTIFIER;
-	dst->identifier.token = (*tok)->val;
-	token_consume(tok);
+	check(parse_identifier(tok, &(**dst).u.function.identifier));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN);
@@ -151,7 +159,7 @@ parse_function(const struct token **tok, struct ast_function *dst)
 	}
 	token_consume(tok);
 
-	check(parse_statement(tok, &dst->statement));
+	check(parse_statement(tok, &(**dst).u.function.statement));
 
 	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
@@ -161,28 +169,17 @@ parse_function(const struct token **tok, struct ast_function *dst)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-parse_program(const struct token **tok, struct ast_program *dst)
-{
-	dst->base.node_type = NODE_PROGRAM;
-	check(parse_function(tok, &dst->function));
-	return RESULT_OK;
-}
-
 result_t
 parse_init(const struct token *tok, struct ast **a)
 {
-	struct ast_program program = {0};
-	check(parse_program(&tok, &program));
+	check(parse_alloc(a, NODE_PROGRAM));
+	assert(a != NULL && *a != NULL);
+
+	check(parse_function(&tok, &(**a).u.program.entrypoint_function));
 	if (tok != NULL) {
 		return make_result(ERR_PARSE_PROG_EXPECT_END);
 	}
 
-	struct ast_program *out = malloc(sizeof(*out));
-	check_if(out == NULL, ERR_PARSE_ALLOC);
-	memcpy(out, &program, sizeof(*out));
-
-	*a = &out->base;
 	return RESULT_OK;
 }
 
@@ -202,61 +199,41 @@ void
 parse_debug_print(const struct ast *a, size_t indent)
 {
 	assert(indent <= INT_MAX);
-	const struct string_view *s = NULL;
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 		debug("%*sPROGRAM", (int)indent, "");
-		parse_debug_print(&((struct ast_program *)a)->function.base,
-		                  indent + 1);
+		parse_debug_print(a->u.program.entrypoint_function, indent + 1);
 		break;
 	case NODE_FUNCTION:
 		debug("%*sFUNCTION", (int)indent, "");
 		debug("%*sNAME", (int)(indent + 1), "");
-		parse_debug_print(&((struct ast_function *)a)->identifier.base,
-		                  indent + 2);
+		parse_debug_print(a->u.function.identifier, indent + 2);
 		debug("%*sBODY", (int)(indent + 1), "");
-		parse_debug_print(&((struct ast_function *)a)->statement.base,
-		                  indent + 2);
+		parse_debug_print(a->u.function.statement, indent + 2);
 		break;
-	case NODE_STATEMENT:
-		debug("%*sSTATEMENT", (int)indent, "");
-		parse_debug_print(
-			((struct ast_statement *)a)->return_expression,
-			indent + 1);
-		break;
-	case NODE_EXPRESSION_PRIMITIVE:
-		debug("%*sEXPRESSION CONSTANT", (int)indent, "");
-		parse_debug_print(
-			&((struct ast_expression_constant *)a)->constant.base,
-			indent + 1);
+	case NODE_EXPRESSION_UNARY_IDENTITY:
+		debug("%*sEXPRESSION IDENTITY", (int)indent, "");
+		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
 	case NODE_EXPRESSION_UNARY_NEGATION:
 		debug("%*sEXPRESSION NEGATION", (int)indent, "");
-		parse_debug_print(
-			((struct ast_expression_unary_op *)a)->operand,
-			indent + 1);
+		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
-	case NODE_EXPRESSION_UNARY_BITWISE_COMPLEMENT:
-		debug("%*sEXPRESSION BITWISE COMPLEMENT", (int)indent, "");
-		parse_debug_print(
-			((struct ast_expression_unary_op *)a)->operand,
-			indent + 1);
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		debug("%*sEXPRESSION COMPLEMENT", (int)indent, "");
+		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		debug("%*sEXPRESSION PARENTHESIZED", (int)indent, "");
-		parse_debug_print(
-			((struct ast_expression_paren_enclosed *)a)->enclosed,
-			indent + 1);
+		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
-	case NODE_IDENTIFIER:
-		s = &((struct ast_identifier *)a)->token;
+	case NODE_IDENTIFIER: {
+		const struct string_view *s = &a->u.str;
 		debug("%*sIDENT %.*s", (int)indent, "", (int)s->sz, s->data);
 		break;
+	}
 	case NODE_CONSTANT_INT:
-		debug("%*sCONSTANT %lld",
-		      (int)indent,
-		      "",
-		      ((struct ast_constant *)a)->num);
+		debug("%*sCONSTANT %lld", (int)indent, "", a->u.num);
 		break;
 	}
 }

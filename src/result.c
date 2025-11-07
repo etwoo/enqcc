@@ -149,9 +149,6 @@ result_to_str(result_t r)
 	case ERR_PARSE_ALLOC:
 		s = strdup("Cannot allocate ast node during parse");
 		break;
-	case ERR_PARSE_CONSTANT_EXPECT_TOKEN_CONSTANT:
-		s = strdup("Parsing constant expr expects TOKEN_CONSTANT");
-		break;
 	case ERR_PARSE_CONSTANT_STRTOLL:
 		s = my_asprintf(
 			"Parsing constant expr %s with strtoll() failed: %s",

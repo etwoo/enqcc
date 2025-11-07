@@ -21,34 +21,28 @@ static WARN_UNUSED result_t
 ir_expression(const struct ast *a, struct ir_op **dst)
 {
 	switch (a->node_type) {
-	case NODE_EXPRESSION_PRIMITIVE: {
-		const struct ast_expression_constant *expr =
-			(const struct ast_expression_constant *)a;
-		assert(expr->constant.base.node_type == NODE_CONSTANT_INT);
+	case NODE_EXPRESSION_UNARY_IDENTITY: {
 		ir_alloc(*dst, IR_RETURN);
 		struct ir_val_constant *ir_constant = NULL;
 		ir_alloc(ir_constant, IR_VAL_CONSTANT_INT);
-		ir_constant->num = expr->constant.num;
+		ir_constant->num = a->u.num;
 		(*dst)->args[0] = &ir_constant->base;
 		break;
 	}
 	case NODE_EXPRESSION_UNARY_NEGATION:
-	case NODE_EXPRESSION_UNARY_BITWISE_COMPLEMENT: {
-		const struct ast_expression_unary_op *expr =
-			(const struct ast_expression_unary_op *)a;
+	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
 		struct ir_op *op = NULL;
 		ir_alloc(op,
 		         a->node_type == NODE_EXPRESSION_UNARY_NEGATION
 		                 ? IR_OP_UNARY_NEGATE
 		                 : IR_OP_UNARY_COMPLEMENT);
 		*dst = op;
-		check(ir_expression(expr->operand, &op->next));
+		check(ir_expression(a->u.op_unary.operand, &op->next));
+		// TODO: set destination of unary op to temporary variable
 		break;
 	}
 	case NODE_EXPRESSION_PAREN_ENCLOSED: {
-		const struct ast_expression_paren_enclosed *expr =
-			(const struct ast_expression_paren_enclosed *)a;
-		check(ir_expression(expr->enclosed, dst));
+		check(ir_expression(a->u.op_unary.operand, dst));
 		break;
 	}
 	default:
@@ -58,31 +52,31 @@ ir_expression(const struct ast *a, struct ir_op **dst)
 }
 
 static WARN_UNUSED result_t
-ir_statement(const struct ast_statement *a, struct ir_op **dst)
+ir_statement(const struct ast *a, struct ir_op **dst)
 {
-	assert(a->base.node_type == NODE_STATEMENT);
-	assert(a->return_expression != NULL);
-	check(ir_expression(a->return_expression, dst));
+	assert(a->u.op_unary.operand != NULL);
+	check(ir_expression(a->u.op_unary.operand, dst));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-ir_function(const struct ast_function *a, struct ir_function *dst)
+ir_function(const struct ast *a, struct ir_function *dst)
 {
-	assert(a->base.node_type == NODE_FUNCTION);
+	assert(a->node_type == NODE_FUNCTION);
+	assert(a->u.function.identifier->node_type == NODE_IDENTIFIER);
 	assert(dst->base.subtype == IR_FUNCTION);
-	dst->identifier = a->identifier.token;
-	check(ir_statement(&a->statement, &dst->ops));
+	dst->identifier = a->u.function.identifier->u.str;
+	check(ir_statement(a->u.function.statement, &dst->ops));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-ir_program(const struct ast_program *a, struct ir_program *dst)
+ir_program(const struct ast *a, struct ir_program *dst)
 {
-	assert(a->base.node_type == NODE_PROGRAM);
+	assert(a->node_type == NODE_PROGRAM);
 	assert(dst->base.subtype == IR_PROGRAM);
 	dst->function.base.subtype = IR_FUNCTION;
-	check(ir_function(&a->function, &dst->function));
+	check(ir_function(a->u.program.entrypoint_function, &dst->function));
 	return RESULT_OK;
 }
 
@@ -93,7 +87,7 @@ ir_init(const struct ast *a, struct intermediate **ir)
 	ir_alloc(program, IR_PROGRAM);
 	*ir = &program->base;
 
-	check(ir_program((const struct ast_program *)a, program));
+	check(ir_program(a, program));
 	return RESULT_OK;
 }
 
