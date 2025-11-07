@@ -96,7 +96,7 @@ ir_function(const struct ast *a, struct ir_function *dst)
 	assert(a->u.function.identifier->node_type == NODE_IDENTIFIER);
 	dst->identifier = a->u.function.identifier->u.str;
 	assert(a->u.op_unary.operand != NULL);
-	check(ir_expression(a->u.op_unary.operand, NULL, &dst->ops));
+	check(ir_expression(a->u.function.statement, NULL, &dst->ops));
 	return RESULT_OK;
 }
 
@@ -134,20 +134,27 @@ ir_cleanup(struct intermediate **ir)
 static void
 ir_debug_print_one(const struct ir_op *op)
 {
-	// TODO: print unary op description
 	switch (op->opcode) {
 	case IR_OP_UNARY_IDENTITY:
+		debug("UNARY IDENTITY");
+		break;
 	case IR_OP_UNARY_NEGATE:
+		debug("UNARY NEGATION");
+		break;
 	case IR_OP_UNARY_COMPLEMENT:
+		debug("UNARY COMPLEMENT");
 		break;
 	}
 
-	// TODO: print constant values, variable references, etc
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		switch (op->args[i].subtype) {
 		case IR_VAL_NONE:
+			break;
 		case IR_VAL_CONSTANT_INT:
+			debug("CONSTANT(%lld)", op->args[i].num);
+			break;
 		case IR_VAL_TEMPORARY_VARIABLE:
+			debug("VARIABLE(tmp.%lld)", op->args[i].num);
 			break;
 		}
 	}
