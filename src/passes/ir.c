@@ -21,7 +21,7 @@ static WARN_UNUSED result_t
 ir_expression(const struct ast *a, struct ir_op **dst)
 {
 	switch (a->node_type) {
-	case NODE_EXPRESSION_UNARY_IDENTITY: {
+	case NODE_CONSTANT_INT: {
 		ir_alloc(*dst, IR_RETURN);
 		struct ir_val_constant *ir_constant = NULL;
 		ir_alloc(ir_constant, IR_VAL_CONSTANT_INT);
@@ -31,20 +31,18 @@ ir_expression(const struct ast *a, struct ir_op **dst)
 	}
 	case NODE_EXPRESSION_UNARY_NEGATION:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
-		struct ir_op *op = NULL;
-		ir_alloc(op,
+		ir_alloc(*dst,
 		         a->node_type == NODE_EXPRESSION_UNARY_NEGATION
 		                 ? IR_OP_UNARY_NEGATE
 		                 : IR_OP_UNARY_COMPLEMENT);
-		*dst = op;
-		check(ir_expression(a->u.op_unary.operand, &op->next));
+		check(ir_expression(a->u.op_unary.operand, &(**dst).next));
 		// TODO: set destination of unary op to temporary variable
 		break;
 	}
-	case NODE_EXPRESSION_PAREN_ENCLOSED: {
+	case NODE_EXPRESSION_UNARY_IDENTITY:
+	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expression(a->u.op_unary.operand, dst));
 		break;
-	}
 	default:
 		assert(0 && "unexpected non-expr within ast_statement");
 	}
