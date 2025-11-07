@@ -33,52 +33,67 @@ ir_op_cleanup(struct ir_op **pp)
 }
 
 static WARN_UNUSED result_t
-ir_expression(const struct ast *a, struct ir_op *prev, struct ir_op **dst)
+ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT: {
-		assert(prev != NULL); // TODO: convert to check_if()
-		assert(prev->args[0].subtype == IR_VAL_NONE); // TODO: check_if
-		prev->args[0].subtype = IR_VAL_CONSTANT_INT;
-		prev->args[0].num = a->u.num;
+		assert(peek != NULL); // TODO: convert to check_if()
+		assert(peek->subtype == IR_VAL_NONE); // TODO: check_if()
+		peek->subtype = IR_VAL_CONSTANT_INT;
+		peek->num = a->u.num;
 		break;
 	}
+	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_UNARY_NEGATION:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
 		struct ir_op *src __attribute__((cleanup(ir_op_cleanup))) =
 			malloc(sizeof(*src));
 		check_if(src == NULL, ERR_IR_ALLOC);
 		memset(src, 0, sizeof(*src));
-		src->opcode = a->node_type == NODE_EXPRESSION_UNARY_NEGATION
-		                      ? IR_OP_UNARY_NEGATE
-		                      : IR_OP_UNARY_COMPLEMENT;
+		switch (a->node_type) {
+		case NODE_EXPRESSION_UNARY_IDENTITY:
+			src->opcode = IR_OP_UNARY_IDENTITY;
+			break;
+		case NODE_EXPRESSION_UNARY_NEGATION:
+			src->opcode = IR_OP_UNARY_NEGATE;
+			break;
+		case NODE_EXPRESSION_UNARY_COMPLEMENT:
+			src->opcode = IR_OP_UNARY_COMPLEMENT;
+			break;
+		default:
+			assert(0);
+			break;
+		}
 		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[1].num = generate_unique_id_for_ir_tmp();
 
 		struct ir_op *inner_ops = NULL;
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		check(ir_expression(a->u.op_unary.operand, src, &inner_ops));
+		check(ir_expression(a->u.op_unary.operand,
+		                    &src->args[0],
+		                    &inner_ops));
 
 		if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
+			assert(src->next == NULL);
 			src->next = inner_ops;
+			assert(*dst == NULL);
 			*dst = src;
 			src = NULL; /* release ownership to caller */
-		} else if (inner_ops != NULL) {
+		} else {
 			assert(inner_ops != NULL); // TODO: can this happen?
+			while (inner_ops->next != NULL) {
+				inner_ops = inner_ops->next;
+			}
+			assert(inner_ops->next == NULL);
 			inner_ops->next = src;
+			assert(*dst == NULL);
 			*dst = inner_ops;
 			src = NULL; /* release ownership to caller */
 		}
 		break;
 	}
-	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
-		check(ir_expression(a->u.op_unary.operand, prev, dst));
-		break;
-	case NODE_IDENTIFIER:
-		// TODO: add support for NODE_IDENTIFIER -> IR struct
-		info("unexpected NODE_IDENTIFIER within %s(): %.*s",
-		     __func__, (int)a->u.str.sz, a->u.str.data);
+		check(ir_expression(a->u.op_unary.operand, peek, dst));
 		break;
 	default:
 		// TODO: replace msg below with check_if() error
@@ -136,13 +151,15 @@ ir_debug_print_one(const struct ir_op *op)
 {
 	switch (op->opcode) {
 	case IR_OP_UNARY_IDENTITY:
-		debug("UNARY IDENTITY");
+		debug("RETURN");
 		break;
 	case IR_OP_UNARY_NEGATE:
-		debug("UNARY NEGATION");
+		debug("UNARY");
+		debug("  NEGATION");
 		break;
 	case IR_OP_UNARY_COMPLEMENT:
-		debug("UNARY COMPLEMENT");
+		debug("UNARY");
+		debug("  COMPLEMENT");
 		break;
 	}
 
@@ -151,10 +168,10 @@ ir_debug_print_one(const struct ir_op *op)
 		case IR_VAL_NONE:
 			break;
 		case IR_VAL_CONSTANT_INT:
-			debug("CONSTANT(%lld)", op->args[i].num);
+			debug("  CONSTANT(%lld)", op->args[i].num);
 			break;
 		case IR_VAL_TEMPORARY_VARIABLE:
-			debug("VARIABLE(tmp.%lld)", op->args[i].num);
+			debug("  VARIABLE(tmp.%lld)", op->args[i].num);
 			break;
 		}
 	}
