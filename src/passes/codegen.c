@@ -19,16 +19,14 @@
 static WARN_UNUSED result_t
 codegen_statement(const struct ir_op *src, struct asm_op **dst)
 {
-	assert(src->base.subtype == IR_OP_UNARY_IDENTITY);
-	assert(src->args[0]->subtype == IR_VAL_CONSTANT_INT);
-	const struct ir_val_constant *irp =
-		(const struct ir_val_constant *)src->args[0];
+	assert(src->opcode == IR_OP_UNARY_IDENTITY);
+	assert(src->args[0].subtype == IR_VAL_CONSTANT_INT);
 
 	assert(*dst == NULL);
 	codegen_alloc(*dst);
 	(*dst)->base.statement_type = ASM_OP_MOV;
 	(*dst)->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	(*dst)->args[0].num = irp->num;
+	(*dst)->args[0].num = src->args[0].num;
 	(*dst)->args[1].operand_type = ASM_OPERAND_REGISTER_EAX;
 
 	assert((*dst)->next == NULL);
@@ -39,24 +37,20 @@ codegen_statement(const struct ir_op *src, struct asm_op **dst)
 }
 
 static WARN_UNUSED result_t
-codegen_function(const struct intermediate *ir, struct asm_function *dst)
+codegen_function(const struct ir_function *ir, struct asm_function *dst)
 {
-	assert(ir->subtype == IR_FUNCTION);
 	assert(dst->base.statement_type == ASM_FUNCTION);
-	const struct ir_function *irp = (const struct ir_function *)ir;
-	dst->identifier = irp->identifier;
-	check(codegen_statement(irp->ops, &dst->ops));
+	dst->identifier = ir->identifier;
+	check(codegen_statement(ir->ops, &dst->ops));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 codegen_program(const struct intermediate *ir, struct asm_program *dst)
 {
-	assert(ir->subtype == IR_PROGRAM);
 	assert(dst->base.statement_type == ASM_PROGRAM);
 	dst->function.base.statement_type = ASM_FUNCTION;
-	const struct ir_program *irp = (const struct ir_program *)ir;
-	check(codegen_function(&irp->function.base, &dst->function));
+	check(codegen_function(&ir->function, &dst->function));
 	return RESULT_OK;
 }
 

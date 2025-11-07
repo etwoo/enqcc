@@ -66,7 +66,7 @@ compile(const char *src, const char *dst, enum compiler_action action)
 
 	struct intermediate *ir __attribute__((cleanup(ir_cleanup))) = NULL;
 	check(ir_init(a, &ir));
-	ir_debug_print(ir, 0);
+	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR_ASM) {
 		return RESULT_OK;

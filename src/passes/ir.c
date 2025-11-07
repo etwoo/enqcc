@@ -16,72 +16,69 @@ generate_unique_id_for_ir_tmp(void)
 	return generator++;
 }
 
-#define ir_alloc(dst, init_type)                                               \
-	do {                                                                   \
-		(dst) = malloc(sizeof(*(dst)));                                \
-		check_if((dst) == NULL, ERR_IR_ALLOC);                         \
-		memset(dst, 0, sizeof(*(dst)));                                \
-		(dst)->base.subtype = init_type;                               \
-	} while (0)
+static void
+ir_free_op_list(struct ir_op *cursor)
+{
+	while (cursor != NULL) {
+		struct ir_op *tmp = cursor;
+		cursor = cursor->next;
+		free(tmp);
+	}
+}
 
 static void
-ir_alloc_guard(struct intermediate **pp)
+ir_op_cleanup(struct ir_op **pp)
 {
-	free(*pp);
+	ir_free_op_list(*pp);
 }
 
 static WARN_UNUSED result_t
-ir_expression(const struct ast *a, struct ir_op **dst)
+ir_expression(const struct ast *a, struct ir_op *prev, struct ir_op **dst)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT: {
-		struct ir_val_constant *ir_constant = NULL;
-		ir_constant = malloc(sizeof(*ir_constant));
-		check_if(ir_constant == NULL, ERR_IR_ALLOC);
-		memset(ir_constant, 0, sizeof(*ir_constant));
-		ir_constant->base.base.subtype = IR_VAL_CONSTANT_INT;
-		ir_constant->num = a->u.num;
-		*dst = &ir_constant->base;
+		assert(prev != NULL); // TODO: convert to check_if()
+		assert(prev->args[0].subtype == IR_VAL_NONE); // TODO: check_if
+		prev->args[0].subtype = IR_VAL_CONSTANT_INT;
+		prev->args[0].num = a->u.num;
 		break;
 	}
 	case NODE_EXPRESSION_UNARY_NEGATION:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
-		struct ir_op *var_src = NULL;
-		check(ir_expression(a->u.op_unary.operand, &var_src));
-		struct intermediate *var_src_owner
-			__attribute((cleanup(ir_alloc_guard))) = &var_src->base;
+		struct ir_op *src __attribute__((cleanup(ir_op_cleanup))) =
+			malloc(sizeof(*src));
+		check_if(src == NULL, ERR_IR_ALLOC);
+		memset(src, 0, sizeof(*src));
+		src->opcode = a->node_type == NODE_EXPRESSION_UNARY_NEGATION
+		                      ? IR_OP_UNARY_NEGATE
+		                      : IR_OP_UNARY_COMPLEMENT;
+		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[1].num = generate_unique_id_for_ir_tmp();
 
-		struct ir_val_temporary_variable *var_dst = NULL;
-		ir_alloc(var_dst, IR_VAL_TEMPORARY_VARIABLE);
-		var_dst->unique_id = generate_unique_id_for_ir_tmp();
-		struct intermediate *var_dst_owner
-			__attribute((cleanup(ir_alloc_guard))) = &var_dst->base;
+		struct ir_op *inner_ops = NULL;
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+		check(ir_expression(a->u.op_unary.operand, src, &inner_ops));
 
-		ir_alloc(*dst, // NOLINT(clang-analyzer-unix.Malloc)
-		         a->node_type == NODE_EXPRESSION_UNARY_NEGATION
-		                 ? IR_OP_UNARY_NEGATE
-		                 : IR_OP_UNARY_COMPLEMENT);
-		(**dst).args[0] = var_src_owner;
-		var_src_owner = NULL; /* release and transfer ownership */
-		(**dst).args[1] = var_dst_owner;
-		var_dst_owner = NULL; /* release and transfer ownership */
+		if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
+			*dst = src;
+			src->next = inner_ops;
+			src = NULL; /* release ownership */
+		} else {
+			*dst = inner_ops;
+			inner_ops->next = src;
+			src = NULL; /* release ownership */
+		}
 		break;
 	}
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
-		check(ir_expression(a->u.op_unary.operand, dst));
+		check(ir_expression(a->u.op_unary.operand, prev, dst));
 		break;
 	default:
+		// TODO: add support for NODE_IDENTIFIER -> IR struct
+		// TODO: replace assert below with check_if() error
 		assert(0 && "unexpected non-expr within ast_statement");
 	}
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-ir_statement(const struct ast *a, struct ir_op **dst)
-{
-	assert(a->u.op_unary.operand != NULL);
-	check(ir_expression(a->u.op_unary.operand, dst));
 	return RESULT_OK;
 }
 
@@ -90,18 +87,16 @@ ir_function(const struct ast *a, struct ir_function *dst)
 {
 	assert(a->node_type == NODE_FUNCTION);
 	assert(a->u.function.identifier->node_type == NODE_IDENTIFIER);
-	assert(dst->base.subtype == IR_FUNCTION);
 	dst->identifier = a->u.function.identifier->u.str;
-	check(ir_statement(a->u.function.statement, &dst->ops));
+	assert(a->u.op_unary.operand != NULL);
+	check(ir_expression(a->u.op_unary.operand, NULL, &dst->ops));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-ir_program(const struct ast *a, struct ir_program *dst)
+ir_program(const struct ast *a, struct intermediate *dst)
 {
 	assert(a->node_type == NODE_PROGRAM);
-	assert(dst->base.subtype == IR_PROGRAM);
-	dst->function.base.subtype = IR_FUNCTION;
 	check(ir_function(a->u.program.entrypoint_function, &dst->function));
 	return RESULT_OK;
 }
@@ -109,33 +104,18 @@ ir_program(const struct ast *a, struct ir_program *dst)
 result_t
 ir_init(const struct ast *a, struct intermediate **ir)
 {
-	struct ir_program *program = NULL;
-	ir_alloc(program, IR_PROGRAM);
-	*ir = &program->base;
-
-	check(ir_program(a, program));
+	*ir = malloc(sizeof(**ir));
+	check_if(*ir == NULL, ERR_IR_ALLOC);
+	memset(*ir, 0, sizeof(**ir));
+	check(ir_program(a, *ir));
 	return RESULT_OK;
 }
 
 void
 ir_free(struct intermediate *ir)
 {
-	if (ir != NULL) {
-		assert(ir->subtype == IR_PROGRAM);
-		struct ir_program *program = (struct ir_program *)ir;
-
-		struct ir_op *ops = program->function.ops;
-		while (ops != NULL) {
-			struct ir_op *tmp = ops;
-			ops = ops->next;
-			for (size_t i = 0; i < ARRAY_SIZE(tmp->args); ++i) {
-				free(tmp->args[i]);
-			}
-			free(tmp);
-		}
-
-		free(ir);
-	}
+	ir_free_op_list(ir ? ir->function.ops : NULL);
+	free(ir);
 }
 
 void
@@ -144,62 +124,44 @@ ir_cleanup(struct intermediate **ir)
 	ir_free(*ir);
 }
 
-void
-ir_debug_print(const struct intermediate *ir, size_t indent)
+static void
+ir_debug_print_one(const struct ir_op *op)
 {
-	if (ir == NULL) {
-		return;
-	}
-
-	switch (ir->subtype) {
-	case IR_PROGRAM: {
-		debug("%*sPROGRAM", (int)indent, "");
-		const struct ir_program *p = (const struct ir_program *)ir;
-		ir_debug_print(&p->function.base, indent /* same indent as caller */);
-		break;
-	}
-	case IR_FUNCTION: {
-		const struct ir_function *f = (const struct ir_function *)ir;
-		const struct string_view *str = &f->identifier;
-		debug("%*sFUNC%.*s", (int)indent, "", (int)str->sz, str->data);
-		ir_debug_print(&f->ops->base, indent /* same indent as caller */);
-		break;
-	}
-	case IR_VAL_CONSTANT_INT: {
-		const struct ir_val_constant *val =
-			(const struct ir_val_constant *)ir;
-		debug("%*sCONSTANT %lld", (int)indent, "", val->num);
-		break;
-	}
-	case IR_VAL_TEMPORARY_VARIABLE: {
-		const struct ir_val_temporary_variable *tmpvar =
-			(const struct ir_val_temporary_variable *)ir;
-		debug("%*sVARIABLE %lld", (int)indent, "", tmpvar->unique_id);
-		break;
-	}
+	// TODO: print unary op description
+	switch (op->opcode) {
 	case IR_OP_UNARY_IDENTITY:
 	case IR_OP_UNARY_NEGATE:
-	case IR_OP_UNARY_COMPLEMENT: {
-		debug("%*sUNARY", (int)indent, "");
-		switch (ir->subtype) {
-		case IR_OP_UNARY_IDENTITY:
-			debug("%*sIDENTITY", (int)indent + 2, "");
-			break;
-		case IR_OP_UNARY_NEGATE:
-			debug("%*sNEGATION", (int)indent + 2, "");
-			break;
-		case IR_OP_UNARY_COMPLEMENT:
-			debug("%*sCOMPLEMENT", (int)indent + 2, "");
-			break;
-		default:
-			break;
-		}
-		const struct ir_op *ops = (const struct ir_op *)ir;
-		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
-			ir_debug_print(ops->args[i], indent + 2);
-		}
-		ir_debug_print(&ops->next->base, indent);
+	case IR_OP_UNARY_COMPLEMENT:
 		break;
 	}
+
+	// TODO: print constant values, variable references, etc
+	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+		switch (op->args[i].subtype) {
+		case IR_VAL_NONE:
+		case IR_VAL_CONSTANT_INT:
+		case IR_VAL_TEMPORARY_VARIABLE:
+			break;
+		}
 	}
+}
+
+static void
+ir_debug_print_list(const struct ir_op *cursor)
+{
+	while (cursor != NULL) {
+		ir_debug_print_one(cursor);
+		cursor = cursor->next;
+	}
+}
+
+void
+ir_debug_print(const struct intermediate *ir)
+{
+	debug("PROGRAM");
+
+	const struct string_view *entrypoint = &ir->function.identifier;
+	debug("FUNC %.*s", (int)entrypoint->sz, entrypoint->data);
+
+	ir_debug_print_list(ir->function.ops);
 }
