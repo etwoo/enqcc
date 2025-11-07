@@ -110,7 +110,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[0].num = src->args[1].num - 1;
 
-		assert(inner != NULL); // TODO: can this happen?
+		assert(inner != NULL);
 		ir_append_to_list(inner, src);
 
 		assert(*dst == NULL);
