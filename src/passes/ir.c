@@ -58,6 +58,7 @@ ir_expression(const struct ast *a, struct ir_op *prev, struct ir_op **dst)
 		struct ir_op *inner_ops = NULL;
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		check(ir_expression(a->u.op_unary.operand, src, &inner_ops));
+		assert(inner_ops != NULL);
 
 		if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
 			*dst = src;
@@ -76,8 +77,10 @@ ir_expression(const struct ast *a, struct ir_op *prev, struct ir_op **dst)
 		break;
 	default:
 		// TODO: add support for NODE_IDENTIFIER -> IR struct
-		// TODO: replace assert below with check_if() error
-		assert(0 && "unexpected non-expr within ast_statement");
+		// TODO: replace msg below with check_if() error
+		info("unexpected non-expr within ast_statement: %u",
+		     a->node_type);
+		break;
 	}
 	return RESULT_OK;
 }
