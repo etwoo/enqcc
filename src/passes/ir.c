@@ -19,6 +19,17 @@ generate_unique_id_for_ir_tmp(void)
 }
 
 static void
+ir_append_to_list(struct ir_op *cursor, struct ir_op *node)
+{
+	assert(cursor != NULL);
+	while (cursor->next != NULL) {
+		cursor = cursor->next;
+	}
+	assert(cursor->next == NULL);
+	cursor->next = node;
+}
+
+static void
 ir_free_op_list(struct ir_op *cursor)
 {
 	while (cursor != NULL) {
@@ -83,13 +94,8 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 			src->args[0].num = src->args[1].num - 1;
 
 			assert(inner_ops != NULL); // TODO: can this happen?
-			struct ir_op *append_to = inner_ops;
-			while (append_to->next != NULL) {
-				append_to = append_to->next;
-			}
+			ir_append_to_list(inner_ops, src);
 
-			assert(append_to->next == NULL);
-			append_to->next = src;
 			assert(*dst == NULL);
 			*dst = inner_ops;
 			src = NULL; /* release ownership to caller */
@@ -115,8 +121,18 @@ ir_function(const struct ast *a, struct ir_function *dst)
 	assert(a->node_type == NODE_FUNCTION);
 	assert(a->u.function.identifier->node_type == NODE_IDENTIFIER);
 	dst->identifier = a->u.function.identifier->u.str;
+
 	assert(a->u.op_unary.operand != NULL);
 	check(ir_expression(a->u.function.statement, NULL, &dst->ops));
+
+	struct ir_op *last_op = malloc(sizeof(*last_op));
+	check_if(last_op == NULL, ERR_IR_ALLOC);
+	memset(last_op, 0, sizeof(*last_op));
+	last_op->opcode = IR_OP_UNARY_IDENTITY;
+	last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	last_op->args[0].num = generator - 1;
+	ir_append_to_list(dst->ops, last_op);
+
 	return RESULT_OK;
 }
 
@@ -171,7 +187,8 @@ ir_debug_print_one(const struct ir_op *op)
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		switch (op->args[i].subtype) {
 		case IR_VAL_NONE:
-			assert(0 && "incorrectly unset IR arg w/ IR_VAL_NONE");
+			assert(i > 0 && op->opcode == IR_OP_UNARY_IDENTITY &&
+			       "invalid op with unset operand");
 			break;
 		case IR_VAL_CONSTANT_INT:
 			debug("  CONSTANT(%lld)", op->args[i].num);
@@ -201,6 +218,4 @@ ir_debug_print(const struct intermediate *ir)
 	debug("FUNC %.*s", (int)entrypoint->sz, entrypoint->data);
 
 	ir_debug_print_list(ir->function.ops);
-	debug("RETURN");
-	debug("  VARIABLE(tmp.%lld)", generator - 1);
 }
