@@ -58,13 +58,13 @@ ir_expression(const struct ast *a, struct ir_op *prev, struct ir_op **dst)
 		struct ir_op *inner_ops = NULL;
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		check(ir_expression(a->u.op_unary.operand, src, &inner_ops));
-		assert(inner_ops != NULL); // TODO: can this ever happen?
 
 		if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
 			src->next = inner_ops;
 			*dst = src;
 			src = NULL; /* release ownership to caller */
 		} else if (inner_ops != NULL) {
+			assert(inner_ops != NULL); // TODO: can this happen?
 			inner_ops->next = src;
 			*dst = inner_ops;
 			src = NULL; /* release ownership to caller */
