@@ -17,14 +17,14 @@
 	} while (0)
 
 static void
-ir_append_to_list(struct ir_op *cursor, struct ir_op *node)
+ir_concat_ops(struct ir_op *first, struct ir_op *second)
 {
-	assert(cursor != NULL);
-	while (cursor->next != NULL) {
-		cursor = cursor->next;
+	assert(first != NULL);
+	while (first->next != NULL) {
+		first = first->next;
 	}
-	assert(cursor->next == NULL);
-	cursor->next = node;
+	assert(first->next == NULL);
+	first->next = second;
 }
 
 static void
@@ -78,6 +78,8 @@ static result_t ir_expression(const struct ast *a,
 static WARN_UNUSED result_t
 ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
+	assert(*dst == NULL);
+
 	struct ir_op *src __attribute__((cleanup(ir_cleanup_op_list))) = NULL;
 	ir_alloc(src);
 
@@ -107,14 +109,11 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * 2) the present UNARY_OP(opcode, CONSTANT(...), TMPVAR)
 		 * 3) results of recursive invocation of ir_expression()
 		 */
-		assert(src->next == NULL);
-		src->next = inner;
-		assert(*dst == NULL);
+		ir_concat_ops(src, inner);
 		*dst = src;
 	} else {
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[0].num = src->args[1].num - 1;
-
 		/*
 		 * Peeked value is not a constant. Emit IR in this order:
 		 *
@@ -122,10 +121,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * 2) results of recursive invocation of ir_expression()
 		 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
 		 */
-		assert(inner != NULL);
-		ir_append_to_list(inner, src);
-
-		assert(*dst == NULL);
+		ir_concat_ops(inner, src);
 		*dst = inner;
 	}
 	src = NULL;   /* release ownership to caller */
@@ -175,7 +171,7 @@ ir_function(const struct ast *a, struct ir_function *dst, struct ir_env *env)
 		last_op->opcode = IR_OP_UNARY_IDENTITY;
 		last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		last_op->args[0].num = env->generator - 1;
-		ir_append_to_list(dst->ops, last_op);
+		ir_concat_ops(dst->ops, last_op);
 	}
 
 	return RESULT_OK;
