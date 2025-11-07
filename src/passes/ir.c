@@ -16,16 +16,6 @@
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
 
-// TODO: mv generator into `struct intermediate`, get rid of mutable globals
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static long long int generator = 0;
-
-static long long int
-generate_unique_id_for_ir_tmp(void)
-{
-	return generator++;
-}
-
 static void
 ir_append_to_list(struct ir_op *cursor, struct ir_op *node)
 {
@@ -54,7 +44,10 @@ ir_op_cleanup(struct ir_op **pp)
 }
 
 static WARN_UNUSED result_t
-ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
+ir_expression(const struct ast *a,
+              struct ir_val *peek,
+              struct ir_op **dst,
+              struct ir_env *env)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT: {
@@ -93,10 +86,11 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		check(ir_expression(a->u.op_unary.operand,
 		                    &src->args[0],
-		                    &inner_ops));
+		                    &inner_ops,
+		                    env));
 
 		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[1].num = generate_unique_id_for_ir_tmp();
+		src->args[1].num = env->generator++;
 
 		if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
 			assert(src->next == NULL);
@@ -119,7 +113,7 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 	}
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
-		check(ir_expression(a->u.op_unary.operand, peek, dst));
+		check(ir_expression(a->u.op_unary.operand, peek, dst, env));
 		break;
 	default:
 		// TODO: replace msg below with check_if() error
@@ -131,21 +125,21 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 }
 
 static WARN_UNUSED result_t
-ir_function(const struct ast *a, struct ir_function *dst)
+ir_function(const struct ast *a, struct ir_function *dst, struct ir_env *env)
 {
 	assert(a->node_type == NODE_FUNCTION);
 	assert(a->u.function.identifier->node_type == NODE_IDENTIFIER);
 	dst->identifier = a->u.function.identifier->u.str;
 
 	assert(a->u.op_unary.operand != NULL);
-	check(ir_expression(a->u.function.statement, NULL, &dst->ops));
+	check(ir_expression(a->u.function.statement, NULL, &dst->ops, env));
 
-	if (generator > 0) {
+	if (env->generator > 0) {
 		struct ir_op *last_op = NULL;
 		ir_alloc(last_op);
 		last_op->opcode = IR_OP_UNARY_IDENTITY;
 		last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		last_op->args[0].num = generator - 1;
+		last_op->args[0].num = env->generator - 1;
 		ir_append_to_list(dst->ops, last_op);
 	}
 
@@ -156,7 +150,9 @@ static WARN_UNUSED result_t
 ir_program(const struct ast *a, struct intermediate *dst)
 {
 	assert(a->node_type == NODE_PROGRAM);
-	check(ir_function(a->u.program.entrypoint_function, &dst->function));
+	check(ir_function(a->u.program.entrypoint_function,
+	                  &dst->function,
+	                  &dst->env));
 	return RESULT_OK;
 }
 

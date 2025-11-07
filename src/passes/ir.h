@@ -27,8 +27,13 @@ struct ir_function {
 	struct ir_op *ops;
 };
 
+struct ir_env {
+	long long int generator;
+};
+
 struct intermediate {
 	struct ir_function function;
+	struct ir_env env;
 };
 
 #endif
