@@ -10,7 +10,7 @@
 #include <stdlib.h>
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static long long int generator = 1;
+static long long int generator = 0;
 
 static long long int
 generate_unique_id_for_ir_tmp(void)
@@ -196,5 +196,5 @@ ir_debug_print(const struct intermediate *ir)
 
 	ir_debug_print_list(ir->function.ops);
 	debug("RETURN");
-	debug("  VARIABLE(tmp.1)");
+	debug("  VARIABLE(tmp.0)");
 }
