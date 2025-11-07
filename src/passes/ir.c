@@ -16,7 +16,7 @@
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
 
-// TODO: mv generator state into ir_program to get rid of mutable global state
+// TODO: mv generator into `struct intermediate`, get rid of mutable globals
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static long long int generator = 0;
 
