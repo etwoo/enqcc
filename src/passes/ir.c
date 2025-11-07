@@ -81,11 +81,12 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 			src = NULL; /* release ownership to caller */
 		} else {
 			assert(inner_ops != NULL); // TODO: can this happen?
-			while (inner_ops->next != NULL) {
-				inner_ops = inner_ops->next;
+			struct ir_op *append_to = inner_ops;
+			while (append_to->next != NULL) {
+				append_to = append_to->next;
 			}
-			assert(inner_ops->next == NULL);
-			inner_ops->next = src;
+			assert(append_to->next == NULL);
+			append_to->next = src;
 			assert(*dst == NULL);
 			*dst = inner_ops;
 			src = NULL; /* release ownership to caller */
