@@ -9,10 +9,12 @@
 #include <assert.h>
 #include <stdlib.h>
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static long long int generator = 1;
+
 static long long int
 generate_unique_id_for_ir_tmp(void)
 {
-	static long long int generator = 1;
 	return generator++;
 }
 
@@ -43,7 +45,6 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 		peek->num = a->u.num;
 		break;
 	}
-	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_UNARY_NEGATION:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
 		struct ir_op *src __attribute__((cleanup(ir_op_cleanup))) =
@@ -51,9 +52,6 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 		check_if(src == NULL, ERR_IR_ALLOC);
 		memset(src, 0, sizeof(*src));
 		switch (a->node_type) {
-		case NODE_EXPRESSION_UNARY_IDENTITY:
-			src->opcode = IR_OP_UNARY_IDENTITY;
-			break;
 		case NODE_EXPRESSION_UNARY_NEGATION:
 			src->opcode = IR_OP_UNARY_NEGATE;
 			break;
@@ -93,6 +91,7 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 		}
 		break;
 	}
+	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expression(a->u.op_unary.operand, peek, dst));
 		break;
@@ -196,4 +195,6 @@ ir_debug_print(const struct intermediate *ir)
 	debug("FUNC %.*s", (int)entrypoint->sz, entrypoint->data);
 
 	ir_debug_print_list(ir->function.ops);
+	debug("RETURN");
+	debug("  VARIABLE(tmp.1)");
 }
