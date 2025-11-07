@@ -58,6 +58,7 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT: {
+		// TODO: move body of case statement into separate function
 		if (peek == NULL) {
 			ir_alloc(*dst);
 			(**dst).opcode = IR_OP_UNARY_IDENTITY;
@@ -70,6 +71,7 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 	}
 	case NODE_EXPRESSION_UNARY_NEGATION:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
+		// TODO: move body of case statement into separate function
 		struct ir_op *src __attribute__((cleanup(ir_op_cleanup))) =
 			NULL;
 		ir_alloc(src);
@@ -86,6 +88,8 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 		}
 
 		struct ir_op *inner_ops = NULL;
+		// TODO: refactor ir_op_cleanup, etc get rid of NOLINTNEXTLINE
+		// TODO: move ir_free_op_list() back to be closer to ir_free()
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		check(ir_expression(a->u.op_unary.operand,
 		                    &src->args[0],
