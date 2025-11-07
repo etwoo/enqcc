@@ -111,8 +111,6 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		src->next = inner;
 		assert(*dst == NULL);
 		*dst = src;
-		src = NULL;   /* release ownership to caller */
-		inner = NULL; /* release ownership to caller */
 	} else {
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[0].num = src->args[1].num - 1;
@@ -129,9 +127,10 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 
 		assert(*dst == NULL);
 		*dst = inner;
-		src = NULL;   /* release ownership to caller */
-		inner = NULL; /* release ownership to caller */
 	}
+	src = NULL;   /* release ownership to caller */
+	inner = NULL; /* release ownership to caller */
+
 	return RESULT_OK;
 }
 
