@@ -124,8 +124,6 @@ ir_debug_print(const struct intermediate *ir)
 	}
 
 	switch (ir->subtype) {
-	case IR_NONE:
-		break;
 	case IR_PROGRAM: {
 		debug("PROGRAM");
 		const struct ir_program *p = (const struct ir_program *)ir;

@@ -5,7 +5,6 @@
 
 struct intermediate {
 	enum {
-		IR_NONE,
 		IR_PROGRAM,
 		IR_FUNCTION,
 		IR_VAL_CONSTANT_INT,
@@ -28,7 +27,7 @@ struct ir_val_variable {
 
 struct ir_op {
 	struct intermediate base;
-	struct intermediate *args[2];
+	struct intermediate *args[1]; /* TODO: 1->2 for binary ops */
 	struct ir_op *next;
 };
 
