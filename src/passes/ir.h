@@ -8,27 +8,27 @@ struct intermediate {
 		IR_PROGRAM,
 		IR_FUNCTION,
 		IR_VAL_CONSTANT_INT,
-		IR_VAL_VARIABLE,
+		IR_VAL_TEMPORARY_VARIABLE,
 		IR_OP_UNARY_IDENTITY, /* aka return */
 		IR_OP_UNARY_NEGATE,
 		IR_OP_UNARY_COMPLEMENT,
 	} subtype;
 };
 
-struct ir_val_constant {
+struct ir_val_temporary_variable {
 	struct intermediate base;
-	long long int num;
-};
-
-struct ir_val_variable {
-	struct intermediate base;
-	struct string_view identifier;
+	long long int unique_id;
 };
 
 struct ir_op {
 	struct intermediate base;
-	struct intermediate *args[1]; /* TODO: 1->2 for binary ops */
+	struct intermediate *args[2];
 	struct ir_op *next;
+};
+
+struct ir_val_constant {
+	struct ir_op base;
+	long long int num;
 };
 
 struct ir_function {

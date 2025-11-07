@@ -9,6 +9,13 @@
 #include <assert.h>
 #include <stdlib.h>
 
+static long long int
+generate_unique_id_for_ir_tmp(void)
+{
+	static long long int generator = 1;
+	return generator++;
+}
+
 #define ir_alloc(dst, init_type)                                               \
 	do {                                                                   \
 		(dst) = malloc(sizeof(*(dst)));                                \
@@ -17,26 +24,47 @@
 		(dst)->base.subtype = init_type;                               \
 	} while (0)
 
+static void
+ir_alloc_guard(struct intermediate **pp)
+{
+	free(*pp);
+}
+
 static WARN_UNUSED result_t
 ir_expression(const struct ast *a, struct ir_op **dst)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT: {
-		ir_alloc(*dst, IR_OP_UNARY_IDENTITY);
 		struct ir_val_constant *ir_constant = NULL;
-		ir_alloc(ir_constant, IR_VAL_CONSTANT_INT);
+		ir_constant = malloc(sizeof(*ir_constant));
+		check_if(ir_constant == NULL, ERR_IR_ALLOC);
+		memset(ir_constant, 0, sizeof(*ir_constant));
+		ir_constant->base.base.subtype = IR_VAL_CONSTANT_INT;
 		ir_constant->num = a->u.num;
-		(*dst)->args[0] = &ir_constant->base;
+		*dst = &ir_constant->base;
 		break;
 	}
 	case NODE_EXPRESSION_UNARY_NEGATION:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
-		ir_alloc(*dst,
+		struct ir_op *var_src = NULL;
+		check(ir_expression(a->u.op_unary.operand, &var_src));
+		struct intermediate *var_src_owner
+			__attribute((cleanup(ir_alloc_guard))) = &var_src->base;
+
+		struct ir_val_temporary_variable *var_dst = NULL;
+		ir_alloc(var_dst, IR_VAL_TEMPORARY_VARIABLE);
+		var_dst->unique_id = generate_unique_id_for_ir_tmp();
+		struct intermediate *var_dst_owner
+			__attribute((cleanup(ir_alloc_guard))) = &var_dst->base;
+
+		ir_alloc(*dst, // NOLINT(clang-analyzer-unix.Malloc)
 		         a->node_type == NODE_EXPRESSION_UNARY_NEGATION
 		                 ? IR_OP_UNARY_NEGATE
 		                 : IR_OP_UNARY_COMPLEMENT);
-		check(ir_expression(a->u.op_unary.operand, &(**dst).next));
-		// TODO: set destination of unary op to temporary variable
+		(**dst).args[0] = var_src_owner;
+		var_src_owner = NULL; /* release and transfer ownership */
+		(**dst).args[1] = var_dst_owner;
+		var_dst_owner = NULL; /* release and transfer ownership */
 		break;
 	}
 	case NODE_EXPRESSION_UNARY_IDENTITY:
@@ -117,7 +145,7 @@ ir_cleanup(struct intermediate **ir)
 }
 
 void
-ir_debug_print(const struct intermediate *ir)
+ir_debug_print(const struct intermediate *ir, size_t indent)
 {
 	if (ir == NULL) {
 		return;
@@ -125,48 +153,52 @@ ir_debug_print(const struct intermediate *ir)
 
 	switch (ir->subtype) {
 	case IR_PROGRAM: {
-		debug("PROGRAM");
+		debug("%*sPROGRAM", (int)indent, "");
 		const struct ir_program *p = (const struct ir_program *)ir;
-		ir_debug_print(&p->function.base);
+		ir_debug_print(&p->function.base, indent /* same indent as caller */);
 		break;
 	}
 	case IR_FUNCTION: {
 		const struct ir_function *f = (const struct ir_function *)ir;
 		const struct string_view *str = &f->identifier;
-		debug("FUNCTION %.*s", (int)str->sz, str->data);
-		ir_debug_print(&f->ops->base);
+		debug("%*sFUNC%.*s", (int)indent, "", (int)str->sz, str->data);
+		ir_debug_print(&f->ops->base, indent /* same indent as caller */);
 		break;
 	}
 	case IR_VAL_CONSTANT_INT: {
 		const struct ir_val_constant *val =
 			(const struct ir_val_constant *)ir;
-		debug("CONSTANT %lld", val->num);
+		debug("%*sCONSTANT %lld", (int)indent, "", val->num);
 		break;
 	}
-	case IR_VAL_VARIABLE:
-		assert(0 && "ir_debug_print + IR_VAL_VARIABLE: unimplemented");
+	case IR_VAL_TEMPORARY_VARIABLE: {
+		const struct ir_val_temporary_variable *tmpvar =
+			(const struct ir_val_temporary_variable *)ir;
+		debug("%*sVARIABLE %lld", (int)indent, "", tmpvar->unique_id);
 		break;
+	}
 	case IR_OP_UNARY_IDENTITY:
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT: {
+		debug("%*sUNARY", (int)indent, "");
 		switch (ir->subtype) {
 		case IR_OP_UNARY_IDENTITY:
-			debug("UNARY IDENTITY");
+			debug("%*sIDENTITY", (int)indent + 2, "");
 			break;
 		case IR_OP_UNARY_NEGATE:
-			debug("UNARY NEGATION");
+			debug("%*sNEGATION", (int)indent + 2, "");
 			break;
 		case IR_OP_UNARY_COMPLEMENT:
-			debug("UNARY COMPLEMENT");
+			debug("%*sCOMPLEMENT", (int)indent + 2, "");
 			break;
 		default:
 			break;
 		}
 		const struct ir_op *ops = (const struct ir_op *)ir;
 		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
-			ir_debug_print(ops->args[i]);
+			ir_debug_print(ops->args[i], indent + 2);
 		}
-		ir_debug_print(&ops->next->base);
+		ir_debug_print(&ops->next->base, indent);
 		break;
 	}
 	}

@@ -25,7 +25,7 @@ result_t ir_init(const struct ast *a, struct intermediate **ir)
 	__attribute__((warn_unused_result));
 void ir_free(struct intermediate *ir);
 void ir_cleanup(struct intermediate **ir);
-void ir_debug_print(const struct intermediate *ir);
+void ir_debug_print(const struct intermediate *ir, size_t indent);
 
 struct assembly;
 
