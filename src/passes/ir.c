@@ -44,73 +44,88 @@ ir_op_cleanup(struct ir_op **pp)
 }
 
 static WARN_UNUSED result_t
+ir_constant(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
+{
+	if (peek == NULL) {
+		ir_alloc(*dst);
+		(**dst).opcode = IR_OP_UNARY_IDENTITY;
+		peek = &(**dst).args[0];
+	}
+	assert(peek->subtype == IR_VAL_NONE);
+	peek->subtype = IR_VAL_CONSTANT_INT;
+	peek->num = a->u.num;
+	return RESULT_OK;
+}
+
+static result_t ir_expression(const struct ast *a,
+                              struct ir_val *peek,
+                              struct ir_op **dst,
+                              struct ir_env *env) WARN_UNUSED;
+
+static WARN_UNUSED result_t
+ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+{
+	struct ir_op *src __attribute__((cleanup(ir_op_cleanup))) = NULL;
+	ir_alloc(src);
+
+	switch (a->node_type) {
+	case NODE_EXPRESSION_UNARY_NEGATION:
+		src->opcode = IR_OP_UNARY_NEGATE;
+		break;
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		src->opcode = IR_OP_UNARY_COMPLEMENT;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	struct ir_op *inner_ops = NULL;
+	// TODO: refactor ir_op_cleanup, etc get rid of NOLINTNEXTLINE
+	// TODO: move ir_free_op_list() back to be closer to ir_free()
+	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+	check(ir_expression(a->u.op_unary.operand,
+	                    &src->args[0],
+	                    &inner_ops,
+	                    env));
+
+	src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	src->args[1].num = env->generator++;
+
+	if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
+		assert(src->next == NULL);
+		src->next = inner_ops;
+		assert(*dst == NULL);
+		*dst = src;
+		src = NULL; /* release ownership to caller */
+	} else {
+		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[0].num = src->args[1].num - 1;
+
+		assert(inner_ops != NULL); // TODO: can this happen?
+		ir_append_to_list(inner_ops, src);
+
+		assert(*dst == NULL);
+		*dst = inner_ops;
+		src = NULL; /* release ownership to caller */
+	}
+	return RESULT_OK;
+}
+
+result_t
 ir_expression(const struct ast *a,
               struct ir_val *peek,
               struct ir_op **dst,
               struct ir_env *env)
 {
 	switch (a->node_type) {
-	case NODE_CONSTANT_INT: {
-		// TODO: move body of case statement into separate function
-		if (peek == NULL) {
-			ir_alloc(*dst);
-			(**dst).opcode = IR_OP_UNARY_IDENTITY;
-			peek = &(**dst).args[0];
-		}
-		assert(peek->subtype == IR_VAL_NONE);
-		peek->subtype = IR_VAL_CONSTANT_INT;
-		peek->num = a->u.num;
+	case NODE_CONSTANT_INT:
+		check(ir_constant(a, peek, dst));
 		break;
-	}
 	case NODE_EXPRESSION_UNARY_NEGATION:
-	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
-		// TODO: move body of case statement into separate function
-		struct ir_op *src __attribute__((cleanup(ir_op_cleanup))) =
-			NULL;
-		ir_alloc(src);
-		switch (a->node_type) {
-		case NODE_EXPRESSION_UNARY_NEGATION:
-			src->opcode = IR_OP_UNARY_NEGATE;
-			break;
-		case NODE_EXPRESSION_UNARY_COMPLEMENT:
-			src->opcode = IR_OP_UNARY_COMPLEMENT;
-			break;
-		default:
-			assert(0);
-			break;
-		}
-
-		struct ir_op *inner_ops = NULL;
-		// TODO: refactor ir_op_cleanup, etc get rid of NOLINTNEXTLINE
-		// TODO: move ir_free_op_list() back to be closer to ir_free()
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		check(ir_expression(a->u.op_unary.operand,
-		                    &src->args[0],
-		                    &inner_ops,
-		                    env));
-
-		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[1].num = env->generator++;
-
-		if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
-			assert(src->next == NULL);
-			src->next = inner_ops;
-			assert(*dst == NULL);
-			*dst = src;
-			src = NULL; /* release ownership to caller */
-		} else {
-			src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-			src->args[0].num = src->args[1].num - 1;
-
-			assert(inner_ops != NULL); // TODO: can this happen?
-			ir_append_to_list(inner_ops, src);
-
-			assert(*dst == NULL);
-			*dst = inner_ops;
-			src = NULL; /* release ownership to caller */
-		}
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		check(ir_unary_op(a, dst, env));
 		break;
-	}
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expression(a->u.op_unary.operand, peek, dst, env));
