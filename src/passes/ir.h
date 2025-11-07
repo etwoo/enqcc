@@ -8,9 +8,9 @@ struct intermediate {
 		IR_NONE,
 		IR_PROGRAM,
 		IR_FUNCTION,
-		IR_RETURN,
 		IR_VAL_CONSTANT_INT,
 		IR_VAL_VARIABLE,
+		IR_OP_UNARY_IDENTITY, /* aka return */
 		IR_OP_UNARY_NEGATE,
 		IR_OP_UNARY_COMPLEMENT,
 	} subtype;

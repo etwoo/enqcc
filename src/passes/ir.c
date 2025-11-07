@@ -22,7 +22,7 @@ ir_expression(const struct ast *a, struct ir_op **dst)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT: {
-		ir_alloc(*dst, IR_RETURN);
+		ir_alloc(*dst, IR_OP_UNARY_IDENTITY);
 		struct ir_val_constant *ir_constant = NULL;
 		ir_alloc(ir_constant, IR_VAL_CONSTANT_INT);
 		ir_constant->num = a->u.num;
@@ -139,15 +139,6 @@ ir_debug_print(const struct intermediate *ir)
 		ir_debug_print(&f->ops->base);
 		break;
 	}
-	case IR_RETURN: {
-		debug("RETURN");
-		const struct ir_op *ops = (const struct ir_op *)ir;
-		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
-			ir_debug_print(ops->args[i]);
-		}
-		ir_debug_print(&ops->next->base);
-		break;
-	}
 	case IR_VAL_CONSTANT_INT: {
 		const struct ir_val_constant *val =
 			(const struct ir_val_constant *)ir;
@@ -157,11 +148,22 @@ ir_debug_print(const struct intermediate *ir)
 	case IR_VAL_VARIABLE:
 		assert(0 && "ir_debug_print + IR_VAL_VARIABLE: unimplemented");
 		break;
+	case IR_OP_UNARY_IDENTITY:
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT: {
-		debug("UNARY %s",
-		      ir->subtype == IR_OP_UNARY_NEGATE ? "NEGATE"
-		                                        : "COMPLEMENT");
+		switch (ir->subtype) {
+		case IR_OP_UNARY_IDENTITY:
+			debug("UNARY IDENTITY");
+			break;
+		case IR_OP_UNARY_NEGATE:
+			debug("UNARY NEGATION");
+			break;
+		case IR_OP_UNARY_COMPLEMENT:
+			debug("UNARY COMPLEMENT");
+			break;
+		default:
+			break;
+		}
 		const struct ir_op *ops = (const struct ir_op *)ir;
 		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
 			ir_debug_print(ops->args[i]);
