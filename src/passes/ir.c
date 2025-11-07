@@ -9,6 +9,13 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#define ir_alloc(dst)                                                          \
+	do {                                                                   \
+		(dst) = malloc(sizeof(*(dst)));                                \
+		check_if((dst) == NULL, ERR_IR_ALLOC);                         \
+		memset(dst, 0, sizeof(*(dst)));                                \
+	} while (0)
+
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static long long int generator = 0;
 
@@ -51,9 +58,7 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT: {
 		if (peek == NULL) {
-			*dst = malloc(sizeof(**dst));
-			check_if(*dst == NULL, ERR_IR_ALLOC);
-			memset(*dst, 0, sizeof(**dst));
+			ir_alloc(*dst);
 			(**dst).opcode = IR_OP_UNARY_IDENTITY;
 			peek = &(**dst).args[0];
 		}
@@ -65,9 +70,8 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 	case NODE_EXPRESSION_UNARY_NEGATION:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT: {
 		struct ir_op *src __attribute__((cleanup(ir_op_cleanup))) =
-			malloc(sizeof(*src));
-		check_if(src == NULL, ERR_IR_ALLOC);
-		memset(src, 0, sizeof(*src));
+			NULL;
+		ir_alloc(src);
 		switch (a->node_type) {
 		case NODE_EXPRESSION_UNARY_NEGATION:
 			src->opcode = IR_OP_UNARY_NEGATE;
@@ -132,9 +136,8 @@ ir_function(const struct ast *a, struct ir_function *dst)
 	check(ir_expression(a->u.function.statement, NULL, &dst->ops));
 
 	if (generator > 0) {
-		struct ir_op *last_op = malloc(sizeof(*last_op));
-		check_if(last_op == NULL, ERR_IR_ALLOC);
-		memset(last_op, 0, sizeof(*last_op));
+		struct ir_op *last_op = NULL;
+		ir_alloc(last_op);
 		last_op->opcode = IR_OP_UNARY_IDENTITY;
 		last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		last_op->args[0].num = generator - 1;
@@ -155,9 +158,7 @@ ir_program(const struct ast *a, struct intermediate *dst)
 result_t
 ir_init(const struct ast *a, struct intermediate **ir)
 {
-	*ir = malloc(sizeof(**ir));
-	check_if(*ir == NULL, ERR_IR_ALLOC);
-	memset(*ir, 0, sizeof(**ir));
+	ir_alloc(*ir);
 	check(ir_program(a, *ir));
 	return RESULT_OK;
 }
