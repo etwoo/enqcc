@@ -27,8 +27,9 @@ codegen_statement(const struct ir_op *src, struct asm_op **dst)
 	codegen_alloc(*dst);
 	(*dst)->base.statement_type = ASM_OP_MOV;
 	(*dst)->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	(*dst)->args[0].num = src->args[0].num;
-	(*dst)->args[1].operand_type = ASM_OPERAND_REGISTER_EAX;
+	(*dst)->args[0].u.num = src->args[0].num;
+	(*dst)->args[1].operand_type = ASM_OPERAND_REGISTER;
+	(*dst)->args[0].u.reg = ASM_REGISTER_AX;
 
 	assert((*dst)->next == NULL);
 	codegen_alloc((*dst)->next);
@@ -112,10 +113,17 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 {
 	switch (operand->operand_type) {
 	case ASM_OPERAND_IMMEDIATE:
-		debug("  IMMEDIATE %lld", operand->num);
+		debug("  IMMEDIATE %lld", operand->u.num);
 		break;
-	case ASM_OPERAND_REGISTER_EAX:
-		debug("  EAX");
+	case ASM_OPERAND_REGISTER:
+		switch (operand->u.reg) {
+		case ASM_REGISTER_AX:
+			debug("  EAX");
+			break;
+		case ASM_REGISTER_R10:
+			debug("  R10");
+			break;
+		}
 		break;
 	}
 }

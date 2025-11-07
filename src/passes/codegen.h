@@ -8,6 +8,9 @@ struct assembly {
 		ASM_PROGRAM,
 		ASM_FUNCTION,
 		ASM_OP_MOV,
+		//ASM_OP_UNARY_NEG,
+		//ASM_OP_UNARY_NOT,
+		//ASM_OP_ALLOC_STACK,
 		ASM_OP_RET,
 	} statement_type;
 };
@@ -15,9 +18,17 @@ struct assembly {
 struct asm_operand {
 	enum {
 		ASM_OPERAND_IMMEDIATE,
-		ASM_OPERAND_REGISTER_EAX,
+		ASM_OPERAND_REGISTER,
+		//ASM_OPERAND_PSEUDO_REGISTER,
+		//ASM_OPERAND_STACK,
 	} operand_type;
-	long long int num;
+	union {
+		long long int num;
+		enum {
+			ASM_REGISTER_AX,
+			ASM_REGISTER_R10,
+		} reg;
+	} u;
 };
 
 struct asm_op {
