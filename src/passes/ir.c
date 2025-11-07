@@ -173,7 +173,6 @@ ir_function(const struct ast *a, struct ir_function *dst, struct ir_env *env)
 		last_op->args[0].num = env->generator - 1;
 		ir_concat_ops(dst->ops, last_op);
 	}
-
 	return RESULT_OK;
 }
 
