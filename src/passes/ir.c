@@ -81,9 +81,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	}
 
 	struct ir_op *inner_ops = NULL;
-	// TODO: refactor ir_op_cleanup, etc get rid of NOLINTNEXTLINE
 	// TODO: move ir_free_op_list() back to be closer to ir_free()
-	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 	check(ir_expression(a->u.op_unary.operand,
 	                    &src->args[0],
 	                    &inner_ops,
