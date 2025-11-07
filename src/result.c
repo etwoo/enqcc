@@ -128,6 +128,11 @@ result_to_str(result_t r)
 	case ERR_IR_ALLOC:
 		s = strdup("Cannot allocate intermediate representation");
 		break;
+	case ERR_IR_EXPECT_AST_NODE_EXPRESSION:
+		s = my_asprintf("Cannot generate IR for AST node of type=%d "
+		                "when expecting NODE_EXPRESSION_*",
+		                r.num);
+		break;
 	case ERR_LEX_OPEN_SOURCE_FILE:
 		s = my_asprintf("Error opening source file %s: %s",
 		                r.msg,

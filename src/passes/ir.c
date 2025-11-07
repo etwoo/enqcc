@@ -140,10 +140,8 @@ ir_expression(const struct ast *a,
 		check(ir_expression(a->u.op_unary.operand, peek, dst, env));
 		break;
 	default:
-		// TODO: replace msg below with check_if() error
-		info("unexpected non-expr within ast_statement: %u",
-		     a->node_type);
-		break;
+		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
+		                   (int)a->node_type);
 	}
 	return RESULT_OK;
 }
