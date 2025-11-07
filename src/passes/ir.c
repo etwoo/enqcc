@@ -62,14 +62,15 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 			assert(0);
 			break;
 		}
-		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[1].num = generate_unique_id_for_ir_tmp();
 
 		struct ir_op *inner_ops = NULL;
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		check(ir_expression(a->u.op_unary.operand,
 		                    &src->args[0],
 		                    &inner_ops));
+
+		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[1].num = generate_unique_id_for_ir_tmp();
 
 		if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
 			assert(src->next == NULL);
@@ -78,11 +79,15 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 			*dst = src;
 			src = NULL; /* release ownership to caller */
 		} else {
+			src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+			src->args[0].num = src->args[1].num - 1;
+
 			assert(inner_ops != NULL); // TODO: can this happen?
 			struct ir_op *append_to = inner_ops;
 			while (append_to->next != NULL) {
 				append_to = append_to->next;
 			}
+
 			assert(append_to->next == NULL);
 			append_to->next = src;
 			assert(*dst == NULL);
@@ -166,6 +171,7 @@ ir_debug_print_one(const struct ir_op *op)
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		switch (op->args[i].subtype) {
 		case IR_VAL_NONE:
+			assert(0 && "incorrectly unset IR arg w/ IR_VAL_NONE");
 			break;
 		case IR_VAL_CONSTANT_INT:
 			debug("  CONSTANT(%lld)", op->args[i].num);
@@ -196,5 +202,5 @@ ir_debug_print(const struct intermediate *ir)
 
 	ir_debug_print_list(ir->function.ops);
 	debug("RETURN");
-	debug("  VARIABLE(tmp.0)");
+	debug("  VARIABLE(tmp.%lld)", generator - 1);
 }
