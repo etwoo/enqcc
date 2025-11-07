@@ -50,8 +50,14 @@ ir_expression(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT: {
-		assert(peek != NULL); // TODO: convert to check_if()
-		assert(peek->subtype == IR_VAL_NONE); // TODO: check_if()
+		if (peek == NULL) {
+			*dst = malloc(sizeof(**dst));
+			check_if(*dst == NULL, ERR_IR_ALLOC);
+			memset(*dst, 0, sizeof(**dst));
+			(**dst).opcode = IR_OP_UNARY_IDENTITY;
+			peek = &(**dst).args[0];
+		}
+		assert(peek->subtype == IR_VAL_NONE);
 		peek->subtype = IR_VAL_CONSTANT_INT;
 		peek->num = a->u.num;
 		break;
@@ -125,13 +131,15 @@ ir_function(const struct ast *a, struct ir_function *dst)
 	assert(a->u.op_unary.operand != NULL);
 	check(ir_expression(a->u.function.statement, NULL, &dst->ops));
 
-	struct ir_op *last_op = malloc(sizeof(*last_op));
-	check_if(last_op == NULL, ERR_IR_ALLOC);
-	memset(last_op, 0, sizeof(*last_op));
-	last_op->opcode = IR_OP_UNARY_IDENTITY;
-	last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	last_op->args[0].num = generator - 1;
-	ir_append_to_list(dst->ops, last_op);
+	if (generator > 0) {
+		struct ir_op *last_op = malloc(sizeof(*last_op));
+		check_if(last_op == NULL, ERR_IR_ALLOC);
+		memset(last_op, 0, sizeof(*last_op));
+		last_op->opcode = IR_OP_UNARY_IDENTITY;
+		last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		last_op->args[0].num = generator - 1;
+		ir_append_to_list(dst->ops, last_op);
+	}
 
 	return RESULT_OK;
 }
