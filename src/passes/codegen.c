@@ -66,6 +66,22 @@ codegen_init(const struct intermediate *ir, struct assembly **cg)
 	return RESULT_OK;
 }
 
+result_t
+codegen_stack(struct assembly *cg)
+{
+	debug("Replacing pseudoregisters with stack addresses");
+	(void)cg; // TODO
+	return RESULT_OK;
+}
+
+result_t
+codegen_fixup(struct assembly *cg)
+{
+	debug("Fixing up invalid instructions");
+	(void)cg; // TODO
+	return RESULT_OK;
+}
+
 void
 codegen_free(struct assembly *cg)
 {

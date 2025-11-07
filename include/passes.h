@@ -31,6 +31,8 @@ struct assembly;
 
 result_t codegen_init(const struct intermediate *ir, struct assembly **cg)
 	__attribute__((warn_unused_result));
+result_t codegen_stack(struct assembly *cg) __attribute__((warn_unused_result));
+result_t codegen_fixup(struct assembly *cg) __attribute__((warn_unused_result));
 void codegen_free(struct assembly *cg);
 void codegen_cleanup(struct assembly **cg);
 void codegen_debug_print(const struct assembly *cg);
