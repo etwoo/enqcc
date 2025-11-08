@@ -196,7 +196,20 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	assert(prev && cur);
 	assert(prev->next == cur);
 
+	/*
+	 * Prepare a trampoline by memcpy()-ing invalid instructions like:
+	 *
+	 *     movl -4(%rbp), -8(%rbp)
+	 *
+	 * ... into temporary copies that we modify to look like:
+	 *
+	 *     movl -4(%rbp), %r10d
+	 *     movl %r10d, -8(%rbp)
+	 *
+	 * ... before splicing them into the original containing op list.
+	 */
 	struct asm_op *trampoline[2] __attribute__((cleanup(tr_cleanup))) = {0};
+
 	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		codegen_alloc(trampoline[i]);
@@ -232,7 +245,7 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	*new_cur = remainder;
 
 	/*
-	 * Release ownership of scoped temporary pointers to caller.
+	 * Release ownership of trampoline sublist to caller.
 	 */
 	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
 		trampoline[i] = NULL;
