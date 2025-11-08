@@ -19,7 +19,12 @@ const long long int CODEGEN_BYTES_PER_VALUE = 4;
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
 
-// TODO: consolidate with ir_op_list_concat? ditto codegen_op_list_free, etc
+#define codegen_dup(dst, src)                                                  \
+	do {                                                                   \
+		codegen_alloc(dst);                                            \
+		memcpy(dst, src, sizeof(*(dst)));                              \
+	} while (0)
+
 static void
 codegen_op_list_contat(struct asm_op *first, struct asm_op *second)
 {
@@ -187,6 +192,72 @@ codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+codegen_fixup_stack_to_stack(struct asm_op *prev,
+                             struct asm_op *cur,
+                             struct asm_op **new_prev,
+                             struct asm_op **new_cur)
+{
+	assert(prev && cur);
+
+	/*
+	 * TODO: try removing NOLINT from this helper method, then rm comment
+	 *
+	 * clang-analyzer does not seem to understand how
+	 * __attribute__((cleanup)) on trampoline affects the rest of
+	 * the loop body. The NOLINT markers for:
+	 *
+	 *   clang-analyzer-unix.Malloc
+	 *   clang-analyzer-deadcode.DeadStores
+	 *
+	 * ... in the rest of the loop body suppress the associated
+	 * clang-tidy warnings. We should remove the annotations if
+	 * clang-tidy changes in the future (or this code evolves).
+	 */
+	struct asm_op *trampoline_head
+		__attribute__((cleanup(codegen_op_list_cleanup))) = NULL;
+	codegen_dup(trampoline_head, cur);
+	trampoline_head->next = NULL;
+	trampoline_head->args[1].operand_type = ASM_OPERAND_REGISTER;
+	trampoline_head->args[1].u.reg = ASM_REGISTER_R10;
+
+	struct asm_op *trampoline_tail
+		__attribute__((cleanup(codegen_op_list_cleanup))) = NULL;
+	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+	codegen_dup(trampoline_tail, cur);
+	trampoline_tail->next = NULL;
+	trampoline_tail->args[0].operand_type = ASM_OPERAND_REGISTER;
+	trampoline_tail->args[0].u.reg = ASM_REGISTER_R10;
+
+	/*
+	 * Split containing list at <cur>, excluding <cur> from both halves.
+	 */
+	struct asm_op *remainder = cur->next;
+	cur->next = NULL;
+	prev->next = NULL;
+
+	/*
+	 * Insert trampoline sublist into containing list.
+	 */
+	codegen_op_list_contat(prev, trampoline_head);
+	codegen_op_list_contat(trampoline_head, trampoline_tail);
+	codegen_op_list_contat(trampoline_tail, remainder);
+
+	/*
+	 * Prepare list cursor positions for next loop iteration.
+	 */
+	*new_prev = trampoline_tail;
+	*new_cur = remainder;
+
+	/*
+	 * Release ownership of scoped temporary pointers to caller.
+	 */
+	trampoline_head = NULL;
+	trampoline_tail = NULL;
+
+	return RESULT_OK;
+}
+
 result_t
 codegen_fixup(const struct intermediate *ir, struct assembly *cg)
 {
@@ -210,63 +281,7 @@ codegen_fixup(const struct intermediate *ir, struct assembly *cg)
 		       "should never need trampoline on very first op, which "
 		       "should always be something like setting up function "
 		       "context, substracting from frame pointer RSP, etc");
-
-		/*
-		 * clang-analyzer does not seem to understand how
-		 * __attribute__((cleanup)) on trampoline affects the rest of
-		 * the loop body. The NOLINT markers for:
-		 *
-		 *   clang-analyzer-unix.Malloc
-		 *   clang-analyzer-deadcode.DeadStores
-		 *
-		 * ... in the rest of the loop body suppress the associated
-		 * clang-tidy warnings. We should remove the annotations if
-		 * clang-tidy changes in the future (or this code evolves).
-		 */
-		struct asm_op *trampoline
-			__attribute__((cleanup(codegen_op_list_cleanup))) =
-				NULL;
-		codegen_alloc(trampoline);
-		memcpy(trampoline, cur, sizeof(*trampoline));
-		trampoline->opcode = ASM_OP_MOV;
-		trampoline->args[1].operand_type = ASM_OPERAND_REGISTER;
-		trampoline->args[1].u.reg = ASM_REGISTER_R10;
-
-		struct asm_op *trampoline_next
-			__attribute__((cleanup(codegen_op_list_cleanup))) =
-				NULL;
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		codegen_alloc(trampoline_next);
-		memcpy(trampoline_next, cur, sizeof(*trampoline));
-		trampoline_next->opcode = ASM_OP_MOV;
-		trampoline_next->args[0].operand_type = ASM_OPERAND_REGISTER;
-		trampoline_next->args[0].u.reg = ASM_REGISTER_R10;
-
-		// TODO: refactor splicing/ownership below to be more readable
-
-		/*
-		 * Splice new trampoline sublist into list.
-		 */
-		trampoline_next->next = cur->next;
-		cur->next = NULL;
-		assert(prev->next == cur);
-		prev->next = trampoline;
-		trampoline->next = trampoline_next;
-
-		/*
-		 * Release ownership of inserted nodes, and take ownership of
-		 * removed nodes. In other words, trade old for new, for the
-		 * purposes of automatic cleanup.
-		 *
-		 * Also, prepare the next loop iteration to start at <tail>,
-		 * i.e. the next pointer of the original <cur>, with <prev>
-		 * referring to the last node of the inserted <trampoline>.
-		 */
-		prev = trampoline_next; // TODO: handle len(trampoline) > 2
-		struct asm_op *tmp = cur;
-		cur = trampoline_next->next;
-		trampoline = tmp; // NOLINT(clang-analyzer-deadcode.DeadStores)
-		trampoline_next = NULL;
+		check(codegen_fixup_stack_to_stack(prev, cur, &prev, &cur));
 	}
 
 	return RESULT_OK;
