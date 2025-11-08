@@ -24,17 +24,15 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 
 	switch (src->opcode) {
 	case IR_OP_UNARY_IDENTITY:
-		// assert(src->args[0].subtype == IR_VAL_CONSTANT_INT);
-
-		(*dst)->opcode = ASM_OP_MOV;
-		(*dst)->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-		(*dst)->args[0].u.num = src->args[0].num;
-		(*dst)->args[1].operand_type = ASM_OPERAND_REGISTER;
-		(*dst)->args[1].u.reg = ASM_REGISTER_AX;
-
+		// assert(src->args[0].subtype == IR_VAL_CONSTANT_INT); // TODO
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+		(**dst).args[0].u.num = src->args[0].num;
+		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
+		(**dst).args[1].u.reg = ASM_REGISTER_AX;
 		dst = &(**dst).next;
 		codegen_alloc(*dst);
-		(*dst)->opcode = ASM_OP_RET;
+		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_UNARY_NEGATE:
 		info("HELLO1 TODO IMPLEMENT NEGATE");
