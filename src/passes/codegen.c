@@ -196,10 +196,6 @@ codegen_debug_print_op(const struct asm_op *op)
 void
 codegen_debug_print(const struct assembly *cg)
 {
-	if (cg == NULL) {
-		return;
-	}
-
 	debug("PROGRAM");
 
 	const struct string_view *fname = &cg->function.identifier;
