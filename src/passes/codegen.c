@@ -43,7 +43,6 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 
 	switch (src->opcode) {
 	case IR_OP_UNARY_IDENTITY:
-		// assert(src->args[0].subtype == IR_VAL_CONSTANT_INT); // TODO
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
