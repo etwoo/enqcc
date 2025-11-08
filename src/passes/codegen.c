@@ -20,7 +20,7 @@ const long long int CODEGEN_BYTES_PER_VALUE = 4;
 	} while (0)
 
 static void
-codegen_op_list_contat(struct asm_op *first, struct asm_op *second)
+codegen_op_list_concat(struct asm_op *first, struct asm_op *second)
 {
 	assert(first != NULL);
 	while (first->next != NULL) {
@@ -33,7 +33,7 @@ codegen_op_list_contat(struct asm_op *first, struct asm_op *second)
 static void
 codegen_op_list_prepend(struct asm_op *new_head, struct asm_op **head)
 {
-	codegen_op_list_contat(new_head, *head);
+	codegen_op_list_concat(new_head, *head);
 	*head = new_head;
 }
 
@@ -235,9 +235,9 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	/*
 	 * Insert trampoline sublist into containing list.
 	 */
-	codegen_op_list_contat(prev, trampoline[0]);
-	codegen_op_list_contat(trampoline[0], trampoline[1]);
-	codegen_op_list_contat(trampoline[1], remainder);
+	codegen_op_list_concat(prev, trampoline[0]);
+	codegen_op_list_concat(trampoline[0], trampoline[1]);
+	codegen_op_list_concat(trampoline[1], remainder);
 
 	/*
 	 * Prepare list cursor positions for next loop iteration.
