@@ -229,6 +229,8 @@ codegen_fixup(const struct intermediate *ir, struct assembly *cg)
 		trampoline_next->args[0].operand_type = ASM_OPERAND_REGISTER;
 		trampoline_next->args[0].u.reg = ASM_REGISTER_R10;
 
+		// TODO: refactor splicing/ownership below to be more readable
+
 		/*
 		 * Splice new trampoline sublist into list.
 		 */
