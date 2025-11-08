@@ -85,6 +85,12 @@ emit_asm_op(const struct asm_op *op, int fd)
 		dprintf(fd, "%s", STR_OP_NOT);
 		break;
 	case ASM_OP_RET:
+		dprintf(fd,
+		        "%s %s %s\n",
+		        STR_OP_MOV_QUAD,
+		        STR_REG_RBP,
+		        STR_REG_RSP);
+		dprintf(fd, "%s %s\n", STR_OP_POP_QUAD, STR_REG_RBP);
 		dprintf(fd, "%s", STR_OP_RET);
 		print_operands = false;
 		break;
