@@ -81,6 +81,8 @@ parse_expression(const struct token **tok, struct ast **dst)
 {
 	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
 
+	// TODO: parse binary ops like TOKEN_PLUS_SIGN
+
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		parse_alloc(dst, NODE_EXPRESSION_UNARY_IDENTITY);
 		check(parse_constant(tok, &(**dst).u.op_unary.operand));
