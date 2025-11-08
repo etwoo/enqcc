@@ -233,6 +233,30 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		switch (a->node_type) {
+		case NODE_EXPRESSION_BINARY_ADD:
+			debug("%*sEXPRESSION ADD", (int)indent, "");
+		case NODE_EXPRESSION_BINARY_SUBTRACT:
+			debug("%*sEXPRESSION SUBTRACT", (int)indent, "");
+		case NODE_EXPRESSION_BINARY_MULTIPLY:
+			debug("%*sEXPRESSION MULTIPLY", (int)indent, "");
+		case NODE_EXPRESSION_BINARY_DIVIDE:
+			debug("%*sEXPRESSION DIVIDE", (int)indent, "");
+		case NODE_EXPRESSION_BINARY_REMAINDER:
+			debug("%*sEXPRESSION REMAINDER", (int)indent, "");
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		parse_debug_print(a->u.op_binary.lhs, indent + 1);
+		parse_debug_print(a->u.op_binary.rhs, indent + 1);
+		break;
 	case NODE_IDENTIFIER: {
 		const struct string_view *s = &a->u.str;
 		debug("%*sIDENT %.*s", (int)indent, "", (int)s->sz, s->data);

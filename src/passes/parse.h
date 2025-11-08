@@ -11,6 +11,11 @@ struct ast {
 		NODE_EXPRESSION_UNARY_NEGATE,
 		NODE_EXPRESSION_UNARY_COMPLEMENT,
 		NODE_EXPRESSION_PAREN_ENCLOSED,
+		NODE_EXPRESSION_BINARY_ADD,
+		NODE_EXPRESSION_BINARY_SUBTRACT,
+		NODE_EXPRESSION_BINARY_MULTIPLY,
+		NODE_EXPRESSION_BINARY_DIVIDE,
+		NODE_EXPRESSION_BINARY_REMAINDER,
 		NODE_IDENTIFIER,
 		NODE_CONSTANT_INT,
 	} node_type;
@@ -25,6 +30,10 @@ struct ast {
 		struct {
 			struct ast *operand;
 		} op_unary;
+		struct {
+			struct ast *lhs;
+			struct ast *rhs;
+		} op_binary;
 		struct string_view str; /* NODE_IDENTIFIER */
 		long long int num;      /* NODE_CONSTANT_INT */
 	} u;
