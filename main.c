@@ -76,11 +76,11 @@ compile(const char *src, const char *dst, enum compiler_action action)
 	check(codegen_init(ir, &cg));
 	codegen_debug_print(cg);
 
-	check(codegen_stack(cg));
-	codegen_debug_print(cg);
+	// check(codegen_stack(cg)); // TODO: enable
+	// codegen_debug_print(cg);
 
-	check(codegen_fixup(cg));
-	codegen_debug_print(cg);
+	// check(codegen_fixup(cg)); // TODO: enable
+	// codegen_debug_print(cg);
 
 	if (action != ACTION_ALL_PASSES) {
 		return RESULT_OK;

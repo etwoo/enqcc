@@ -17,54 +17,62 @@
 	} while (0)
 
 static WARN_UNUSED result_t
-codegen_statement(const struct ir_op *src, struct asm_op **dst)
+codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 {
-	// TODO: add support for unary ops: negation, complement, etc
-	assert(src->opcode == IR_OP_UNARY_IDENTITY);
-	assert(src->args[0].subtype == IR_VAL_CONSTANT_INT);
-
 	assert(*dst == NULL);
 	codegen_alloc(*dst);
-	(*dst)->base.statement_type = ASM_OP_MOV;
-	(*dst)->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	(*dst)->args[0].u.num = src->args[0].num;
-	(*dst)->args[1].operand_type = ASM_OPERAND_REGISTER;
-	(*dst)->args[0].u.reg = ASM_REGISTER_AX;
 
-	assert((*dst)->next == NULL);
-	codegen_alloc((*dst)->next);
-	(*dst)->next->base.statement_type = ASM_OP_RET;
+	switch (src->opcode) {
+	case IR_OP_UNARY_IDENTITY:
+		// assert(src->args[0].subtype == IR_VAL_CONSTANT_INT);
 
+		(*dst)->opcode = ASM_OP_MOV;
+		(*dst)->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+		(*dst)->args[0].u.num = src->args[0].num;
+		(*dst)->args[1].operand_type = ASM_OPERAND_REGISTER;
+		(*dst)->args[1].u.reg = ASM_REGISTER_AX;
+
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(*dst)->opcode = ASM_OP_RET;
+		break;
+	case IR_OP_UNARY_NEGATE:
+		info("HELLO1 TODO IMPLEMENT NEGATE");
+		break;
+	case IR_OP_UNARY_COMPLEMENT:
+		info("HELLO1 TODO IMPLEMENT COMPLEMENT");
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement(const struct ir_op *src, struct asm_op **dst)
+{
+	while (src != NULL) {
+		check(codegen_statement_one(src, dst));
+		src = src->next;
+		while (*dst != NULL) {
+			dst = &(**dst).next;
+		}
+	}
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 codegen_function(const struct ir_function *ir, struct asm_function *dst)
 {
-	assert(dst->base.statement_type == ASM_FUNCTION);
 	dst->identifier = ir->identifier;
 	check(codegen_statement(ir->ops, &dst->ops));
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-codegen_program(const struct intermediate *ir, struct asm_program *dst)
-{
-	assert(dst->base.statement_type == ASM_PROGRAM);
-	dst->function.base.statement_type = ASM_FUNCTION;
-	check(codegen_function(&ir->function, &dst->function));
 	return RESULT_OK;
 }
 
 result_t
 codegen_init(const struct intermediate *ir, struct assembly **cg)
 {
-	struct asm_program *program = NULL;
-	codegen_alloc(program);
-	program->base.statement_type = ASM_PROGRAM;
-	*cg = &program->base;
-
-	check(codegen_program(ir, program));
+	codegen_alloc(*cg);
+	check(codegen_function(&ir->function, &(**cg).function));
 	return RESULT_OK;
 }
 
@@ -88,16 +96,12 @@ void
 codegen_free(struct assembly *cg)
 {
 	if (cg != NULL) {
-		assert(cg->statement_type == ASM_PROGRAM);
-		struct asm_program *program = (struct asm_program *)cg;
-
-		struct asm_op *ops = program->function.ops;
+		struct asm_op *ops = cg->function.ops;
 		while (ops != NULL) {
 			struct asm_op *tmp = ops;
 			ops = ops->next;
 			free(tmp);
 		}
-
 		free(cg);
 	}
 }
@@ -128,6 +132,22 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 	}
 }
 
+static void
+codegen_debug_print_op(const struct asm_op *op)
+{
+	switch (op->opcode) {
+	case ASM_OP_MOV:
+		debug("MOV");
+		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+			codegen_debug_print_operand(&op->args[i]);
+		}
+		break;
+	case ASM_OP_RET:
+		debug("RET");
+		break;
+	}
+}
+
 void
 codegen_debug_print(const struct assembly *cg)
 {
@@ -135,34 +155,12 @@ codegen_debug_print(const struct assembly *cg)
 		return;
 	}
 
-	switch (cg->statement_type) {
-	case ASM_PROGRAM: {
-		debug("PROGRAM");
-		const struct asm_program *p = (const struct asm_program *)cg;
-		codegen_debug_print(&p->function.base);
-		break;
-	}
-	case ASM_FUNCTION: {
-		const struct asm_function *f = (const struct asm_function *)cg;
-		const struct string_view *str = &f->identifier;
-		debug("FUNCTION %.*s", (int)str->sz, str->data);
-		codegen_debug_print(&f->ops->base);
-		break;
-	}
-	case ASM_OP_MOV: {
-		debug("MOV");
-		const struct asm_op *ops = (const struct asm_op *)cg;
-		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
-			codegen_debug_print_operand(&ops->args[i]);
-		}
-		codegen_debug_print(&ops->next->base);
-		break;
-	}
-	case ASM_OP_RET: {
-		debug("RET");
-		const struct asm_op *ops = (const struct asm_op *)cg;
-		codegen_debug_print(&ops->next->base);
-		break;
-	}
+	debug("PROGRAM");
+
+	const struct string_view *fname = &cg->function.identifier;
+	debug("FUNCTION %.*s", (int)fname->sz, fname->data);
+
+	for (struct asm_op *op = cg->function.ops; op != NULL; op = op->next) {
+		codegen_debug_print_op(op);
 	}
 }

@@ -40,6 +40,26 @@ emit_asm_operand(const struct asm_operand *operand, int fd)
 	}
 }
 
+static void
+emit_asm_op(const struct asm_op *op, int fd)
+{
+	switch (op->opcode) {
+	case ASM_OP_MOV:
+		dprintf(fd, "\t%s ", STR_OP_MOV);
+		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+			if (i > 0) {
+				dprintf(fd, ", ");
+			}
+			emit_asm_operand(&op->args[i], fd);
+		}
+		dprintf(fd, "\n");
+		break;
+	case ASM_OP_RET:
+		dprintf(fd, "\t%s\n", STR_OP_RET);
+		break;
+	}
+}
+
 void
 emit_asm(const struct assembly *cg, enum platform plat, int fd)
 {
@@ -48,39 +68,13 @@ emit_asm(const struct assembly *cg, enum platform plat, int fd)
 	}
 
 	const char *fprefix = plat == PLATFORM_MACOS ? MACOS_FUNC_PREFIX : "";
+	dprintf(fd, "\t.globl %smain\n", fprefix);
 
-	switch (cg->statement_type) {
-	case ASM_PROGRAM: {
-		dprintf(fd, "\t.globl %smain\n", fprefix);
-		const struct asm_program *p = (const struct asm_program *)cg;
-		emit_asm(&p->function.base, plat, fd);
-		break;
-	}
-	case ASM_FUNCTION: {
-		const struct asm_function *f = (const struct asm_function *)cg;
-		const struct string_view *str = &f->identifier;
-		dprintf(fd, "%s%.*s:\n", fprefix, (int)str->sz, str->data);
-		emit_asm(&f->ops->base, plat, fd);
-		break;
-	}
-	case ASM_OP_MOV: {
-		dprintf(fd, "\t%s ", STR_OP_MOV);
-		const struct asm_op *ops = (const struct asm_op *)cg;
-		for (size_t i = 0; i < ARRAY_SIZE(ops->args); ++i) {
-			if (i > 0) {
-				dprintf(fd, ", ");
-			}
-			emit_asm_operand(&ops->args[i], fd);
-		}
-		dprintf(fd, "\n");
-		emit_asm(&ops->next->base, plat, fd);
-		break;
-	}
-	case ASM_OP_RET:
-		dprintf(fd, "\t%s\n", STR_OP_RET);
-		const struct asm_op *ops = (const struct asm_op *)cg;
-		emit_asm(&ops->next->base, plat, fd);
-		break;
+	const struct string_view *fname = &cg->function.identifier;
+	dprintf(fd, "%s%.*s:\n", fprefix, (int)fname->sz, fname->data);
+
+	for (struct asm_op *op = cg->function.ops; op != NULL; op = op->next) {
+		emit_asm_op(op, fd);
 	}
 
 	emit_asm_footer(plat, fd);
