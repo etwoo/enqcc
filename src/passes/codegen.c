@@ -19,12 +19,6 @@ const long long int CODEGEN_BYTES_PER_VALUE = 4;
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
 
-#define codegen_dup(dst, src)                                                  \
-	do {                                                                   \
-		codegen_alloc(dst);                                            \
-		memcpy(dst, src, sizeof(*(dst)));                              \
-	} while (0)
-
 static void
 codegen_op_list_contat(struct asm_op *first, struct asm_op *second)
 {
@@ -204,7 +198,8 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	struct asm_op *trampoline[2] __attribute__((cleanup(tr_cleanup))) = {0};
 	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		codegen_dup(trampoline[i], cur);
+		codegen_alloc(trampoline[i]);
+		memcpy(trampoline[i], cur, sizeof(*cur));
 	}
 
 	trampoline[0]->next = NULL;
