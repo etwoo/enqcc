@@ -53,12 +53,6 @@ codegen_op_list_free(struct asm_op *cursor)
 	}
 }
 
-static void
-codegen_op_list_cleanup(struct asm_op **pp)
-{
-	codegen_op_list_free(*pp);
-}
-
 void
 codegen_free(struct assembly *cg)
 {
@@ -192,6 +186,13 @@ codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
 	return RESULT_OK;
 }
 
+static void
+tr_cleanup(struct asm_op *pp[][2])
+{
+	codegen_op_list_free((*pp)[0]);
+	codegen_op_list_free((*pp)[1]);
+}
+
 static WARN_UNUSED result_t
 codegen_fixup_stack_to_stack(struct asm_op *prev,
                              struct asm_op *cur,
@@ -200,34 +201,19 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 {
 	assert(prev && cur);
 
-	/*
-	 * TODO: try removing NOLINT from this helper method, then rm comment
-	 *
-	 * clang-analyzer does not seem to understand how
-	 * __attribute__((cleanup)) on trampoline affects the rest of
-	 * the loop body. The NOLINT markers for:
-	 *
-	 *   clang-analyzer-unix.Malloc
-	 *   clang-analyzer-deadcode.DeadStores
-	 *
-	 * ... in the rest of the loop body suppress the associated
-	 * clang-tidy warnings. We should remove the annotations if
-	 * clang-tidy changes in the future (or this code evolves).
-	 */
-	struct asm_op *trampoline_head
-		__attribute__((cleanup(codegen_op_list_cleanup))) = NULL;
-	codegen_dup(trampoline_head, cur);
-	trampoline_head->next = NULL;
-	trampoline_head->args[1].operand_type = ASM_OPERAND_REGISTER;
-	trampoline_head->args[1].u.reg = ASM_REGISTER_R10;
+	struct asm_op *trampoline[2] __attribute__((cleanup(tr_cleanup))) = {0};
+	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+		codegen_dup(trampoline[i], cur);
+	}
 
-	struct asm_op *trampoline_tail
-		__attribute__((cleanup(codegen_op_list_cleanup))) = NULL;
-	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-	codegen_dup(trampoline_tail, cur);
-	trampoline_tail->next = NULL;
-	trampoline_tail->args[0].operand_type = ASM_OPERAND_REGISTER;
-	trampoline_tail->args[0].u.reg = ASM_REGISTER_R10;
+	trampoline[0]->next = NULL;
+	trampoline[0]->args[1].operand_type = ASM_OPERAND_REGISTER;
+	trampoline[0]->args[1].u.reg = ASM_REGISTER_R10;
+
+	trampoline[1]->next = NULL;
+	trampoline[1]->args[0].operand_type = ASM_OPERAND_REGISTER;
+	trampoline[1]->args[0].u.reg = ASM_REGISTER_R10;
 
 	/*
 	 * Split containing list at <cur>, excluding <cur> from both halves.
@@ -239,21 +225,22 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	/*
 	 * Insert trampoline sublist into containing list.
 	 */
-	codegen_op_list_contat(prev, trampoline_head);
-	codegen_op_list_contat(trampoline_head, trampoline_tail);
-	codegen_op_list_contat(trampoline_tail, remainder);
+	codegen_op_list_contat(prev, trampoline[0]);
+	codegen_op_list_contat(trampoline[0], trampoline[1]);
+	codegen_op_list_contat(trampoline[1], remainder);
 
 	/*
 	 * Prepare list cursor positions for next loop iteration.
 	 */
-	*new_prev = trampoline_tail;
+	*new_prev = trampoline[1];
 	*new_cur = remainder;
 
 	/*
 	 * Release ownership of scoped temporary pointers to caller.
 	 */
-	trampoline_head = NULL;
-	trampoline_tail = NULL;
+	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
+		trampoline[i] = NULL;
+	}
 
 	return RESULT_OK;
 }
