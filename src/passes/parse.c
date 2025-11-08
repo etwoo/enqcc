@@ -130,7 +130,7 @@ parse_expression(const struct token **tok,
                  unsigned minimum_precedence)
 {
 	struct ast *left __attribute__((cleanup(parse_cleanup))) = NULL;
-	check(parse_factor(tok, &left)); // NOLINT(clang-analyzer-unix.Malloc)
+	check(parse_factor(tok, &left));
 
 	while (true) {
 		struct ast *bop __attribute__((cleanup(parse_cleanup))) = NULL;
