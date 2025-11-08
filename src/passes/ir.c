@@ -84,7 +84,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	ir_alloc(src);
 
 	switch (a->node_type) {
-	case NODE_EXPRESSION_UNARY_NEGATION:
+	case NODE_EXPRESSION_UNARY_NEGATE:
 		src->opcode = IR_OP_UNARY_NEGATE;
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -140,7 +140,7 @@ ir_expression(const struct ast *a,
 	case NODE_CONSTANT_INT:
 		check(ir_constant(a, peek, dst));
 		break;
-	case NODE_EXPRESSION_UNARY_NEGATION:
+	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		check(ir_unary_op(a, dst, env));
 		break;
@@ -203,7 +203,7 @@ ir_debug_print_one(const struct ir_op *op)
 		break;
 	case IR_OP_UNARY_NEGATE:
 		debug("UNARY");
-		debug("  NEGATION");
+		debug("  NEGATE");
 		break;
 	case IR_OP_UNARY_COMPLEMENT:
 		debug("UNARY");
@@ -246,3 +246,5 @@ ir_debug_print(const struct intermediate *ir)
 
 	ir_debug_print_list(ir->function.ops);
 }
+
+#undef ir_alloc
