@@ -149,6 +149,7 @@ parse_expression_gtp(const struct token **tok,
 
 		const unsigned next_precedence = get_precedence(bop);
 		if (next_precedence < minimum_precedence) {
+			info("STOPPING %u < %u", next_precedence, minimum_precedence);
 			break;
 		}
 
@@ -175,37 +176,7 @@ parse_expression_gtp(const struct token **tok,
 static WARN_UNUSED result_t
 parse_expression(const struct token **tok, struct ast **dst)
 {
-	struct ast *left __attribute__((cleanup(parse_cleanup))) = NULL;
-	check(parse_expression_gtp(tok, &left, 0));
-
-	while (true) {
-		struct ast *bop __attribute__((cleanup(parse_cleanup))) = NULL;
-		if (is_token_type(*tok, TOKEN_PLUS_SIGN)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_ADD);
-		} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_SUBTRACT);
-		} else if (is_token_type(*tok, TOKEN_ASTERISK)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_MULTIPLY);
-		} else if (is_token_type(*tok, TOKEN_FORWARD_SLASH)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_DIVIDE);
-		} else if (is_token_type(*tok, TOKEN_PERCENT_SIGN)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_REMAINDER);
-		} else {
-			break;
-		}
-		token_consume(tok);
-
-		struct ast *right __attribute__((cleanup(parse_cleanup))) =
-			NULL;
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		check(parse_expression_gtp(tok, &right, 0));
-
-		right = NULL; /* release ownership */
-		bop = NULL;   /* release ownership */
-	}
-
-	*dst = left;
-	left = NULL; /* release ownership */
+	check(parse_expression_gtp(tok, dst, 0));
 	return RESULT_OK;
 }
 
