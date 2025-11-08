@@ -243,12 +243,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 		switch (a->node_type) {
 		case NODE_EXPRESSION_BINARY_ADD:
 			debug("%*sEXPRESSION ADD", (int)indent, "");
+			break;
 		case NODE_EXPRESSION_BINARY_SUBTRACT:
 			debug("%*sEXPRESSION SUBTRACT", (int)indent, "");
+			break;
 		case NODE_EXPRESSION_BINARY_MULTIPLY:
 			debug("%*sEXPRESSION MULTIPLY", (int)indent, "");
+			break;
 		case NODE_EXPRESSION_BINARY_DIVIDE:
 			debug("%*sEXPRESSION DIVIDE", (int)indent, "");
+			break;
 		case NODE_EXPRESSION_BINARY_REMAINDER:
 			debug("%*sEXPRESSION REMAINDER", (int)indent, "");
 			break;
