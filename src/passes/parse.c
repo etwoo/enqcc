@@ -68,7 +68,8 @@ parse_identifier(const struct token **tok, struct ast **dst)
 }
 
 static result_t parse_expression(const struct token **tok,
-                                 struct ast **dst) WARN_UNUSED;
+                                 struct ast **dst,
+                                 unsigned minimum_precedence) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_factor(const struct token **tok, struct ast **dst)
@@ -88,7 +89,7 @@ parse_factor(const struct token **tok, struct ast **dst)
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		parse_alloc(*dst, NODE_EXPRESSION_PAREN_ENCLOSED);
 		token_consume(tok);
-		check(parse_expression(tok, &(**dst).u.op_unary.operand));
+		check(parse_expression(tok, &(**dst).u.op_unary.operand, 0));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE);
@@ -100,8 +101,30 @@ parse_factor(const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED unsigned
+get_precedence(const struct ast *a)
+{
+	unsigned precedence = 0;
+	switch (a->node_type) {
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		precedence = 45; // NOLINT(*-magic-numbers)
+		break;
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		precedence = 50; // NOLINT(*-magic-numbers)
+		break;
+	default:
+		break;
+	}
+	return precedence;
+}
+
 static WARN_UNUSED result_t
-parse_expression(const struct token **tok, struct ast **dst)
+parse_expression(const struct token **tok,
+                 struct ast **dst,
+                 unsigned minimum_precedence)
 {
 	struct ast *left __attribute__((cleanup(parse_cleanup))) = NULL;
 	check(parse_factor(tok, &left));
@@ -112,15 +135,27 @@ parse_expression(const struct token **tok, struct ast **dst)
 			parse_alloc(bop, NODE_EXPRESSION_BINARY_ADD);
 		} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
 			parse_alloc(bop, NODE_EXPRESSION_BINARY_SUBTRACT);
+		} else if (is_token_type(*tok, TOKEN_ASTERISK)) {
+			parse_alloc(bop, NODE_EXPRESSION_BINARY_MULTIPLY);
+		} else if (is_token_type(*tok, TOKEN_FORWARD_SLASH)) {
+			parse_alloc(bop, NODE_EXPRESSION_BINARY_DIVIDE);
+		} else if (is_token_type(*tok, TOKEN_PERCENT_SIGN)) {
+			parse_alloc(bop, NODE_EXPRESSION_BINARY_REMAINDER);
 		} else {
 			break;
 		}
+
+		const unsigned next_precedence = get_precedence(bop);
+		if (next_precedence < minimum_precedence) {
+			break;
+		}
+
 		token_consume(tok);
 
 		struct ast *right __attribute__((cleanup(parse_cleanup))) =
 			NULL;
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		check(parse_factor(tok, &right));
+		check(parse_expression(tok, &right, next_precedence + 1));
 
 		bop->u.op_binary.lhs = left;
 		bop->u.op_binary.rhs = right;
@@ -145,7 +180,7 @@ parse_statement(const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_expression(tok, &(**dst).u.op_unary.operand));
+	check(parse_expression(tok, &(**dst).u.op_unary.operand, 0));
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
