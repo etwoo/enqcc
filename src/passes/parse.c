@@ -149,7 +149,6 @@ parse_expression_gtp(const struct token **tok,
 
 		const unsigned next_precedence = get_precedence(bop);
 		if (next_precedence < minimum_precedence) {
-			info("STOPPING %u < %u", next_precedence, minimum_precedence);
 			break;
 		}
 
