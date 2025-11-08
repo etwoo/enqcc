@@ -101,6 +101,9 @@ parse_factor(const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static const unsigned PRECEDENCE_LOW = 45;
+static const unsigned PRECEDENCE_HIGH = 50;
+
 static WARN_UNUSED unsigned
 get_precedence(const struct ast *a)
 {
@@ -108,12 +111,12 @@ get_precedence(const struct ast *a)
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
-		precedence = 45; // NOLINT(*-magic-numbers)
+		precedence = PRECEDENCE_LOW;
 		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
-		precedence = 50; // NOLINT(*-magic-numbers)
+		precedence = PRECEDENCE_HIGH;
 		break;
 	default:
 		break;
