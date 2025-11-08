@@ -32,6 +32,13 @@ codegen_op_list_contat(struct asm_op *first, struct asm_op *second)
 }
 
 static void
+codegen_op_list_prepend(struct asm_op *new_head, struct asm_op **head)
+{
+	codegen_op_list_contat(new_head, *head);
+	*head = new_head;
+}
+
+static void
 codegen_op_list_free(struct asm_op *cursor)
 {
 	while (cursor != NULL) {
@@ -176,8 +183,7 @@ codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
 	alloc_stack->args[1].operand_type = ASM_OPERAND_REGISTER;
 	alloc_stack->args[1].u.reg = ASM_REGISTER_RSP;
 
-	codegen_op_list_contat(alloc_stack, cg->function.ops);
-	cg->function.ops = alloc_stack;
+	codegen_op_list_prepend(alloc_stack, &cg->function.ops);
 	return RESULT_OK;
 }
 
