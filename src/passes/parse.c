@@ -119,7 +119,7 @@ parse_expression(const struct token **tok, struct ast **dst)
 
 		struct ast *right __attribute__((cleanup(parse_cleanup))) =
 			NULL;
-		// NOLINT(clang-analyzer-unix.Malloc)
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		check(parse_factor(tok, &right));
 
 		bop->u.op_binary.lhs = left;
