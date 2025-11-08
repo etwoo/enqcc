@@ -28,7 +28,11 @@ lex_alloc(struct token **tok)
 	F('}', TOKEN_BRACE_CLOSE)                                              \
 	F(';', TOKEN_SEMICOLON)                                                \
 	F('~', TOKEN_TILDE)                                                    \
-	F('-', TOKEN_HYPHEN)
+	F('-', TOKEN_HYPHEN)                                                   \
+	F('+', TOKEN_PLUS_SIGN)                                                \
+	F('*', TOKEN_ASTERISK)                                                 \
+	F('/', TOKEN_FORWARD_SLASH)                                            \
+	F('%', TOKEN_PERCENT_SIGN)
 
 static WARN_UNUSED result_t
 lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
@@ -155,7 +159,13 @@ lex_cleanup(struct token **tok)
 static void
 lex_debug_one(const struct token *tok)
 {
+#define TRY_DEBUG_PRINT_TOKEN(candidate, enum_value)                           \
+	case enum_value:                                                       \
+		debug("%s", #enum_value);                                      \
+		break;
+
 	switch (tok->token_type) {
+		FOREACH_LEX_CHAR(TRY_DEBUG_PRINT_TOKEN)
 	case TOKEN_IDENTIFIER:
 		debug("IDENTIFIER %.*s", (int)tok->val.sz, tok->val.data);
 		break;
@@ -171,31 +181,12 @@ lex_debug_one(const struct token *tok)
 	case TOKEN_KEYWORD_INT:
 		debug("KEYWORD int");
 		break;
-	case TOKEN_PAREN_OPEN:
-		debug("PAREN open");
-		break;
-	case TOKEN_PAREN_CLOSE:
-		debug("PAREN close");
-		break;
-	case TOKEN_BRACE_OPEN:
-		debug("BRACE open");
-		break;
-	case TOKEN_BRACE_CLOSE:
-		debug("BRACE close");
-		break;
-	case TOKEN_SEMICOLON:
-		debug("SEMICOLON");
-		break;
-	case TOKEN_TILDE:
-		debug("TILDE");
-		break;
 	case TOKEN_HYPHEN_HYPHEN:
-		debug("HYPHENHYPHEN");
-		break;
-	case TOKEN_HYPHEN:
-		debug("HYPHEN");
+		debug("TOKEN_HYPHEN_HYPHEN");
 		break;
 	}
+
+#undef TRY_DEBUG_PRINT_TOKEN
 }
 
 void
