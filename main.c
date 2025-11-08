@@ -76,10 +76,10 @@ compile(const char *src, const char *dst, enum compiler_action action)
 	check(codegen_init(ir, &cg));
 	codegen_debug_print(cg);
 
-	check(codegen_stack(cg));
+	check(codegen_replace_pseudoregisters(cg));
 	codegen_debug_print(cg);
 
-	check(codegen_fixup(ir, cg));
+	check(codegen_fixup_instructions(ir, cg));
 	codegen_debug_print(cg);
 
 	if (action != ACTION_ALL_PASSES) {

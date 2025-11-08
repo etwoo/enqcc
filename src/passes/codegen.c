@@ -150,7 +150,7 @@ codegen_init(const struct intermediate *ir, struct assembly **cg)
 }
 
 result_t
-codegen_stack(struct assembly *cg)
+codegen_replace_pseudoregisters(struct assembly *cg)
 {
 	debug("Replacing pseudoregisters with stack addresses");
 	for (struct asm_op *op = cg->function.ops; op != NULL; op = op->next) {
@@ -256,7 +256,7 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 }
 
 result_t
-codegen_fixup(const struct intermediate *ir, struct assembly *cg)
+codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 {
 	debug("Fixing up invalid instructions");
 
