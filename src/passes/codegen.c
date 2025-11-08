@@ -115,6 +115,12 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		}
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
+	case IR_OP_BINARY_ADD:
+	case IR_OP_BINARY_SUBTRACT:
+	case IR_OP_BINARY_MULTIPLY:
+	case IR_OP_BINARY_DIVIDE:
+	case IR_OP_BINARY_REMAINDER:
+		break; // TODO: binary op IR -> ASM codegen
 	}
 
 	return RESULT_OK;
