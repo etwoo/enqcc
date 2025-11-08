@@ -43,3 +43,5 @@ SUITE(print_to_str)
 {
 	RUN_TEST(print_to_str_each_enum_value);
 }
+
+#undef ASSERT_IN
