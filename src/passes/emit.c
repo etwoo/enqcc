@@ -12,9 +12,11 @@ static const char STR_OP_MOV[] = "movl";
 static const char STR_OP_NEG[] = "negl";
 static const char STR_OP_NOT[] = "notl";
 static const char STR_OP_RET[] = "ret";
+static const char STR_OP_SUB[] = "subq";
 static const char STR_REGISTER_EAX[] = "%eax";
 static const char STR_REGISTER_R10[] = "%r10d";
-static const char STR_REGISTER_STACK[] = "%rbp";
+static const char STR_REGISTER_RSP[] = "%rsp"; /* aka frame pointer */
+static const char STR_REGISTER_RBP[] = "%rbp"; /* aka stack pointer */
 
 static void
 emit_asm_footer(enum platform plat, int fd)
@@ -42,6 +44,9 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		case ASM_REGISTER_R10:
 			dprintf(fd, "%s", STR_REGISTER_R10);
 			break;
+		case ASM_REGISTER_RSP:
+			dprintf(fd, "%s", STR_REGISTER_RSP);
+			break;
 		}
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
@@ -49,7 +54,10 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		dprintf(fd, "$PSEUDO(%lld)", o->u.num);
 		break;
 	case ASM_OPERAND_STACK:
-		dprintf(fd, "%lld(%s)", -4 * o->u.num, STR_REGISTER_STACK);
+		dprintf(fd,
+		        "%lld(%s)",
+		        -1 * CODEGEN_BYTES_PER_VALUE * o->u.num,
+		        STR_REGISTER_RBP);
 		break;
 	}
 }
@@ -64,6 +72,9 @@ emit_asm_op(const struct asm_op *op, int fd)
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		dprintf(fd, "%s", STR_OP_MOV);
+		break;
+	case ASM_OP_SUB:
+		dprintf(fd, "%s", STR_OP_SUB);
 		break;
 	case ASM_OP_UNARY_NEG:
 		dprintf(fd, "%s", STR_OP_NEG);

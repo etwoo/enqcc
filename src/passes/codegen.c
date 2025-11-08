@@ -10,12 +10,26 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+const long long int CODEGEN_BYTES_PER_VALUE = 4;
+
 #define codegen_alloc(dst)                                                     \
 	do {                                                                   \
 		(dst) = malloc(sizeof(*(dst)));                                \
 		check_if((dst) == NULL, ERR_CODEGEN_ALLOC);                    \
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
+
+// TODO: consolidate with ir_concat_ops?
+static void
+codegen_concat_ops(struct asm_op *first, struct asm_op *second)
+{
+	assert(first != NULL);
+	while (first->next != NULL) {
+		first = first->next;
+	}
+	assert(first->next == NULL);
+	first->next = second;
+}
 
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
@@ -122,10 +136,33 @@ codegen_stack(struct assembly *cg)
 }
 
 result_t
-codegen_fixup(struct assembly *cg)
+codegen_fixup(const struct intermediate *ir, struct assembly *cg)
 {
 	debug("Fixing up invalid instructions");
-	(void)cg; // TODO
+
+	if (ir->env.generator > 1) {
+		struct asm_op *alloc_stack = NULL;
+		codegen_alloc(alloc_stack);
+		alloc_stack->opcode = ASM_OP_SUB;
+		alloc_stack->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+		alloc_stack->args[0].u.num =
+			CODEGEN_BYTES_PER_VALUE * (ir->env.generator - 1);
+		alloc_stack->args[1].operand_type = ASM_OPERAND_REGISTER;
+		alloc_stack->args[1].u.reg = ASM_REGISTER_RSP;
+
+		codegen_concat_ops(alloc_stack, cg->function.ops);
+		cg->function.ops = alloc_stack;
+	}
+
+	// TODO
+////////struct asm_op *op = cg->function.ops;
+////////while (op != NULL) {
+////////	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+////////		struct asm_operand *arg = &op->args[i];
+////////	}
+////////	op = op->next;
+////////}
+
 	return RESULT_OK;
 }
 
@@ -166,13 +203,17 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		case ASM_REGISTER_R10:
 			debug("  R10");
 			break;
+		case ASM_REGISTER_RSP:
+			debug("  RSP");
+			break;
 		}
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		debug("  PSEUDO %lld", operand->u.num);
 		break;
 	case ASM_OPERAND_STACK:
-		debug("  STACK %lld", -4 * operand->u.num);
+		debug("  STACK %lld",
+		      -1 * CODEGEN_BYTES_PER_VALUE * operand->u.num);
 		break;
 	}
 }
@@ -185,6 +226,9 @@ codegen_debug_print_op(const struct asm_op *op)
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		debug("MOV");
+		break;
+	case ASM_OP_SUB:
+		debug("SUB");
 		break;
 	case ASM_OP_UNARY_NEG:
 		debug("NEG");
