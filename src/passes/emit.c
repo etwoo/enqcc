@@ -50,8 +50,7 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		}
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
-		// TODO: change to assert once codegen_stack() is done
-		dprintf(fd, "$PSEUDO(%lld)", o->u.num);
+		assert(0 && "PSEUDOREGISTER should have been eliminated");
 		break;
 	case ASM_OPERAND_STACK:
 		dprintf(fd,
