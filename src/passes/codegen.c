@@ -164,23 +164,30 @@ codegen_stack(struct assembly *cg)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
+{
+	struct asm_op *alloc_stack = NULL;
+	codegen_alloc(alloc_stack);
+	alloc_stack->opcode = ASM_OP_SUB;
+	alloc_stack->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+	alloc_stack->args[0].u.num =
+		CODEGEN_BYTES_PER_VALUE * (ir->env.generator - 1);
+	alloc_stack->args[1].operand_type = ASM_OPERAND_REGISTER;
+	alloc_stack->args[1].u.reg = ASM_REGISTER_RSP;
+
+	codegen_op_list_contat(alloc_stack, cg->function.ops);
+	cg->function.ops = alloc_stack;
+	return RESULT_OK;
+}
+
 result_t
 codegen_fixup(const struct intermediate *ir, struct assembly *cg)
 {
 	debug("Fixing up invalid instructions");
 
 	if (ir->env.generator > 1) {
-		struct asm_op *alloc_stack = NULL;
-		codegen_alloc(alloc_stack);
-		alloc_stack->opcode = ASM_OP_SUB;
-		alloc_stack->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-		alloc_stack->args[0].u.num =
-			CODEGEN_BYTES_PER_VALUE * (ir->env.generator - 1);
-		alloc_stack->args[1].operand_type = ASM_OPERAND_REGISTER;
-		alloc_stack->args[1].u.reg = ASM_REGISTER_RSP;
-
-		codegen_op_list_contat(alloc_stack, cg->function.ops);
-		cg->function.ops = alloc_stack;
+		check(codegen_fixup_alloc_stack(ir, cg));
 	}
 
 	struct asm_op *prev = NULL;
