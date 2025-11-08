@@ -90,8 +90,8 @@ emit_asm_op(const struct asm_op *op, int fd)
 		        STR_OP_MOV_QUAD,
 		        STR_REG_RBP,
 		        STR_REG_RSP);
-		dprintf(fd, "%s %s\n", STR_OP_POP_QUAD, STR_REG_RBP);
-		dprintf(fd, "%s", STR_OP_RET);
+		dprintf(fd, "\t%s %s\n", STR_OP_POP_QUAD, STR_REG_RBP);
+		dprintf(fd, "\t%s", STR_OP_RET);
 		print_operands = false;
 		break;
 	}
@@ -123,8 +123,8 @@ emit_asm(const struct assembly *cg, enum platform plat, int fd)
 
 	const struct string_view *fname = &cg->function.identifier;
 	dprintf(fd, "%s%.*s:\n", fprefix, (int)fname->sz, fname->data);
-	dprintf(fd, "%s %s\n", STR_OP_PUSH_QUAD, STR_REG_RBP);
-	dprintf(fd, "%s %s, %s\n", STR_OP_MOV_QUAD, STR_REG_RSP, STR_REG_RBP);
+	dprintf(fd, "\t%s %s\n", STR_OP_PUSH_QUAD, STR_REG_RBP);
+	dprintf(fd, "\t%s %s, %s\n", STR_OP_MOV_QUAD, STR_REG_RSP, STR_REG_RBP);
 
 	for (struct asm_op *op = cg->function.ops; op != NULL; op = op->next) {
 		emit_asm_op(op, fd);
