@@ -17,7 +17,7 @@
 	} while (0)
 
 static void
-ir_concat_ops(struct ir_op *first, struct ir_op *second)
+ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 {
 	assert(first != NULL);
 	while (first->next != NULL) {
@@ -28,7 +28,7 @@ ir_concat_ops(struct ir_op *first, struct ir_op *second)
 }
 
 static void
-ir_free_op_list(struct ir_op *cursor)
+ir_op_list_free(struct ir_op *cursor)
 {
 	while (cursor != NULL) {
 		struct ir_op *tmp = cursor;
@@ -38,15 +38,15 @@ ir_free_op_list(struct ir_op *cursor)
 }
 
 static void
-ir_cleanup_op_list(struct ir_op **pp)
+ir_op_list_cleanup(struct ir_op **pp)
 {
-	ir_free_op_list(*pp);
+	ir_op_list_free(*pp);
 }
 
 void
 ir_free(struct intermediate *ir)
 {
-	ir_free_op_list(ir ? ir->function.ops : NULL);
+	ir_op_list_free(ir ? ir->function.ops : NULL);
 	free(ir);
 }
 
@@ -80,7 +80,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
 	assert(*dst == NULL);
 
-	struct ir_op *src __attribute__((cleanup(ir_cleanup_op_list))) = NULL;
+	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
 	ir_alloc(src);
 
 	switch (a->node_type) {
@@ -95,7 +95,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		break;
 	}
 
-	struct ir_op *inner __attribute__((cleanup(ir_cleanup_op_list))) = NULL;
+	struct ir_op *inner __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
 	check(ir_expression(a->u.op_unary.operand, &src->args[0], &inner, env));
 
 	src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
@@ -109,7 +109,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * 2) the present UNARY_OP(opcode, CONSTANT(...), TMPVAR)
 		 * 3) results of recursive invocation of ir_expression()
 		 */
-		ir_concat_ops(src, inner);
+		ir_op_list_concat(src, inner);
 		*dst = src;
 	} else {
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
@@ -121,12 +121,12 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * 2) results of recursive invocation of ir_expression()
 		 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
 		 */
-		ir_concat_ops(inner, src);
+		ir_op_list_concat(inner, src);
 		*dst = inner;
 	}
+
 	src = NULL;   /* release ownership to caller */
 	inner = NULL; /* release ownership to caller */
-
 	return RESULT_OK;
 }
 
@@ -171,7 +171,7 @@ ir_function(const struct ast *a, struct ir_function *dst, struct ir_env *env)
 		last_op->opcode = IR_OP_UNARY_IDENTITY;
 		last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		last_op->args[0].num = env->generator - 1;
-		ir_concat_ops(dst->ops, last_op);
+		ir_op_list_concat(dst->ops, last_op);
 	}
 	return RESULT_OK;
 }

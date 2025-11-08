@@ -19,9 +19,9 @@ const long long int CODEGEN_BYTES_PER_VALUE = 4;
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
 
-// TODO: consolidate with ir_concat_ops?
+// TODO: consolidate with ir_op_list_concat? ditto codegen_op_list_free, etc
 static void
-codegen_concat_ops(struct asm_op *first, struct asm_op *second)
+codegen_op_list_contat(struct asm_op *first, struct asm_op *second)
 {
 	assert(first != NULL);
 	while (first->next != NULL) {
@@ -29,6 +29,35 @@ codegen_concat_ops(struct asm_op *first, struct asm_op *second)
 	}
 	assert(first->next == NULL);
 	first->next = second;
+}
+
+static void
+codegen_op_list_free(struct asm_op *cursor)
+{
+	while (cursor != NULL) {
+		struct asm_op *tmp = cursor;
+		cursor = cursor->next;
+		free(tmp);
+	}
+}
+
+static void
+codegen_op_list_cleanup(struct asm_op **pp)
+{
+	codegen_op_list_free(*pp);
+}
+
+void
+codegen_free(struct assembly *cg)
+{
+	codegen_op_list_free(cg ? cg->function.ops : NULL);
+	free(cg);
+}
+
+void
+codegen_cleanup(struct assembly **cg)
+{
+	codegen_free(*cg);
 }
 
 static void
@@ -150,40 +179,82 @@ codegen_fixup(const struct intermediate *ir, struct assembly *cg)
 		alloc_stack->args[1].operand_type = ASM_OPERAND_REGISTER;
 		alloc_stack->args[1].u.reg = ASM_REGISTER_RSP;
 
-		codegen_concat_ops(alloc_stack, cg->function.ops);
+		codegen_op_list_contat(alloc_stack, cg->function.ops);
 		cg->function.ops = alloc_stack;
 	}
 
-	// TODO
-////////struct asm_op *op = cg->function.ops;
-////////while (op != NULL) {
-////////	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
-////////		struct asm_operand *arg = &op->args[i];
-////////	}
-////////	op = op->next;
-////////}
+	struct asm_op *prev = NULL;
+	struct asm_op *cur = cg->function.ops;
+	while (cur != NULL) {
+		if (cur->opcode != ASM_OP_MOV ||
+		    cur->args[0].operand_type != ASM_OPERAND_STACK ||
+		    cur->args[1].operand_type != ASM_OPERAND_STACK) {
+			prev = cur;
+			cur = cur->next;
+			continue;
+		}
+		assert(prev != NULL &&
+		       "should never need trampoline on very first op, which "
+		       "should always be something like setting up function "
+		       "context, substracting from frame pointer RSP, etc");
+
+		/*
+		 * clang-analyzer does not seem to understand how
+		 * __attribute__((cleanup)) on trampoline affects the rest of
+		 * the loop body. The NOLINT markers for:
+		 *
+		 *   clang-analyzer-unix.Malloc
+		 *   clang-analyzer-deadcode.DeadStores
+		 *
+		 * ... in the rest of the loop body suppress the associated
+		 * clang-tidy warnings. We should remove the annotations if
+		 * clang-tidy changes in the future (or this code evolves).
+		 */
+		struct asm_op *trampoline
+			__attribute__((cleanup(codegen_op_list_cleanup))) =
+				NULL;
+		codegen_alloc(trampoline);
+		memcpy(trampoline, cur, sizeof(*trampoline));
+		trampoline->opcode = ASM_OP_MOV;
+		trampoline->args[1].operand_type = ASM_OPERAND_REGISTER;
+		trampoline->args[1].u.reg = ASM_REGISTER_R10;
+
+		struct asm_op *trampoline_next
+			__attribute__((cleanup(codegen_op_list_cleanup))) =
+				NULL;
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+		codegen_alloc(trampoline_next);
+		memcpy(trampoline_next, cur, sizeof(*trampoline));
+		trampoline_next->opcode = ASM_OP_MOV;
+		trampoline_next->args[0].operand_type = ASM_OPERAND_REGISTER;
+		trampoline_next->args[0].u.reg = ASM_REGISTER_R10;
+
+		/*
+		 * Splice new trampoline sublist into list.
+		 */
+		trampoline_next->next = cur->next;
+		cur->next = NULL;
+		assert(prev->next == cur);
+		prev->next = trampoline;
+		trampoline->next = trampoline_next;
+
+		/*
+		 * Release ownership of inserted nodes, and take ownership of
+		 * removed nodes. In other words, trade old for new, for the
+		 * purposes of automatic cleanup.
+		 *
+		 * Also, prepare the next loop iteration to start at <tail>,
+		 * i.e. the next pointer of the original <cur>, with <prev>
+		 * referring to the last node of the inserted <trampoline>.
+		 */
+		prev = trampoline_next; // TODO: handle len(trampoline) > 2
+		struct asm_op *tmp = cur;
+		cur = trampoline_next->next;
+		trampoline = tmp; // NOLINT(clang-analyzer-deadcode.DeadStores)
+		trampoline_next = NULL;
+	}
 
 	return RESULT_OK;
-}
-
-void
-codegen_free(struct assembly *cg)
-{
-	if (cg != NULL) {
-		struct asm_op *ops = cg->function.ops;
-		while (ops != NULL) {
-			struct asm_op *tmp = ops;
-			ops = ops->next;
-			free(tmp);
-		}
-		free(cg);
-	}
-}
-
-void
-codegen_cleanup(struct assembly **cg)
-{
-	codegen_free(*cg);
 }
 
 static void
