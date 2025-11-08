@@ -7,6 +7,7 @@
 #include "sys/debug.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #define codegen_alloc(dst)                                                     \
@@ -15,6 +16,24 @@
 		check_if((dst) == NULL, ERR_CODEGEN_ALLOC);                    \
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
+
+static void
+codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
+{
+	switch (src->subtype) {
+	case IR_VAL_NONE:
+		assert(0 && "unset operand in 2-arg op");
+		break;
+	case IR_VAL_CONSTANT_INT:
+		dst->operand_type = ASM_OPERAND_IMMEDIATE;
+		dst->u.num = src->num;
+		break;
+	case IR_VAL_TEMPORARY_VARIABLE:
+		dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
+		dst->u.num = src->num;
+		break;
+	}
+}
 
 static WARN_UNUSED result_t
 codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
@@ -26,8 +45,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_UNARY_IDENTITY:
 		// assert(src->args[0].subtype == IR_VAL_CONSTANT_INT); // TODO
 		(**dst).opcode = ASM_OP_MOV;
-		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-		(**dst).args[0].u.num = src->args[0].num;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
 		(**dst).args[1].u.reg = ASM_REGISTER_AX;
 		dst = &(**dst).next;
@@ -35,10 +53,25 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_UNARY_NEGATE:
-		info("HELLO1 TODO IMPLEMENT NEGATE");
-		break;
 	case IR_OP_UNARY_COMPLEMENT:
-		info("HELLO1 TODO IMPLEMENT COMPLEMENT");
+		(**dst).opcode = ASM_OP_MOV;
+		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
+			codegen_map_operand(&src->args[i], &(**dst).args[i]);
+		}
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		switch (src->opcode) {
+		case IR_OP_UNARY_NEGATE:
+			(**dst).opcode = ASM_OP_UNARY_NEG;
+			break;
+		case IR_OP_UNARY_COMPLEMENT:
+			(**dst).opcode = ASM_OP_UNARY_NOT;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
 	}
 
@@ -114,6 +147,8 @@ static void
 codegen_debug_print_operand(const struct asm_operand *operand)
 {
 	switch (operand->operand_type) {
+	case ASM_OPERAND_NONE:
+		break;
 	case ASM_OPERAND_IMMEDIATE:
 		debug("  IMMEDIATE %lld", operand->u.num);
 		break;
@@ -127,22 +162,35 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 			break;
 		}
 		break;
+	case ASM_OPERAND_PSEUDO_REGISTER:
+		debug("  PSEUDO %lld", operand->u.num);
+		break;
 	}
 }
 
 static void
 codegen_debug_print_op(const struct asm_op *op)
 {
+	bool print_operands = true;
+
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		debug("MOV");
-		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
-			codegen_debug_print_operand(&op->args[i]);
-		}
+		break;
+	case ASM_OP_UNARY_NEG:
+		debug("NEG");
+		break;
+	case ASM_OP_UNARY_NOT:
+		debug("NOT");
 		break;
 	case ASM_OP_RET:
 		debug("RET");
+		print_operands = false;
 		break;
+	}
+
+	for (size_t i = 0; print_operands && i < ARRAY_SIZE(op->args); ++i) {
+		codegen_debug_print_operand(&op->args[i]);
 	}
 }
 

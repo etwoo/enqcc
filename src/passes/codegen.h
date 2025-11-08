@@ -5,10 +5,11 @@
 
 struct asm_operand {
 	enum {
+		ASM_OPERAND_NONE,
 		ASM_OPERAND_IMMEDIATE,
 		ASM_OPERAND_REGISTER,
-		//ASM_OPERAND_PSEUDO_REGISTER,
-		//ASM_OPERAND_STACK,
+		ASM_OPERAND_PSEUDO_REGISTER,
+		// ASM_OPERAND_STACK,
 	} operand_type;
 	union {
 		long long int num;
@@ -22,9 +23,9 @@ struct asm_operand {
 struct asm_op {
 	enum {
 		ASM_OP_MOV,
-		//ASM_OP_UNARY_NEG,
-		//ASM_OP_UNARY_NOT,
-		//ASM_OP_ALLOC_STACK,
+		ASM_OP_UNARY_NEG,
+		ASM_OP_UNARY_NOT,
+		// ASM_OP_ALLOC_STACK,
 		ASM_OP_RET,
 	} opcode;
 	struct asm_operand args[2];

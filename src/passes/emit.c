@@ -2,11 +2,15 @@
 #include "passes/codegen.h"
 #include "sys/array.h"
 
+#include <assert.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char MACOS_FUNC_PREFIX[] = "_";
 static const char STR_OP_MOV[] = "movl";
+static const char STR_OP_NEG[] = "neg";
+static const char STR_OP_NOT[] = "not";
 static const char STR_OP_RET[] = "ret";
 static const char STR_REGISTER_EAX[] = "%eax";
 static const char STR_REGISTER_R10[] = "%r10";
@@ -23,6 +27,9 @@ static void
 emit_asm_operand(const struct asm_operand *operand, int fd)
 {
 	switch (operand->operand_type) {
+	case ASM_OPERAND_NONE:
+		assert(0); /* logic error in caller */
+		break;
 	case ASM_OPERAND_IMMEDIATE:
 		dprintf(fd, "$%lld", operand->u.num);
 		break;
@@ -36,28 +43,49 @@ emit_asm_operand(const struct asm_operand *operand, int fd)
 			break;
 		}
 		break;
-
+	case ASM_OPERAND_PSEUDO_REGISTER:
+		// TODO: change to assert once codegen_stack() is done
+		dprintf(fd, "$PSEUDO(%lld)", operand->u.num);
+		break;
 	}
 }
 
 static void
 emit_asm_op(const struct asm_op *op, int fd)
 {
+	dprintf(fd, "\t");
+
+	bool print_operands = true;
+
 	switch (op->opcode) {
 	case ASM_OP_MOV:
-		dprintf(fd, "\t%s ", STR_OP_MOV);
-		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
-			if (i > 0) {
-				dprintf(fd, ", ");
-			}
-			emit_asm_operand(&op->args[i], fd);
-		}
-		dprintf(fd, "\n");
+		dprintf(fd, "%s", STR_OP_MOV);
+		break;
+	case ASM_OP_UNARY_NEG:
+		dprintf(fd, "%s", STR_OP_NEG);
+		break;
+	case ASM_OP_UNARY_NOT:
+		dprintf(fd, "%s", STR_OP_NOT);
 		break;
 	case ASM_OP_RET:
-		dprintf(fd, "\t%s\n", STR_OP_RET);
+		dprintf(fd, "%s", STR_OP_RET);
+		print_operands = false;
 		break;
 	}
+
+	for (size_t i = 0; print_operands && i < ARRAY_SIZE(op->args); ++i) {
+		if (op->args[i].operand_type == ASM_OPERAND_NONE) {
+			continue;
+		}
+		if (i == 0) {
+			dprintf(fd, " ");
+		} else {
+			dprintf(fd, ", ");
+		}
+		emit_asm_operand(&op->args[i], fd);
+	}
+
+	dprintf(fd, "\n");
 }
 
 void
