@@ -236,3 +236,5 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	}
 }
+
+#undef parse_alloc

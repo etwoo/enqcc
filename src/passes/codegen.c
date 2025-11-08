@@ -357,3 +357,5 @@ codegen_debug_print(const struct assembly *cg)
 		codegen_debug_print_op(op);
 	}
 }
+
+#undef codegen_alloc

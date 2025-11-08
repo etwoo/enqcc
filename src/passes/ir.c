@@ -246,3 +246,5 @@ ir_debug_print(const struct intermediate *ir)
 
 	ir_debug_print_list(ir->function.ops);
 }
+
+#undef ir_alloc
