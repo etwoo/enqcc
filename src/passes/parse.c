@@ -68,7 +68,8 @@ parse_identifier(const struct token **tok, struct ast **dst)
 }
 
 static result_t parse_expression(const struct token **tok,
-                                 struct ast **dst) WARN_UNUSED;
+                                 struct ast **dst,
+                                 unsigned minimum_precedence) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_factor(const struct token **tok, struct ast **dst)
@@ -88,7 +89,7 @@ parse_factor(const struct token **tok, struct ast **dst)
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		parse_alloc(*dst, NODE_EXPRESSION_PAREN_ENCLOSED);
 		token_consume(tok);
-		check(parse_expression(tok, &(**dst).u.op_unary.operand));
+		check(parse_expression(tok, &(**dst).u.op_unary.operand, 0));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE);
@@ -124,9 +125,9 @@ get_precedence(const struct ast *a)
  * gtmp: greater than (minimum) precedence
  */
 static WARN_UNUSED result_t
-parse_expression_gtp(const struct token **tok,
-                     struct ast **dst,
-                     unsigned minimum_precedence)
+parse_expression(const struct token **tok,
+                 struct ast **dst,
+                 unsigned minimum_precedence)
 {
 	struct ast *left __attribute__((cleanup(parse_cleanup))) = NULL;
 	check(parse_factor(tok, &left)); // NOLINT(clang-analyzer-unix.Malloc)
@@ -157,7 +158,7 @@ parse_expression_gtp(const struct token **tok,
 		struct ast *right __attribute__((cleanup(parse_cleanup))) =
 			NULL;
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		check(parse_expression_gtp(tok, &right, next_precedence + 1));
+		check(parse_expression(tok, &right, next_precedence + 1));
 
 		bop->u.op_binary.lhs = left;
 		bop->u.op_binary.rhs = right;
@@ -173,13 +174,6 @@ parse_expression_gtp(const struct token **tok,
 }
 
 static WARN_UNUSED result_t
-parse_expression(const struct token **tok, struct ast **dst)
-{
-	check(parse_expression_gtp(tok, dst, 0));
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 parse_statement(const struct token **tok, struct ast **dst)
 {
 	parse_alloc(*dst, NODE_EXPRESSION_UNARY_IDENTITY);
@@ -189,7 +183,7 @@ parse_statement(const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_expression(tok, &(**dst).u.op_unary.operand));
+	check(parse_expression(tok, &(**dst).u.op_unary.operand, 0));
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
