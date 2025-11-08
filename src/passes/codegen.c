@@ -201,12 +201,13 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	 *
 	 *     movl -4(%rbp), -8(%rbp)
 	 *
-	 * ... into temporary copies that we modify to look like:
+	 * ... into temporary copies. Modify these temporaries to perform the
+	 * same logical operation in an actually-valid way:
 	 *
 	 *     movl -4(%rbp), %r10d
 	 *     movl %r10d, -8(%rbp)
 	 *
-	 * ... before splicing them into the original containing op list.
+	 * ... and then splice these new ops into the original containing list.
 	 */
 	struct asm_op *trampoline[2] __attribute__((cleanup(tr_cleanup))) = {0};
 
