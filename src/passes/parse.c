@@ -124,6 +124,17 @@ get_precedence(const struct ast *a)
 	return precedence;
 }
 
+/*
+ * TODO: was confused how this was working without an outer loop to drive
+ * parse_expression() after early break on precedence; found a minimal C
+ * program that actually triggers the logic error that i assumed was present:
+ *
+ * int main(void)
+ * {
+ * 	return 1 * 2 + 3 * 4 + 5 * 6
+ * }
+ *
+ */
 static WARN_UNUSED result_t
 parse_expression(const struct token **tok,
                  struct ast **dst,
