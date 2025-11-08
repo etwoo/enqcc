@@ -194,6 +194,7 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
                              struct asm_op **new_cur)
 {
 	assert(prev && cur);
+	assert(prev->next == cur);
 
 	struct asm_op *trampoline[2] __attribute__((cleanup(tr_cleanup))) = {0};
 	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
