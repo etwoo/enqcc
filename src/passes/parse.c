@@ -89,7 +89,7 @@ parse_expression(const struct token **tok, struct ast **dst)
 		token_consume(tok);
 		check(parse_expression(tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
-		parse_alloc(dst, NODE_EXPRESSION_UNARY_NEGATION);
+		parse_alloc(dst, NODE_EXPRESSION_UNARY_NEGATE);
 		token_consume(tok);
 		check(parse_expression(tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
@@ -214,8 +214,8 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sEXPRESSION IDENTITY", (int)indent, "");
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
-	case NODE_EXPRESSION_UNARY_NEGATION:
-		debug("%*sEXPRESSION NEGATION", (int)indent, "");
+	case NODE_EXPRESSION_UNARY_NEGATE:
+		debug("%*sEXPRESSION NEGATE", (int)indent, "");
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
