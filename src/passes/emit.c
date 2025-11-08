@@ -56,10 +56,14 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		assert(0 && "PSEUDOREGISTER should have been eliminated");
 		break;
 	case ASM_OPERAND_STACK:
-		dprintf(fd,
-		        "%lld(%s)",
-		        -1 * CODEGEN_BYTES_PER_VALUE * o->u.num,
-		        STR_REG_RBP);
+		if (o->u.num == 0) {
+			dprintf(fd, "(%s)", STR_REG_RBP);
+		} else {
+			dprintf(fd,
+				"%lld(%s)",
+				-1 * CODEGEN_BYTES_PER_VALUE * o->u.num,
+				STR_REG_RBP);
+		}
 		break;
 	}
 }
