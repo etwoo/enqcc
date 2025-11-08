@@ -14,6 +14,7 @@ static const char STR_OP_NOT[] = "notl";
 static const char STR_OP_RET[] = "ret";
 static const char STR_REGISTER_EAX[] = "%eax";
 static const char STR_REGISTER_R10[] = "%r10d";
+static const char STR_REGISTER_STACK[] = "%rbp";
 
 static void
 emit_asm_footer(enum platform plat, int fd)
@@ -24,17 +25,17 @@ emit_asm_footer(enum platform plat, int fd)
 }
 
 static void
-emit_asm_operand(const struct asm_operand *operand, int fd)
+emit_asm_operand(const struct asm_operand *o, int fd)
 {
-	switch (operand->operand_type) {
+	switch (o->operand_type) {
 	case ASM_OPERAND_NONE:
 		assert(0); /* logic error in caller */
 		break;
 	case ASM_OPERAND_IMMEDIATE:
-		dprintf(fd, "$%lld", operand->u.num);
+		dprintf(fd, "$%lld", o->u.num);
 		break;
 	case ASM_OPERAND_REGISTER:
-		switch (operand->u.reg) {
+		switch (o->u.reg) {
 		case ASM_REGISTER_AX:
 			dprintf(fd, "%s", STR_REGISTER_EAX);
 			break;
@@ -45,7 +46,10 @@ emit_asm_operand(const struct asm_operand *operand, int fd)
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		// TODO: change to assert once codegen_stack() is done
-		dprintf(fd, "$PSEUDO(%lld)", operand->u.num);
+		dprintf(fd, "$PSEUDO(%lld)", o->u.num);
+		break;
+	case ASM_OPERAND_STACK:
+		dprintf(fd, "%lld(%s)", -4 * o->u.num, STR_REGISTER_STACK);
 		break;
 	}
 }

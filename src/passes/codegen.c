@@ -110,7 +110,14 @@ result_t
 codegen_stack(struct assembly *cg)
 {
 	debug("Replacing pseudoregisters with stack addresses");
-	(void)cg; // TODO
+	for (struct asm_op *op = cg->function.ops; op != NULL; op = op->next) {
+		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+			struct asm_operand *arg = &op->args[i];
+			if (arg->operand_type == ASM_OPERAND_PSEUDO_REGISTER) {
+				arg->operand_type = ASM_OPERAND_STACK;
+			}
+		}
+	}
 	return RESULT_OK;
 }
 
@@ -163,6 +170,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		debug("  PSEUDO %lld", operand->u.num);
+		break;
+	case ASM_OPERAND_STACK:
+		debug("  STACK %lld", -4 * operand->u.num);
 		break;
 	}
 }

@@ -9,7 +9,7 @@ struct asm_operand {
 		ASM_OPERAND_IMMEDIATE,
 		ASM_OPERAND_REGISTER,
 		ASM_OPERAND_PSEUDO_REGISTER,
-		// ASM_OPERAND_STACK,
+		ASM_OPERAND_STACK,
 	} operand_type;
 	union {
 		long long int num;
