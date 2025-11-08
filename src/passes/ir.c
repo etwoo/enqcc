@@ -84,7 +84,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	ir_alloc(src);
 
 	switch (a->node_type) {
-	case NODE_EXPRESSION_UNARY_NEGATION:
+	case NODE_EXPRESSION_UNARY_NEGATE:
 		src->opcode = IR_OP_UNARY_NEGATE;
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -140,7 +140,7 @@ ir_expression(const struct ast *a,
 	case NODE_CONSTANT_INT:
 		check(ir_constant(a, peek, dst));
 		break;
-	case NODE_EXPRESSION_UNARY_NEGATION:
+	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		check(ir_unary_op(a, dst, env));
 		break;
@@ -148,6 +148,12 @@ ir_expression(const struct ast *a,
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expression(a->u.op_unary.operand, peek, dst, env));
 		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		break; // TODO: binary op AST node -> IR
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
 		                   (int)a->node_type);
@@ -202,12 +208,44 @@ ir_debug_print_one(const struct ir_op *op)
 		debug("RETURN");
 		break;
 	case IR_OP_UNARY_NEGATE:
-		debug("UNARY");
-		debug("  NEGATION");
-		break;
 	case IR_OP_UNARY_COMPLEMENT:
 		debug("UNARY");
-		debug("  COMPLEMENT");
+		switch (op->opcode) {
+		case IR_OP_UNARY_NEGATE:
+			debug("  NEGATE");
+			break;
+		case IR_OP_UNARY_COMPLEMENT:
+			debug("  COMPLEMENT");
+			break;
+		default:
+			assert(0); /* logic error in caller */
+		}
+		break;
+	case IR_OP_BINARY_ADD:
+	case IR_OP_BINARY_SUBTRACT:
+	case IR_OP_BINARY_MULTIPLY:
+	case IR_OP_BINARY_DIVIDE:
+	case IR_OP_BINARY_REMAINDER:
+		debug("BINARY");
+		switch (op->opcode) {
+		case IR_OP_BINARY_ADD:
+			debug("  ADD");
+			break;
+		case IR_OP_BINARY_SUBTRACT:
+			debug("  SUBTRACT");
+			break;
+		case IR_OP_BINARY_MULTIPLY:
+			debug("  MULTIPLY");
+			break;
+		case IR_OP_BINARY_DIVIDE:
+			debug("  DIVIDE");
+			break;
+		case IR_OP_BINARY_REMAINDER:
+			debug("  REMAINDER");
+			break;
+		default:
+			assert(0); /* logic error in caller */
+		}
 		break;
 	}
 
@@ -246,3 +284,5 @@ ir_debug_print(const struct intermediate *ir)
 
 	ir_debug_print_list(ir->function.ops);
 }
+
+#undef ir_alloc
