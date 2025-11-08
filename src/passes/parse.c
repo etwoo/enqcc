@@ -211,19 +211,26 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.function.statement, indent + 2);
 		break;
 	case NODE_EXPRESSION_UNARY_IDENTITY:
-		debug("%*sEXPRESSION IDENTITY", (int)indent, "");
-		parse_debug_print(a->u.op_unary.operand, indent + 1);
-		break;
 	case NODE_EXPRESSION_UNARY_NEGATE:
-		debug("%*sEXPRESSION NEGATE", (int)indent, "");
-		parse_debug_print(a->u.op_unary.operand, indent + 1);
-		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-		debug("%*sEXPRESSION COMPLEMENT", (int)indent, "");
-		parse_debug_print(a->u.op_unary.operand, indent + 1);
-		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
-		debug("%*sEXPRESSION PARENTHESIZED", (int)indent, "");
+		switch (a->node_type) {
+		case NODE_EXPRESSION_UNARY_IDENTITY:
+			debug("%*sEXPRESSION IDENTITY", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_UNARY_NEGATE:
+			debug("%*sEXPRESSION NEGATE", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_UNARY_COMPLEMENT:
+			debug("%*sEXPRESSION COMPLEMENT", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_PAREN_ENCLOSED:
+			debug("%*sEXPRESSION PARENTHESIZED", (int)indent, "");
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
 	case NODE_IDENTIFIER: {
