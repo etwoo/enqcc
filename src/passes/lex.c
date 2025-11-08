@@ -1,6 +1,7 @@
 #include "passes/lex.h"
 
 #include "passes.h"
+#include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 #include "sys/tmpfile.h"
@@ -20,12 +21,32 @@ lex_alloc(struct token **tok)
 	return RESULT_OK;
 }
 
+#define FOREACH_LEX_CHAR(F)                                                    \
+	F('(', TOKEN_PAREN_OPEN)                                               \
+	F(')', TOKEN_PAREN_CLOSE)                                              \
+	F('{', TOKEN_BRACE_OPEN)                                               \
+	F('}', TOKEN_BRACE_CLOSE)                                              \
+	F(';', TOKEN_SEMICOLON)                                                \
+	F('~', TOKEN_TILDE)                                                    \
+	F('-', TOKEN_HYPHEN)                                                   \
+	F('+', TOKEN_PLUS_SIGN)                                                \
+	F('*', TOKEN_ASTERISK)                                                 \
+	F('/', TOKEN_FORWARD_SLASH)                                            \
+	F('%', TOKEN_PERCENT_SIGN)
+
 static WARN_UNUSED result_t
 lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
 {
+#define GET_CHAR(candidate, enum_value) candidate,
+	const char allowed[] = {FOREACH_LEX_CHAR(GET_CHAR)};
+#undef GET_CHAR
+
 	const char c = pos->data[0];
-	const bool ok = (isspace(c) || c == '(' || c == ')' || c == '{' ||
-	                 c == '}' || c == ';' || c == '~' || c == '-');
+	bool ok = isspace(c);
+	for (size_t i = 0; i < ARRAY_SIZE(allowed); ++i) {
+		ok = (c == allowed[i]) || ok;
+	}
+
 	check_if(!ok,
 	         ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR,
 	         c,
@@ -42,25 +63,23 @@ lex_one_token(struct string_view *pos, struct token **tok)
 	check(lex_alloc(tok));
 	assert(*tok != NULL);
 	struct token *cur = *tok;
-
 	const char c = pos->data[0];
-	if (c == '(') {
-		cur->token_type = TOKEN_PAREN_OPEN;
-	} else if (c == ')') {
-		cur->token_type = TOKEN_PAREN_CLOSE;
-	} else if (c == '{') {
-		cur->token_type = TOKEN_BRACE_OPEN;
-	} else if (c == '}') {
-		cur->token_type = TOKEN_BRACE_CLOSE;
-	} else if (c == ';') {
-		cur->token_type = TOKEN_SEMICOLON;
-	} else if (c == '~') {
-		cur->token_type = TOKEN_TILDE;
-	} else if (c == '-') {
-		if (pos->sz > 1 && pos->data[1] == '-') {
+	bool early_match = false;
+
+#define TRY_EARLY_MATCH(candidate, enum_value)                                 \
+	if (!early_match && c == (candidate)) {                                \
+		cur->token_type = enum_value;                                  \
+		early_match = true;                                            \
+	}
+	FOREACH_LEX_CHAR(TRY_EARLY_MATCH);
+
+#undef TRY_EARLY_MATCH
+
+	if (early_match) {
+		if (cur->token_type == TOKEN_HYPHEN && /* peek ahead in case */
+		    pos->sz > 1 &&                     /* of --, not just -  */
+		    pos->data[1] == '-') {
 			cur->token_type = TOKEN_HYPHEN_HYPHEN;
-		} else {
-			cur->token_type = TOKEN_HYPHEN;
 		}
 	} else if (isdigit(c)) {
 		cur->val.data = pos->data;
@@ -140,7 +159,13 @@ lex_cleanup(struct token **tok)
 static void
 lex_debug_one(const struct token *tok)
 {
+#define TRY_DEBUG_PRINT_TOKEN(candidate, enum_value)                           \
+	case enum_value:                                                       \
+		debug("%s", #enum_value);                                      \
+		break;
+
 	switch (tok->token_type) {
+		FOREACH_LEX_CHAR(TRY_DEBUG_PRINT_TOKEN)
 	case TOKEN_IDENTIFIER:
 		debug("IDENTIFIER %.*s", (int)tok->val.sz, tok->val.data);
 		break;
@@ -156,31 +181,12 @@ lex_debug_one(const struct token *tok)
 	case TOKEN_KEYWORD_INT:
 		debug("KEYWORD int");
 		break;
-	case TOKEN_PAREN_OPEN:
-		debug("PAREN open");
-		break;
-	case TOKEN_PAREN_CLOSE:
-		debug("PAREN close");
-		break;
-	case TOKEN_BRACE_OPEN:
-		debug("BRACE open");
-		break;
-	case TOKEN_BRACE_CLOSE:
-		debug("BRACE close");
-		break;
-	case TOKEN_SEMICOLON:
-		debug("SEMICOLON");
-		break;
-	case TOKEN_TILDE:
-		debug("TILDE");
-		break;
 	case TOKEN_HYPHEN_HYPHEN:
-		debug("HYPHENHYPHEN");
-		break;
-	case TOKEN_HYPHEN:
-		debug("HYPHEN");
+		debug("TOKEN_HYPHEN_HYPHEN");
 		break;
 	}
+
+#undef TRY_DEBUG_PRINT_TOKEN
 }
 
 void
@@ -191,3 +197,5 @@ lex_debug_print(const struct token *tok)
 		tok = tok->next;
 	}
 }
+
+#undef FOREACH_IMPORTANT_LEX_CHAR

@@ -16,15 +16,20 @@
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
 
+static struct ir_op *
+ir_op_list_back(struct ir_op *cursor)
+{
+	assert(cursor != NULL);
+	while (cursor->next != NULL) {
+		cursor = cursor->next;
+	}
+	return cursor;
+}
+
 static void
 ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 {
-	assert(first != NULL);
-	while (first->next != NULL) {
-		first = first->next;
-	}
-	assert(first->next == NULL);
-	first->next = second;
+	ir_op_list_back(first)->next = second;
 }
 
 static void
@@ -78,13 +83,11 @@ static result_t ir_expression(const struct ast *a,
 static WARN_UNUSED result_t
 ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
-	assert(*dst == NULL);
-
 	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
 	ir_alloc(src);
 
 	switch (a->node_type) {
-	case NODE_EXPRESSION_UNARY_NEGATION:
+	case NODE_EXPRESSION_UNARY_NEGATE:
 		src->opcode = IR_OP_UNARY_NEGATE;
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -130,6 +133,108 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+{
+	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	ir_alloc(src);
+
+	switch (a->node_type) {
+	case NODE_EXPRESSION_BINARY_ADD:
+		src->opcode = IR_OP_BINARY_ADD;
+		break;
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		src->opcode = IR_OP_BINARY_SUBTRACT;
+		break;
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+		src->opcode = IR_OP_BINARY_MULTIPLY;
+		break;
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+		src->opcode = IR_OP_BINARY_DIVIDE;
+		break;
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		src->opcode = IR_OP_BINARY_REMAINDER;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	struct ir_op *left __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	check(ir_expression(a->u.op_binary.lhs, &src->args[0], &left, env));
+
+	struct ir_op *right __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	check(ir_expression(a->u.op_binary.rhs, &src->args[1], &right, env));
+
+	src->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	src->args[2].num = env->generator++;
+
+	if (src->args[0].subtype == IR_VAL_CONSTANT_INT &&
+	    src->args[1].subtype == IR_VAL_CONSTANT_INT) {
+		assert(left == NULL);
+		assert(right == NULL);
+		/*
+		 * Reached terminal constants. Emit IR of the form:
+		 *
+		 *   BINARY_OP(opcode, CONSTANT(...), CONSTANT(...), TMPVAR)
+		 */
+		*dst = src;
+	} else if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
+		assert(left == NULL);
+		assert(src->args[1].subtype == IR_VAL_NONE);
+		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[1].num = src->args[2].num - 1;
+		/*
+		 * Related testcases from writing-a-c-compiler-tests repo:
+		 *
+		 * - ./tests/chapter_3/valid/parens.c
+		 * - ./tests/chapter_3/valid/precedence.c
+		 * - ./tests/chapter_3/valid/sub_neg.c
+		 * - ./tests/chapter_3/valid/sub.c
+		 */
+		ir_op_list_concat(right, src);
+		*dst = right;
+	} else if (src->args[1].subtype == IR_VAL_CONSTANT_INT) {
+		assert(right == NULL);
+		assert(src->args[0].subtype == IR_VAL_NONE);
+		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[0].num = src->args[2].num - 1;
+		/*
+		 * Related testcases from writing-a-c-compiler-tests repo:
+		 * - ./tests/chapter_3/valid/associativity.c
+		 * - ./tests/chapter_3/valid/associativity_2.c
+		 * - ./tests/chapter_3/valid/associativity_3.c
+		 * - ./tests/chapter_3/valid/associativity_and_precedence.c
+		 * - ./tests/chapter_3/valid/div_neg.c
+		 * - ./tests/chapter_3/valid/unop_add.c
+		 */
+		ir_op_list_concat(left, src);
+		*dst = left;
+	} else {
+		assert(src->args[0].subtype == IR_VAL_NONE);
+		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[0].num = ir_op_list_back(left)->args[2].num;
+		assert(src->args[1].subtype == IR_VAL_NONE);
+		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[1].num = ir_op_list_back(right)->args[2].num;
+		/*
+		 * Neither peeked value is a constant. Emit IR in this order:
+		 *
+		 * 1) existing ops created by caller
+		 * 2) results of recursive invocations of ir_expression()
+		 * 3) the present BINARY_OP(opcode, ..., TMPVAR)
+		 */
+		ir_op_list_concat(left, right);
+		ir_op_list_concat(right, src);
+		*dst = left;
+	}
+
+	src = NULL;   /* release ownership to caller */
+	left = NULL;  /* release ownership to caller */
+	right = NULL; /* release ownership to caller */
+	return RESULT_OK;
+}
+
 result_t
 ir_expression(const struct ast *a,
               struct ir_val *peek,
@@ -140,13 +245,20 @@ ir_expression(const struct ast *a,
 	case NODE_CONSTANT_INT:
 		check(ir_constant(a, peek, dst));
 		break;
-	case NODE_EXPRESSION_UNARY_NEGATION:
+	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		check(ir_unary_op(a, dst, env));
 		break;
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expression(a->u.op_unary.operand, peek, dst, env));
+		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		check(ir_binary_op(a, dst, env));
 		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
@@ -197,25 +309,60 @@ ir_init(const struct ast *a, struct intermediate **ir)
 static void
 ir_debug_print_one(const struct ir_op *op)
 {
+	size_t required_args = 0;
 	switch (op->opcode) {
 	case IR_OP_UNARY_IDENTITY:
 		debug("RETURN");
 		break;
 	case IR_OP_UNARY_NEGATE:
-		debug("UNARY");
-		debug("  NEGATION");
-		break;
 	case IR_OP_UNARY_COMPLEMENT:
+		required_args = 1;
 		debug("UNARY");
-		debug("  COMPLEMENT");
+		switch (op->opcode) {
+		case IR_OP_UNARY_NEGATE:
+			debug("  NEGATE");
+			break;
+		case IR_OP_UNARY_COMPLEMENT:
+			debug("  COMPLEMENT");
+			break;
+		default:
+			assert(0); /* logic error in caller */
+		}
+		break;
+	case IR_OP_BINARY_ADD:
+	case IR_OP_BINARY_SUBTRACT:
+	case IR_OP_BINARY_MULTIPLY:
+	case IR_OP_BINARY_DIVIDE:
+	case IR_OP_BINARY_REMAINDER:
+		required_args = 2;
+		debug("BINARY");
+		switch (op->opcode) {
+		case IR_OP_BINARY_ADD:
+			debug("  ADD");
+			break;
+		case IR_OP_BINARY_SUBTRACT:
+			debug("  SUBTRACT");
+			break;
+		case IR_OP_BINARY_MULTIPLY:
+			debug("  MULTIPLY");
+			break;
+		case IR_OP_BINARY_DIVIDE:
+			debug("  DIVIDE");
+			break;
+		case IR_OP_BINARY_REMAINDER:
+			debug("  REMAINDER");
+			break;
+		default:
+			assert(0); /* logic error in caller */
+		}
 		break;
 	}
 
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		switch (op->args[i].subtype) {
 		case IR_VAL_NONE:
-			assert(i > 0 && op->opcode == IR_OP_UNARY_IDENTITY &&
-			       "invalid op with unset operand");
+			assert(i >= required_args &&
+			       "op lacks required operand");
 			break;
 		case IR_VAL_CONSTANT_INT:
 			debug("  CONSTANT %lld", op->args[i].num);
@@ -246,3 +393,5 @@ ir_debug_print(const struct intermediate *ir)
 
 	ir_debug_print_list(ir->function.ops);
 }
+
+#undef ir_alloc

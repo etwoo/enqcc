@@ -61,6 +61,27 @@ codegen_cleanup(struct assembly **cg)
 }
 
 static void
+codegen_set_operand_eax(struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->u.reg = ASM_REGISTER_AX;
+}
+
+static void
+codegen_set_operand_r10(struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->u.reg = ASM_REGISTER_R10;
+}
+
+static void
+codegen_set_operand_r11(struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->u.reg = ASM_REGISTER_R11;
+}
+
+static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->subtype) {
@@ -88,8 +109,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_UNARY_IDENTITY:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
-		(**dst).args[1].u.reg = ASM_REGISTER_AX;
+		codegen_set_operand_eax(&(**dst).args[1]);
 		dst = &(**dst).next;
 		codegen_alloc(*dst);
 		(**dst).opcode = ASM_OP_RET;
@@ -114,6 +134,60 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 			break;
 		}
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
+	case IR_OP_BINARY_ADD:
+	case IR_OP_BINARY_SUBTRACT:
+	case IR_OP_BINARY_MULTIPLY:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		switch (src->opcode) {
+		case IR_OP_BINARY_ADD:
+			(**dst).opcode = ASM_OP_BINARY_ADD;
+			break;
+		case IR_OP_BINARY_SUBTRACT:
+			(**dst).opcode = ASM_OP_BINARY_SUBTRACT;
+			break;
+		case IR_OP_BINARY_MULTIPLY:
+			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		break;
+	case IR_OP_BINARY_DIVIDE:
+	case IR_OP_BINARY_REMAINDER:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		codegen_set_operand_eax(&(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_CDQ;
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_IDIV;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_MOV;
+		switch (src->opcode) {
+		case IR_OP_BINARY_DIVIDE:
+			codegen_set_operand_eax(&(**dst).args[0]);
+			break;
+		case IR_OP_BINARY_REMAINDER:
+			(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
+			(**dst).args[0].u.reg = ASM_REGISTER_DX;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
 		break;
 	}
 
@@ -169,7 +243,7 @@ codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
 {
 	struct asm_op *alloc_stack = NULL;
 	codegen_alloc(alloc_stack);
-	alloc_stack->opcode = ASM_OP_SUB;
+	alloc_stack->opcode = ASM_OP_BINARY_SUBTRACT_QUAD;
 	alloc_stack->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
 	alloc_stack->args[0].u.num =
 		CODEGEN_BYTES_PER_VALUE * (ir->env.generator - 1);
@@ -180,50 +254,41 @@ codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
 	return RESULT_OK;
 }
 
+struct fix {
+	size_t sz;
+	struct asm_op *ops[3];
+};
+
 static void
-tr_cleanup(struct asm_op *pp[][2])
+fix_cleanup(struct fix *trampoline)
 {
-	codegen_op_list_free((*pp)[0]);
-	codegen_op_list_free((*pp)[1]);
+	for (size_t i = 0; i < ARRAY_SIZE(trampoline->ops); ++i) {
+		codegen_op_list_free(trampoline->ops[i]);
+		trampoline->ops[i] = NULL;
+	}
 }
 
 static WARN_UNUSED result_t
-codegen_fixup_stack_to_stack(struct asm_op *prev,
-                             struct asm_op *cur,
-                             struct asm_op **new_prev,
-                             struct asm_op **new_cur)
+codegen_fixup_apply(struct asm_op *prev,
+                    struct asm_op *cur,
+                    struct asm_op **new_prev,
+                    struct asm_op **new_cur,
+                    bool (*fix_init)(struct asm_op *cur,
+                                     struct fix *trampoline))
 {
-	assert(prev && cur);
-	assert(prev->next == cur);
-
-	/*
-	 * Prepare a trampoline by memcpy()-ing invalid instructions like:
-	 *
-	 *     movl -4(%rbp), -8(%rbp)
-	 *
-	 * ... into temporary copies. Modify these temporaries to perform the
-	 * same logical operation in an actually-valid way:
-	 *
-	 *     movl -4(%rbp), %r10d
-	 *     movl %r10d, -8(%rbp)
-	 *
-	 * ... and then splice these new ops into the original containing list.
-	 */
-	struct asm_op *trampoline[2] __attribute__((cleanup(tr_cleanup))) = {0};
-
-	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
+	struct fix trampoline __attribute__((cleanup(fix_cleanup))) = {0};
+	for (size_t i = 0; i < ARRAY_SIZE(trampoline.ops); ++i) {
 		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		codegen_alloc(trampoline[i]);
-		memcpy(trampoline[i], cur, sizeof(*cur));
+		codegen_alloc(trampoline.ops[i]);
 	}
 
-	trampoline[0]->next = NULL;
-	trampoline[0]->args[1].operand_type = ASM_OPERAND_REGISTER;
-	trampoline[0]->args[1].u.reg = ASM_REGISTER_R10;
+	if (!fix_init(cur, &trampoline)) {
+		return RESULT_OK; /* no fixup necessary */
+	}
 
-	trampoline[1]->next = NULL;
-	trampoline[1]->args[0].operand_type = ASM_OPERAND_REGISTER;
-	trampoline[1]->args[0].u.reg = ASM_REGISTER_R10;
+	assert(prev && "should never need trampoline on very first op");
+	assert(cur);
+	assert(prev->next == cur);
 
 	/*
 	 * Split containing list at <cur>, excluding <cur> from both halves.
@@ -235,24 +300,142 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	/*
 	 * Insert trampoline sublist into containing list.
 	 */
-	codegen_op_list_concat(prev, trampoline[0]);
-	codegen_op_list_concat(trampoline[0], trampoline[1]);
-	codegen_op_list_concat(trampoline[1], remainder);
+	assert(trampoline.sz >= 1);
+	codegen_op_list_concat(prev, trampoline.ops[0]);
+	assert(trampoline.sz >= 2);
+	codegen_op_list_concat(trampoline.ops[0], trampoline.ops[1]);
+	if (trampoline.sz >= 3) {
+		codegen_op_list_concat(trampoline.ops[1], trampoline.ops[2]);
+	}
+	codegen_op_list_concat(trampoline.ops[trampoline.sz - 1], remainder);
 
 	/*
 	 * Prepare list cursor positions for next loop iteration.
 	 */
-	*new_prev = trampoline[1];
+	*new_prev = trampoline.ops[trampoline.sz - 1];
 	*new_cur = remainder;
 
 	/*
 	 * Release ownership of trampoline sublist to caller.
 	 */
-	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
-		trampoline[i] = NULL;
+	for (size_t i = 0; i < ARRAY_SIZE(trampoline.ops); ++i) {
+		trampoline.ops[i] = NULL;
 	}
 
+	/*
+	 * Clean up node that we've just removed from the containing list.
+	 */
+	codegen_op_list_free(cur);
+
 	return RESULT_OK;
+}
+
+/*
+ * Prepare a trampoline by memcpy()-ing invalid instructions where both
+ * operands are ASM_OPERAND_STACK:
+ *
+ *     movl -4(%rbp), -8(%rbp)
+ *
+ * ... into temporary copies. Modify these temporaries to perform the same
+ * logical operation in an actually-valid way:
+ *
+ *     movl -4(%rbp), %r10d
+ *     movl %r10d, -8(%rbp)
+ *
+ * ... and then splice these new ops into the original containing list.
+ */
+static WARN_UNUSED bool
+fix_s2s(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!((cur->opcode == ASM_OP_MOV || cur->opcode == ASM_OP_BINARY_ADD ||
+	       cur->opcode == ASM_OP_BINARY_SUBTRACT) &&
+	      cur->args[0].operand_type == ASM_OPERAND_STACK &&
+	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
+		return false;
+	}
+
+	trampoline->sz = 2;
+	for (size_t i = 0; i < trampoline->sz; ++i) {
+		memcpy(trampoline->ops[i], cur, sizeof(*cur));
+		trampoline->ops[i]->next = NULL;
+	}
+	if (cur->opcode != ASM_OP_MOV) {
+		trampoline->ops[0]->opcode = ASM_OP_MOV;
+	}
+	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
+	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
+
+	return true;
+}
+
+/*
+ * Translate:
+ *
+ *     idivl $3
+ *
+ * ... into:
+ *
+ *     movl  $3, $r10d
+ *     idivl %r10d
+ */
+static WARN_UNUSED bool
+fix_idiv(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!(cur->opcode == ASM_OP_IDIV &&
+	      cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE)) {
+		return false;
+	}
+
+	trampoline->sz = 2;
+
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	trampoline->ops[0]->args[0].operand_type = cur->args[0].operand_type;
+	trampoline->ops[0]->args[0].u.num = cur->args[0].u.num;
+	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
+
+	trampoline->ops[1]->opcode = ASM_OP_IDIV;
+	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
+
+	return true;
+}
+
+/*
+ *
+ * Translate:
+ *
+ *     imull $3, -4(%rbp)
+ *
+ * ... into:
+ *
+ *     movl  -4(%rbp), $r11d
+ *     imull $3, %r11d
+ *     movl  $r11d, -4(%rbp)
+ */
+static WARN_UNUSED bool
+fix_imul(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!(cur->opcode == ASM_OP_BINARY_MULTIPLY &&
+	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
+		return false;
+	}
+
+	trampoline->sz = 3;
+
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	trampoline->ops[0]->args[0].operand_type = cur->args[1].operand_type;
+	trampoline->ops[0]->args[0].u.num = cur->args[1].u.num;
+	codegen_set_operand_r11(&trampoline->ops[0]->args[1]);
+
+	trampoline->ops[1]->opcode = ASM_OP_BINARY_MULTIPLY;
+	trampoline->ops[1]->args[0].operand_type = cur->args[0].operand_type;
+	trampoline->ops[1]->args[0].u.num = cur->args[0].u.num;
+	codegen_set_operand_r11(&trampoline->ops[1]->args[1]);
+
+	trampoline->ops[2]->opcode = ASM_OP_MOV;
+	codegen_set_operand_r11(&trampoline->ops[2]->args[0]);
+	trampoline->ops[2]->args[1].operand_type = cur->args[1].operand_type;
+	trampoline->ops[2]->args[1].u.num = cur->args[1].u.num;
+	return true;
 }
 
 result_t
@@ -267,18 +450,15 @@ codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 	struct asm_op *prev = NULL;
 	struct asm_op *cur = cg->function.ops;
 	while (cur != NULL) {
-		if (cur->opcode != ASM_OP_MOV ||
-		    cur->args[0].operand_type != ASM_OPERAND_STACK ||
-		    cur->args[1].operand_type != ASM_OPERAND_STACK) {
+		struct asm_op *orig[2] = {prev, cur};
+		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_s2s));
+		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_idiv));
+		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_imul));
+		if (cur == orig[1]) {
+			assert(prev == orig[0]);
 			prev = cur;
-			cur = cur->next;
-			continue;
+			cur = cur->next; /* no fixup -> default cur update */
 		}
-		assert(prev != NULL &&
-		       "should never need trampoline on very first op, which "
-		       "should always be something like setting up function "
-		       "context, substracting from frame pointer RSP, etc");
-		check(codegen_fixup_stack_to_stack(prev, cur, &prev, &cur));
 	}
 
 	return RESULT_OK;
@@ -298,8 +478,14 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		case ASM_REGISTER_AX:
 			debug("  EAX");
 			break;
+		case ASM_REGISTER_DX:
+			debug("  EDX");
+			break;
 		case ASM_REGISTER_R10:
 			debug("  R10");
+			break;
+		case ASM_REGISTER_R11:
+			debug("  R11");
 			break;
 		case ASM_REGISTER_RSP:
 			debug("  RSP");
@@ -325,14 +511,27 @@ codegen_debug_print_op(const struct asm_op *op)
 	case ASM_OP_MOV:
 		debug("MOV");
 		break;
-	case ASM_OP_SUB:
-		debug("SUB");
-		break;
 	case ASM_OP_UNARY_NEG:
 		debug("NEG");
 		break;
 	case ASM_OP_UNARY_NOT:
 		debug("NOT");
+		break;
+	case ASM_OP_BINARY_ADD:
+		debug("ADD");
+		break;
+	case ASM_OP_BINARY_SUBTRACT:
+	case ASM_OP_BINARY_SUBTRACT_QUAD:
+		debug("SUBTRACT");
+		break;
+	case ASM_OP_BINARY_MULTIPLY:
+		debug("MULTIPLY");
+		break;
+	case ASM_OP_IDIV:
+		debug("IDIV");
+		break;
+	case ASM_OP_CDQ:
+		debug("CDQ");
 		break;
 	case ASM_OP_RET:
 		debug("RET");
@@ -357,3 +556,5 @@ codegen_debug_print(const struct assembly *cg)
 		codegen_debug_print_op(op);
 	}
 }
+
+#undef codegen_alloc

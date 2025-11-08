@@ -12,12 +12,19 @@ static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_MOV[] = "movl";
 static const char STR_OP_NEG[] = "negl";
 static const char STR_OP_NOT[] = "notl";
+static const char STR_OP_ADD[] = "addl";
+static const char STR_OP_SUB[] = "subl";
+static const char STR_OP_MUL[] = "imull";
+static const char STR_OP_DIV[] = "idivl";
+static const char STR_OP_CDQ[] = "cdq";
 static const char STR_OP_POP_QUAD[] = "popq";
 static const char STR_OP_PUSH_QUAD[] = "pushq";
 static const char STR_OP_RET[] = "ret";
 static const char STR_OP_SUB_QUAD[] = "subq";
 static const char STR_REG_EAX[] = "%eax";
+static const char STR_REG_EDX[] = "%edx";
 static const char STR_REG_R10[] = "%r10d";
+static const char STR_REG_R11[] = "%r11d";
 static const char STR_REG_RSP[] = "%rsp"; /* aka frame pointer */
 static const char STR_REG_RBP[] = "%rbp"; /* aka stack pointer */
 
@@ -44,8 +51,14 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		case ASM_REGISTER_AX:
 			dprintf(fd, "%s", STR_REG_EAX);
 			break;
+		case ASM_REGISTER_DX:
+			dprintf(fd, "%s", STR_REG_EDX);
+			break;
 		case ASM_REGISTER_R10:
 			dprintf(fd, "%s", STR_REG_R10);
+			break;
+		case ASM_REGISTER_R11:
+			dprintf(fd, "%s", STR_REG_R11);
 			break;
 		case ASM_REGISTER_RSP:
 			dprintf(fd, "%s", STR_REG_RSP);
@@ -79,14 +92,29 @@ emit_asm_op(const struct asm_op *op, int fd)
 	case ASM_OP_MOV:
 		dprintf(fd, "%s", STR_OP_MOV);
 		break;
-	case ASM_OP_SUB:
-		dprintf(fd, "%s", STR_OP_SUB_QUAD);
-		break;
 	case ASM_OP_UNARY_NEG:
 		dprintf(fd, "%s", STR_OP_NEG);
 		break;
 	case ASM_OP_UNARY_NOT:
 		dprintf(fd, "%s", STR_OP_NOT);
+		break;
+	case ASM_OP_BINARY_ADD:
+		dprintf(fd, "%s", STR_OP_ADD);
+		break;
+	case ASM_OP_BINARY_SUBTRACT:
+		dprintf(fd, "%s", STR_OP_SUB);
+		break;
+	case ASM_OP_BINARY_SUBTRACT_QUAD:
+		dprintf(fd, "%s", STR_OP_SUB_QUAD);
+		break;
+	case ASM_OP_BINARY_MULTIPLY:
+		dprintf(fd, "%s", STR_OP_MUL);
+		break;
+	case ASM_OP_IDIV:
+		dprintf(fd, "%s", STR_OP_DIV);
+		break;
+	case ASM_OP_CDQ:
+		dprintf(fd, "%s", STR_OP_CDQ);
 		break;
 	case ASM_OP_RET:
 		dprintf(fd,

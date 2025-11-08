@@ -10,21 +10,12 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-static WARN_UNUSED result_t
-parse_alloc_helper(struct ast **a, unsigned node_type)
-{
-	assert(a != NULL && *a == NULL);
-	*a = malloc(sizeof(**a));
-	check_if(*a == NULL, ERR_LEX_ALLOC);
-	memset(*a, 0, sizeof(**a));
-	(**a).node_type = node_type;
-	return RESULT_OK;
-}
-
-#define parse_alloc(a, nt)                                                     \
+#define parse_alloc(expr, nt)                                                  \
 	do {                                                                   \
-		check(parse_alloc_helper((a), (nt)));                          \
-		assert(*(a)); /* silence clang-analyzer NullDereference */     \
+		(expr) = malloc(sizeof(*(expr)));                              \
+		check_if((expr) == NULL, ERR_LEX_ALLOC);                       \
+		memset(expr, 0, sizeof(*(expr)));                              \
+		(*(expr)).node_type = nt;                                      \
 	} while (0);
 
 static WARN_UNUSED bool
@@ -43,7 +34,7 @@ static WARN_UNUSED result_t
 parse_constant(const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_CONSTANT));
-	parse_alloc(dst, NODE_CONSTANT_INT);
+	parse_alloc(*dst, NODE_CONSTANT_INT);
 
 	/*
 	 * strtoll() does not update errno on success, so we must clear it
@@ -69,33 +60,36 @@ parse_identifier(const struct token **tok, struct ast **dst)
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
 	}
-	parse_alloc(dst, NODE_IDENTIFIER);
+	parse_alloc(*dst, NODE_IDENTIFIER);
 
 	(**dst).u.str = (**tok).val;
 	token_consume(tok);
 	return RESULT_OK;
 }
 
+static result_t parse_expression(const struct token **tok,
+                                 struct ast **dst,
+                                 unsigned minimum_precedence) WARN_UNUSED;
+
 static WARN_UNUSED result_t
-parse_expression(const struct token **tok, struct ast **dst)
+parse_factor(const struct token **tok, struct ast **dst)
 {
 	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
-
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
-		parse_alloc(dst, NODE_EXPRESSION_UNARY_IDENTITY);
+		parse_alloc(*dst, NODE_EXPRESSION_UNARY_IDENTITY);
 		check(parse_constant(tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
-		parse_alloc(dst, NODE_EXPRESSION_UNARY_COMPLEMENT);
+		parse_alloc(*dst, NODE_EXPRESSION_UNARY_COMPLEMENT);
 		token_consume(tok);
-		check(parse_expression(tok, &(**dst).u.op_unary.operand));
+		check(parse_factor(tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
-		parse_alloc(dst, NODE_EXPRESSION_UNARY_NEGATION);
+		parse_alloc(*dst, NODE_EXPRESSION_UNARY_NEGATE);
 		token_consume(tok);
-		check(parse_expression(tok, &(**dst).u.op_unary.operand));
+		check(parse_factor(tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-		parse_alloc(dst, NODE_EXPRESSION_PAREN_ENCLOSED);
+		parse_alloc(*dst, NODE_EXPRESSION_PAREN_ENCLOSED);
 		token_consume(tok);
-		check(parse_expression(tok, &(**dst).u.op_unary.operand));
+		check(parse_expression(tok, &(**dst).u.op_unary.operand, 0));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE);
@@ -107,17 +101,96 @@ parse_expression(const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static const unsigned PRECEDENCE_LOW = 45;
+static const unsigned PRECEDENCE_HIGH = 50;
+
+static WARN_UNUSED unsigned
+get_precedence(const struct ast *a)
+{
+	unsigned precedence = 0;
+	switch (a->node_type) {
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		precedence = PRECEDENCE_LOW;
+		break;
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		precedence = PRECEDENCE_HIGH;
+		break;
+	default:
+		break;
+	}
+	return precedence;
+}
+
+/*
+ * Some references on precedence climbing:
+ *
+ * https://en.wikipedia.org/wiki/Operator-precedence_parser
+ * https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing
+ * https://www.oilshell.org/blog/2016/11/01.html
+ */
+static WARN_UNUSED result_t
+parse_expression(const struct token **tok,
+                 struct ast **dst,
+                 unsigned minimum_precedence)
+{
+	struct ast *left __attribute__((cleanup(parse_cleanup))) = NULL;
+	check(parse_factor(tok, &left));
+
+	while (true) {
+		struct ast *bop __attribute__((cleanup(parse_cleanup))) = NULL;
+		if (is_token_type(*tok, TOKEN_PLUS_SIGN)) {
+			parse_alloc(bop, NODE_EXPRESSION_BINARY_ADD);
+		} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
+			parse_alloc(bop, NODE_EXPRESSION_BINARY_SUBTRACT);
+		} else if (is_token_type(*tok, TOKEN_ASTERISK)) {
+			parse_alloc(bop, NODE_EXPRESSION_BINARY_MULTIPLY);
+		} else if (is_token_type(*tok, TOKEN_FORWARD_SLASH)) {
+			parse_alloc(bop, NODE_EXPRESSION_BINARY_DIVIDE);
+		} else if (is_token_type(*tok, TOKEN_PERCENT_SIGN)) {
+			parse_alloc(bop, NODE_EXPRESSION_BINARY_REMAINDER);
+		} else {
+			break;
+		}
+
+		const unsigned next_precedence = get_precedence(bop);
+		if (next_precedence < minimum_precedence) {
+			break;
+		}
+
+		token_consume(tok);
+
+		struct ast *right __attribute__((cleanup(parse_cleanup))) =
+			NULL;
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+		check(parse_expression(tok, &right, next_precedence + 1));
+
+		bop->u.op_binary.lhs = left;
+		bop->u.op_binary.rhs = right;
+		left = bop;
+
+		right = NULL; /* release ownership */
+		bop = NULL;   /* release ownership */
+	}
+
+	*dst = left;
+	left = NULL; /* release ownership */
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 parse_statement(const struct token **tok, struct ast **dst)
 {
-	parse_alloc(dst, NODE_EXPRESSION_UNARY_IDENTITY);
+	parse_alloc(*dst, NODE_EXPRESSION_UNARY_IDENTITY);
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_KEYWORD_RETURN);
 	}
 	token_consume(tok);
 
-	check(parse_expression(tok, &(**dst).u.op_unary.operand));
+	check(parse_expression(tok, &(**dst).u.op_unary.operand, 0));
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
@@ -130,7 +203,7 @@ parse_statement(const struct token **tok, struct ast **dst)
 static WARN_UNUSED result_t
 parse_function(const struct token **tok, struct ast **dst)
 {
-	parse_alloc(dst, NODE_FUNCTION);
+	parse_alloc(*dst, NODE_FUNCTION);
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
@@ -172,7 +245,7 @@ parse_function(const struct token **tok, struct ast **dst)
 result_t
 parse_init(const struct token *tok, struct ast **a)
 {
-	parse_alloc(a, NODE_PROGRAM);
+	parse_alloc(*a, NODE_PROGRAM);
 
 	check(parse_function(&tok, &(**a).u.program.entrypoint_function));
 	if (tok != NULL) {
@@ -211,20 +284,55 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.function.statement, indent + 2);
 		break;
 	case NODE_EXPRESSION_UNARY_IDENTITY:
-		debug("%*sEXPRESSION IDENTITY", (int)indent, "");
-		parse_debug_print(a->u.op_unary.operand, indent + 1);
-		break;
-	case NODE_EXPRESSION_UNARY_NEGATION:
-		debug("%*sEXPRESSION NEGATION", (int)indent, "");
-		parse_debug_print(a->u.op_unary.operand, indent + 1);
-		break;
+	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-		debug("%*sEXPRESSION COMPLEMENT", (int)indent, "");
+	case NODE_EXPRESSION_PAREN_ENCLOSED:
+		switch (a->node_type) {
+		case NODE_EXPRESSION_UNARY_IDENTITY:
+			debug("%*sEXPRESSION IDENTITY", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_UNARY_NEGATE:
+			debug("%*sEXPRESSION NEGATE", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_UNARY_COMPLEMENT:
+			debug("%*sEXPRESSION COMPLEMENT", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_PAREN_ENCLOSED:
+			debug("%*sEXPRESSION PARENTHESIZED", (int)indent, "");
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
-	case NODE_EXPRESSION_PAREN_ENCLOSED:
-		debug("%*sEXPRESSION PARENTHESIZED", (int)indent, "");
-		parse_debug_print(a->u.op_unary.operand, indent + 1);
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		switch (a->node_type) {
+		case NODE_EXPRESSION_BINARY_ADD:
+			debug("%*sEXPRESSION ADD", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_BINARY_SUBTRACT:
+			debug("%*sEXPRESSION SUBTRACT", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_BINARY_MULTIPLY:
+			debug("%*sEXPRESSION MULTIPLY", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_BINARY_DIVIDE:
+			debug("%*sEXPRESSION DIVIDE", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_BINARY_REMAINDER:
+			debug("%*sEXPRESSION REMAINDER", (int)indent, "");
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		parse_debug_print(a->u.op_binary.lhs, indent + 1);
+		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
 	case NODE_IDENTIFIER: {
 		const struct string_view *s = &a->u.str;
@@ -236,3 +344,5 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	}
 }
+
+#undef parse_alloc
