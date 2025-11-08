@@ -9,11 +9,11 @@
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char MACOS_FUNC_PREFIX[] = "_";
 static const char STR_OP_MOV[] = "movl";
-static const char STR_OP_NEG[] = "neg";
-static const char STR_OP_NOT[] = "not";
+static const char STR_OP_NEG[] = "negl";
+static const char STR_OP_NOT[] = "notl";
 static const char STR_OP_RET[] = "ret";
 static const char STR_REGISTER_EAX[] = "%eax";
-static const char STR_REGISTER_R10[] = "%r10";
+static const char STR_REGISTER_R10[] = "%r10d";
 
 static void
 emit_asm_footer(enum platform plat, int fd)
