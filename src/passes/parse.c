@@ -124,9 +124,6 @@ get_precedence(const struct ast *a)
 	return precedence;
 }
 
-/*
- * gtmp: greater than (minimum) precedence
- */
 static WARN_UNUSED result_t
 parse_expression(const struct token **tok,
                  struct ast **dst,
