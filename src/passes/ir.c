@@ -198,6 +198,8 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * - ./tests/chapter_3/valid/div_neg.c
 		 * - ./tests/chapter_3/valid/unop_add.c
 		 */
+		// TODO: associativity_3.c is still broken
+		// TODO: associativity_and_precedence.c is still broken
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		ir_op_list_concat(left, src);
 		*dst = left;
