@@ -210,13 +210,13 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		// TODO: associativity_and_precedence.c ditto
 		assert(src->args[0].subtype == IR_VAL_NONE);
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		// TODO: purpose using invalid 100 offset
+		// TODO: for now, purposely use invalid 100 offset
 		// need to figure out logic for what variable ID to use
 		// probably cannot use static offsets like constant cases above
 		// ... because there can be arbitrary nesting of expressions?
 		src->args[0].num = src->args[2].num + 100; // NOLINT
 		assert(src->args[1].subtype == IR_VAL_NONE);
-		// TODO: ditto above re: 100, with 1000 offset below
+		// TODO: purposely use invalid 1000 offset (ditto above)
 		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[1].num = src->args[2].num + 1000; // NOLINT
 		/*
