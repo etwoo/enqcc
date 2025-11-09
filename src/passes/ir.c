@@ -29,8 +29,7 @@ ir_op_list_back(struct ir_op *cursor)
 static void
 ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 {
-	first = ir_op_list_back(first);
-	first->next = second;
+	ir_op_list_back(first)->next = second;
 }
 
 static void
