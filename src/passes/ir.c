@@ -177,6 +177,7 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 */
 		*dst = src;
 	} else if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
+		assert(left == NULL);
 		/*
 		 * Related testcases from writing-a-c-compiler-tests repo:
 		 *
@@ -185,7 +186,6 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * - ./tests/chapter_3/valid/sub_neg.c
 		 * - ./tests/chapter_3/valid/sub.c
 		 */
-		assert(0 && "only left is constant; how should we handle?");
 		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		ir_op_list_concat(right, src);
 		*dst = right;
