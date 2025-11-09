@@ -180,8 +180,10 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 */
 		*dst = src;
 	} else if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
+		// TODO: fix writing-a-c-compiler-tests/tests/chapter_3/valid/parens.c
 		assert(0 && "only left is constant; how should we handle?");
 	} else if (src->args[1].subtype == IR_VAL_CONSTANT_INT) {
+		// TODO: fix writing-a-c-compiler-tests/tests/chapter_3/valid/associativity.c
 		assert(0 && "only right is constant; how should we handle?");
 	} else {
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
