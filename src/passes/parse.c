@@ -124,6 +124,13 @@ get_precedence(const struct ast *a)
 	return precedence;
 }
 
+/*
+ * Some references on precedence climbing:
+ *
+ * https://en.wikipedia.org/wiki/Operator-precedence_parser
+ * https://eli.thegreenplace.net/2012/08/02/parsing-expressions-by-precedence-climbing
+ * https://www.oilshell.org/blog/2016/11/01.html
+ */
 static WARN_UNUSED result_t
 parse_expression(const struct token **tok,
                  struct ast **dst,
