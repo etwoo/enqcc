@@ -16,14 +16,21 @@
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
 
+static struct ir_op *
+ir_op_list_back(struct ir_op *cursor)
+{
+	assert(cursor != NULL);
+	while (cursor->next != NULL) {
+		cursor = cursor->next;
+	}
+	assert(cursor->next == NULL);
+	return cursor;
+}
+
 static void
 ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 {
-	assert(first != NULL);
-	while (first->next != NULL) {
-		first = first->next;
-	}
-	assert(first->next == NULL);
+	first = ir_op_list_back(first);
 	first->next = second;
 }
 
@@ -206,19 +213,12 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		ir_op_list_concat(left, src);
 		*dst = left;
 	} else {
-		// TODO: associativity_3.c gives wrong results re: TMP IDs
-		// TODO: associativity_and_precedence.c ditto
 		assert(src->args[0].subtype == IR_VAL_NONE);
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		// TODO: for now, purposely use invalid 100 offset
-		// need to figure out logic for what variable ID to use
-		// probably cannot use static offsets like constant cases above
-		// ... because there can be arbitrary nesting of expressions?
-		src->args[0].num = src->args[2].num + 100; // NOLINT
+		src->args[0].num = ir_op_list_back(left)->args[2].num;
 		assert(src->args[1].subtype == IR_VAL_NONE);
-		// TODO: purposely use invalid 1000 offset (ditto above)
 		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[1].num = src->args[2].num + 1000; // NOLINT
+		src->args[1].num = ir_op_list_back(right)->args[2].num;
 		/*
 		 * Neither peeked value is a constant. Emit IR in this order:
 		 *
