@@ -104,7 +104,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * Reached a terminal constant. Emit IR in this order:
 		 *
 		 * 1) existing ops created by caller
-		 * 2) the present UNARY_OP(opcode, CONSTANT(...), TMPVAR)
+		 * 2) the present UNARY_OP(opcode, CONST(...), TMP)
 		 * 3) results of recursive invocation of ir_expression()
 		 */
 		ir_op_list_concat(src, inner);
@@ -117,7 +117,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 *
 		 * 1) existing ops created by caller
 		 * 2) results of recursive invocation of ir_expression()
-		 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
+		 * 3) the present UNARY_OP(opcode, ..., TMP)
 		 */
 		ir_op_list_concat(inner, src);
 		*dst = inner;
@@ -169,11 +169,9 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		assert(left == NULL);
 		assert(right == NULL);
 		/*
-		 * Reached terminal constants. Emit IR in this order:
+		 * Reached terminal constants. Emit IR of the form:
 		 *
-		 * 1) existing ops created by caller
-		 * 2) the present UNARY_OP(opcode, CONSTANT(...), TMPVAR)
-		 * 3) results of recursive invocation of ir_expression()
+		 *   BINARY_OP(opcode, CONST(...), CONST(...), TMP)
 		 */
 		*dst = src;
 	} else if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
@@ -190,6 +188,7 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		ir_op_list_concat(right, src);
 		*dst = right;
 	} else if (src->args[1].subtype == IR_VAL_CONSTANT_INT) {
+		assert(right == NULL);
 		/*
 		 * Related testcases from writing-a-c-compiler-tests repo:
 		 * - ./tests/chapter_3/valid/associativity.c
@@ -208,7 +207,7 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 *
 		 * 1) existing ops created by caller
 		 * 2) results of recursive invocation of ir_expression()
-		 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
+		 * 3) the present BINARY_OP(opcode, ..., TMPVAR)
 		 */
 		ir_op_list_concat(left, right);
 		ir_op_list_concat(right, src);
