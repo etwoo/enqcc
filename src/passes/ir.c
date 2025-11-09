@@ -184,7 +184,9 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * - ./tests/chapter_3/valid/sub_neg.c
 		 * - ./tests/chapter_3/valid/sub.c
 		 */
+		assert(src->args[1].subtype == IR_VAL_NONE);
 		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[1].num = src->args[2].num - 1;
 		ir_op_list_concat(right, src);
 		*dst = right;
 	} else if (src->args[1].subtype == IR_VAL_CONSTANT_INT) {
@@ -198,14 +200,22 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * - ./tests/chapter_3/valid/div_neg.c
 		 * - ./tests/chapter_3/valid/unop_add.c
 		 */
-		// TODO: associativity_3.c is still broken
-		// TODO: associativity_and_precedence.c is still broken
+		assert(src->args[0].subtype == IR_VAL_NONE);
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[0].num = src->args[2].num - 1;
 		ir_op_list_concat(left, src);
 		*dst = left;
 	} else {
+		// TODO: associativity_3.c gives wrong results re: TMP IDs
+		// TODO: associativity_and_precedence.c ditto
+		assert(src->args[0].subtype == IR_VAL_NONE);
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[0].num = src->args[1].num - 1;
+		// TODO: purpose using invalid 100 offset; need to figure out logic for what variable ID to use, probably cannot use static offsets like constant cases above because there could be arbitrary nesting of expressions?
+		src->args[0].num = src->args[2].num + 100;  // NOLINT
+		assert(src->args[1].subtype == IR_VAL_NONE);
+		// TODO: ditto above re: 100, with 1000 offset below
+		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[1].num = src->args[2].num + 1000; // NOLINT
 		/*
 		 * Neither peeked value is a constant. Emit IR in this order:
 		 *
