@@ -23,7 +23,7 @@ struct ir_op {
 		IR_OP_BINARY_DIVIDE,
 		IR_OP_BINARY_REMAINDER,
 	} opcode;
-	struct ir_val args[2];
+	struct ir_val args[3];
 	struct ir_op *next;
 };
 

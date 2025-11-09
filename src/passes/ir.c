@@ -78,7 +78,7 @@ static result_t ir_expression(const struct ast *a,
 static WARN_UNUSED result_t
 ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
-	assert(*dst == NULL);
+	assert(*dst == NULL); // TODO: remove this assertion?
 
 	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
 	ir_alloc(src);
@@ -130,6 +130,80 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+{
+	assert(*dst == NULL); // TODO: remove this assertion?
+
+	// TODO: like ir_unary_op(); copy-paste+modify for now, then consolidate
+	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	ir_alloc(src);
+
+	switch (a->node_type) {
+	case NODE_EXPRESSION_BINARY_ADD:
+		src->opcode = IR_OP_BINARY_ADD;
+		break;
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		src->opcode = IR_OP_BINARY_SUBTRACT;
+		break;
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+		src->opcode = IR_OP_BINARY_MULTIPLY;
+		break;
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+		src->opcode = IR_OP_BINARY_DIVIDE;
+		break;
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		src->opcode = IR_OP_BINARY_REMAINDER;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	struct ir_op *left __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	check(ir_expression(a->u.op_binary.lhs, &src->args[0], &left, env));
+
+	struct ir_op *right __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	check(ir_expression(a->u.op_binary.rhs, &src->args[1], &right, env));
+
+	src->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	src->args[2].num = env->generator++;
+
+	if (src->args[0].subtype == IR_VAL_CONSTANT_INT &&
+	    src->args[1].subtype == IR_VAL_CONSTANT_INT) {
+		/*
+		 * Reached terminal constants. Emit IR in this order:
+		 *
+		 * 1) existing ops created by caller
+		 * 2) the present UNARY_OP(opcode, CONSTANT(...), TMPVAR)
+		 * 3) results of recursive invocation of ir_expression()
+		 */
+		*dst = src;
+	} else if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
+		assert(0 && "only left is constant; how should we handle?");
+	} else if (src->args[1].subtype == IR_VAL_CONSTANT_INT) {
+		assert(0 && "only right is constant; how should we handle?");
+	} else {
+		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[0].num = src->args[1].num - 1;
+		/*
+		 * Neither peeked value is a constant. Emit IR in this order:
+		 *
+		 * 1) existing ops created by caller
+		 * 2) results of recursive invocation of ir_expression()
+		 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
+		 */
+		ir_op_list_concat(left, right);
+		ir_op_list_concat(right, src);
+		*dst = left;
+	}
+
+	src = NULL;   /* release ownership to caller */
+	left = NULL;  /* release ownership to caller */
+	right = NULL; /* release ownership to caller */
+	return RESULT_OK;
+}
+
 result_t
 ir_expression(const struct ast *a,
               struct ir_val *peek,
@@ -153,7 +227,8 @@ ir_expression(const struct ast *a,
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
-		break; // TODO: binary op AST node -> IR
+		check(ir_binary_op(a, dst, env));
+		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
 		                   (int)a->node_type);
@@ -203,12 +278,14 @@ ir_init(const struct ast *a, struct intermediate **ir)
 static void
 ir_debug_print_one(const struct ir_op *op)
 {
+	size_t required_args = 0;
 	switch (op->opcode) {
 	case IR_OP_UNARY_IDENTITY:
 		debug("RETURN");
 		break;
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:
+		required_args = 1;
 		debug("UNARY");
 		switch (op->opcode) {
 		case IR_OP_UNARY_NEGATE:
@@ -226,6 +303,7 @@ ir_debug_print_one(const struct ir_op *op)
 	case IR_OP_BINARY_MULTIPLY:
 	case IR_OP_BINARY_DIVIDE:
 	case IR_OP_BINARY_REMAINDER:
+		required_args = 2;
 		debug("BINARY");
 		switch (op->opcode) {
 		case IR_OP_BINARY_ADD:
@@ -252,8 +330,8 @@ ir_debug_print_one(const struct ir_op *op)
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		switch (op->args[i].subtype) {
 		case IR_VAL_NONE:
-			assert(i > 0 && op->opcode == IR_OP_UNARY_IDENTITY &&
-			       "invalid op with unset operand");
+			assert(i >= required_args &&
+			       "op lacks required operand");
 			break;
 		case IR_VAL_CONSTANT_INT:
 			debug("  CONSTANT %lld", op->args[i].num);
