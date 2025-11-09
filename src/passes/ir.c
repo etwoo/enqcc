@@ -23,7 +23,6 @@ ir_op_list_back(struct ir_op *cursor)
 	while (cursor->next != NULL) {
 		cursor = cursor->next;
 	}
-	assert(cursor->next == NULL);
 	return cursor;
 }
 
