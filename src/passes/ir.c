@@ -198,7 +198,9 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * - ./tests/chapter_3/valid/div_neg.c
 		 * - ./tests/chapter_3/valid/unop_add.c
 		 */
-		assert(0 && "only right is constant; how should we handle?");
+		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		ir_op_list_concat(left, src);
+		*dst = left;
 	} else {
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[0].num = src->args[1].num - 1;
@@ -206,7 +208,7 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * Neither peeked value is a constant. Emit IR in this order:
 		 *
 		 * 1) existing ops created by caller
-		 * 2) results of recursive invocation of ir_expression()
+		 * 2) results of recursive invocations of ir_expression()
 		 * 3) the present BINARY_OP(opcode, ..., TMPVAR)
 		 */
 		ir_op_list_concat(left, right);
