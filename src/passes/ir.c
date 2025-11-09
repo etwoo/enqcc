@@ -78,8 +78,6 @@ static result_t ir_expression(const struct ast *a,
 static WARN_UNUSED result_t
 ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
-	assert(*dst == NULL); // TODO: remove this assertion?
-
 	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
 	ir_alloc(src);
 
@@ -133,9 +131,6 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 static WARN_UNUSED result_t
 ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
-	assert(*dst == NULL); // TODO: remove this assertion?
-
-	// TODO: like ir_unary_op(); copy-paste+modify for now, then consolidate
 	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
 	ir_alloc(src);
 
@@ -171,6 +166,8 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 
 	if (src->args[0].subtype == IR_VAL_CONSTANT_INT &&
 	    src->args[1].subtype == IR_VAL_CONSTANT_INT) {
+		assert(left == NULL);
+		assert(right == NULL);
 		/*
 		 * Reached terminal constants. Emit IR in this order:
 		 *
@@ -180,10 +177,28 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 */
 		*dst = src;
 	} else if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
-		// TODO: fix writing-a-c-compiler-tests/tests/chapter_3/valid/parens.c
+		/*
+		 * Related testcases from writing-a-c-compiler-tests repo:
+		 *
+		 * - ./tests/chapter_3/valid/parens.c
+		 * - ./tests/chapter_3/valid/precedence.c
+		 * - ./tests/chapter_3/valid/sub_neg.c
+		 * - ./tests/chapter_3/valid/sub.c
+		 */
 		assert(0 && "only left is constant; how should we handle?");
+		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		ir_op_list_concat(right, src);
+		*dst = right;
 	} else if (src->args[1].subtype == IR_VAL_CONSTANT_INT) {
-		// TODO: fix writing-a-c-compiler-tests/tests/chapter_3/valid/associativity.c
+		/*
+		 * Related testcases from writing-a-c-compiler-tests repo:
+		 * - ./tests/chapter_3/valid/associativity.c
+		 * - ./tests/chapter_3/valid/associativity_2.c
+		 * - ./tests/chapter_3/valid/associativity_3.c
+		 * - ./tests/chapter_3/valid/associativity_and_precedence.c
+		 * - ./tests/chapter_3/valid/div_neg.c
+		 * - ./tests/chapter_3/valid/unop_add.c
+		 */
 		assert(0 && "only right is constant; how should we handle?");
 	} else {
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
