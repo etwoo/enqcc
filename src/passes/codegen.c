@@ -276,6 +276,9 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 		codegen_alloc(trampoline[i]);
 		memcpy(trampoline[i], cur, sizeof(*cur));
 	}
+	if (cur->opcode != ASM_OP_MOV) {
+		trampoline[0]->opcode = ASM_OP_MOV;
+	}
 
 	trampoline[0]->next = NULL;
 	trampoline[0]->args[1].operand_type = ASM_OPERAND_REGISTER;
@@ -327,7 +330,8 @@ codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 	struct asm_op *prev = NULL;
 	struct asm_op *cur = cg->function.ops;
 	while (cur != NULL) {
-		if (cur->opcode != ASM_OP_MOV ||
+		if ((cur->opcode != ASM_OP_MOV &&
+		     cur->opcode != ASM_OP_BINARY_ADD) ||
 		    cur->args[0].operand_type != ASM_OPERAND_STACK ||
 		    cur->args[1].operand_type != ASM_OPERAND_STACK) {
 			prev = cur;
