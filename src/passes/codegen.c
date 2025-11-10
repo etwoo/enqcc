@@ -253,7 +253,14 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
                              struct asm_op **new_prev,
                              struct asm_op **new_cur)
 {
-	assert(prev && cur);
+	if (!((cur->opcode == ASM_OP_MOV || cur->opcode == ASM_OP_BINARY_ADD) &&
+	      cur->args[0].operand_type == ASM_OPERAND_STACK &&
+	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
+		return RESULT_OK; /* no fixup necessary */
+	}
+
+	assert(prev && "should never need trampoline on very first op");
+	assert(cur);
 	assert(prev->next == cur);
 
 	/*
@@ -318,6 +325,16 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+codegen_fixup_idiv_immediate(struct asm_op *prev,
+                             struct asm_op *cur,
+                             struct asm_op **new_prev,
+                             struct asm_op **new_cur)
+{
+	(void)prev; (void)cur; (void)new_prev; (void)new_cur;
+	return RESULT_OK; // TODO
+}
+
 result_t
 codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 {
@@ -330,19 +347,14 @@ codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 	struct asm_op *prev = NULL;
 	struct asm_op *cur = cg->function.ops;
 	while (cur != NULL) {
-		if ((cur->opcode != ASM_OP_MOV &&
-		     cur->opcode != ASM_OP_BINARY_ADD) ||
-		    cur->args[0].operand_type != ASM_OPERAND_STACK ||
-		    cur->args[1].operand_type != ASM_OPERAND_STACK) {
-			prev = cur;
-			cur = cur->next;
-			continue;
-		}
-		assert(prev != NULL &&
-		       "should never need trampoline on very first op, which "
-		       "should always be something like setting up function "
-		       "context, substracting from frame pointer RSP, etc");
+		struct asm_op *orig[2] = {prev, cur};
 		check(codegen_fixup_stack_to_stack(prev, cur, &prev, &cur));
+		check(codegen_fixup_idiv_immediate(prev, cur, &prev, &cur));
+		if (cur == orig[1]) {
+			assert(prev == orig[0]);
+			prev = cur;
+			cur = cur->next; /* no fixup -> default cur update */
+		}
 	}
 
 	return RESULT_OK;
