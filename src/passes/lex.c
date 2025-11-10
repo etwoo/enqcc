@@ -34,12 +34,12 @@ lex_alloc(struct token **tok)
 	F('*', TOKEN_ASTERISK)                                                 \
 	F('/', TOKEN_FORWARD_SLASH)                                            \
 	F('%', TOKEN_PERCENT_SIGN)                                             \
-	F('!', TOKEN_EXCLAMATION_MARK)                                         \
+	F('!', TOKEN_EXCLAMATION)                                              \
 	F('&', TOKEN_AMPERSAND)                                                \
-	F('|', TOKEN_VERTICAL_BAR)                                             \
+	F('|', TOKEN_VERT_BAR)                                                 \
 	F('=', TOKEN_EQUAL_SIGN)                                               \
 	F('<', TOKEN_LESS_THAN)                                                \
-	F('>', TOKEN_GREATER_THAN)
+	F('>', TOKEN_MORE_THAN)
 
 static WARN_UNUSED result_t
 lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
@@ -78,8 +78,8 @@ lex_one_token_peek(struct string_view *pos, struct token *cur)
 		case TOKEN_AMPERSAND:
 			cur->token_type = TOKEN_AMPERSAND_AMPERSAND;
 			break;
-		case TOKEN_VERTICAL_BAR:
-			cur->token_type = TOKEN_VERTICAL_BAR_VERTICAL_BAR;
+		case TOKEN_VERT_BAR:
+			cur->token_type = TOKEN_VERT_BAR_VERT_BAR;
 			break;
 		case TOKEN_EQUAL_SIGN:
 			cur->token_type = TOKEN_EQUAL_SIGN_EQUAL_SIGN;
@@ -87,8 +87,8 @@ lex_one_token_peek(struct string_view *pos, struct token *cur)
 		case TOKEN_LESS_THAN:
 			cur->token_type = TOKEN_LESS_THAN_LESS_THAN;
 			break;
-		case TOKEN_GREATER_THAN:
-			cur->token_type = TOKEN_GREATER_THAN_GREATER_THAN;
+		case TOKEN_MORE_THAN:
+			cur->token_type = TOKEN_MORE_THAN_MORE_THAN;
 			break;
 		default:
 			matched = false;
@@ -96,20 +96,20 @@ lex_one_token_peek(struct string_view *pos, struct token *cur)
 		}
 	} else if (pos->data[1] == '=') {
 		switch (cur->token_type) {
-		case TOKEN_EXCLAMATION_MARK:
-			cur->token_type = TOKEN_EXCLAMATION_MARK_EQUAL_SIGN;
+		case TOKEN_EXCLAMATION:
+			cur->token_type = TOKEN_EXCLAMATION_EQUAL_SIGN;
 			break;
 		case TOKEN_AMPERSAND:
 			cur->token_type = TOKEN_AMPERSAND_EQUAL_SIGN;
 			break;
-		case TOKEN_VERTICAL_BAR:
-			cur->token_type = TOKEN_VERTICAL_BAR_EQUAL_SIGN;
+		case TOKEN_VERT_BAR:
+			cur->token_type = TOKEN_VERT_BAR_EQUAL_SIGN;
 			break;
 		case TOKEN_LESS_THAN:
 			cur->token_type = TOKEN_LESS_THAN_EQUAL_SIGN;
 			break;
-		case TOKEN_GREATER_THAN:
-			cur->token_type = TOKEN_GREATER_THAN_EQUAL_SIGN;
+		case TOKEN_MORE_THAN:
+			cur->token_type = TOKEN_MORE_THAN_EQUAL_SIGN;
 			break;
 		default:
 			matched = false;
@@ -256,8 +256,8 @@ lex_debug_one(const struct token *tok)
 	case TOKEN_HYPHEN_HYPHEN:
 		debug("TOKEN_HYPHEN_HYPHEN");
 		break;
-	case TOKEN_EXCLAMATION_MARK_EQUAL_SIGN:
-		debug("TOKEN_EXCLAMATION_MARK_EQUAL_SIGN");
+	case TOKEN_EXCLAMATION_EQUAL_SIGN:
+		debug("TOKEN_EXCLAMATION_EQUAL_SIGN");
 		break;
 	case TOKEN_AMPERSAND_AMPERSAND:
 		debug("TOKEN_AMPERSAND_AMPERSAND");
@@ -265,11 +265,11 @@ lex_debug_one(const struct token *tok)
 	case TOKEN_AMPERSAND_EQUAL_SIGN:
 		debug("TOKEN_AMPERSAND_EQUAL_SIGN");
 		break;
-	case TOKEN_VERTICAL_BAR_VERTICAL_BAR:
-		debug("TOKEN_VERTICAL_BAR_VERTICAL_BAR");
+	case TOKEN_VERT_BAR_VERT_BAR:
+		debug("TOKEN_VERT_BAR_VERT_BAR");
 		break;
-	case TOKEN_VERTICAL_BAR_EQUAL_SIGN:
-		debug("TOKEN_VERTICAL_BAR_EQUAL_SIGN");
+	case TOKEN_VERT_BAR_EQUAL_SIGN:
+		debug("TOKEN_VERT_BAR_EQUAL_SIGN");
 		break;
 	case TOKEN_EQUAL_SIGN_EQUAL_SIGN:
 		debug("TOKEN_EQUAL_SIGN_EQUAL_SIGN");
@@ -280,11 +280,11 @@ lex_debug_one(const struct token *tok)
 	case TOKEN_LESS_THAN_EQUAL_SIGN:
 		debug("TOKEN_LESS_THAN_EQUAL_SIGN");
 		break;
-	case TOKEN_GREATER_THAN_GREATER_THAN:
-		debug("TOKEN_GREATER_THAN_GREATER_THAN");
+	case TOKEN_MORE_THAN_MORE_THAN:
+		debug("TOKEN_MORE_THAN_MORE_THAN");
 		break;
-	case TOKEN_GREATER_THAN_EQUAL_SIGN:
-		debug("TOKEN_GREATER_THAN_EQUAL_SIGN");
+	case TOKEN_MORE_THAN_EQUAL_SIGN:
+		debug("TOKEN_MORE_THAN_EQUAL_SIGN");
 		break;
 	}
 

@@ -86,7 +86,7 @@ parse_factor(const struct token **tok, struct ast **dst)
 		parse_alloc(*dst, NODE_EXPRESSION_UNARY_NEGATE);
 		token_consume(tok);
 		check(parse_factor(tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_EXCLAMATION_MARK)) {
+	} else if (is_token_type(*tok, TOKEN_EXCLAMATION)) {
 		parse_alloc(*dst, NODE_EXPRESSION_UNARY_NOT);
 		token_consume(tok);
 		check(parse_factor(tok, &(**dst).u.op_unary.operand));
@@ -105,9 +105,7 @@ parse_factor(const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
-static const unsigned PRECEDENCE_LOW = 45;
-static const unsigned PRECEDENCE_HIGH = 50;
-
+/* NOLINTBEGIN(*-magic-numbers) */
 static WARN_UNUSED unsigned
 get_precedence(const struct ast *a)
 {
@@ -115,18 +113,36 @@ get_precedence(const struct ast *a)
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
-		precedence = PRECEDENCE_LOW;
+		precedence = 45;
 		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
-		precedence = PRECEDENCE_HIGH;
+		precedence = 50;
+		break;
+	case NODE_EXPRESSION_LOGICAL_AND:
+		precedence = 10;
+		break;
+	case NODE_EXPRESSION_LOGICAL_OR:
+		precedence = 5;
+		break;
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		precedence = 30;
+		break;
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		precedence = 35;
 		break;
 	default:
+		assert(0); /* logic error in caller */
 		break;
 	}
 	return precedence;
 }
+/* NOLINTEND(*-magic-numbers) */
 
 /*
  * Some references on precedence climbing:
@@ -155,6 +171,22 @@ parse_expression(const struct token **tok,
 			parse_alloc(bop, NODE_EXPRESSION_BINARY_DIVIDE);
 		} else if (is_token_type(*tok, TOKEN_PERCENT_SIGN)) {
 			parse_alloc(bop, NODE_EXPRESSION_BINARY_REMAINDER);
+		} else if (is_token_type(*tok, TOKEN_AMPERSAND_AMPERSAND)) {
+			parse_alloc(bop, NODE_EXPRESSION_LOGICAL_AND);
+		} else if (is_token_type(*tok, TOKEN_VERT_BAR_VERT_BAR)) {
+			parse_alloc(bop, NODE_EXPRESSION_LOGICAL_OR);
+		} else if (is_token_type(*tok, TOKEN_EQUAL_SIGN_EQUAL_SIGN)) {
+			parse_alloc(bop, NODE_EXPRESSION_COMPARE_EQUAL);
+		} else if (is_token_type(*tok, TOKEN_EXCLAMATION_EQUAL_SIGN)) {
+			parse_alloc(bop, NODE_EXPRESSION_COMPARE_NOT_EQUAL);
+		} else if (is_token_type(*tok, TOKEN_LESS_THAN)) {
+			parse_alloc(bop, NODE_EXPRESSION_COMPARE_LESS_THAN);
+		} else if (is_token_type(*tok, TOKEN_LESS_THAN_EQUAL_SIGN)) {
+			parse_alloc(bop, NODE_EXPRESSION_COMPARE_LESS_THAN_EQ);
+		} else if (is_token_type(*tok, TOKEN_MORE_THAN)) {
+			parse_alloc(bop, NODE_EXPRESSION_COMPARE_MORE_THAN);
+		} else if (is_token_type(*tok, TOKEN_MORE_THAN_EQUAL_SIGN)) {
+			parse_alloc(bop, NODE_EXPRESSION_COMPARE_MORE_THAN_EQ);
 		} else {
 			break;
 		}
@@ -319,6 +351,14 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 		switch (a->node_type) {
 		case NODE_EXPRESSION_BINARY_ADD:
 			debug("%*sEXPRESSION ADD", (int)indent, "");
@@ -334,6 +374,30 @@ parse_debug_print(const struct ast *a, size_t indent)
 			break;
 		case NODE_EXPRESSION_BINARY_REMAINDER:
 			debug("%*sEXPRESSION REMAINDER", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_LOGICAL_AND:
+			debug("%*sEXPRESSION LOGICAL AND", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_LOGICAL_OR:
+			debug("%*sEXPRESSION LOGICAL OR", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_COMPARE_EQUAL:
+			debug("%*sEXPRESSION COMPARE EQUAL", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+			debug("%*sEXPRESSION NOT EQUAL", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_COMPARE_LESS_THAN:
+			debug("%*sEXPRESSION LESS THAN", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+			debug("%*sEXPRESSION LESS THAN OR EQ", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_COMPARE_MORE_THAN:
+			debug("%*sEXPRESSION MORE THAN", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+			debug("%*sEXPRESSION MORE THAN OR EQ", (int)indent, "");
 			break;
 		default:
 			assert(0); /* logic error in caller */
