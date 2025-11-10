@@ -10,6 +10,7 @@ struct asm_operand {
 		ASM_OPERAND_REGISTER,
 		ASM_OPERAND_PSEUDO_REGISTER,
 		ASM_OPERAND_STACK,
+		ASM_OPERAND_JUMP_TARGET_LABEL,
 	} operand_type;
 	union {
 		long long int num;
@@ -32,8 +33,23 @@ struct asm_op {
 		ASM_OP_BINARY_SUBTRACT,
 		ASM_OP_BINARY_SUBTRACT_QUAD,
 		ASM_OP_BINARY_MULTIPLY,
+		ASM_OP_COMPARE,
 		ASM_OP_IDIV, /* divide AX+DX by given divisor */
 		ASM_OP_CDQ,  /* convert to quadword, aka sign extend AX->DX */
+		ASM_OP_JMP,
+		ASM_OP_JMP_IF_EQ,
+		ASM_OP_JMP_IF_NEQ,
+		ASM_OP_JMP_IF_GT,
+		ASM_OP_JMP_IF_GTE,
+		ASM_OP_JMP_IF_LT,
+		ASM_OP_JMP_IF_LTE,
+		ASM_OP_SET_IF_EQ,
+		ASM_OP_SET_IF_NEQ,
+		ASM_OP_SET_IF_GT,
+		ASM_OP_SET_IF_GTE,
+		ASM_OP_SET_IF_LT,
+		ASM_OP_SET_IF_LTE,
+		ASM_OP_LABEL,
 		ASM_OP_RET,
 	} opcode;
 	struct asm_operand args[2];
