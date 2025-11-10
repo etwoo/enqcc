@@ -105,44 +105,52 @@ parse_factor(const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
-/* NOLINTBEGIN(*-magic-numbers) */
+static const unsigned PRECEDENCE_INCREMENT = 10;
+
 static WARN_UNUSED unsigned
 get_precedence(const struct ast *a)
 {
 	unsigned precedence = 0;
 	switch (a->node_type) {
-	case NODE_EXPRESSION_BINARY_ADD:
-	case NODE_EXPRESSION_BINARY_SUBTRACT:
-		precedence = 45;
-		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
-		precedence = 50;
-		break;
-	case NODE_EXPRESSION_LOGICAL_AND:
-		precedence = 10;
-		break;
-	case NODE_EXPRESSION_LOGICAL_OR:
-		precedence = 5;
-		break;
-	case NODE_EXPRESSION_COMPARE_EQUAL:
-	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
-		precedence = 30;
-		break;
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_COMPARE_LESS_THAN:
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-		precedence = 35;
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
+	case NODE_EXPRESSION_LOGICAL_AND:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
+	case NODE_EXPRESSION_LOGICAL_OR:
+		precedence += PRECEDENCE_INCREMENT;
 		break;
-	default:
+	case NODE_FUNCTION:
+	case NODE_PROGRAM:
+	case NODE_EXPRESSION_UNARY_IDENTITY:
+	case NODE_EXPRESSION_UNARY_NEGATE:
+	case NODE_EXPRESSION_UNARY_NOT:
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_IDENTIFIER:
+	case NODE_CONSTANT_INT:
 		assert(0); /* logic error in caller */
 		break;
 	}
 	return precedence;
 }
-/* NOLINTEND(*-magic-numbers) */
 
 /*
  * Some references on precedence climbing:
