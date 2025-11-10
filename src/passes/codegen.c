@@ -321,6 +321,20 @@ codegen_fixup_apply(struct asm_op *prev,
 	return RESULT_OK;
 }
 
+/*
+ * Prepare a trampoline by memcpy()-ing invalid instructions where both
+ * operands are ASM_OPERAND_STACK:
+ *
+ *     movl -4(%rbp), -8(%rbp)
+ *
+ * ... into temporary copies. Modify these temporaries to perform the same
+ * logical operation in an actually-valid way:
+ *
+ *     movl -4(%rbp), %r10d
+ *     movl %r10d, -8(%rbp)
+ *
+ * ... and then splice these new ops into the original containing list.
+ */
 static WARN_UNUSED bool
 fix_s2s(struct asm_op *cur, struct fix *trampoline)
 {
@@ -331,38 +345,29 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 		return false;
 	}
 
-	/*
-	 * Prepare a trampoline by memcpy()-ing invalid instructions where both
-	 * operands are ASM_OPERAND_STACK:
-	 *
-	 *     movl -4(%rbp), -8(%rbp)
-	 *
-	 * ... into temporary copies. Modify these temporaries to perform the
-	 * same logical operation in an actually-valid way:
-	 *
-	 *     movl -4(%rbp), %r10d
-	 *     movl %r10d, -8(%rbp)
-	 *
-	 * ... and then splice these new ops into the original containing list.
-	 */
-
 	for (size_t i = 0; i < 2; ++i) {
 		memcpy(trampoline->ops[i], cur, sizeof(*cur));
+		trampoline->ops[i]->next = NULL;
 	}
-
 	if (cur->opcode != ASM_OP_MOV) {
 		trampoline->ops[0]->opcode = ASM_OP_MOV;
 	}
-
-	trampoline->ops[0]->next = NULL;
 	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
-
-	trampoline->ops[1]->next = NULL;
 	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
 
 	return true;
 }
 
+/*
+ * Translate:
+ *
+ *     idivl $3
+ *
+ * ... into:
+ *
+ *     movl  $3, $r10d
+ *     idivl %r10d
+ */
 static WARN_UNUSED bool
 fix_idiv(struct asm_op *cur, struct fix *trampoline)
 {
@@ -371,13 +376,11 @@ fix_idiv(struct asm_op *cur, struct fix *trampoline)
 		return false;
 	}
 
-	trampoline->ops[0]->next = NULL;
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	trampoline->ops[0]->args[0].operand_type = cur->args[0].operand_type;
 	trampoline->ops[0]->args[0].u.num = cur->args[0].u.num;
 	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
 
-	trampoline->ops[1]->next = NULL;
 	trampoline->ops[1]->opcode = ASM_OP_IDIV;
 	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
 
