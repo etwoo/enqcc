@@ -90,6 +90,9 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	case NODE_EXPRESSION_UNARY_NEGATE:
 		src->opcode = IR_OP_UNARY_NEGATE;
 		break;
+	case NODE_EXPRESSION_UNARY_NOT:
+		src->opcode = IR_OP_UNARY_NOT;
+		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		src->opcode = IR_OP_UNARY_COMPLEMENT;
 		break;
@@ -154,6 +157,24 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		break;
 	case NODE_EXPRESSION_BINARY_REMAINDER:
 		src->opcode = IR_OP_BINARY_REMAINDER;
+		break;
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+		src->opcode = IR_OP_COMPARE_EQUAL;
+		break;
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		src->opcode = IR_OP_COMPARE_NOT_EQUAL;
+		break;
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+		src->opcode = IR_OP_COMPARE_LESS_THAN;
+		break;
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+		src->opcode = IR_OP_COMPARE_LESS_THAN_EQ;
+		break;
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+		src->opcode = IR_OP_COMPARE_MORE_THAN;
+		break;
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		src->opcode = IR_OP_COMPARE_MORE_THAN_EQ;
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -246,6 +267,7 @@ ir_expression(const struct ast *a,
 		check(ir_constant(a, peek, dst));
 		break;
 	case NODE_EXPRESSION_UNARY_NEGATE:
+	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		check(ir_unary_op(a, dst, env));
 		break;
@@ -258,7 +280,17 @@ ir_expression(const struct ast *a,
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 		check(ir_binary_op(a, dst, env));
+		break;
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+		assert(0 && "short-circuiting ops yet not implemented");
 		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
@@ -315,12 +347,16 @@ ir_debug_print_one(const struct ir_op *op)
 		debug("RETURN");
 		break;
 	case IR_OP_UNARY_NEGATE:
+	case IR_OP_UNARY_NOT:
 	case IR_OP_UNARY_COMPLEMENT:
 		required_args = 1;
 		debug("UNARY");
 		switch (op->opcode) {
 		case IR_OP_UNARY_NEGATE:
 			debug("  NEGATE");
+			break;
+		case IR_OP_UNARY_NOT:
+			debug("  NOT");
 			break;
 		case IR_OP_UNARY_COMPLEMENT:
 			debug("  COMPLEMENT");
@@ -334,6 +370,12 @@ ir_debug_print_one(const struct ir_op *op)
 	case IR_OP_BINARY_MULTIPLY:
 	case IR_OP_BINARY_DIVIDE:
 	case IR_OP_BINARY_REMAINDER:
+	case IR_OP_COMPARE_EQUAL:
+	case IR_OP_COMPARE_NOT_EQUAL:
+	case IR_OP_COMPARE_LESS_THAN:
+	case IR_OP_COMPARE_LESS_THAN_EQ:
+	case IR_OP_COMPARE_MORE_THAN:
+	case IR_OP_COMPARE_MORE_THAN_EQ:
 		required_args = 2;
 		debug("BINARY");
 		switch (op->opcode) {
@@ -351,6 +393,24 @@ ir_debug_print_one(const struct ir_op *op)
 			break;
 		case IR_OP_BINARY_REMAINDER:
 			debug("  REMAINDER");
+			break;
+		case IR_OP_COMPARE_EQUAL:
+			debug("  COMPARE_EQUAL");
+			break;
+		case IR_OP_COMPARE_NOT_EQUAL:
+			debug("  NOT_EQUAL");
+			break;
+		case IR_OP_COMPARE_LESS_THAN:
+			debug("  LESS_THAN");
+			break;
+		case IR_OP_COMPARE_LESS_THAN_EQ:
+			debug("  LESS_THAN_OR_EQUAL");
+			break;
+		case IR_OP_COMPARE_MORE_THAN:
+			debug("  MORE_THAN");
+			break;
+		case IR_OP_COMPARE_MORE_THAN_EQ:
+			debug("  MORE_THAN_OR_EQUAL");
 			break;
 		default:
 			assert(0); /* logic error in caller */
