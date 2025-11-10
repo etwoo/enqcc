@@ -48,7 +48,6 @@ macro(generate_test_driver)
 endmacro()
 
 register_test(result)
-register_test(write_wrapper)
 
 generate_test_driver()
 

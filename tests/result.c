@@ -26,16 +26,11 @@ make_n(int err_type)
 }
 
 TEST
-print_to_str_each_enum_value(void) // NOLINT(*-function-size)
+print_to_str_each_enum_value(void)
 {
 	ASSERT_IN(make(OK), "Success");
-	ASSERT_IN(make_n(ERR_TMPFILE), "Error in tmpfile");
-	ASSERT_IN(make_n(ERR_TMPFILE_FILENO), "Error fileno");
-	ASSERT_IN(make_n(ERR_TMPFILE_DUP), "Error dup");
 	ASSERT_IN(make_n(ERR_TMPFILE_FSTAT), "Error fstat");
 	ASSERT_IN(make_n(ERR_TMPFILE_MMAP), "Error mmap");
-	ASSERT_IN(make_n(ERR_TMPFILE_LSEEK), "Error seeking");
-	ASSERT_IN(make_n(ERR_TMPFILE_FTRUNCATE), "Error truncating");
 	PASS();
 }
 

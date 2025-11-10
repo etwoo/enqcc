@@ -210,28 +210,12 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
-	case ERR_TMPFILE:
-		s = my_asprintf("Error in tmpfile(): %s", my_strerror(r));
-		break;
-	case ERR_TMPFILE_FILENO:
-		s = my_asprintf("Error fileno()-ing tmpfile: %s",
-		                my_strerror(r));
-		break;
-	case ERR_TMPFILE_DUP:
-		s = my_asprintf("Error dup()-ing tmpfile: %s", my_strerror(r));
-		break;
 	case ERR_TMPFILE_FSTAT:
 		s = my_asprintf("Error fstat()-ing tmpfile: %s",
 		                my_strerror(r));
 		break;
 	case ERR_TMPFILE_MMAP:
 		s = my_asprintf("Error mmap()-ing tmpfile: %s", my_strerror(r));
-		break;
-	case ERR_TMPFILE_LSEEK:
-		s = my_asprintf("Error seeking in tmpfile: %s", my_strerror(r));
-		break;
-	case ERR_TMPFILE_FTRUNCATE:
-		s = my_asprintf("Error truncating tmpfile: %s", my_strerror(r));
 		break;
 	}
 
