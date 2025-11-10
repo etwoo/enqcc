@@ -24,6 +24,7 @@ coverage_write_and_close(int fd MAYBE_UNUSED)
 #include "sys/array.h"
 #include "sys/debug.h"
 
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -101,7 +102,10 @@ coverage_write_and_close(int fd)
 	perror_if(copied < 0, "Cannot copy coverage data to in-memory buffer");
 
 	const ssize_t written = write(fd, buf, sz);
-	debug("Wrote %zd of %zd bytes to coverage fd=%d", written, sz, fd);
+	debug("Wrote %zd of %" PRIu64 " bytes to coverage fd=%d",
+	      written,
+	      sz,
+	      fd);
 
 	free(buf);
 	info_m_if(close(fd) < 0, "Ignoring error close()-ing coverage fd");
