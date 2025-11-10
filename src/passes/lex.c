@@ -67,12 +67,10 @@ lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
 static WARN_UNUSED bool
 lex_one_token_peek(struct string_view *pos, struct token *cur)
 {
+	assert(pos->sz > 1);
 	bool matched = true;
 
-	if (pos->sz <= 1) {
-		/* no remaining characters to peek */
-		matched = false;
-	} else if (pos->data[0] == pos->data[1]) {
+	if (pos->data[0] == pos->data[1]) {
 		switch (cur->token_type) {
 		case TOKEN_HYPHEN:
 			cur->token_type = TOKEN_HYPHEN_HYPHEN;
@@ -142,7 +140,8 @@ lex_one_token(struct string_view *pos, struct token **tok)
 #undef TRY_EARLY_MATCH
 
 	if (early_match) {
-		const bool peek_match = lex_one_token_peek(pos, cur);
+		const bool peek_match =
+			(pos->sz > 1) && lex_one_token_peek(pos, cur);
 		if (peek_match) {
 			pos->data++;
 			pos->sz--;
