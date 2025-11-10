@@ -87,14 +87,14 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	ir_alloc(src);
 
 	switch (a->node_type) {
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		src->opcode = IR_OP_UNARY_COMPLEMENT;
+		break;
 	case NODE_EXPRESSION_UNARY_NEGATE:
 		src->opcode = IR_OP_UNARY_NEGATE;
 		break;
 	case NODE_EXPRESSION_UNARY_NOT:
 		src->opcode = IR_OP_UNARY_NOT;
-		break;
-	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-		src->opcode = IR_OP_UNARY_COMPLEMENT;
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -266,9 +266,9 @@ ir_expression(const struct ast *a,
 	case NODE_CONSTANT_INT:
 		check(ir_constant(a, peek, dst));
 		break;
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
-	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		check(ir_unary_op(a, dst, env));
 		break;
 	case NODE_EXPRESSION_UNARY_IDENTITY:
@@ -347,20 +347,20 @@ ir_debug_print_one(const struct ir_op *op)
 	case IR_OP_UNARY_IDENTITY:
 		debug("RETURN");
 		break;
+	case IR_OP_UNARY_COMPLEMENT:
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_NOT:
-	case IR_OP_UNARY_COMPLEMENT:
 		required_args = 1;
 		debug("UNARY");
 		switch (op->opcode) {
+		case IR_OP_UNARY_COMPLEMENT:
+			debug("  COMPLEMENT");
+			break;
 		case IR_OP_UNARY_NEGATE:
 			debug("  NEGATE");
 			break;
 		case IR_OP_UNARY_NOT:
 			debug("  NOT");
-			break;
-		case IR_OP_UNARY_COMPLEMENT:
-			debug("  COMPLEMENT");
 			break;
 		default:
 			assert(0); /* logic error in caller */

@@ -114,9 +114,9 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_alloc(*dst);
 		(**dst).opcode = ASM_OP_RET;
 		break;
+	case IR_OP_UNARY_COMPLEMENT:
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_NOT:
-	case IR_OP_UNARY_COMPLEMENT:
 		(**dst).opcode = ASM_OP_MOV;
 		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
