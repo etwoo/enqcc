@@ -260,7 +260,9 @@ static WARN_UNUSED result_t
 ir_short_circuit_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
 	// TODO: AST->IR for short-circuiting ops && and ||
+	// TODO: use IR_OP_COPY, IR_OP_JUMP*, IR_OP_LABEL
 	assert(0 && "short-circuiting ops yet not implemented");
+
 }
 
 result_t
