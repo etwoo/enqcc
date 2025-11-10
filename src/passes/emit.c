@@ -20,6 +20,7 @@ static const char STR_OP_PUSH_QUAD[] = "pushq";
 static const char STR_OP_RET[] = "ret";
 static const char STR_OP_SUB_QUAD[] = "subq";
 static const char STR_REG_EAX[] = "%eax";
+static const char STR_REG_EDX[] = "%edx";
 static const char STR_REG_R10[] = "%r10d";
 static const char STR_REG_R11[] = "%r11d";
 static const char STR_REG_RSP[] = "%rsp"; /* aka frame pointer */
@@ -47,6 +48,9 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		switch (o->u.reg) {
 		case ASM_REGISTER_AX:
 			dprintf(fd, "%s", STR_REG_EAX);
+			break;
+		case ASM_REGISTER_DX:
+			dprintf(fd, "%s", STR_REG_EDX);
 			break;
 		case ASM_REGISTER_R10:
 			dprintf(fd, "%s", STR_REG_R10);

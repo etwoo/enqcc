@@ -147,6 +147,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
 		break;
 	case IR_OP_BINARY_DIVIDE:
+	case IR_OP_BINARY_REMAINDER:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_set_operand_eax(&(**dst).args[1]);
@@ -160,11 +161,20 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		dst = &(**dst).next;
 		codegen_alloc(*dst);
 		(**dst).opcode = ASM_OP_MOV;
-		codegen_set_operand_eax(&(**dst).args[0]);
+		switch (src->opcode) {
+		case IR_OP_BINARY_DIVIDE:
+			codegen_set_operand_eax(&(**dst).args[0]);
+			break;
+		case IR_OP_BINARY_REMAINDER:
+			(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
+			(**dst).args[0].u.reg = ASM_REGISTER_DX;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
 		break;
-	case IR_OP_BINARY_REMAINDER:
-		break; // TODO: binary op IR -> ASM codegen
 	}
 
 	return RESULT_OK;
@@ -347,6 +357,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		switch (operand->u.reg) {
 		case ASM_REGISTER_AX:
 			debug("  EAX");
+			break;
+		case ASM_REGISTER_DX:
+			debug("  EDX");
 			break;
 		case ASM_REGISTER_R10:
 			debug("  R10");

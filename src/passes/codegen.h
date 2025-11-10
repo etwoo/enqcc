@@ -15,6 +15,7 @@ struct asm_operand {
 		long long int num;
 		enum {
 			ASM_REGISTER_AX,
+			ASM_REGISTER_DX,
 			ASM_REGISTER_R10, /* aka scratch */
 			ASM_REGISTER_R11, /* aka scratch */
 			ASM_REGISTER_RSP, /* aka frame pointer */
