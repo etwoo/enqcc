@@ -68,6 +68,13 @@ codegen_set_operand_eax(struct asm_operand *dst)
 }
 
 static void
+codegen_set_operand_r10(struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->u.reg = ASM_REGISTER_R10;
+}
+
+static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->subtype) {
@@ -240,28 +247,89 @@ codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
 	return RESULT_OK;
 }
 
+struct fix {
+	struct asm_op *ops[3];
+};
+
 static void
-tr_cleanup(struct asm_op *pp[][2])
+fix_cleanup(struct fix *trampoline)
 {
-	codegen_op_list_free((*pp)[0]);
-	codegen_op_list_free((*pp)[1]);
+	for (size_t i = 0; i < ARRAY_SIZE(trampoline->ops); ++i) {
+		codegen_op_list_free(trampoline->ops[i]);
+		trampoline->ops[i] = NULL;
+	}
 }
 
 static WARN_UNUSED result_t
-codegen_fixup_stack_to_stack(struct asm_op *prev,
-                             struct asm_op *cur,
-                             struct asm_op **new_prev,
-                             struct asm_op **new_cur)
+codegen_fixup_apply(struct asm_op *prev,
+                    struct asm_op *cur,
+                    struct asm_op **new_prev,
+                    struct asm_op **new_cur,
+                    bool (*fix_init)(struct asm_op *cur,
+                                     struct fix *trampoline))
 {
-	if (!((cur->opcode == ASM_OP_MOV || cur->opcode == ASM_OP_BINARY_ADD) &&
-	      cur->args[0].operand_type == ASM_OPERAND_STACK &&
-	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
+	struct fix trampoline __attribute__((cleanup(fix_cleanup))) = {0};
+	for (size_t i = 0; i < ARRAY_SIZE(trampoline.ops); ++i) {
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO: remove?
+		codegen_alloc(trampoline.ops[i]);
+	}
+
+	if (!fix_init(cur, &trampoline)) {
 		return RESULT_OK; /* no fixup necessary */
 	}
 
 	assert(prev && "should never need trampoline on very first op");
 	assert(cur);
 	assert(prev->next == cur);
+
+	/*
+	 * Split containing list at <cur>, excluding <cur> from both halves.
+	 */
+	struct asm_op *remainder = cur->next;
+	cur->next = NULL;
+	prev->next = NULL;
+
+	/*
+	 * Insert trampoline sublist into containing list.
+	 */
+	codegen_op_list_concat(prev, trampoline.ops[0]);
+	codegen_op_list_concat(trampoline.ops[0], trampoline.ops[1]);
+	codegen_op_list_concat(trampoline.ops[1], remainder);
+	// TODO: handle 3-arg trampoline
+
+	/*
+	 * Prepare list cursor positions for next loop iteration.
+	 */
+	*new_prev = trampoline.ops[1]; // TODO: set to 2 for 3-arg trampoline
+	*new_cur = remainder;
+
+	/*
+	 * Release ownership of trampoline sublist to caller.
+	 */
+	trampoline.ops[0] = NULL;
+	trampoline.ops[1] = NULL;
+	// TODO: restore generic loop once 2-arg vs 3-arg is implemented
+	// for (size_t i = 0; i < ARRAY_SIZE(trampoline.ops); ++i) {
+	//	trampoline.ops[i] = NULL;
+	//}
+
+	/*
+	 * Clean up node that we've just removed from the containing list.
+	 */
+	codegen_op_list_free(cur);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED bool
+fix_s2s(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!((cur->opcode == ASM_OP_MOV || cur->opcode == ASM_OP_BINARY_ADD ||
+	       cur->opcode == ASM_OP_BINARY_SUBTRACT) &&
+	      cur->args[0].operand_type == ASM_OPERAND_STACK &&
+	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
+		return false;
+	}
 
 	/*
 	 * Prepare a trampoline by memcpy()-ing invalid instructions like:
@@ -276,63 +344,43 @@ codegen_fixup_stack_to_stack(struct asm_op *prev,
 	 *
 	 * ... and then splice these new ops into the original containing list.
 	 */
-	struct asm_op *trampoline[2] __attribute__((cleanup(tr_cleanup))) = {0};
 
-	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		codegen_alloc(trampoline[i]);
-		memcpy(trampoline[i], cur, sizeof(*cur));
+	for (size_t i = 0; i < 2; ++i) {
+		memcpy(trampoline->ops[i], cur, sizeof(*cur));
 	}
+
 	if (cur->opcode != ASM_OP_MOV) {
-		trampoline[0]->opcode = ASM_OP_MOV;
+		trampoline->ops[0]->opcode = ASM_OP_MOV;
 	}
 
-	trampoline[0]->next = NULL;
-	trampoline[0]->args[1].operand_type = ASM_OPERAND_REGISTER;
-	trampoline[0]->args[1].u.reg = ASM_REGISTER_R10;
+	trampoline->ops[0]->next = NULL;
+	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
 
-	trampoline[1]->next = NULL;
-	trampoline[1]->args[0].operand_type = ASM_OPERAND_REGISTER;
-	trampoline[1]->args[0].u.reg = ASM_REGISTER_R10;
+	trampoline->ops[1]->next = NULL;
+	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
 
-	/*
-	 * Split containing list at <cur>, excluding <cur> from both halves.
-	 */
-	struct asm_op *remainder = cur->next;
-	cur->next = NULL;
-	prev->next = NULL;
-
-	/*
-	 * Insert trampoline sublist into containing list.
-	 */
-	codegen_op_list_concat(prev, trampoline[0]);
-	codegen_op_list_concat(trampoline[0], trampoline[1]);
-	codegen_op_list_concat(trampoline[1], remainder);
-
-	/*
-	 * Prepare list cursor positions for next loop iteration.
-	 */
-	*new_prev = trampoline[1];
-	*new_cur = remainder;
-
-	/*
-	 * Release ownership of trampoline sublist to caller.
-	 */
-	for (size_t i = 0; i < ARRAY_SIZE(trampoline); ++i) {
-		trampoline[i] = NULL;
-	}
-
-	return RESULT_OK;
+	return true;
 }
 
-static WARN_UNUSED result_t
-codegen_fixup_idiv_immediate(struct asm_op *prev,
-                             struct asm_op *cur,
-                             struct asm_op **new_prev,
-                             struct asm_op **new_cur)
+static WARN_UNUSED bool
+fix_idiv(struct asm_op *cur, struct fix *trampoline)
 {
-	(void)prev; (void)cur; (void)new_prev; (void)new_cur;
-	return RESULT_OK; // TODO
+	if (!(cur->opcode == ASM_OP_IDIV &&
+	      cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE)) {
+		return false;
+	}
+
+	trampoline->ops[0]->next = NULL;
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	trampoline->ops[0]->args[0].operand_type = cur->args[0].operand_type;
+	trampoline->ops[0]->args[0].u.num = cur->args[0].u.num;
+	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
+
+	trampoline->ops[1]->next = NULL;
+	trampoline->ops[1]->opcode = ASM_OP_IDIV;
+	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
+
+	return true;
 }
 
 result_t
@@ -348,8 +396,8 @@ codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 	struct asm_op *cur = cg->function.ops;
 	while (cur != NULL) {
 		struct asm_op *orig[2] = {prev, cur};
-		check(codegen_fixup_stack_to_stack(prev, cur, &prev, &cur));
-		check(codegen_fixup_idiv_immediate(prev, cur, &prev, &cur));
+		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_s2s));
+		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_idiv));
 		if (cur == orig[1]) {
 			assert(prev == orig[0]);
 			prev = cur;
