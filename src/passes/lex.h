@@ -18,6 +18,10 @@ struct token {
 		TOKEN_TILDE,
 		TOKEN_HYPHEN_HYPHEN,
 		TOKEN_HYPHEN,
+		TOKEN_PLUS_SIGN,
+		TOKEN_ASTERISK,
+		TOKEN_FORWARD_SLASH,
+		TOKEN_PERCENT_SIGN,
 	} token_type;
 	struct string_view val;
 	struct token *next;
