@@ -16,6 +16,7 @@ struct asm_operand {
 		enum {
 			ASM_REGISTER_AX,
 			ASM_REGISTER_R10, /* aka scratch */
+			ASM_REGISTER_R11, /* aka scratch */
 			ASM_REGISTER_RSP, /* aka frame pointer */
 		} reg;
 	} u;
@@ -24,9 +25,14 @@ struct asm_operand {
 struct asm_op {
 	enum {
 		ASM_OP_MOV,
-		ASM_OP_SUB,
 		ASM_OP_UNARY_NEG,
 		ASM_OP_UNARY_NOT,
+		ASM_OP_BINARY_ADD,
+		ASM_OP_BINARY_SUBTRACT,
+		ASM_OP_BINARY_SUBTRACT_QUAD,
+		ASM_OP_BINARY_MULTIPLY,
+		ASM_OP_IDIV, /* divide AX+DX by given divisor */
+		ASM_OP_CDQ,  /* convert to quadword, aka sign extend AX->DX */
 		ASM_OP_RET,
 	} opcode;
 	struct asm_operand args[2];

@@ -118,6 +118,28 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_BINARY_ADD:
 	case IR_OP_BINARY_SUBTRACT:
 	case IR_OP_BINARY_MULTIPLY:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		switch (src->opcode) {
+		case IR_OP_BINARY_ADD:
+			(**dst).opcode = ASM_OP_BINARY_ADD;
+			break;
+		case IR_OP_BINARY_SUBTRACT:
+			(**dst).opcode = ASM_OP_BINARY_SUBTRACT;
+			break;
+		case IR_OP_BINARY_MULTIPLY:
+			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		break;
 	case IR_OP_BINARY_DIVIDE:
 	case IR_OP_BINARY_REMAINDER:
 		break; // TODO: binary op IR -> ASM codegen
@@ -175,7 +197,7 @@ codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
 {
 	struct asm_op *alloc_stack = NULL;
 	codegen_alloc(alloc_stack);
-	alloc_stack->opcode = ASM_OP_SUB;
+	alloc_stack->opcode = ASM_OP_BINARY_SUBTRACT_QUAD;
 	alloc_stack->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
 	alloc_stack->args[0].u.num =
 		CODEGEN_BYTES_PER_VALUE * (ir->env.generator - 1);
@@ -307,6 +329,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		case ASM_REGISTER_R10:
 			debug("  R10");
 			break;
+		case ASM_REGISTER_R11:
+			debug("  R11");
+			break;
 		case ASM_REGISTER_RSP:
 			debug("  RSP");
 			break;
@@ -331,14 +356,27 @@ codegen_debug_print_op(const struct asm_op *op)
 	case ASM_OP_MOV:
 		debug("MOV");
 		break;
-	case ASM_OP_SUB:
-		debug("SUB");
-		break;
 	case ASM_OP_UNARY_NEG:
 		debug("NEG");
 		break;
 	case ASM_OP_UNARY_NOT:
 		debug("NOT");
+		break;
+	case ASM_OP_BINARY_ADD:
+		debug("ADD");
+		break;
+	case ASM_OP_BINARY_SUBTRACT:
+	case ASM_OP_BINARY_SUBTRACT_QUAD:
+		debug("SUBTRACT");
+		break;
+	case ASM_OP_BINARY_MULTIPLY:
+		debug("MULTIPLY");
+		break;
+	case ASM_OP_IDIV:
+		debug("IDIV");
+		break;
+	case ASM_OP_CDQ:
+		debug("CDQ");
 		break;
 	case ASM_OP_RET:
 		debug("RET");
