@@ -270,7 +270,7 @@ codegen_fixup_apply(struct asm_op *prev,
 {
 	struct fix trampoline __attribute__((cleanup(fix_cleanup))) = {0};
 	for (size_t i = 0; i < ARRAY_SIZE(trampoline.ops); ++i) {
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO: remove?
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
 		codegen_alloc(trampoline.ops[i]);
 	}
 
@@ -332,7 +332,8 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 	}
 
 	/*
-	 * Prepare a trampoline by memcpy()-ing invalid instructions like:
+	 * Prepare a trampoline by memcpy()-ing invalid instructions where both
+	 * operands are ASM_OPERAND_STACK:
 	 *
 	 *     movl -4(%rbp), -8(%rbp)
 	 *
