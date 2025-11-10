@@ -32,8 +32,7 @@ ir_op_list_find_last_tmpvar_id(struct ir_op *p)
 	long long int result = -1;
 
 	assert(p != NULL);
-	while (p->next != NULL) {
-		p = p->next;
+	for (; p != NULL; p = p->next) {
 		for (size_t i = 0; i < ARRAY_SIZE(p->args); ++i) {
 			if (p->args[i].subtype == IR_VAL_TEMPORARY_VARIABLE) {
 				result = p->args[i].num;
