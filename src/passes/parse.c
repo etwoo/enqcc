@@ -86,6 +86,10 @@ parse_factor(const struct token **tok, struct ast **dst)
 		parse_alloc(*dst, NODE_EXPRESSION_UNARY_NEGATE);
 		token_consume(tok);
 		check(parse_factor(tok, &(**dst).u.op_unary.operand));
+	} else if (is_token_type(*tok, TOKEN_EXCLAMATION_MARK)) {
+		parse_alloc(*dst, NODE_EXPRESSION_UNARY_NOT);
+		token_consume(tok);
+		check(parse_factor(tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		parse_alloc(*dst, NODE_EXPRESSION_PAREN_ENCLOSED);
 		token_consume(tok);
@@ -285,6 +289,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_UNARY_NEGATE:
+	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		switch (a->node_type) {
@@ -293,6 +298,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 			break;
 		case NODE_EXPRESSION_UNARY_NEGATE:
 			debug("%*sEXPRESSION NEGATE", (int)indent, "");
+			break;
+		case NODE_EXPRESSION_UNARY_NOT:
+			debug("%*sEXPRESSION NOT", (int)indent, "");
 			break;
 		case NODE_EXPRESSION_UNARY_COMPLEMENT:
 			debug("%*sEXPRESSION COMPLEMENT", (int)indent, "");
