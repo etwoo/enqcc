@@ -256,6 +256,13 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+ir_short_circuit_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+{
+	// TODO: AST->IR for short-circuiting ops && and ||
+	assert(0 && "short-circuiting ops yet not implemented");
+}
+
 result_t
 ir_expression(const struct ast *a,
               struct ir_val *peek,
@@ -290,8 +297,7 @@ ir_expression(const struct ast *a,
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
 	case NODE_EXPRESSION_LOGICAL_OR:
-		// TODO: AST->IR for short-circuiting ops && and ||
-		assert(0 && "short-circuiting ops yet not implemented");
+		check(ir_short_circuit_op(a, dst, env));
 		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,

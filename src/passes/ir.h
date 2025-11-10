@@ -29,6 +29,11 @@ struct ir_op {
 		IR_OP_COMPARE_LESS_THAN_EQ,
 		IR_OP_COMPARE_MORE_THAN,
 		IR_OP_COMPARE_MORE_THAN_EQ,
+		IR_OP_COPY,
+		IR_OP_JUMP,
+		IR_OP_JUMP_IF_ZERO,
+		IR_OP_JUMP_IF_NOT_ZERO,
+		IR_OP_LABEL,
 	} opcode;
 	struct ir_val args[3];
 	struct ir_op *next;
