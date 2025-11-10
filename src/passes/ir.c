@@ -16,20 +16,33 @@
 		memset(dst, 0, sizeof(*(dst)));                                \
 	} while (0)
 
-static struct ir_op *
-ir_op_list_back(struct ir_op *cursor)
-{
-	assert(cursor != NULL);
-	while (cursor->next != NULL) {
-		cursor = cursor->next;
-	}
-	return cursor;
-}
-
 static void
 ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 {
-	ir_op_list_back(first)->next = second;
+	assert(first != NULL);
+	while (first->next != NULL) {
+		first = first->next;
+	}
+	first->next = second;
+}
+
+static long long int
+ir_op_list_find_last_tmpvar_id(struct ir_op *p)
+{
+	long long int result = -1;
+
+	assert(p != NULL);
+	while (p->next != NULL) {
+		p = p->next;
+		for (size_t i = 0; i < ARRAY_SIZE(p->args); ++i) {
+			if (p->args[i].subtype == IR_VAL_TEMPORARY_VARIABLE) {
+				result = p->args[i].num;
+			}
+		}
+	}
+
+	assert(result >= 0);
+	return result;
 }
 
 static void
@@ -236,10 +249,10 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	} else {
 		assert(src->args[0].subtype == IR_VAL_NONE);
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[0].num = ir_op_list_back(left)->args[2].num;
+		src->args[0].num = ir_op_list_find_last_tmpvar_id(left);
 		assert(src->args[1].subtype == IR_VAL_NONE);
 		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[1].num = ir_op_list_back(right)->args[2].num;
+		src->args[1].num = ir_op_list_find_last_tmpvar_id(right);
 		/*
 		 * Neither peeked value is a constant. Emit IR in this order:
 		 *
@@ -264,24 +277,36 @@ ir_and_helper(const struct ast *a,
               struct ir_env *env,
               long long int jump_label)
 {
-	check(ir_expression(a, NULL, dst, env));
+	struct ir_val peek = {0};
+	struct ir_op *inner __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	check(ir_expression(a, &peek, &inner, env));
 
-	struct ir_op *jumper = NULL;
+	struct ir_op *jumper __attribute__((cleanup(ir_op_list_cleanup))) =
+		NULL;
 	ir_alloc(jumper);
 	jumper->opcode = IR_OP_JUMP_IF_ZERO;
-	jumper->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 
-	struct ir_op *dst_back = ir_op_list_back(*dst);
-	for (size_t i = 0; i < ARRAY_SIZE(dst_back->args); ++i) {
-		if (dst_back->args[i].subtype == IR_VAL_TEMPORARY_VARIABLE) {
-			jumper->args[0].num = dst_back->args[i].num;
-		}
+	if (peek.subtype == IR_VAL_CONSTANT_INT) {
+		assert(inner == NULL);
+		jumper->args[0].subtype = IR_VAL_CONSTANT_INT;
+		jumper->args[0].num = peek.num;
+	} else {
+		assert(inner != NULL);
+		jumper->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		jumper->args[0].num = ir_op_list_find_last_tmpvar_id(inner);
 	}
 
 	jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	jumper->args[1].num = jump_label;
 
-	ir_op_list_concat(*dst, jumper);
+	if (peek.subtype == IR_VAL_CONSTANT_INT) {
+		*dst = jumper;
+	} else {
+		ir_op_list_concat(inner, jumper);
+		*dst = inner;
+	}
+
+	inner = NULL;  /* release ownership to caller */
 	jumper = NULL; /* release ownership to caller */
 
 	return RESULT_OK;
@@ -466,7 +491,7 @@ ir_debug_print_one(const struct ir_op *op)
 			debug("  JUMP");
 			break;
 		case IR_OP_LABEL:
-			debug("  LABEL");
+			debug("  SET_LABEL");
 			break;
 		default:
 			assert(0); /* logic error in caller */
