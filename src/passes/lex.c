@@ -33,7 +33,13 @@ lex_alloc(struct token **tok)
 	F('+', TOKEN_PLUS_SIGN)                                                \
 	F('*', TOKEN_ASTERISK)                                                 \
 	F('/', TOKEN_FORWARD_SLASH)                                            \
-	F('%', TOKEN_PERCENT_SIGN)
+	F('%', TOKEN_PERCENT_SIGN)                                             \
+	F('!', TOKEN_EXCLAMATION_MARK)                                         \
+	F('&', TOKEN_AMPERSAND)                                                \
+	F('|', TOKEN_VERTICAL_BAR)                                             \
+	F('=', TOKEN_EQUAL_SIGN)                                               \
+	F('<', TOKEN_LESS_THAN)                                                \
+	F('>', TOKEN_GREATER_THAN)
 
 static WARN_UNUSED result_t
 lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
@@ -58,6 +64,65 @@ lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+lex_one_token_peek(struct string_view *pos, struct token *cur)
+{
+	bool matched = true;
+
+	if (pos->sz <= 1) {
+		/* no remaining characters to peek */
+		matched = false;
+	} else if (pos->data[0] == pos->data[1]) {
+		switch (cur->token_type) {
+		case TOKEN_HYPHEN:
+			cur->token_type = TOKEN_HYPHEN_HYPHEN;
+			break;
+		case TOKEN_AMPERSAND:
+			cur->token_type = TOKEN_AMPERSAND_AMPERSAND;
+			break;
+		case TOKEN_VERTICAL_BAR:
+			cur->token_type = TOKEN_VERTICAL_BAR_VERTICAL_BAR;
+			break;
+		case TOKEN_EQUAL_SIGN:
+			cur->token_type = TOKEN_EQUAL_SIGN_EQUAL_SIGN;
+			break;
+		case TOKEN_LESS_THAN:
+			cur->token_type = TOKEN_LESS_THAN_LESS_THAN;
+			break;
+		case TOKEN_GREATER_THAN:
+			cur->token_type = TOKEN_GREATER_THAN_GREATER_THAN;
+			break;
+		default:
+			matched = false;
+			break;
+		}
+	} else if (pos->data[1] == '=') {
+		switch (cur->token_type) {
+		case TOKEN_EXCLAMATION_MARK:
+			cur->token_type = TOKEN_EXCLAMATION_MARK_EQUAL_SIGN;
+			break;
+		case TOKEN_AMPERSAND:
+			cur->token_type = TOKEN_AMPERSAND_EQUAL_SIGN;
+			break;
+		case TOKEN_VERTICAL_BAR:
+			cur->token_type = TOKEN_VERTICAL_BAR_EQUAL_SIGN;
+			break;
+		case TOKEN_LESS_THAN:
+			cur->token_type = TOKEN_LESS_THAN_EQUAL_SIGN;
+			break;
+		case TOKEN_GREATER_THAN:
+			cur->token_type = TOKEN_GREATER_THAN_EQUAL_SIGN;
+			break;
+		default:
+			matched = false;
+		}
+	} else {
+		matched = false;
+	}
+
+	return matched;
+}
+
 static WARN_UNUSED result_t
 lex_one_token(struct string_view *pos, struct token **tok)
 {
@@ -77,10 +142,10 @@ lex_one_token(struct string_view *pos, struct token **tok)
 #undef TRY_EARLY_MATCH
 
 	if (early_match) {
-		if (cur->token_type == TOKEN_HYPHEN && /* peek ahead in case */
-		    pos->sz > 1 &&                     /* of --, not just -  */
-		    pos->data[1] == '-') {
-			cur->token_type = TOKEN_HYPHEN_HYPHEN;
+		const bool peek_match = lex_one_token_peek(pos, cur);
+		if (peek_match) {
+			pos->data++;
+			pos->sz--;
 		}
 	} else if (isdigit(c)) {
 		cur->val.data = pos->data;
@@ -191,6 +256,36 @@ lex_debug_one(const struct token *tok)
 		break;
 	case TOKEN_HYPHEN_HYPHEN:
 		debug("TOKEN_HYPHEN_HYPHEN");
+		break;
+	case TOKEN_EXCLAMATION_MARK_EQUAL_SIGN:
+		debug("TOKEN_EXCLAMATION_MARK_EQUAL_SIGN");
+		break;
+	case TOKEN_AMPERSAND_AMPERSAND:
+		debug("TOKEN_AMPERSAND_AMPERSAND");
+		break;
+	case TOKEN_AMPERSAND_EQUAL_SIGN:
+		debug("TOKEN_AMPERSAND_EQUAL_SIGN");
+		break;
+	case TOKEN_VERTICAL_BAR_VERTICAL_BAR:
+		debug("TOKEN_VERTICAL_BAR_VERTICAL_BAR");
+		break;
+	case TOKEN_VERTICAL_BAR_EQUAL_SIGN:
+		debug("TOKEN_VERTICAL_BAR_EQUAL_SIGN");
+		break;
+	case TOKEN_EQUAL_SIGN_EQUAL_SIGN:
+		debug("TOKEN_EQUAL_SIGN_EQUAL_SIGN");
+		break;
+	case TOKEN_LESS_THAN_LESS_THAN:
+		debug("TOKEN_LESS_THAN_LESS_THAN");
+		break;
+	case TOKEN_LESS_THAN_EQUAL_SIGN:
+		debug("TOKEN_LESS_THAN_EQUAL_SIGN");
+		break;
+	case TOKEN_GREATER_THAN_GREATER_THAN:
+		debug("TOKEN_GREATER_THAN_GREATER_THAN");
+		break;
+	case TOKEN_GREATER_THAN_EQUAL_SIGN:
+		debug("TOKEN_GREATER_THAN_EQUAL_SIGN");
 		break;
 	}
 
