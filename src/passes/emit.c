@@ -15,6 +15,8 @@ static const char STR_OP_NOT[] = "notl";
 static const char STR_OP_ADD[] = "addl";
 static const char STR_OP_SUB[] = "subl";
 static const char STR_OP_MUL[] = "imull";
+static const char STR_OP_DIV[] = "idivl";
+static const char STR_OP_CDQ[] = "cdq";
 static const char STR_OP_POP_QUAD[] = "popq";
 static const char STR_OP_PUSH_QUAD[] = "pushq";
 static const char STR_OP_RET[] = "ret";
@@ -108,8 +110,10 @@ emit_asm_op(const struct asm_op *op, int fd)
 	case ASM_OP_BINARY_MULTIPLY:
 		dprintf(fd, "%s", STR_OP_MUL);
 		break;
-	case ASM_OP_IDIV: // TODO
-	case ASM_OP_CDQ:  // TODO
+	case ASM_OP_IDIV:
+		dprintf(fd, "%s", STR_OP_DIV);
+	case ASM_OP_CDQ:
+		dprintf(fd, "%s", STR_OP_CDQ);
 		break;
 	case ASM_OP_RET:
 		dprintf(fd,
