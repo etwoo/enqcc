@@ -26,7 +26,7 @@ lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
 {
 	const char c = pos->data[0];
 	const bool ok = (isspace(c) || c == '(' || c == ')' || c == '{' ||
-	                 c == '}' || c == ';');
+	                 c == '}' || c == ';' || c == '~' || c == '-');
 	check_if(!ok,
 	         ERR_LEX_IDENTIFIER_CONSTANT_KEYWORD_PEEK_ERROR,
 	         c,
@@ -55,6 +55,14 @@ lex_one_token(struct string_view *pos, struct token **tok)
 		cur->token_type = TOKEN_BRACE_CLOSE;
 	} else if (c == ';') {
 		cur->token_type = TOKEN_SEMICOLON;
+	} else if (c == '~') {
+		cur->token_type = TOKEN_TILDE;
+	} else if (c == '-') {
+		if (pos->sz > 1 && pos->data[1] == '-') {
+			cur->token_type = TOKEN_HYPHEN_HYPHEN;
+		} else {
+			cur->token_type = TOKEN_HYPHEN;
+		}
 	} else if (isdigit(c)) {
 		cur->val.data = pos->data;
 		do {
@@ -170,6 +178,15 @@ lex_debug_one(const struct token *tok)
 		break;
 	case TOKEN_SEMICOLON:
 		debug("SEMICOLON");
+		break;
+	case TOKEN_TILDE:
+		debug("TILDE");
+		break;
+	case TOKEN_HYPHEN_HYPHEN:
+		debug("HYPHENHYPHEN");
+		break;
+	case TOKEN_HYPHEN:
+		debug("HYPHEN");
 		break;
 	}
 }
