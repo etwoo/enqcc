@@ -109,7 +109,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * Reached a terminal constant. Emit IR in this order:
 		 *
 		 * 1) existing ops created by caller
-		 * 2) the present UNARY_OP(opcode, CONSTANT(...), TMP)
+		 * 2) the present UNARY_OP(opcode, CONSTANT(...), TMPVAR)
 		 * 3) results of recursive invocation of ir_expression()
 		 */
 		ir_op_list_concat(src, inner);
@@ -122,7 +122,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 *
 		 * 1) existing ops created by caller
 		 * 2) results of recursive invocation of ir_expression()
-		 * 3) the present UNARY_OP(opcode, ..., TMP)
+		 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
 		 */
 		ir_op_list_concat(inner, src);
 		*dst = inner;
@@ -176,7 +176,7 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		/*
 		 * Reached terminal constants. Emit IR of the form:
 		 *
-		 *   BINARY_OP(opcode, CONSTANT(...), CONSTANT(...), TMP)
+		 *   BINARY_OP(opcode, CONSTANT(...), CONSTANT(...), TMPVAR)
 		 */
 		*dst = src;
 	} else if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
