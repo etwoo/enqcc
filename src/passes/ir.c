@@ -290,6 +290,7 @@ ir_expression(const struct ast *a,
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
 	case NODE_EXPRESSION_LOGICAL_OR:
+		// TODO: AST->IR for short-circuiting ops && and ||
 		assert(0 && "short-circuiting ops yet not implemented");
 		break;
 	default:
