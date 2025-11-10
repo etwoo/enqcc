@@ -61,6 +61,13 @@ codegen_cleanup(struct assembly **cg)
 }
 
 static void
+codegen_set_operand_eax(struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->u.reg = ASM_REGISTER_AX;
+}
+
+static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->subtype) {
@@ -88,8 +95,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_UNARY_IDENTITY:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
-		(**dst).args[1].u.reg = ASM_REGISTER_AX;
+		codegen_set_operand_eax(&(**dst).args[1]);
 		dst = &(**dst).next;
 		codegen_alloc(*dst);
 		(**dst).opcode = ASM_OP_RET;
@@ -141,6 +147,22 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
 		break;
 	case IR_OP_BINARY_DIVIDE:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		codegen_set_operand_eax(&(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_CDQ;
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_IDIV;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_eax(&(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		break;
 	case IR_OP_BINARY_REMAINDER:
 		break; // TODO: binary op IR -> ASM codegen
 	}
