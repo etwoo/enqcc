@@ -181,6 +181,9 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		*dst = src;
 	} else if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
 		assert(left == NULL);
+		assert(src->args[1].subtype == IR_VAL_NONE);
+		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[1].num = src->args[2].num - 1;
 		/*
 		 * Related testcases from writing-a-c-compiler-tests repo:
 		 *
@@ -189,13 +192,13 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * - ./tests/chapter_3/valid/sub_neg.c
 		 * - ./tests/chapter_3/valid/sub.c
 		 */
-		assert(src->args[1].subtype == IR_VAL_NONE);
-		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[1].num = src->args[2].num - 1;
 		ir_op_list_concat(right, src);
 		*dst = right;
 	} else if (src->args[1].subtype == IR_VAL_CONSTANT_INT) {
 		assert(right == NULL);
+		assert(src->args[0].subtype == IR_VAL_NONE);
+		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		src->args[0].num = src->args[2].num - 1;
 		/*
 		 * Related testcases from writing-a-c-compiler-tests repo:
 		 * - ./tests/chapter_3/valid/associativity.c
@@ -205,9 +208,6 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		 * - ./tests/chapter_3/valid/div_neg.c
 		 * - ./tests/chapter_3/valid/unop_add.c
 		 */
-		assert(src->args[0].subtype == IR_VAL_NONE);
-		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		src->args[0].num = src->args[2].num - 1;
 		ir_op_list_concat(left, src);
 		*dst = left;
 	} else {
