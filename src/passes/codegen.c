@@ -96,6 +96,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 		dst->u.num = src->num;
 		break;
+	case IR_VAL_JUMP_TARGET_LABEL:
+		assert(0 && "IR->ASM IR_VAL_JUMP_TARGET_LABEL unimplemented");
+		break;
 	}
 }
 
@@ -199,8 +202,13 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_COMPARE_LESS_THAN_EQ:
 	case IR_OP_COMPARE_MORE_THAN:
 	case IR_OP_COMPARE_MORE_THAN_EQ:
-		// TODO: IR->ASM for comparison operators like ==, !=, etc
-		assert(0 && "IR->ASM for comparison ops not implemented");
+	case IR_OP_COPY:
+	case IR_OP_JUMP:
+	case IR_OP_JUMP_IF_ZERO:
+	case IR_OP_JUMP_IF_NOT_ZERO:
+	case IR_OP_LABEL:
+		// TODO: IR->ASM for comparison operators like ==, &&, ||, etc
+		assert(0 && "IR->ASM for cmp/shortcircuit ops not implemented");
 		break;
 	}
 

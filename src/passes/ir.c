@@ -102,6 +102,7 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	}
 
 	struct ir_op *inner __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO remove?
 	check(ir_expression(a->u.op_unary.operand, &src->args[0], &inner, env));
 
 	src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
@@ -182,6 +183,7 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 	}
 
 	struct ir_op *left __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO remove?
 	check(ir_expression(a->u.op_binary.lhs, &src->args[0], &left, env));
 
 	struct ir_op *right __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
@@ -257,12 +259,98 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 }
 
 static WARN_UNUSED result_t
-ir_short_circuit_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+ir_and_helper(const struct ast *a,
+              struct ir_op **dst,
+              struct ir_env *env,
+              long long int jump_label)
 {
-	// TODO: AST->IR for short-circuiting ops && and ||
-	// TODO: use IR_OP_COPY, IR_OP_JUMP*, IR_OP_LABEL
-	assert(0 && "short-circuiting ops yet not implemented");
+	check(ir_expression(a, NULL, dst, env));
 
+	struct ir_op *jumper = NULL;
+	ir_alloc(jumper);
+	jumper->opcode = IR_OP_JUMP_IF_ZERO;
+	jumper->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+
+	struct ir_op *dst_back = ir_op_list_back(*dst);
+	for (size_t i = 0; i < ARRAY_SIZE(dst_back->args); ++i) {
+		if (dst_back->args[i].subtype == IR_VAL_TEMPORARY_VARIABLE) {
+			jumper->args[0].num = dst_back->args[i].num;
+		}
+	}
+
+	jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	jumper->args[1].num = jump_label;
+
+	ir_op_list_concat(*dst, jumper);
+	jumper = NULL; /* release ownership to caller */
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_logical_op_and(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+{
+	const long long int label_false = env->labels++;
+
+	struct ir_op *left __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	check(ir_and_helper(a->u.op_binary.lhs, &left, env, label_false));
+
+	struct ir_op *right __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
+	check(ir_and_helper(a->u.op_binary.rhs, &right, env, label_false));
+
+	const long long int label_end = env->labels++;
+	const long long int result_id = env->generator++;
+
+	struct ir_op *footer __attribute__((cleanup(ir_op_list_cleanup))) =
+		NULL;
+	ir_alloc(footer);
+	struct ir_op *foot_pos = footer;
+
+	foot_pos->opcode = IR_OP_COPY;
+	foot_pos->args[0].subtype = IR_VAL_CONSTANT_INT;
+	foot_pos->args[0].num = 1;
+	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	foot_pos->args[1].num = result_id;
+
+	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO remove?
+	ir_alloc(foot_pos->next);
+	foot_pos = foot_pos->next;
+
+	foot_pos->opcode = IR_OP_JUMP;
+	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	foot_pos->args[0].num = label_end;
+
+	ir_alloc(foot_pos->next);
+	foot_pos = foot_pos->next;
+
+	foot_pos->opcode = IR_OP_LABEL;
+	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	foot_pos->args[0].num = label_false;
+
+	ir_alloc(foot_pos->next);
+	foot_pos = foot_pos->next;
+
+	foot_pos->opcode = IR_OP_COPY;
+	foot_pos->args[0].subtype = IR_VAL_CONSTANT_INT;
+	foot_pos->args[0].num = 0;
+	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	foot_pos->args[1].num = result_id;
+
+	ir_alloc(foot_pos->next);
+	foot_pos = foot_pos->next;
+
+	foot_pos->opcode = IR_OP_LABEL;
+	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	foot_pos->args[0].num = label_end;
+
+	ir_op_list_concat(left, right);
+	ir_op_list_concat(right, footer);
+	*dst = left;
+
+	left = NULL;   /* release ownership to caller */
+	right = NULL;  /* release ownership to caller */
+	footer = NULL; /* release ownership to caller */
+	return RESULT_OK;
 }
 
 result_t
@@ -298,8 +386,10 @@ ir_expression(const struct ast *a,
 		check(ir_binary_op(a, dst, env));
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
+		check(ir_logical_op_and(a, dst, env));
+		break;
 	case NODE_EXPRESSION_LOGICAL_OR:
-		check(ir_short_circuit_op(a, dst, env));
+		assert(0 && "short-circuiting OR yet not implemented"); // TODO
 		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
@@ -358,6 +448,8 @@ ir_debug_print_one(const struct ir_op *op)
 	case IR_OP_UNARY_COMPLEMENT:
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_NOT:
+	case IR_OP_JUMP:
+	case IR_OP_LABEL:
 		required_args = 1;
 		debug("UNARY");
 		switch (op->opcode) {
@@ -369,6 +461,12 @@ ir_debug_print_one(const struct ir_op *op)
 			break;
 		case IR_OP_UNARY_NOT:
 			debug("  NOT");
+			break;
+		case IR_OP_JUMP:
+			debug("  JUMP");
+			break;
+		case IR_OP_LABEL:
+			debug("  LABEL");
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -385,6 +483,9 @@ ir_debug_print_one(const struct ir_op *op)
 	case IR_OP_COMPARE_LESS_THAN_EQ:
 	case IR_OP_COMPARE_MORE_THAN:
 	case IR_OP_COMPARE_MORE_THAN_EQ:
+	case IR_OP_COPY:
+	case IR_OP_JUMP_IF_ZERO:
+	case IR_OP_JUMP_IF_NOT_ZERO:
 		required_args = 2;
 		debug("BINARY");
 		switch (op->opcode) {
@@ -421,6 +522,15 @@ ir_debug_print_one(const struct ir_op *op)
 		case IR_OP_COMPARE_MORE_THAN_EQ:
 			debug("  MORE_THAN_OR_EQUAL");
 			break;
+		case IR_OP_COPY:
+			debug("  COPY");
+			break;
+		case IR_OP_JUMP_IF_ZERO:
+			debug("  JUMP_IF_ZERO");
+			break;
+		case IR_OP_JUMP_IF_NOT_ZERO:
+			debug("  JUMP_IF_NOT_ZERO");
+			break;
 		default:
 			assert(0); /* logic error in caller */
 		}
@@ -438,6 +548,9 @@ ir_debug_print_one(const struct ir_op *op)
 			break;
 		case IR_VAL_TEMPORARY_VARIABLE:
 			debug("  VARIABLE tmp.%lld", op->args[i].num);
+			break;
+		case IR_VAL_JUMP_TARGET_LABEL:
+			debug("  LABEL label_%lld", op->args[i].num);
 			break;
 		}
 	}

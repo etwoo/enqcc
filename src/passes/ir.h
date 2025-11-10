@@ -8,6 +8,7 @@ struct ir_val {
 		IR_VAL_NONE,
 		IR_VAL_CONSTANT_INT,
 		IR_VAL_TEMPORARY_VARIABLE,
+		IR_VAL_JUMP_TARGET_LABEL,
 	} subtype;
 	long long int num; /* numeric value, variable ID, etc */
 };
@@ -46,6 +47,7 @@ struct ir_function {
 
 struct ir_env {
 	long long int generator;
+	long long int labels;
 };
 
 struct intermediate {
