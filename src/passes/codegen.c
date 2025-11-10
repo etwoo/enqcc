@@ -61,6 +61,13 @@ codegen_cleanup(struct assembly **cg)
 }
 
 static void
+codegen_set_operand_immediate_zero(struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_IMMEDIATE;
+	dst->u.num = 0;
+}
+
+static void
 codegen_set_operand_eax(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
@@ -86,17 +93,25 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->subtype) {
 	case IR_VAL_NONE:
-		assert(0 && "unset operand in 2-arg op");
+		assert(0 && "unset operand in 2-arg/3-arg op");
 		break;
 	case IR_VAL_CONSTANT_INT:
 		dst->operand_type = ASM_OPERAND_IMMEDIATE;
-		dst->u.num = src->num;
 		break;
 	case IR_VAL_TEMPORARY_VARIABLE:
 		dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
-		dst->u.num = src->num;
+		break;
+	case IR_VAL_JUMP_TARGET_LABEL:
+		dst->operand_type = ASM_OPERAND_JUMP_TARGET_LABEL;
 		break;
 	}
+	dst->u.num = src->num;
+}
+
+static void
+codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
+{
+	memcpy(dst, src, sizeof(*dst));
 }
 
 static WARN_UNUSED result_t
@@ -114,8 +129,8 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_alloc(*dst);
 		(**dst).opcode = ASM_OP_RET;
 		break;
-	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:
+	case IR_OP_UNARY_NEGATE:
 		(**dst).opcode = ASM_OP_MOV;
 		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
@@ -188,6 +203,96 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 			break;
 		}
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		break;
+	case IR_OP_UNARY_NOT:
+		(**dst).opcode = ASM_OP_COMPARE;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_SET_IF_EQ;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
+	case IR_OP_COMPARE_EQUAL:
+	case IR_OP_COMPARE_NOT_EQUAL:
+	case IR_OP_COMPARE_LESS_THAN:
+	case IR_OP_COMPARE_LESS_THAN_EQ:
+	case IR_OP_COMPARE_MORE_THAN:
+	case IR_OP_COMPARE_MORE_THAN_EQ:
+		(**dst).opcode = ASM_OP_COMPARE;
+		/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		switch (src->opcode) {
+		case IR_OP_COMPARE_EQUAL:
+			(**dst).opcode = ASM_OP_SET_IF_EQ;
+			break;
+		case IR_OP_COMPARE_NOT_EQUAL:
+			(**dst).opcode = ASM_OP_SET_IF_NEQ;
+			break;
+		case IR_OP_COMPARE_LESS_THAN:
+			(**dst).opcode = ASM_OP_SET_IF_LT;
+			break;
+		case IR_OP_COMPARE_LESS_THAN_EQ:
+			(**dst).opcode = ASM_OP_SET_IF_LTE;
+			break;
+		case IR_OP_COMPARE_MORE_THAN:
+			(**dst).opcode = ASM_OP_SET_IF_GT;
+			break;
+		case IR_OP_COMPARE_MORE_THAN_EQ:
+			(**dst).opcode = ASM_OP_SET_IF_GTE;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[2], &(**dst).args[0]);
+		break;
+	case IR_OP_COPY:
+		(**dst).opcode = ASM_OP_MOV;
+		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
+			codegen_map_operand(&src->args[i], &(**dst).args[i]);
+		}
+		break;
+	case IR_OP_JUMP:
+		(**dst).opcode = ASM_OP_JMP;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		break;
+	case IR_OP_JUMP_IF_ZERO:
+	case IR_OP_JUMP_IF_NOT_ZERO:
+		(**dst).opcode = ASM_OP_COMPARE;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		switch (src->opcode) {
+		case IR_OP_JUMP_IF_ZERO:
+			(**dst).opcode = ASM_OP_JMP_IF_EQ;
+			break;
+		case IR_OP_JUMP_IF_NOT_ZERO:
+			(**dst).opcode = ASM_OP_JMP_IF_NEQ;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
+	case IR_OP_LABEL:
+		(**dst).opcode = ASM_OP_LABEL;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		break;
 	}
 
@@ -269,7 +374,8 @@ fix_cleanup(struct fix *trampoline)
 }
 
 static WARN_UNUSED result_t
-codegen_fixup_apply(struct asm_op *prev,
+codegen_fixup_apply(struct assembly *cg,
+                    struct asm_op *prev,
                     struct asm_op *cur,
                     struct asm_op **new_prev,
                     struct asm_op **new_cur,
@@ -286,22 +392,34 @@ codegen_fixup_apply(struct asm_op *prev,
 		return RESULT_OK; /* no fixup necessary */
 	}
 
-	assert(prev && "should never need trampoline on very first op");
 	assert(cur);
-	assert(prev->next == cur);
+	if (prev == NULL) {
+		assert(cg->function.ops == cur);
+	} else {
+		assert(prev->next == cur);
+	}
 
 	/*
 	 * Split containing list at <cur>, excluding <cur> from both halves.
 	 */
 	struct asm_op *remainder = cur->next;
 	cur->next = NULL;
-	prev->next = NULL;
+	if (prev != NULL) {
+		prev->next = NULL;
+	}
 
-	/*
-	 * Insert trampoline sublist into containing list.
-	 */
 	assert(trampoline.sz >= 1);
-	codegen_op_list_concat(prev, trampoline.ops[0]);
+	if (prev == NULL) {
+		/*
+		 * Set trampoline as new head of containing list.
+		 */
+		cg->function.ops = trampoline.ops[0];
+	} else {
+		/*
+		 * Insert trampoline sublist into containing list.
+		 */
+		codegen_op_list_concat(prev, trampoline.ops[0]);
+	}
 	assert(trampoline.sz >= 2);
 	codegen_op_list_concat(trampoline.ops[0], trampoline.ops[1]);
 	if (trampoline.sz >= 3) {
@@ -348,7 +466,8 @@ static WARN_UNUSED bool
 fix_s2s(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!((cur->opcode == ASM_OP_MOV || cur->opcode == ASM_OP_BINARY_ADD ||
-	       cur->opcode == ASM_OP_BINARY_SUBTRACT) &&
+	       cur->opcode == ASM_OP_BINARY_SUBTRACT ||
+	       cur->opcode == ASM_OP_COMPARE) &&
 	      cur->args[0].operand_type == ASM_OPERAND_STACK &&
 	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
 		return false;
@@ -371,6 +490,37 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 /*
  * Translate:
  *
+ *     cmpl %eax, $5
+ *
+ * ... into:
+ *
+ *     movl $5, $r11d
+ *     cmpl %eax, %r11d
+ */
+static WARN_UNUSED bool
+fix_cmp(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!(cur->opcode == ASM_OP_COMPARE &&
+	      cur->args[1].operand_type == ASM_OPERAND_IMMEDIATE)) {
+		return false;
+	}
+
+	trampoline->sz = 2;
+
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
+	codegen_set_operand_r11(&trampoline->ops[0]->args[1]);
+
+	trampoline->ops[1]->opcode = ASM_OP_COMPARE;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[1]->args[0]);
+	codegen_set_operand_r11(&trampoline->ops[1]->args[1]);
+
+	return true;
+}
+
+/*
+ * Translate:
+ *
  *     idivl $3
  *
  * ... into:
@@ -379,7 +529,7 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
  *     idivl %r10d
  */
 static WARN_UNUSED bool
-fix_idiv(struct asm_op *cur, struct fix *trampoline)
+fix_div(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!(cur->opcode == ASM_OP_IDIV &&
 	      cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE)) {
@@ -389,8 +539,7 @@ fix_idiv(struct asm_op *cur, struct fix *trampoline)
 	trampoline->sz = 2;
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
-	trampoline->ops[0]->args[0].operand_type = cur->args[0].operand_type;
-	trampoline->ops[0]->args[0].u.num = cur->args[0].u.num;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
 	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
 
 	trampoline->ops[1]->opcode = ASM_OP_IDIV;
@@ -412,7 +561,7 @@ fix_idiv(struct asm_op *cur, struct fix *trampoline)
  *     movl  $r11d, -4(%rbp)
  */
 static WARN_UNUSED bool
-fix_imul(struct asm_op *cur, struct fix *trampoline)
+fix_mul(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!(cur->opcode == ASM_OP_BINARY_MULTIPLY &&
 	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
@@ -422,19 +571,16 @@ fix_imul(struct asm_op *cur, struct fix *trampoline)
 	trampoline->sz = 3;
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
-	trampoline->ops[0]->args[0].operand_type = cur->args[1].operand_type;
-	trampoline->ops[0]->args[0].u.num = cur->args[1].u.num;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
 	codegen_set_operand_r11(&trampoline->ops[0]->args[1]);
 
 	trampoline->ops[1]->opcode = ASM_OP_BINARY_MULTIPLY;
-	trampoline->ops[1]->args[0].operand_type = cur->args[0].operand_type;
-	trampoline->ops[1]->args[0].u.num = cur->args[0].u.num;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[1]->args[0]);
 	codegen_set_operand_r11(&trampoline->ops[1]->args[1]);
 
 	trampoline->ops[2]->opcode = ASM_OP_MOV;
 	codegen_set_operand_r11(&trampoline->ops[2]->args[0]);
-	trampoline->ops[2]->args[1].operand_type = cur->args[1].operand_type;
-	trampoline->ops[2]->args[1].u.num = cur->args[1].u.num;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
 	return true;
 }
 
@@ -451,9 +597,10 @@ codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 	struct asm_op *cur = cg->function.ops;
 	while (cur != NULL) {
 		struct asm_op *orig[2] = {prev, cur};
-		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_s2s));
-		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_idiv));
-		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_imul));
+		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_s2s));
+		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_cmp));
+		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_div));
+		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_mul));
 		if (cur == orig[1]) {
 			assert(prev == orig[0]);
 			prev = cur;
@@ -499,6 +646,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  STACK %lld",
 		      -1 * CODEGEN_BYTES_PER_VALUE * operand->u.num);
 		break;
+	case ASM_OPERAND_JUMP_TARGET_LABEL:
+		debug("  LABEL %lld", operand->u.num);
+		break;
 	}
 }
 
@@ -527,11 +677,56 @@ codegen_debug_print_op(const struct asm_op *op)
 	case ASM_OP_BINARY_MULTIPLY:
 		debug("MULTIPLY");
 		break;
+	case ASM_OP_COMPARE:
+		debug("COMPARE");
+		break;
 	case ASM_OP_IDIV:
 		debug("IDIV");
 		break;
 	case ASM_OP_CDQ:
 		debug("CDQ");
+		break;
+	case ASM_OP_JMP:
+		debug("JMP");
+		break;
+	case ASM_OP_JMP_IF_EQ:
+		debug("JMP_IF_EQ");
+		break;
+	case ASM_OP_JMP_IF_NEQ:
+		debug("JMP_IF_NEQ");
+		break;
+	case ASM_OP_JMP_IF_GT:
+		debug("JMP_IF_GT");
+		break;
+	case ASM_OP_JMP_IF_GTE:
+		debug("JMP_IF_GTE");
+		break;
+	case ASM_OP_JMP_IF_LT:
+		debug("JMP_IF_LT");
+		break;
+	case ASM_OP_JMP_IF_LTE:
+		debug("JMP_IF_LTE");
+		break;
+	case ASM_OP_SET_IF_EQ:
+		debug("SET_IF_EQ");
+		break;
+	case ASM_OP_SET_IF_NEQ:
+		debug("SET_IF_NEQ");
+		break;
+	case ASM_OP_SET_IF_GT:
+		debug("SET_IF_GT");
+		break;
+	case ASM_OP_SET_IF_GTE:
+		debug("SET_IF_GTE");
+		break;
+	case ASM_OP_SET_IF_LT:
+		debug("SET_IF_LT");
+		break;
+	case ASM_OP_SET_IF_LTE:
+		debug("SET_IF_LTE");
+		break;
+	case ASM_OP_LABEL:
+		debug("MARK_LABEL");
 		break;
 	case ASM_OP_RET:
 		debug("RET");
