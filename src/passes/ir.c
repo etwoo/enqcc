@@ -7,6 +7,7 @@
 #include "sys/debug.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #define ir_alloc(dst)                                                          \
@@ -274,6 +275,7 @@ static WARN_UNUSED result_t
 ir_and_helper(const struct ast *a,
               struct ir_op **dst,
               struct ir_env *env,
+              bool jump_if_zero,
               long long int jump_label)
 {
 	struct ir_val peek = {0};
@@ -283,7 +285,8 @@ ir_and_helper(const struct ast *a,
 	struct ir_op *jumper __attribute__((cleanup(ir_op_list_cleanup))) =
 		NULL;
 	ir_alloc(jumper);
-	jumper->opcode = IR_OP_JUMP_IF_ZERO;
+	jumper->opcode =
+		jump_if_zero ? IR_OP_JUMP_IF_ZERO : IR_OP_JUMP_IF_NOT_ZERO;
 
 	if (peek.subtype == IR_VAL_CONSTANT_INT) {
 		assert(inner == NULL);
@@ -312,15 +315,26 @@ ir_and_helper(const struct ast *a,
 }
 
 static WARN_UNUSED result_t
-ir_logical_op_and(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+ir_logical_op(const struct ast *a,
+              struct ir_op **dst,
+              struct ir_env *env,
+              bool jump_if_zero)
 {
 	const long long int label_false = env->labels++;
 
 	struct ir_op *left __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	check(ir_and_helper(a->u.op_binary.lhs, &left, env, label_false));
+	check(ir_and_helper(a->u.op_binary.lhs,
+	                    &left,
+	                    env,
+	                    jump_if_zero,
+	                    label_false));
 
 	struct ir_op *right __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	check(ir_and_helper(a->u.op_binary.rhs, &right, env, label_false));
+	check(ir_and_helper(a->u.op_binary.rhs,
+	                    &right,
+	                    env,
+	                    jump_if_zero,
+	                    label_false));
 
 	const long long int label_end = env->labels++;
 	const long long int result_id = env->generator++;
@@ -332,7 +346,7 @@ ir_logical_op_and(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 
 	foot_pos->opcode = IR_OP_COPY;
 	foot_pos->args[0].subtype = IR_VAL_CONSTANT_INT;
-	foot_pos->args[0].num = 1;
+	foot_pos->args[0].num = jump_if_zero ? 1 : 0;
 	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	foot_pos->args[1].num = result_id;
 
@@ -356,7 +370,7 @@ ir_logical_op_and(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 
 	foot_pos->opcode = IR_OP_COPY;
 	foot_pos->args[0].subtype = IR_VAL_CONSTANT_INT;
-	foot_pos->args[0].num = 0;
+	foot_pos->args[0].num = jump_if_zero ? 0 : 1;
 	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	foot_pos->args[1].num = result_id;
 
@@ -410,10 +424,10 @@ ir_expression(const struct ast *a,
 		check(ir_binary_op(a, dst, env));
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
-		check(ir_logical_op_and(a, dst, env));
+		check(ir_logical_op(a, dst, env, true));
 		break;
 	case NODE_EXPRESSION_LOGICAL_OR:
-		assert(0 && "short-circuiting OR yet not implemented"); // TODO
+		check(ir_logical_op(a, dst, env, false));
 		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
