@@ -112,6 +112,7 @@ emit_asm_op(const struct asm_op *op, int fd)
 		break;
 	case ASM_OP_IDIV:
 		dprintf(fd, "%s", STR_OP_DIV);
+		break;
 	case ASM_OP_CDQ:
 		dprintf(fd, "%s", STR_OP_CDQ);
 		break;
