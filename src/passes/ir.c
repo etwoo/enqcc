@@ -272,11 +272,11 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 }
 
 static WARN_UNUSED result_t
-ir_and_helper(const struct ast *a,
-              struct ir_op **dst,
-              struct ir_env *env,
-              bool jump_if_zero,
-              long long int jump_label)
+ir_logical_op_arm(const struct ast *a,
+                  struct ir_op **dst,
+                  struct ir_env *env,
+                  bool jump_if_zero,
+                  long long int jump_label)
 {
 	struct ir_val peek = {0};
 	struct ir_op *inner __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
@@ -323,18 +323,18 @@ ir_logical_op(const struct ast *a,
 	const long long int label_false = env->labels++;
 
 	struct ir_op *left __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	check(ir_and_helper(a->u.op_binary.lhs,
-	                    &left,
-	                    env,
-	                    jump_if_zero,
-	                    label_false));
+	check(ir_logical_op_arm(a->u.op_binary.lhs,
+	                        &left,
+	                        env,
+	                        jump_if_zero,
+	                        label_false));
 
 	struct ir_op *right __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	check(ir_and_helper(a->u.op_binary.rhs,
-	                    &right,
-	                    env,
-	                    jump_if_zero,
-	                    label_false));
+	check(ir_logical_op_arm(a->u.op_binary.rhs,
+	                        &right,
+	                        env,
+	                        jump_if_zero,
+	                        label_false));
 
 	const long long int label_end = env->labels++;
 	const long long int result_id = env->generator++;
