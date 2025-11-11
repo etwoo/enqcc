@@ -12,10 +12,8 @@ void lex_debug_print(const struct token *tok);
 
 struct ast;
 
-result_t parse_init(const struct token *tok, struct ast **a)
+result_t parse_init(Arena *arena, const struct token *tok, struct ast **a)
 	__attribute__((warn_unused_result));
-void parse_free(struct ast *a);
-void parse_cleanup(struct ast **a);
 void parse_debug_print(const struct ast *a, size_t indent);
 
 struct intermediate;

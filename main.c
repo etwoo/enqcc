@@ -62,8 +62,8 @@ compile(Arena *arena,
 		return RESULT_OK;
 	}
 
-	struct ast *a __attribute__((cleanup(parse_cleanup))) = NULL;
-	check(parse_init(tok, &a));
+	struct ast *a = NULL;
+	check(parse_init(arena, tok, &a));
 	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR) {
