@@ -8,7 +8,6 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h> // TODO: remove, no longer using free()?
 
 static WARN_UNUSED result_t
 ir_alloc_op(Arena *arena, struct ir_op **dst)

@@ -9,7 +9,6 @@
 #include <getopt.h> /* for getopt_long() */
 #include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h> // TODO: remove, no longer using free()?
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 #include <sysexits.h>

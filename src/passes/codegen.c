@@ -8,7 +8,6 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h> // TODO: remove, no longer using free()?
 
 const long long int CODEGEN_BYTES_PER_VALUE = 4;
 
