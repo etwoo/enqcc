@@ -1,6 +1,7 @@
 #include "passes.h"
 #include "passes/codegen.h"
 #include "sys/array.h"
+#include "sys/compiler_features.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -10,16 +11,41 @@ static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char LINUX_LABEL_PREFIX[] = ".L";
 static const char MACOS_FUNC_PREFIX[] = "_";
 static const char MACOS_LABEL_PREFIX[] = "L";
+static const char CUSTOM_LABEL_ID[] = "boba_";
 static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_POP_QUAD[] = "popq";
 static const char STR_OP_PUSH_QUAD[] = "pushq";
 static const char STR_OP_RET[] = "ret";
 static const char STR_REG_EAX[] = "%eax";
+static const char STR_REG_EAX_LOWEST_BYTE[] = "%al";
 static const char STR_REG_EDX[] = "%edx";
+static const char STR_REG_EDX_LOWEST_BYTE[] = "%dl";
 static const char STR_REG_R10[] = "%r10d";
+static const char STR_REG_R10_LOWEST_BYTE[] = "%r10b";
 static const char STR_REG_R11[] = "%r11d";
+static const char STR_REG_R11_LOWEST_BYTE[] = "%r11b";
 static const char STR_REG_RSP[] = "%rsp"; /* aka frame pointer */
 static const char STR_REG_RBP[] = "%rbp"; /* aka stack pointer */
+
+enum register_alias {
+	REGISTER_ALIAS_4BYTE,
+	REGISTER_ALIAS_1BYTE,
+};
+
+static WARN_UNUSED const char *
+get_label_prefix(enum platform plat)
+{
+	const char *result = NULL;
+	switch (plat) {
+	case PLATFORM_MACOS:
+		result = MACOS_LABEL_PREFIX;
+		break;
+	case PLATFORM_LINUX:
+		result = LINUX_LABEL_PREFIX;
+		break;
+	}
+	return result;
+}
 
 static void
 emit_asm_footer(enum platform plat, int fd)
@@ -30,8 +56,13 @@ emit_asm_footer(enum platform plat, int fd)
 }
 
 static void
-emit_asm_operand(const struct asm_operand *o, int fd)
+emit_asm_operand(const struct asm_operand *o,
+                 enum platform plat,
+                 enum register_alias ralias,
+                 int fd)
 {
+	const char *label_prefix = get_label_prefix(plat);
+
 	switch (o->operand_type) {
 	case ASM_OPERAND_NONE:
 		assert(0); /* logic error in caller */
@@ -40,19 +71,46 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		dprintf(fd, "$%lld", o->u.num);
 		break;
 	case ASM_OPERAND_REGISTER:
-		// TODO: switch eax->eal, edx->dl, r10d->r10b, r11d-r11b for conditional jump and conditional set instructions
 		switch (o->u.reg) {
 		case ASM_REGISTER_AX:
-			dprintf(fd, "%s", STR_REG_EAX);
+			switch (ralias) {
+			case REGISTER_ALIAS_4BYTE:
+				dprintf(fd, "%s", STR_REG_EAX);
+				break;
+			case REGISTER_ALIAS_1BYTE:
+				dprintf(fd, "%s", STR_REG_EAX_LOWEST_BYTE);
+				break;
+			}
 			break;
 		case ASM_REGISTER_DX:
-			dprintf(fd, "%s", STR_REG_EDX);
+			switch (ralias) {
+			case REGISTER_ALIAS_4BYTE:
+				dprintf(fd, "%s", STR_REG_EDX);
+				break;
+			case REGISTER_ALIAS_1BYTE:
+				dprintf(fd, "%s", STR_REG_EDX_LOWEST_BYTE);
+				break;
+			}
 			break;
 		case ASM_REGISTER_R10:
-			dprintf(fd, "%s", STR_REG_R10);
+			switch (ralias) {
+			case REGISTER_ALIAS_4BYTE:
+				dprintf(fd, "%s", STR_REG_R10);
+				break;
+			case REGISTER_ALIAS_1BYTE:
+				dprintf(fd, "%s", STR_REG_R10_LOWEST_BYTE);
+				break;
+			}
 			break;
 		case ASM_REGISTER_R11:
-			dprintf(fd, "%s", STR_REG_R11);
+			switch (ralias) {
+			case REGISTER_ALIAS_4BYTE:
+				dprintf(fd, "%s", STR_REG_R11);
+				break;
+			case REGISTER_ALIAS_1BYTE:
+				dprintf(fd, "%s", STR_REG_R11_LOWEST_BYTE);
+				break;
+			}
 			break;
 		case ASM_REGISTER_RSP:
 			dprintf(fd, "%s", STR_REG_RSP);
@@ -73,7 +131,11 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		}
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
-		assert(0 && "ASM emit for LABEL operand unimplemented");
+		dprintf(fd,
+		        "%s%s%lld",
+		        label_prefix,
+		        CUSTOM_LABEL_ID,
+		        o->u.num);
 		break;
 	}
 }
@@ -81,17 +143,18 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 static void
 emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
-	const char *label_prefix = plat == PLATFORM_MACOS ? MACOS_LABEL_PREFIX
-	                                                  : LINUX_LABEL_PREFIX;
+	const char *label_prefix = get_label_prefix(plat);
+	char *print_opcode = NULL;
+	enum register_alias ralias = REGISTER_ALIAS_4BYTE;
 
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
 	}
 
-	char *print_opcode = NULL;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
-		print_opcode = "movl";;
+		print_opcode = "movl";
+		;
 		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "negl";
@@ -143,26 +206,36 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_SET_IF_EQ:
 		print_opcode = "sete";
+		ralias = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_NEQ:
 		print_opcode = "setne";
+		ralias = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_GT:
 		print_opcode = "setg";
+		ralias = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_GTE:
 		print_opcode = "setge";
+		ralias = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_LT:
 		print_opcode = "setl";
+		ralias = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_LTE:
 		print_opcode = "setle";
+		ralias = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_LABEL:
 		assert(op->args[0].operand_type ==
 		       ASM_OPERAND_JUMP_TARGET_LABEL);
-		dprintf(fd, "%sL_foobar%lld:", label_prefix, op->args[0].u.num);
+		dprintf(fd,
+		        "%s%s%lld:\n",
+		        label_prefix,
+		        CUSTOM_LABEL_ID,
+		        op->args[0].u.num);
 		break;
 	case ASM_OP_RET:
 		dprintf(fd,
@@ -171,7 +244,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		        STR_REG_RBP,
 		        STR_REG_RSP);
 		dprintf(fd, "\t%s %s\n", STR_OP_POP_QUAD, STR_REG_RBP);
-		dprintf(fd, "\t%s", STR_OP_RET);
+		dprintf(fd, "\t%s\n", STR_OP_RET);
 		break;
 	}
 
@@ -189,7 +262,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		} else {
 			dprintf(fd, ", ");
 		}
-		emit_asm_operand(&op->args[i], fd);
+		emit_asm_operand(&op->args[i], plat, ralias, fd);
 	}
 
 	dprintf(fd, "\n");
