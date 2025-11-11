@@ -13,8 +13,22 @@
 static WARN_UNUSED result_t
 parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 {
+	static struct ast dummy_workaround_clang_analyzer_null_pointer = {0};
+
 	*dst = arena_alloc(arena, sizeof(**dst));
-	check_if(*dst == NULL, ERR_LEX_ALLOC);
+	if (*dst == NULL) {
+		/*
+		 * Workaround spurious clang-analyzer-core.NullDereference
+		 * warnings at callsites of this helper function. The Clang
+		 * Static Analyzer seems to forget that (*dst != NULL) when
+		 * this function returns RESULT_OK, which should then protect
+		 * callers from accessing a NULL pointer when they use
+		 * check(parse_alloc(...)) properly.
+		 */
+		*dst = &dummy_workaround_clang_analyzer_null_pointer;
+		return make_result(ERR_LEX_ALLOC);
+	}
+
 	memset(*dst, 0, sizeof(**dst));
 	(**dst).node_type = ntype;
 	return RESULT_OK;
