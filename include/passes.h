@@ -11,15 +11,20 @@ result_t lex_init(Arena *arena, const char *src, struct token **tok)
 void lex_debug_print(const struct token *tok);
 
 struct ast;
+struct symbol;
 
-result_t parse_init(Arena *arena, const struct token *tok, struct ast **a)
-	__attribute__((warn_unused_result));
+result_t parse_init(Arena *arena,
+                    const struct token *tok,
+                    struct ast **a,
+                    struct symbol **sym) __attribute__((warn_unused_result));
 void parse_debug_print(const struct ast *a, size_t indent);
 
 struct intermediate;
 
-result_t ir_init(Arena *arena, const struct ast *a, struct intermediate **ir)
-	__attribute__((warn_unused_result));
+result_t ir_init(Arena *arena,
+                 const struct ast *a,
+                 struct intermediate **ir,
+                 struct symbol **sym) __attribute__((warn_unused_result));
 void ir_debug_print(const struct intermediate *ir);
 
 struct assembly;

@@ -160,6 +160,18 @@ result_to_str(result_t r)
 			r.msg,
 			my_strerror(r));
 		break;
+	case ERR_PARSE_DECL_EXPECT_TYPE_INT:
+		s = strdup("Parsing variable declaration expects "
+		           "TOKEN_KEYWORD_INT in type position");
+		break;
+	case ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER:
+		s = strdup("Parsing variable declaration expects "
+		           "TOKEN_IDENTIFIER in variable name position");
+		break;
+	case ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON:
+		s = strdup("Parsing variable declaration expects "
+		           "TOKEN_SEMICOLON after initializer expression");
+		break;
 	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing paren-enclosed expression expects "
 		           "TOKEN_PAREN_CLOSE after expression");
@@ -202,13 +214,18 @@ result_to_str(result_t r)
 		s = strdup("Parsing program expects end of token stream after "
 		           "function definition(s)");
 		break;
-	case ERR_PARSE_STMT_EXPECT_TOKEN_KEYWORD_RETURN:
-		s = strdup("Parsing statement expects TOKEN_KEYWORD_RETURN "
-		           "before expression");
-		break;
 	case ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
+		break;
+	case ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION:
+		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
+		break;
+	case ERR_SEMA_UNDECLARED_VARIABLE_USAGE:
+		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
+		break;
+	case ERR_SEMA_DECL_INVALID_LVALUE:
+		s = strdup("Invalid lvalue in variable assignment");
 		break;
 	}
 
