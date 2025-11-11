@@ -40,6 +40,7 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 		dprintf(fd, "$%lld", o->u.num);
 		break;
 	case ASM_OPERAND_REGISTER:
+		// TODO: switch eax->eal, edx->dl, r10d->r10b, r11d-r11b for conditional jump and conditional set instructions
 		switch (o->u.reg) {
 		case ASM_REGISTER_AX:
 			dprintf(fd, "%s", STR_REG_EAX);
