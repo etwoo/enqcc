@@ -131,7 +131,6 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		break;
 	case IR_OP_UNARY_COMPLEMENT:
 	case IR_OP_UNARY_NEGATE:
-	case IR_OP_UNARY_NOT: // TODO: need to use ASM_OP_SET_IF_EQ!
 		(**dst).opcode = ASM_OP_MOV;
 		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
@@ -142,9 +141,6 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		case IR_OP_UNARY_NEGATE:
 			(**dst).opcode = ASM_OP_UNARY_NEG;
 			break;
-		case IR_OP_UNARY_NOT:
-			// TODO: verify that IR for boolean not and bitwise
-			// complement both become same ASM, `notl`
 		case IR_OP_UNARY_COMPLEMENT:
 			(**dst).opcode = ASM_OP_UNARY_NOT;
 			break;
@@ -207,6 +203,20 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 			break;
 		}
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		break;
+	case IR_OP_UNARY_NOT:
+		(**dst).opcode = ASM_OP_COMPARE;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_SET_IF_EQ;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
 	case IR_OP_COMPARE_EQUAL:
 	case IR_OP_COMPARE_NOT_EQUAL:
