@@ -108,6 +108,12 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 	dst->u.num = src->num;
 }
 
+static void
+codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
+{
+	memcpy(dst, src, sizeof(*dst));
+}
+
 static WARN_UNUSED result_t
 codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 {
@@ -437,7 +443,8 @@ static WARN_UNUSED bool
 fix_s2s(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!((cur->opcode == ASM_OP_MOV || cur->opcode == ASM_OP_BINARY_ADD ||
-	       cur->opcode == ASM_OP_BINARY_SUBTRACT) &&
+	       cur->opcode == ASM_OP_BINARY_SUBTRACT ||
+	       cur->opcode == ASM_OP_COMPARE) &&
 	      cur->args[0].operand_type == ASM_OPERAND_STACK &&
 	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
 		return false;
@@ -453,6 +460,37 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 	}
 	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
 	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
+
+	return true;
+}
+
+/*
+ * Translate:
+ *
+ *     cmpl %eax, $5
+ *
+ * ... into:
+ *
+ *     movl $5, $r11d
+ *     cmpl %eax, %r11d
+ */
+static WARN_UNUSED bool
+fix_cmp(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!(cur->opcode == ASM_OP_COMPARE &&
+	      cur->args[1].operand_type == ASM_OPERAND_IMMEDIATE)) {
+		return false;
+	}
+
+	trampoline->sz = 2;
+
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
+	codegen_set_operand_r11(&trampoline->ops[0]->args[1]);
+
+	trampoline->ops[1]->opcode = ASM_OP_COMPARE;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[1]->args[0]);
+	codegen_set_operand_r11(&trampoline->ops[1]->args[1]);
 
 	return true;
 }
@@ -478,8 +516,7 @@ fix_idiv(struct asm_op *cur, struct fix *trampoline)
 	trampoline->sz = 2;
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
-	trampoline->ops[0]->args[0].operand_type = cur->args[0].operand_type;
-	trampoline->ops[0]->args[0].u.num = cur->args[0].u.num;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
 	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
 
 	trampoline->ops[1]->opcode = ASM_OP_IDIV;
@@ -511,19 +548,16 @@ fix_imul(struct asm_op *cur, struct fix *trampoline)
 	trampoline->sz = 3;
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
-	trampoline->ops[0]->args[0].operand_type = cur->args[1].operand_type;
-	trampoline->ops[0]->args[0].u.num = cur->args[1].u.num;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
 	codegen_set_operand_r11(&trampoline->ops[0]->args[1]);
 
 	trampoline->ops[1]->opcode = ASM_OP_BINARY_MULTIPLY;
-	trampoline->ops[1]->args[0].operand_type = cur->args[0].operand_type;
-	trampoline->ops[1]->args[0].u.num = cur->args[0].u.num;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[1]->args[0]);
 	codegen_set_operand_r11(&trampoline->ops[1]->args[1]);
 
 	trampoline->ops[2]->opcode = ASM_OP_MOV;
 	codegen_set_operand_r11(&trampoline->ops[2]->args[0]);
-	trampoline->ops[2]->args[1].operand_type = cur->args[1].operand_type;
-	trampoline->ops[2]->args[1].u.num = cur->args[1].u.num;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
 	return true;
 }
 
@@ -541,6 +575,7 @@ codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 	while (cur != NULL) {
 		struct asm_op *orig[2] = {prev, cur};
 		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_s2s));
+		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_cmp));
 		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_idiv));
 		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_imul));
 		if (cur == orig[1]) {
