@@ -64,15 +64,15 @@ ir_constant(Arena *arena,
 
 static result_t ir_expression(Arena *arena,
                               const struct ast *a,
+                              struct intermediate *ir,
                               struct ir_val *peek,
-                              struct ir_op **dst,
-                              struct intermediate *ir) WARN_UNUSED;
+                              struct ir_op **dst) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 ir_unary_op(Arena *arena,
             const struct ast *a,
-            struct ir_op **dst,
-            struct intermediate *ir)
+            struct intermediate *ir,
+            struct ir_op **dst)
 {
 	struct ir_op *src = NULL;
 	arena_alloc_and_assign(src, arena);
@@ -95,9 +95,9 @@ ir_unary_op(Arena *arena,
 	struct ir_op *inner = NULL;
 	check(ir_expression(arena,
 	                    a->u.op_unary.operand,
+	                    ir,
 	                    &src->args[0],
-	                    &inner,
-	                    ir));
+	                    &inner));
 
 	src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	src->args[1].num = ir->env.generator++;
@@ -132,8 +132,8 @@ ir_unary_op(Arena *arena,
 static WARN_UNUSED result_t
 ir_binary_op(Arena *arena,
              const struct ast *a,
-             struct ir_op **dst,
-             struct intermediate *ir)
+             struct intermediate *ir,
+             struct ir_op **dst)
 {
 	struct ir_op *src = NULL;
 	arena_alloc_and_assign(src, arena);
@@ -180,16 +180,16 @@ ir_binary_op(Arena *arena,
 	struct ir_op *left = NULL;
 	check(ir_expression(arena,
 	                    a->u.op_binary.lhs,
+	                    ir,
 	                    &src->args[0],
-	                    &left,
-	                    ir));
+	                    &left));
 
 	struct ir_op *right = NULL;
 	check(ir_expression(arena,
 	                    a->u.op_binary.rhs,
+	                    ir,
 	                    &src->args[1],
-	                    &right,
-	                    ir));
+	                    &right));
 
 	src->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	src->args[2].num = ir->env.generator++;
@@ -260,14 +260,14 @@ ir_binary_op(Arena *arena,
 static WARN_UNUSED result_t
 ir_logical_op_arm(Arena *arena,
                   const struct ast *a,
-                  struct ir_op **dst,
                   struct intermediate *ir,
+                  struct ir_op **dst,
                   bool jump_if_zero,
                   long long int jump_label)
 {
 	struct ir_val peek = {0};
 	struct ir_op *inner = NULL;
-	check(ir_expression(arena, a, &peek, &inner, ir));
+	check(ir_expression(arena, a, ir, &peek, &inner));
 
 	struct ir_op *jumper = NULL;
 	arena_alloc_and_assign(jumper, arena);
@@ -300,8 +300,8 @@ ir_logical_op_arm(Arena *arena,
 static WARN_UNUSED result_t
 ir_logical_op(Arena *arena,
               const struct ast *a,
-              struct ir_op **dst,
               struct intermediate *ir,
+              struct ir_op **dst,
               bool jump_if_zero)
 {
 	const long long int label_false = ir->env.labels++;
@@ -309,16 +309,16 @@ ir_logical_op(Arena *arena,
 	struct ir_op *left = NULL;
 	check(ir_logical_op_arm(arena,
 	                        a->u.op_binary.lhs,
-	                        &left,
 	                        ir,
+	                        &left,
 	                        jump_if_zero,
 	                        label_false));
 
 	struct ir_op *right = NULL;
 	check(ir_logical_op_arm(arena,
 	                        a->u.op_binary.rhs,
-	                        &right,
 	                        ir,
+	                        &right,
 	                        jump_if_zero,
 	                        label_false));
 
@@ -375,9 +375,9 @@ ir_logical_op(Arena *arena,
 result_t
 ir_expression(Arena *arena,
               const struct ast *a,
+              struct intermediate *ir,
               struct ir_val *peek,
-              struct ir_op **dst,
-              struct intermediate *ir)
+              struct ir_op **dst)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT:
@@ -386,15 +386,15 @@ ir_expression(Arena *arena,
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
-		check(ir_unary_op(arena, a, dst, ir));
+		check(ir_unary_op(arena, a, ir, dst));
 		break;
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expression(arena,
 		                    a->u.op_unary.operand,
+		                    ir,
 		                    peek,
-		                    dst,
-		                    ir));
+		                    dst));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -407,13 +407,13 @@ ir_expression(Arena *arena,
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-		check(ir_binary_op(arena, a, dst, ir));
+		check(ir_binary_op(arena, a, ir, dst));
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
-		check(ir_logical_op(arena, a, dst, ir, true));
+		check(ir_logical_op(arena, a, ir, dst, true));
 		break;
 	case NODE_EXPRESSION_LOGICAL_OR:
-		check(ir_logical_op(arena, a, dst, ir, false));
+		check(ir_logical_op(arena, a, ir, dst, false));
 		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
@@ -432,7 +432,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	f->identifier = a->u.function.identifier->u.str;
 
 	assert(a->u.op_unary.operand != NULL);
-	check(ir_expression(arena, a->u.function.statement, NULL, &f->ops, ir));
+	check(ir_expression(arena, a->u.function.statement, ir, NULL, &f->ops));
 
 	if (ir->env.generator > 0) {
 		struct ir_op *last_op = NULL;
