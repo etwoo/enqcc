@@ -154,7 +154,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		print_opcode = "movl";
-		;
 		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "negl";
