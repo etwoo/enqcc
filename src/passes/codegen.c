@@ -131,7 +131,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		break;
 	case IR_OP_UNARY_COMPLEMENT:
 	case IR_OP_UNARY_NEGATE:
-	case IR_OP_UNARY_NOT:
+	case IR_OP_UNARY_NOT: // TODO: need to use ASM_OP_SET_IF_EQ!
 		(**dst).opcode = ASM_OP_MOV;
 		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
