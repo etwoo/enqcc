@@ -3,6 +3,7 @@
 
 #define ARENA_IMPLEMENTATION
 #include "arena.h"
+#undef ARENA_IMPLEMENTATION
 
 #include <errno.h>
 #include <fcntl.h>
