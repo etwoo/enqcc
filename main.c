@@ -9,7 +9,7 @@
 #include <getopt.h> /* for getopt_long() */
 #include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdlib.h> // TODO: remove, no longer using free()?
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 #include <sysexits.h>
@@ -78,14 +78,14 @@ compile(Arena *arena,
 		return RESULT_OK;
 	}
 
-	struct assembly *cg __attribute__((cleanup(codegen_cleanup))) = NULL;
-	check(codegen_init(ir, &cg));
+	struct assembly *cg = NULL;
+	check(codegen_init(arena, ir, &cg));
 	codegen_debug_print(cg);
 
 	check(codegen_replace_pseudoregisters(cg));
 	codegen_debug_print(cg);
 
-	check(codegen_fixup_instructions(ir, cg));
+	check(codegen_fixup_instructions(arena, ir, cg));
 	codegen_debug_print(cg);
 
 	if (action != ACTION_ALL_PASSES) {

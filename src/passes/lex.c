@@ -9,7 +9,7 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <stdbool.h>
-#include <stdlib.h>
+#include <stdlib.h> // TODO: remove, no longer using free()?
 #include <sys/mman.h>
 #include <sys/stat.h>
 

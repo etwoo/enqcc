@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
-#include <stdlib.h>
+#include <stdlib.h> // TODO: remove, no longer using free()?
 
 static WARN_UNUSED result_t
 parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
