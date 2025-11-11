@@ -3,6 +3,12 @@ include_guard(GLOBAL)
 include(get_cpm)
 
 macro(add_external_packages)
+	CPMAddPackage(
+		NAME arena
+		GITHUB_REPOSITORY tsoding/arena
+		GIT_TAG ab625dd3ac0df8c6d82cbbcd1d8fb976ecb8b9c8
+		DOWNLOAD_ONLY YES
+	)
 	if (BUILD_TESTING)
 		# Note: defines ${greatest_SOURCE_DIR}
 		CPMAddPackage(

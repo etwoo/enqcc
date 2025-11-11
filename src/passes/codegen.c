@@ -8,16 +8,17 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h>
 
 const long long int CODEGEN_BYTES_PER_VALUE = 4;
 
-#define codegen_alloc(dst)                                                     \
-	do {                                                                   \
-		(dst) = malloc(sizeof(*(dst)));                                \
-		check_if((dst) == NULL, ERR_CODEGEN_ALLOC);                    \
-		memset(dst, 0, sizeof(*(dst)));                                \
-	} while (0)
+static WARN_UNUSED result_t
+codegen_alloc_op(Arena *arena, struct asm_op **dst)
+{
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if((dst) == NULL, ERR_CODEGEN_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+	return RESULT_OK;
+}
 
 static void
 codegen_op_list_concat(struct asm_op *first, struct asm_op *second)
@@ -35,29 +36,6 @@ codegen_op_list_prepend(struct asm_op *new_head, struct asm_op **head)
 {
 	codegen_op_list_concat(new_head, *head);
 	*head = new_head;
-}
-
-static void
-codegen_op_list_free(struct asm_op *cursor)
-{
-	while (cursor != NULL) {
-		struct asm_op *tmp = cursor;
-		cursor = cursor->next;
-		free(tmp);
-	}
-}
-
-void
-codegen_free(struct assembly *cg)
-{
-	codegen_op_list_free(cg ? cg->function.ops : NULL);
-	free(cg);
-}
-
-void
-codegen_cleanup(struct assembly **cg)
-{
-	codegen_free(*cg);
 }
 
 static void
@@ -115,10 +93,12 @@ codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 }
 
 static WARN_UNUSED result_t
-codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
+codegen_statement_one(Arena *arena,
+                      const struct ir_op *src,
+                      struct asm_op **dst)
 {
 	assert(*dst == NULL);
-	codegen_alloc(*dst);
+	check(codegen_alloc_op(arena, dst));
 
 	switch (src->opcode) {
 	case IR_OP_UNARY_IDENTITY:
@@ -126,7 +106,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_set_operand_eax(&(**dst).args[1]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_UNARY_NEGATE:
@@ -136,7 +116,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
 		}
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		switch (src->opcode) {
 		case IR_OP_UNARY_NEGATE:
 			(**dst).opcode = ASM_OP_UNARY_NEG;
@@ -157,7 +137,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		switch (src->opcode) {
 		case IR_OP_BINARY_ADD:
 			(**dst).opcode = ASM_OP_BINARY_ADD;
@@ -181,14 +161,14 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_set_operand_eax(&(**dst).args[1]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_CDQ;
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_IDIV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		switch (src->opcode) {
 		case IR_OP_BINARY_DIVIDE:
@@ -209,12 +189,12 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_set_operand_immediate_zero(&(**dst).args[0]);
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_set_operand_immediate_zero(&(**dst).args[0]);
 		codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_SET_IF_EQ;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
@@ -229,12 +209,12 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_set_operand_immediate_zero(&(**dst).args[0]);
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		switch (src->opcode) {
 		case IR_OP_COMPARE_EQUAL:
 			(**dst).opcode = ASM_OP_SET_IF_EQ;
@@ -276,7 +256,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_set_operand_immediate_zero(&(**dst).args[0]);
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
-		codegen_alloc(*dst);
+		check(codegen_alloc_op(arena, dst));
 		switch (src->opcode) {
 		case IR_OP_JUMP_IF_ZERO:
 			(**dst).opcode = ASM_OP_JMP_IF_EQ;
@@ -300,10 +280,10 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 }
 
 static WARN_UNUSED result_t
-codegen_statement(const struct ir_op *src, struct asm_op **dst)
+codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 {
 	while (src != NULL) {
-		check(codegen_statement_one(src, dst));
+		check(codegen_statement_one(arena, src, dst));
 		src = src->next;
 		while (*dst != NULL) {
 			dst = &(**dst).next;
@@ -313,18 +293,22 @@ codegen_statement(const struct ir_op *src, struct asm_op **dst)
 }
 
 static WARN_UNUSED result_t
-codegen_function(const struct ir_function *ir, struct asm_function *dst)
+codegen_function(Arena *arena,
+                 const struct ir_function *ir,
+                 struct asm_function *dst)
 {
 	dst->identifier = ir->identifier;
-	check(codegen_statement(ir->ops, &dst->ops));
+	check(codegen_statement(arena, ir->ops, &dst->ops));
 	return RESULT_OK;
 }
 
 result_t
-codegen_init(const struct intermediate *ir, struct assembly **cg)
+codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 {
-	codegen_alloc(*cg);
-	check(codegen_function(&ir->function, &(**cg).function));
+	*cg = arena_alloc(arena, sizeof(**cg));
+	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);
+	memset(*cg, 0, sizeof(**cg));
+	check(codegen_function(arena, &ir->function, &(**cg).function));
 	return RESULT_OK;
 }
 
@@ -344,10 +328,12 @@ codegen_replace_pseudoregisters(struct assembly *cg)
 }
 
 static WARN_UNUSED result_t
-codegen_fixup_alloc_stack(const struct intermediate *ir, struct assembly *cg)
+codegen_fixup_alloc_stack(Arena *arena,
+                          const struct intermediate *ir,
+                          struct assembly *cg)
 {
 	struct asm_op *alloc_stack = NULL;
-	codegen_alloc(alloc_stack);
+	check(codegen_alloc_op(arena, &alloc_stack));
 	alloc_stack->opcode = ASM_OP_BINARY_SUBTRACT_QUAD;
 	alloc_stack->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
 	alloc_stack->args[0].u.num =
@@ -364,28 +350,20 @@ struct fix {
 	struct asm_op *ops[3];
 };
 
-static void
-fix_cleanup(struct fix *trampoline)
-{
-	for (size_t i = 0; i < ARRAY_SIZE(trampoline->ops); ++i) {
-		codegen_op_list_free(trampoline->ops[i]);
-		trampoline->ops[i] = NULL;
-	}
-}
-
 static WARN_UNUSED result_t
-codegen_fixup_apply(struct assembly *cg,
-                    struct asm_op *prev,
-                    struct asm_op *cur,
+codegen_fixup_apply(Arena *arena,
+                    struct assembly *cg,
                     struct asm_op **new_prev,
                     struct asm_op **new_cur,
                     bool (*fix_init)(struct asm_op *cur,
                                      struct fix *trampoline))
 {
-	struct fix trampoline __attribute__((cleanup(fix_cleanup))) = {0};
+	struct asm_op *prev = *new_prev;
+	struct asm_op *cur = *new_cur;
+
+	struct fix trampoline = {0};
 	for (size_t i = 0; i < ARRAY_SIZE(trampoline.ops); ++i) {
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		codegen_alloc(trampoline.ops[i]);
+		check(codegen_alloc_op(arena, &trampoline.ops[i]));
 	}
 
 	if (!fix_init(cur, &trampoline)) {
@@ -439,11 +417,6 @@ codegen_fixup_apply(struct assembly *cg,
 	for (size_t i = 0; i < ARRAY_SIZE(trampoline.ops); ++i) {
 		trampoline.ops[i] = NULL;
 	}
-
-	/*
-	 * Clean up node that we've just removed from the containing list.
-	 */
-	codegen_op_list_free(cur);
 
 	return RESULT_OK;
 }
@@ -585,22 +558,24 @@ fix_mul(struct asm_op *cur, struct fix *trampoline)
 }
 
 result_t
-codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
+codegen_fixup_instructions(Arena *arena,
+                           const struct intermediate *ir,
+                           struct assembly *cg)
 {
 	debug("Fixing up invalid instructions");
 
 	if (ir->env.generator > 1) {
-		check(codegen_fixup_alloc_stack(ir, cg));
+		check(codegen_fixup_alloc_stack(arena, ir, cg));
 	}
 
 	struct asm_op *prev = NULL;
 	struct asm_op *cur = cg->function.ops;
 	while (cur != NULL) {
 		struct asm_op *orig[2] = {prev, cur};
-		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_s2s));
-		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_cmp));
-		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_div));
-		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_mul));
+		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_s2s));
+		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_cmp));
+		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_div));
+		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_mul));
 		if (cur == orig[1]) {
 			assert(prev == orig[0]);
 			prev = cur;
@@ -751,5 +726,3 @@ codegen_debug_print(const struct assembly *cg)
 		codegen_debug_print_op(op);
 	}
 }
-
-#undef codegen_alloc
