@@ -248,7 +248,7 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 			assert(0); /* logic error in caller */
 			break;
 		}
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[0]);
 		break;
 	case IR_OP_COPY:
 		(**dst).opcode = ASM_OP_MOV;
