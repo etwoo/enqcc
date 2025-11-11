@@ -4,4 +4,5 @@ target_sources(compiler PRIVATE
 	ir.c
 	lex.c
 	parse.c
+	symbol.c
 )

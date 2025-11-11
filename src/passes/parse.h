@@ -3,11 +3,19 @@
 
 #include "sys/string_view.h"
 
+struct ast_symbol {
+	struct string_view name;
+	long long int unique;
+};
+
 struct ast {
 	enum {
 		NODE_PROGRAM,
 		NODE_FUNCTION,
-		NODE_EXPRESSION_UNARY_IDENTITY, /* aka return */
+		NODE_FUNCTION_RETURN_STATEMENT,
+		NODE_BLOCK,
+		NODE_DECLARATION,
+		NODE_EXPRESSION_NULL,
 		NODE_EXPRESSION_UNARY_COMPLEMENT,
 		NODE_EXPRESSION_UNARY_NEGATE,
 		NODE_EXPRESSION_UNARY_NOT,
@@ -25,7 +33,8 @@ struct ast {
 		NODE_EXPRESSION_COMPARE_LESS_THAN_EQ,
 		NODE_EXPRESSION_COMPARE_MORE_THAN,
 		NODE_EXPRESSION_COMPARE_MORE_THAN_EQ,
-		NODE_IDENTIFIER,
+		NODE_EXPRESSION_VARIABLE_USAGE,
+		NODE_EXPRESSION_VARIABLE_ASSIGNMENT,
 		NODE_CONSTANT_INT,
 	} node_type;
 	union {
@@ -33,9 +42,17 @@ struct ast {
 			struct ast *entrypoint_function;
 		} program;
 		struct {
-			struct ast *identifier;
-			struct ast *statement;
+			struct ast_symbol identifier;
+			struct ast *block;
 		} function;
+		struct {
+			struct ast *item;
+			struct ast *next;
+		} block;
+		struct {
+			struct ast_symbol identifier;
+			struct ast *init;
+		} declare;
 		struct {
 			struct ast *operand;
 		} op_unary;
@@ -43,8 +60,8 @@ struct ast {
 			struct ast *lhs;
 			struct ast *rhs;
 		} op_binary;
-		struct string_view str; /* NODE_IDENTIFIER */
-		long long int num;      /* NODE_CONSTANT_INT */
+		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
+		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
 };
 
