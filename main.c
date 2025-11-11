@@ -49,12 +49,13 @@ enum compiler_action {
 };
 
 static __attribute__((warn_unused_result)) result_t
-compile(const char *src, const char *dst, enum compiler_action action)
+compile(Arena *arena,
+        const char *src,
+        const char *dst,
+        enum compiler_action action)
 {
-	Arena arena = {0};
-
 	struct token *tok = NULL;
-	check(lex_init(&arena, src, &tok));
+	check(lex_init(arena, src, &tok));
 	lex_debug_print(tok);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE) {
@@ -161,9 +162,11 @@ main(int argc, char *argv[])
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
+			Arena a = {0};
 			const char *src = argv[optind];
 			const char *dst = argv[optind + 1];
-			rc = result_to_status(compile(src, dst, action));
+			rc = result_to_status(compile(&a, src, dst, action));
+			arena_free(&a);
 		}
 		break;
 	case ACTION_USAGE_HELP:
