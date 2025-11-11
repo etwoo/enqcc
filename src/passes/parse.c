@@ -150,6 +150,8 @@ parse_expression_check_next_token(Arena *arena,
 		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_AND);
 	} else if (is_token_type(tok, TOKEN_VERT_BAR_VERT_BAR)) {
 		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_OR);
+	} else if (is_token_type(tok, TOKEN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_VARIABLE_ASSIGNMENT);
 	} else if (is_token_type(tok, TOKEN_EQUAL_SIGN_EQUAL_SIGN)) {
 		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_EQUAL);
 	} else if (is_token_type(tok, TOKEN_EXCLAMATION_EQUAL_SIGN)) {
@@ -198,6 +200,8 @@ get_precedence(const struct ast *a)
 		precedence += PRECEDENCE_INCREMENT;
 		__attribute__((fallthrough));
 	case NODE_EXPRESSION_LOGICAL_OR:
+		precedence += PRECEDENCE_INCREMENT;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		precedence += PRECEDENCE_INCREMENT;
 		break;
 	case NODE_FUNCTION:
@@ -377,6 +381,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -391,6 +396,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 		switch (a->node_type) {
+		case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+			debug("%*sEXPRESSION ASSIGN", (int)indent, "");
+			break;
 		case NODE_EXPRESSION_BINARY_ADD:
 			debug("%*sEXPRESSION ADD", (int)indent, "");
 			break;
