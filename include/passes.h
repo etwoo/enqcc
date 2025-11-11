@@ -20,10 +20,8 @@ void parse_debug_print(const struct ast *a, size_t indent);
 
 struct intermediate;
 
-result_t ir_init(const struct ast *a, struct intermediate **ir)
+result_t ir_init(Arena *arena, const struct ast *a, struct intermediate **ir)
 	__attribute__((warn_unused_result));
-void ir_free(struct intermediate *ir);
-void ir_cleanup(struct intermediate **ir);
 void ir_debug_print(const struct intermediate *ir);
 
 struct assembly;

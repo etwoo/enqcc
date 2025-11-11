@@ -70,8 +70,8 @@ compile(Arena *arena,
 		return RESULT_OK;
 	}
 
-	struct intermediate *ir __attribute__((cleanup(ir_cleanup))) = NULL;
-	check(ir_init(a, &ir));
+	struct intermediate *ir = NULL;
+	check(ir_init(arena, a, &ir));
 	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR_ASM) {

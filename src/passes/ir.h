@@ -49,7 +49,7 @@ struct ir_function {
 struct ir_env {
 	long long int generator;
 	long long int labels;
-	Arena arena;
+	Arena *arena; /* does not own */
 };
 
 struct intermediate {

@@ -53,7 +53,7 @@ ir_constant(const struct ast *a,
             struct ir_env *env)
 {
 	if (peek == NULL) {
-		arena_alloc_and_assign(*dst, &env->arena);
+		arena_alloc_and_assign(*dst, env->arena);
 		(**dst).opcode = IR_OP_UNARY_IDENTITY;
 		peek = &(**dst).args[0];
 	}
@@ -72,7 +72,7 @@ static WARN_UNUSED result_t
 ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
 	struct ir_op *src = NULL;
-	arena_alloc_and_assign(src, &env->arena);
+	arena_alloc_and_assign(src, env->arena);
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -126,7 +126,7 @@ static WARN_UNUSED result_t
 ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 {
 	struct ir_op *src = NULL;
-	arena_alloc_and_assign(src, &env->arena);
+	arena_alloc_and_assign(src, env->arena);
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -251,7 +251,7 @@ ir_logical_op_arm(const struct ast *a,
 	check(ir_expression(a, &peek, &inner, env));
 
 	struct ir_op *jumper = NULL;
-	arena_alloc_and_assign(jumper, &env->arena);
+	arena_alloc_and_assign(jumper, env->arena);
 	jumper->opcode =
 		jump_if_zero ? IR_OP_JUMP_IF_ZERO : IR_OP_JUMP_IF_NOT_ZERO;
 
@@ -304,7 +304,7 @@ ir_logical_op(const struct ast *a,
 	const long long int result_id = env->generator++;
 
 	struct ir_op *footer = NULL;
-	arena_alloc_and_assign(footer, &env->arena);
+	arena_alloc_and_assign(footer, env->arena);
 	struct ir_op *foot_pos = footer;
 
 	foot_pos->opcode = IR_OP_COPY;
@@ -313,21 +313,21 @@ ir_logical_op(const struct ast *a,
 	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	foot_pos->args[1].num = result_id;
 
-	arena_alloc_and_assign(foot_pos->next, &env->arena);
+	arena_alloc_and_assign(foot_pos->next, env->arena);
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_JUMP;
 	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	foot_pos->args[0].num = label_end;
 
-	arena_alloc_and_assign(foot_pos->next, &env->arena);
+	arena_alloc_and_assign(foot_pos->next, env->arena);
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_LABEL;
 	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	foot_pos->args[0].num = label_false;
 
-	arena_alloc_and_assign(foot_pos->next, &env->arena);
+	arena_alloc_and_assign(foot_pos->next, env->arena);
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_COPY;
@@ -336,7 +336,7 @@ ir_logical_op(const struct ast *a,
 	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	foot_pos->args[1].num = result_id;
 
-	arena_alloc_and_assign(foot_pos->next, &env->arena);
+	arena_alloc_and_assign(foot_pos->next, env->arena);
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_LABEL;
@@ -407,7 +407,7 @@ ir_function(const struct ast *a, struct ir_function *dst, struct ir_env *env)
 
 	if (env->generator > 0) {
 		struct ir_op *last_op = NULL;
-		arena_alloc_and_assign(last_op, &env->arena);
+		arena_alloc_and_assign(last_op, env->arena);
 		last_op->opcode = IR_OP_UNARY_IDENTITY;
 		last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		last_op->args[0].num = env->generator - 1;
@@ -427,28 +427,12 @@ ir_program(const struct ast *a, struct intermediate *dst)
 }
 
 result_t
-ir_init(const struct ast *a, struct intermediate **ir)
+ir_init(Arena *arena, const struct ast *a, struct intermediate **ir)
 {
-	*ir = malloc(sizeof(**ir));
-	check_if(*ir == NULL, ERR_IR_ALLOC);
-	memset(*ir, 0, sizeof(**ir));
+	arena_alloc_and_assign(*ir, arena);
+	(**ir).env.arena = arena;
 	check(ir_program(a, *ir));
 	return RESULT_OK;
-}
-
-void
-ir_free(struct intermediate *ir)
-{
-	if (ir) {
-		arena_free(&ir->env.arena);
-	}
-	free(ir);
-}
-
-void
-ir_cleanup(struct intermediate **ir)
-{
-	ir_free(*ir);
 }
 
 static void
