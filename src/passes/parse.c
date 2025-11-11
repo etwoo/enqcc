@@ -8,15 +8,31 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
-#include <stdlib.h>
+#include <stdlib.h> /* for strtoll() */
 
-#define parse_alloc(expr, nt)                                                  \
-	do {                                                                   \
-		(expr) = malloc(sizeof(*(expr)));                              \
-		check_if((expr) == NULL, ERR_LEX_ALLOC);                       \
-		memset(expr, 0, sizeof(*(expr)));                              \
-		(*(expr)).node_type = nt;                                      \
-	} while (0);
+static WARN_UNUSED result_t
+parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
+{
+	static struct ast dummy_workaround_clang_analyzer_null_pointer = {0};
+
+	*dst = arena_alloc(arena, sizeof(**dst));
+	if (*dst == NULL) {
+		/*
+		 * Workaround spurious clang-analyzer-core.NullDereference
+		 * warnings at callsites of this helper function. The Clang
+		 * Static Analyzer seems to forget that (*dst != NULL) when
+		 * this function returns RESULT_OK, which should then protect
+		 * callers from accessing a NULL pointer when they use
+		 * check(parse_alloc(...)) properly.
+		 */
+		*dst = &dummy_workaround_clang_analyzer_null_pointer;
+		return make_result(ERR_LEX_ALLOC);
+	}
+
+	memset(*dst, 0, sizeof(**dst));
+	(**dst).node_type = ntype;
+	return RESULT_OK;
+}
 
 static WARN_UNUSED bool
 is_token_type(const struct token *tok, unsigned expected)
@@ -31,10 +47,10 @@ token_consume(const struct token **tok)
 }
 
 static WARN_UNUSED result_t
-parse_constant(const struct token **tok, struct ast **dst)
+parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_CONSTANT));
-	parse_alloc(*dst, NODE_CONSTANT_INT);
+	check(parse_alloc(arena, dst, NODE_CONSTANT_INT));
 
 	/*
 	 * strtoll() does not update errno on success, so we must clear it
@@ -55,45 +71,51 @@ parse_constant(const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_identifier(const struct token **tok, struct ast **dst)
+parse_identifier(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
 	}
-	parse_alloc(*dst, NODE_IDENTIFIER);
+	check(parse_alloc(arena, dst, NODE_IDENTIFIER));
 
 	(**dst).u.str = (**tok).val;
 	token_consume(tok);
 	return RESULT_OK;
 }
 
-static result_t parse_expression(const struct token **tok,
+static result_t parse_expression(Arena *arena,
+                                 const struct token **tok,
                                  struct ast **dst,
                                  unsigned minimum_precedence) WARN_UNUSED;
 
 static WARN_UNUSED result_t
-parse_factor(const struct token **tok, struct ast **dst)
+parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
-		parse_alloc(*dst, NODE_EXPRESSION_UNARY_IDENTITY);
-		check(parse_constant(tok, &(**dst).u.op_unary.operand));
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_IDENTITY));
+		check(parse_constant(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
-		parse_alloc(*dst, NODE_EXPRESSION_UNARY_COMPLEMENT);
+		check(parse_alloc(arena,
+		                  dst,
+		                  NODE_EXPRESSION_UNARY_COMPLEMENT));
 		token_consume(tok);
-		check(parse_factor(tok, &(**dst).u.op_unary.operand));
+		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
-		parse_alloc(*dst, NODE_EXPRESSION_UNARY_NEGATE);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_NEGATE));
 		token_consume(tok);
-		check(parse_factor(tok, &(**dst).u.op_unary.operand));
+		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_EXCLAMATION)) {
-		parse_alloc(*dst, NODE_EXPRESSION_UNARY_NOT);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_NOT));
 		token_consume(tok);
-		check(parse_factor(tok, &(**dst).u.op_unary.operand));
+		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-		parse_alloc(*dst, NODE_EXPRESSION_PAREN_ENCLOSED);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
-		check(parse_expression(tok, &(**dst).u.op_unary.operand, 0));
+		check(parse_expression(arena,
+		                       tok,
+		                       &(**dst).u.op_unary.operand,
+		                       0));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE);
@@ -103,6 +125,44 @@ parse_factor(const struct token **tok, struct ast **dst)
 		return make_result(ERR_PARSE_EXPR_EXPECT_REASONABLE);
 	}
 	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_expression_check_next_token(Arena *arena,
+                                  const struct token *tok,
+                                  struct ast **a)
+{
+	result_t r = RESULT_OK;
+	if (is_token_type(tok, TOKEN_PLUS_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_ADD);
+	} else if (is_token_type(tok, TOKEN_HYPHEN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_SUBTRACT);
+	} else if (is_token_type(tok, TOKEN_ASTERISK)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_MULTIPLY);
+	} else if (is_token_type(tok, TOKEN_FORWARD_SLASH)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_DIVIDE);
+	} else if (is_token_type(tok, TOKEN_PERCENT_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_REMAINDER);
+	} else if (is_token_type(tok, TOKEN_AMPERSAND_AMPERSAND)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_AND);
+	} else if (is_token_type(tok, TOKEN_VERT_BAR_VERT_BAR)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_OR);
+	} else if (is_token_type(tok, TOKEN_EQUAL_SIGN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_EQUAL);
+	} else if (is_token_type(tok, TOKEN_EXCLAMATION_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_NOT_EQUAL);
+	} else if (is_token_type(tok, TOKEN_LESS_THAN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_LESS_THAN);
+	} else if (is_token_type(tok, TOKEN_LESS_THAN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_LESS_THAN_EQ);
+	} else if (is_token_type(tok, TOKEN_MORE_THAN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN);
+	} else if (is_token_type(tok, TOKEN_MORE_THAN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN_EQ);
+	} else {
+		return RESULT_OK;
+	}
+	return r;
 }
 
 static const unsigned PRECEDENCE_INCREMENT = 10;
@@ -160,81 +220,51 @@ get_precedence(const struct ast *a)
  * https://www.oilshell.org/blog/2016/11/01.html
  */
 static WARN_UNUSED result_t
-parse_expression(const struct token **tok,
+parse_expression(Arena *arena,
+                 const struct token **tok,
                  struct ast **dst,
                  unsigned minimum_precedence)
 {
-	struct ast *left __attribute__((cleanup(parse_cleanup))) = NULL;
-	check(parse_factor(tok, &left));
+	struct ast *left = NULL;
+	check(parse_factor(arena, tok, &left));
 
 	while (true) {
-		struct ast *bop __attribute__((cleanup(parse_cleanup))) = NULL;
-		if (is_token_type(*tok, TOKEN_PLUS_SIGN)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_ADD);
-		} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_SUBTRACT);
-		} else if (is_token_type(*tok, TOKEN_ASTERISK)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_MULTIPLY);
-		} else if (is_token_type(*tok, TOKEN_FORWARD_SLASH)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_DIVIDE);
-		} else if (is_token_type(*tok, TOKEN_PERCENT_SIGN)) {
-			parse_alloc(bop, NODE_EXPRESSION_BINARY_REMAINDER);
-		} else if (is_token_type(*tok, TOKEN_AMPERSAND_AMPERSAND)) {
-			parse_alloc(bop, NODE_EXPRESSION_LOGICAL_AND);
-		} else if (is_token_type(*tok, TOKEN_VERT_BAR_VERT_BAR)) {
-			parse_alloc(bop, NODE_EXPRESSION_LOGICAL_OR);
-		} else if (is_token_type(*tok, TOKEN_EQUAL_SIGN_EQUAL_SIGN)) {
-			parse_alloc(bop, NODE_EXPRESSION_COMPARE_EQUAL);
-		} else if (is_token_type(*tok, TOKEN_EXCLAMATION_EQUAL_SIGN)) {
-			parse_alloc(bop, NODE_EXPRESSION_COMPARE_NOT_EQUAL);
-		} else if (is_token_type(*tok, TOKEN_LESS_THAN)) {
-			parse_alloc(bop, NODE_EXPRESSION_COMPARE_LESS_THAN);
-		} else if (is_token_type(*tok, TOKEN_LESS_THAN_EQUAL_SIGN)) {
-			parse_alloc(bop, NODE_EXPRESSION_COMPARE_LESS_THAN_EQ);
-		} else if (is_token_type(*tok, TOKEN_MORE_THAN)) {
-			parse_alloc(bop, NODE_EXPRESSION_COMPARE_MORE_THAN);
-		} else if (is_token_type(*tok, TOKEN_MORE_THAN_EQUAL_SIGN)) {
-			parse_alloc(bop, NODE_EXPRESSION_COMPARE_MORE_THAN_EQ);
-		} else {
+		struct ast *bop = NULL;
+		check(parse_expression_check_next_token(arena, *tok, &bop));
+		if (bop == NULL) {
 			break;
 		}
 
-		const unsigned next_precedence = get_precedence(bop);
-		if (next_precedence < minimum_precedence) {
+		const unsigned precedence = get_precedence(bop);
+		if (precedence < minimum_precedence) {
 			break;
 		}
 
 		token_consume(tok);
 
-		struct ast *right __attribute__((cleanup(parse_cleanup))) =
-			NULL;
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
-		check(parse_expression(tok, &right, next_precedence + 1));
+		struct ast *right = NULL;
+		check(parse_expression(arena, tok, &right, precedence + 1));
 
 		bop->u.op_binary.lhs = left;
 		bop->u.op_binary.rhs = right;
 		left = bop;
-
-		right = NULL; /* release ownership */
-		bop = NULL;   /* release ownership */
 	}
 
 	*dst = left;
-	left = NULL; /* release ownership */
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-parse_statement(const struct token **tok, struct ast **dst)
+parse_statement(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	parse_alloc(*dst, NODE_EXPRESSION_UNARY_IDENTITY);
+	check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_IDENTITY));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_KEYWORD_RETURN);
 	}
 	token_consume(tok);
 
-	check(parse_expression(tok, &(**dst).u.op_unary.operand, 0));
+	check(parse_expression(arena, tok, &(**dst).u.op_unary.operand, 0));
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
@@ -245,16 +275,16 @@ parse_statement(const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_function(const struct token **tok, struct ast **dst)
+parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	parse_alloc(*dst, NODE_FUNCTION);
+	check(parse_alloc(arena, dst, NODE_FUNCTION));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
 	}
 	token_consume(tok);
 
-	check(parse_identifier(tok, &(**dst).u.function.identifier));
+	check(parse_identifier(arena, tok, &(**dst).u.function.identifier));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN);
@@ -276,7 +306,7 @@ parse_function(const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_statement(tok, &(**dst).u.function.statement));
+	check(parse_statement(arena, tok, &(**dst).u.function.statement));
 
 	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
@@ -287,28 +317,17 @@ parse_function(const struct token **tok, struct ast **dst)
 }
 
 result_t
-parse_init(const struct token *tok, struct ast **a)
+parse_init(Arena *arena, const struct token *tok, struct ast **a)
 {
-	parse_alloc(*a, NODE_PROGRAM);
-
-	check(parse_function(&tok, &(**a).u.program.entrypoint_function));
+	check(parse_alloc(arena, a, NODE_PROGRAM));
+	check(parse_function(arena,
+	                     &tok,
+	                     &(**a).u.program.entrypoint_function));
 	if (tok != NULL) {
 		return make_result(ERR_PARSE_PROG_EXPECT_END);
 	}
 
 	return RESULT_OK;
-}
-
-void
-parse_free(struct ast *a)
-{
-	free(a);
-}
-
-void
-parse_cleanup(struct ast **a)
-{
-	parse_free(*a);
 }
 
 void
@@ -424,5 +443,3 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	}
 }
-
-#undef parse_alloc
