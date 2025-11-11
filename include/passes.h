@@ -1,14 +1,13 @@
 #ifndef COMPILER_PASSES_H
 #define COMPILER_PASSES_H
 
+#include "arena.h"
 #include "result.h"
 
 struct token;
 
-result_t lex_init(const char *src, struct token **tok)
+result_t lex_init(Arena *arena, const char *src, struct token **tok)
 	__attribute__((warn_unused_result));
-void lex_free(struct token *tok);
-void lex_cleanup(struct token **tok);
 void lex_debug_print(const struct token *tok);
 
 struct ast;

@@ -4,7 +4,7 @@ add_subdirectory(sys)
 target_sources(compiler PRIVATE
 	result.c
 )
-target_include_directories(compiler SYSTEM PRIVATE ${arena_SOURCE_DIR})
+target_include_directories(compiler SYSTEM PUBLIC ${arena_SOURCE_DIR})
 
 option(WITH_DEBUG_LOG "Enable runtime debug logging" OFF)
 if (WITH_DEBUG_LOG)

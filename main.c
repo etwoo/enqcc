@@ -1,6 +1,9 @@
 #include "passes.h"
 #include "result.h"
 
+#define ARENA_IMPLEMENTATION
+#include "arena.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h> /* for getopt_long() */
@@ -48,8 +51,10 @@ enum compiler_action {
 static __attribute__((warn_unused_result)) result_t
 compile(const char *src, const char *dst, enum compiler_action action)
 {
-	struct token *tok __attribute__((cleanup(lex_cleanup))) = NULL;
-	check(lex_init(src, &tok));
+	Arena arena = {0};
+
+	struct token *tok = NULL;
+	check(lex_init(&arena, src, &tok));
 	lex_debug_print(tok);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE) {

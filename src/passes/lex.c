@@ -1,5 +1,6 @@
 #include "passes/lex.h"
 
+#include "arena.h"
 #include "passes.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
@@ -14,9 +15,9 @@
 #include <sys/stat.h>
 
 static WARN_UNUSED result_t
-lex_alloc(struct token **tok)
+lex_alloc(Arena *arena, struct token **tok)
 {
-	*tok = malloc(sizeof(**tok));
+	*tok = arena_alloc(arena, sizeof(**tok));
 	check_if(*tok == NULL, ERR_LEX_ALLOC);
 	memset(*tok, 0, sizeof(**tok));
 	return RESULT_OK;
@@ -122,9 +123,9 @@ lex_one_token_peek(struct string_view *pos, struct token *cur)
 }
 
 static WARN_UNUSED result_t
-lex_one_token(struct string_view *pos, struct token **tok)
+lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 {
-	check(lex_alloc(tok));
+	check(lex_alloc(arena, tok));
 	assert(*tok != NULL);
 	struct token *cur = *tok;
 	const char c = pos->data[0];
@@ -183,7 +184,7 @@ lex_one_token(struct string_view *pos, struct token **tok)
 }
 
 result_t
-lex_init(const char *src, struct token **tok)
+lex_init(Arena *arena, const char *src, struct token **tok)
 {
 	int fd = open(src, O_RDONLY);
 	check_if(fd < 0, ERR_LEX_OPEN_SOURCE_FILE, errno, src);
@@ -204,28 +205,12 @@ lex_init(const char *src, struct token **tok)
 			code.sz--;
 			continue;
 		}
-		check(lex_one_token(&code, tok));
+		check(lex_one_token(arena, &code, tok));
 		assert(*tok != NULL);
 		tok = &(*tok)->next;
 	}
 
 	return RESULT_OK;
-}
-
-void
-lex_free(struct token *tok)
-{
-	while (tok != NULL) {
-		struct token *tmp = tok;
-		tok = tok->next;
-		free(tmp);
-	}
-}
-
-void
-lex_cleanup(struct token **tok)
-{
-	lex_free(*tok);
 }
 
 static void

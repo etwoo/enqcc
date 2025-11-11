@@ -1,13 +1,11 @@
 #include "passes/ir.h"
 
+#include "arena.h"
 #include "passes.h"
 #include "passes/parse.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
-
-#define ARENA_IMPLEMENTATION
-#include "arena.h"
 
 #include <assert.h>
 #include <stdbool.h>
