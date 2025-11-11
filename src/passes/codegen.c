@@ -245,7 +245,11 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
 	case IR_OP_COPY:
-		break; // TODO
+		(**dst).opcode = ASM_OP_MOV;
+		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
+			codegen_map_operand(&src->args[i], &(**dst).args[i]);
+		}
+		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
@@ -271,8 +275,8 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
 	case IR_OP_LABEL:
-		// TODO: IR->ASM for comparison operators like ==, &&, ||, etc
-		assert(0 && "IR->ASM for cmp/shortcircuit ops not implemented");
+		(**dst).opcode = ASM_OP_LABEL;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		break;
 	}
 
