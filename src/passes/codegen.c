@@ -61,6 +61,13 @@ codegen_cleanup(struct assembly **cg)
 }
 
 static void
+codegen_set_operand_immediate_zero(struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_IMMEDIATE;
+	dst->u.num = 0;
+}
+
+static void
 codegen_set_operand_eax(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
@@ -86,20 +93,19 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->subtype) {
 	case IR_VAL_NONE:
-		assert(0 && "unset operand in 2-arg op");
+		assert(0 && "unset operand in 2-arg/3-arg op");
 		break;
 	case IR_VAL_CONSTANT_INT:
 		dst->operand_type = ASM_OPERAND_IMMEDIATE;
-		dst->u.num = src->num;
 		break;
 	case IR_VAL_TEMPORARY_VARIABLE:
 		dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
-		dst->u.num = src->num;
 		break;
 	case IR_VAL_JUMP_TARGET_LABEL:
-		assert(0 && "IR->ASM IR_VAL_JUMP_TARGET_LABEL unimplemented");
+		dst->operand_type = ASM_OPERAND_JUMP_TARGET_LABEL;
 		break;
 	}
+	dst->u.num = src->num;
 }
 
 static WARN_UNUSED result_t
@@ -202,10 +208,68 @@ codegen_statement_one(const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_COMPARE_LESS_THAN_EQ:
 	case IR_OP_COMPARE_MORE_THAN:
 	case IR_OP_COMPARE_MORE_THAN_EQ:
+		(**dst).opcode = ASM_OP_COMPARE;
+		/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		switch (src->opcode) {
+		case IR_OP_COMPARE_EQUAL:
+			(**dst).opcode = ASM_OP_SET_IF_EQ;
+			break;
+		case IR_OP_COMPARE_NOT_EQUAL:
+			(**dst).opcode = ASM_OP_SET_IF_NEQ;
+			break;
+		case IR_OP_COMPARE_LESS_THAN:
+			(**dst).opcode = ASM_OP_SET_IF_LT;
+			break;
+		case IR_OP_COMPARE_LESS_THAN_EQ:
+			(**dst).opcode = ASM_OP_SET_IF_LTE;
+			break;
+		case IR_OP_COMPARE_MORE_THAN:
+			(**dst).opcode = ASM_OP_SET_IF_GT;
+			break;
+		case IR_OP_COMPARE_MORE_THAN_EQ:
+			(**dst).opcode = ASM_OP_SET_IF_GTE;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
 	case IR_OP_COPY:
+		break; // TODO
 	case IR_OP_JUMP:
+		(**dst).opcode = ASM_OP_JMP;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		break;
 	case IR_OP_JUMP_IF_ZERO:
 	case IR_OP_JUMP_IF_NOT_ZERO:
+		(**dst).opcode = ASM_OP_COMPARE;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		codegen_alloc(*dst);
+		switch (src->opcode) {
+		case IR_OP_JUMP_IF_ZERO:
+			(**dst).opcode = ASM_OP_JMP_IF_EQ;
+			break;
+		case IR_OP_JUMP_IF_NOT_ZERO:
+			(**dst).opcode = ASM_OP_JMP_IF_NEQ;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
 	case IR_OP_LABEL:
 		// TODO: IR->ASM for comparison operators like ==, &&, ||, etc
 		assert(0 && "IR->ASM for cmp/shortcircuit ops not implemented");
@@ -520,6 +584,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  STACK %lld",
 		      -1 * CODEGEN_BYTES_PER_VALUE * operand->u.num);
 		break;
+	case ASM_OPERAND_JUMP_TARGET_LABEL:
+		debug("  LABEL %lld", operand->u.num);
+		break;
 	}
 }
 
@@ -548,11 +615,56 @@ codegen_debug_print_op(const struct asm_op *op)
 	case ASM_OP_BINARY_MULTIPLY:
 		debug("MULTIPLY");
 		break;
+	case ASM_OP_COMPARE:
+		debug("COMPARE");
+		break;
 	case ASM_OP_IDIV:
 		debug("IDIV");
 		break;
 	case ASM_OP_CDQ:
 		debug("CDQ");
+		break;
+	case ASM_OP_JMP:
+		debug("JMP");
+		break;
+	case ASM_OP_JMP_IF_EQ:
+		debug("JMP_IF_EQ");
+		break;
+	case ASM_OP_JMP_IF_NEQ:
+		debug("JMP_IF_NEQ");
+		break;
+	case ASM_OP_JMP_IF_GT:
+		debug("JMP_IF_GT");
+		break;
+	case ASM_OP_JMP_IF_GTE:
+		debug("JMP_IF_GTE");
+		break;
+	case ASM_OP_JMP_IF_LT:
+		debug("JMP_IF_LT");
+		break;
+	case ASM_OP_JMP_IF_LTE:
+		debug("JMP_IF_LTE");
+		break;
+	case ASM_OP_SET_IF_EQ:
+		debug("SET_IF_EQ");
+		break;
+	case ASM_OP_SET_IF_NEQ:
+		debug("SET_IF_NEQ");
+		break;
+	case ASM_OP_SET_IF_GT:
+		debug("SET_IF_GT");
+		break;
+	case ASM_OP_SET_IF_GTE:
+		debug("SET_IF_GTE");
+		break;
+	case ASM_OP_SET_IF_LT:
+		debug("SET_IF_LT");
+		break;
+	case ASM_OP_SET_IF_LTE:
+		debug("SET_IF_LTE");
+		break;
+	case ASM_OP_LABEL:
+		debug("MARK_LABEL");
 		break;
 	case ASM_OP_RET:
 		debug("RET");

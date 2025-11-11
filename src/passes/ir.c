@@ -504,7 +504,7 @@ ir_debug_print_one(const struct ir_op *op)
 			debug("  JUMP");
 			break;
 		case IR_OP_LABEL:
-			debug("  SET_LABEL");
+			debug("  MARK_LABEL");
 			break;
 		default:
 			assert(0); /* logic error in caller */

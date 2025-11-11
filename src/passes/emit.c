@@ -7,20 +7,13 @@
 #include <stdio.h>
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
+static const char LINUX_LABEL_PREFIX[] = ".L";
 static const char MACOS_FUNC_PREFIX[] = "_";
+static const char MACOS_LABEL_PREFIX[] = "L";
 static const char STR_OP_MOV_QUAD[] = "movq";
-static const char STR_OP_MOV[] = "movl";
-static const char STR_OP_NEG[] = "negl";
-static const char STR_OP_NOT[] = "notl";
-static const char STR_OP_ADD[] = "addl";
-static const char STR_OP_SUB[] = "subl";
-static const char STR_OP_MUL[] = "imull";
-static const char STR_OP_DIV[] = "idivl";
-static const char STR_OP_CDQ[] = "cdq";
 static const char STR_OP_POP_QUAD[] = "popq";
 static const char STR_OP_PUSH_QUAD[] = "pushq";
 static const char STR_OP_RET[] = "ret";
-static const char STR_OP_SUB_QUAD[] = "subq";
 static const char STR_REG_EAX[] = "%eax";
 static const char STR_REG_EDX[] = "%edx";
 static const char STR_REG_R10[] = "%r10d";
@@ -78,43 +71,97 @@ emit_asm_operand(const struct asm_operand *o, int fd)
 			        STR_REG_RBP);
 		}
 		break;
+	case ASM_OPERAND_JUMP_TARGET_LABEL:
+		assert(0 && "ASM emit for LABEL operand unimplemented");
+		break;
 	}
 }
 
 static void
-emit_asm_op(const struct asm_op *op, int fd)
+emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
-	dprintf(fd, "\t");
+	const char *label_prefix = plat == PLATFORM_MACOS ? MACOS_LABEL_PREFIX
+	                                                  : LINUX_LABEL_PREFIX;
 
-	bool print_operands = true;
+	if (op->opcode != ASM_OP_LABEL) {
+		dprintf(fd, "\t");
+	}
 
+	char *print_opcode = NULL;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
-		dprintf(fd, "%s", STR_OP_MOV);
+		print_opcode = "movl";;
 		break;
 	case ASM_OP_UNARY_NEG:
-		dprintf(fd, "%s", STR_OP_NEG);
+		print_opcode = "negl";
 		break;
 	case ASM_OP_UNARY_NOT:
-		dprintf(fd, "%s", STR_OP_NOT);
+		print_opcode = "notl";
 		break;
 	case ASM_OP_BINARY_ADD:
-		dprintf(fd, "%s", STR_OP_ADD);
+		print_opcode = "addl";
 		break;
 	case ASM_OP_BINARY_SUBTRACT:
-		dprintf(fd, "%s", STR_OP_SUB);
+		print_opcode = "subl";
 		break;
 	case ASM_OP_BINARY_SUBTRACT_QUAD:
-		dprintf(fd, "%s", STR_OP_SUB_QUAD);
+		print_opcode = "subq";
 		break;
 	case ASM_OP_BINARY_MULTIPLY:
-		dprintf(fd, "%s", STR_OP_MUL);
+		print_opcode = "imull";
+		break;
+	case ASM_OP_COMPARE:
+		print_opcode = "cmpl";
 		break;
 	case ASM_OP_IDIV:
-		dprintf(fd, "%s", STR_OP_DIV);
+		print_opcode = "idivl";
 		break;
 	case ASM_OP_CDQ:
-		dprintf(fd, "%s", STR_OP_CDQ);
+		print_opcode = "cdq";
+		break;
+	case ASM_OP_JMP:
+		print_opcode = "jmp";
+		break;
+	case ASM_OP_JMP_IF_EQ:
+		print_opcode = "je";
+		break;
+	case ASM_OP_JMP_IF_NEQ:
+		print_opcode = "jne";
+		break;
+	case ASM_OP_JMP_IF_GT:
+		print_opcode = "jg";
+		break;
+	case ASM_OP_JMP_IF_GTE:
+		print_opcode = "jge";
+		break;
+	case ASM_OP_JMP_IF_LT:
+		print_opcode = "jl";
+		break;
+	case ASM_OP_JMP_IF_LTE:
+		print_opcode = "jle";
+		break;
+	case ASM_OP_SET_IF_EQ:
+		print_opcode = "sete";
+		break;
+	case ASM_OP_SET_IF_NEQ:
+		print_opcode = "setne";
+		break;
+	case ASM_OP_SET_IF_GT:
+		print_opcode = "setg";
+		break;
+	case ASM_OP_SET_IF_GTE:
+		print_opcode = "setge";
+		break;
+	case ASM_OP_SET_IF_LT:
+		print_opcode = "setl";
+		break;
+	case ASM_OP_SET_IF_LTE:
+		print_opcode = "setle";
+		break;
+	case ASM_OP_LABEL:
+		assert(op->args[0].operand_type ==
+		       ASM_OPERAND_JUMP_TARGET_LABEL);
+		dprintf(fd, "%sL_foobar%lld:", label_prefix, op->args[0].u.num);
 		break;
 	case ASM_OP_RET:
 		dprintf(fd,
@@ -124,11 +171,15 @@ emit_asm_op(const struct asm_op *op, int fd)
 		        STR_REG_RSP);
 		dprintf(fd, "\t%s %s\n", STR_OP_POP_QUAD, STR_REG_RBP);
 		dprintf(fd, "\t%s", STR_OP_RET);
-		print_operands = false;
 		break;
 	}
 
-	for (size_t i = 0; print_operands && i < ARRAY_SIZE(op->args); ++i) {
+	if (print_opcode == NULL) {
+		return;
+	}
+	dprintf(fd, "%s", print_opcode);
+
+	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		if (op->args[i].operand_type == ASM_OPERAND_NONE) {
 			continue;
 		}
@@ -159,7 +210,7 @@ emit_asm(const struct assembly *cg, enum platform plat, int fd)
 	dprintf(fd, "\t%s %s, %s\n", STR_OP_MOV_QUAD, STR_REG_RSP, STR_REG_RBP);
 
 	for (struct asm_op *op = cg->function.ops; op != NULL; op = op->next) {
-		emit_asm_op(op, fd);
+		emit_asm_op(op, plat, fd);
 	}
 
 	emit_asm_footer(plat, fd);
