@@ -364,7 +364,8 @@ fix_cleanup(struct fix *trampoline)
 }
 
 static WARN_UNUSED result_t
-codegen_fixup_apply(struct asm_op *prev,
+codegen_fixup_apply(struct assembly *cg,
+                    struct asm_op *prev,
                     struct asm_op *cur,
                     struct asm_op **new_prev,
                     struct asm_op **new_cur,
@@ -381,22 +382,34 @@ codegen_fixup_apply(struct asm_op *prev,
 		return RESULT_OK; /* no fixup necessary */
 	}
 
-	assert(prev && "should never need trampoline on very first op");
 	assert(cur);
-	assert(prev->next == cur);
+	if (prev == NULL) {
+		assert(cg->function.ops == cur);
+	} else {
+		assert(prev->next == cur);
+	}
 
 	/*
 	 * Split containing list at <cur>, excluding <cur> from both halves.
 	 */
 	struct asm_op *remainder = cur->next;
 	cur->next = NULL;
-	prev->next = NULL;
+	if (prev != NULL) {
+		prev->next = NULL;
+	}
 
-	/*
-	 * Insert trampoline sublist into containing list.
-	 */
 	assert(trampoline.sz >= 1);
-	codegen_op_list_concat(prev, trampoline.ops[0]);
+	if (prev == NULL) {
+		/*
+		 * Set trampoline as new head of containing list.
+		 */
+		cg->function.ops = trampoline.ops[0];
+	} else {
+		/*
+		 * Insert trampoline sublist into containing list.
+		 */
+		codegen_op_list_concat(prev, trampoline.ops[0]);
+	}
 	assert(trampoline.sz >= 2);
 	codegen_op_list_concat(trampoline.ops[0], trampoline.ops[1]);
 	if (trampoline.sz >= 3) {
@@ -506,7 +519,7 @@ fix_cmp(struct asm_op *cur, struct fix *trampoline)
  *     idivl %r10d
  */
 static WARN_UNUSED bool
-fix_idiv(struct asm_op *cur, struct fix *trampoline)
+fix_div(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!(cur->opcode == ASM_OP_IDIV &&
 	      cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE)) {
@@ -538,7 +551,7 @@ fix_idiv(struct asm_op *cur, struct fix *trampoline)
  *     movl  $r11d, -4(%rbp)
  */
 static WARN_UNUSED bool
-fix_imul(struct asm_op *cur, struct fix *trampoline)
+fix_mul(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!(cur->opcode == ASM_OP_BINARY_MULTIPLY &&
 	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
@@ -574,10 +587,10 @@ codegen_fixup_instructions(const struct intermediate *ir, struct assembly *cg)
 	struct asm_op *cur = cg->function.ops;
 	while (cur != NULL) {
 		struct asm_op *orig[2] = {prev, cur};
-		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_s2s));
-		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_cmp));
-		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_idiv));
-		check(codegen_fixup_apply(prev, cur, &prev, &cur, fix_imul));
+		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_s2s));
+		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_cmp));
+		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_div));
+		check(codegen_fixup_apply(cg, prev, cur, &prev, &cur, fix_mul));
 		if (cur == orig[1]) {
 			assert(prev == orig[0]);
 			prev = cur;
