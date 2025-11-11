@@ -1,12 +1,14 @@
 #include "passes.h"
 #include "result.h"
 
+#define ARENA_IMPLEMENTATION
+#include "arena.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h> /* for getopt_long() */
 #include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 #include <sysexits.h>
@@ -46,40 +48,43 @@ enum compiler_action {
 };
 
 static __attribute__((warn_unused_result)) result_t
-compile(const char *src, const char *dst, enum compiler_action action)
+compile(Arena *arena,
+        const char *src,
+        const char *dst,
+        enum compiler_action action)
 {
-	struct token *tok __attribute__((cleanup(lex_cleanup))) = NULL;
-	check(lex_init(src, &tok));
+	struct token *tok = NULL;
+	check(lex_init(arena, src, &tok));
 	lex_debug_print(tok);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE) {
 		return RESULT_OK;
 	}
 
-	struct ast *a __attribute__((cleanup(parse_cleanup))) = NULL;
-	check(parse_init(tok, &a));
+	struct ast *a = NULL;
+	check(parse_init(arena, tok, &a));
 	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR) {
 		return RESULT_OK;
 	}
 
-	struct intermediate *ir __attribute__((cleanup(ir_cleanup))) = NULL;
-	check(ir_init(a, &ir));
+	struct intermediate *ir = NULL;
+	check(ir_init(arena, a, &ir));
 	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR_ASM) {
 		return RESULT_OK;
 	}
 
-	struct assembly *cg __attribute__((cleanup(codegen_cleanup))) = NULL;
-	check(codegen_init(ir, &cg));
+	struct assembly *cg = NULL;
+	check(codegen_init(arena, ir, &cg));
 	codegen_debug_print(cg);
 
 	check(codegen_replace_pseudoregisters(cg));
 	codegen_debug_print(cg);
 
-	check(codegen_fixup_instructions(ir, cg));
+	check(codegen_fixup_instructions(arena, ir, cg));
 	codegen_debug_print(cg);
 
 	if (action != ACTION_ALL_PASSES) {
@@ -156,9 +161,11 @@ main(int argc, char *argv[])
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
+			Arena a = {0};
 			const char *src = argv[optind];
 			const char *dst = argv[optind + 1];
-			rc = result_to_status(compile(src, dst, action));
+			rc = result_to_status(compile(&a, src, dst, action));
+			arena_free(&a);
 		}
 		break;
 	case ACTION_USAGE_HELP:

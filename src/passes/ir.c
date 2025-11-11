@@ -8,14 +8,15 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h>
 
-#define ir_alloc(dst)                                                          \
-	do {                                                                   \
-		(dst) = malloc(sizeof(*(dst)));                                \
-		check_if((dst) == NULL, ERR_IR_ALLOC);                         \
-		memset(dst, 0, sizeof(*(dst)));                                \
-	} while (0)
+static WARN_UNUSED result_t
+ir_alloc_op(Arena *arena, struct ir_op **dst)
+{
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_IR_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+	return RESULT_OK;
+}
 
 static void
 ir_op_list_concat(struct ir_op *first, struct ir_op *second)
@@ -45,40 +46,14 @@ ir_op_list_find_last_tmpvar_id(struct ir_op *p)
 	return result;
 }
 
-static void
-ir_op_list_free(struct ir_op *cursor)
-{
-	while (cursor != NULL) {
-		struct ir_op *tmp = cursor;
-		cursor = cursor->next;
-		free(tmp);
-	}
-}
-
-static void
-ir_op_list_cleanup(struct ir_op **pp)
-{
-	ir_op_list_free(*pp);
-}
-
-void
-ir_free(struct intermediate *ir)
-{
-	ir_op_list_free(ir ? ir->function.ops : NULL);
-	free(ir);
-}
-
-void
-ir_cleanup(struct intermediate **ir)
-{
-	ir_free(*ir);
-}
-
 static WARN_UNUSED result_t
-ir_constant(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
+ir_constant(Arena *arena,
+            const struct ast *a,
+            struct ir_val *peek,
+            struct ir_op **dst)
 {
 	if (peek == NULL) {
-		ir_alloc(*dst);
+		check(ir_alloc_op(arena, dst));
 		(**dst).opcode = IR_OP_UNARY_IDENTITY;
 		peek = &(**dst).args[0];
 	}
@@ -88,16 +63,20 @@ ir_constant(const struct ast *a, struct ir_val *peek, struct ir_op **dst)
 	return RESULT_OK;
 }
 
-static result_t ir_expression(const struct ast *a,
+static result_t ir_expression(Arena *arena,
+                              const struct ast *a,
+                              struct intermediate *ir,
                               struct ir_val *peek,
-                              struct ir_op **dst,
-                              struct ir_env *env) WARN_UNUSED;
+                              struct ir_op **dst) WARN_UNUSED;
 
 static WARN_UNUSED result_t
-ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+ir_unary_op(Arena *arena,
+            const struct ast *a,
+            struct intermediate *ir,
+            struct ir_op **dst)
 {
-	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	ir_alloc(src);
+	struct ir_op *src = NULL;
+	check(ir_alloc_op(arena, &src));
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -114,12 +93,15 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		break;
 	}
 
-	struct ir_op *inner __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO remove?
-	check(ir_expression(a->u.op_unary.operand, &src->args[0], &inner, env));
+	struct ir_op *inner = NULL;
+	check(ir_expression(arena,
+	                    a->u.op_unary.operand,
+	                    ir,
+	                    &src->args[0],
+	                    &inner));
 
 	src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	src->args[1].num = env->generator++;
+	src->args[1].num = ir->env.generator++;
 
 	if (src->args[0].subtype == IR_VAL_CONSTANT_INT) {
 		/*
@@ -145,16 +127,17 @@ ir_unary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		*dst = inner;
 	}
 
-	src = NULL;   /* release ownership to caller */
-	inner = NULL; /* release ownership to caller */
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
+ir_binary_op(Arena *arena,
+             const struct ast *a,
+             struct intermediate *ir,
+             struct ir_op **dst)
 {
-	struct ir_op *src __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	ir_alloc(src);
+	struct ir_op *src = NULL;
+	check(ir_alloc_op(arena, &src));
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -195,15 +178,22 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		break;
 	}
 
-	struct ir_op *left __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO remove?
-	check(ir_expression(a->u.op_binary.lhs, &src->args[0], &left, env));
+	struct ir_op *left = NULL;
+	check(ir_expression(arena,
+	                    a->u.op_binary.lhs,
+	                    ir,
+	                    &src->args[0],
+	                    &left));
 
-	struct ir_op *right __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	check(ir_expression(a->u.op_binary.rhs, &src->args[1], &right, env));
+	struct ir_op *right = NULL;
+	check(ir_expression(arena,
+	                    a->u.op_binary.rhs,
+	                    ir,
+	                    &src->args[1],
+	                    &right));
 
 	src->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	src->args[2].num = env->generator++;
+	src->args[2].num = ir->env.generator++;
 
 	if (src->args[0].subtype == IR_VAL_CONSTANT_INT &&
 	    src->args[1].subtype == IR_VAL_CONSTANT_INT) {
@@ -265,26 +255,23 @@ ir_binary_op(const struct ast *a, struct ir_op **dst, struct ir_env *env)
 		*dst = left;
 	}
 
-	src = NULL;   /* release ownership to caller */
-	left = NULL;  /* release ownership to caller */
-	right = NULL; /* release ownership to caller */
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-ir_logical_op_arm(const struct ast *a,
+ir_logical_op_arm(Arena *arena,
+                  const struct ast *a,
+                  struct intermediate *ir,
                   struct ir_op **dst,
-                  struct ir_env *env,
                   bool jump_if_zero,
                   long long int jump_label)
 {
 	struct ir_val peek = {0};
-	struct ir_op *inner __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	check(ir_expression(a, &peek, &inner, env));
+	struct ir_op *inner = NULL;
+	check(ir_expression(arena, a, ir, &peek, &inner));
 
-	struct ir_op *jumper __attribute__((cleanup(ir_op_list_cleanup))) =
-		NULL;
-	ir_alloc(jumper);
+	struct ir_op *jumper = NULL;
+	check(ir_alloc_op(arena, &jumper));
 	jumper->opcode =
 		jump_if_zero ? IR_OP_JUMP_IF_ZERO : IR_OP_JUMP_IF_NOT_ZERO;
 
@@ -308,40 +295,39 @@ ir_logical_op_arm(const struct ast *a,
 		*dst = inner;
 	}
 
-	inner = NULL;  /* release ownership to caller */
-	jumper = NULL; /* release ownership to caller */
-
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-ir_logical_op(const struct ast *a,
+ir_logical_op(Arena *arena,
+              const struct ast *a,
+              struct intermediate *ir,
               struct ir_op **dst,
-              struct ir_env *env,
               bool jump_if_zero)
 {
-	const long long int label_false = env->labels++;
+	const long long int label_false = ir->env.labels++;
 
-	struct ir_op *left __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	check(ir_logical_op_arm(a->u.op_binary.lhs,
+	struct ir_op *left = NULL;
+	check(ir_logical_op_arm(arena,
+	                        a->u.op_binary.lhs,
+	                        ir,
 	                        &left,
-	                        env,
 	                        jump_if_zero,
 	                        label_false));
 
-	struct ir_op *right __attribute__((cleanup(ir_op_list_cleanup))) = NULL;
-	check(ir_logical_op_arm(a->u.op_binary.rhs,
+	struct ir_op *right = NULL;
+	check(ir_logical_op_arm(arena,
+	                        a->u.op_binary.rhs,
+	                        ir,
 	                        &right,
-	                        env,
 	                        jump_if_zero,
 	                        label_false));
 
-	const long long int label_end = env->labels++;
-	const long long int result_id = env->generator++;
+	const long long int label_end = ir->env.labels++;
+	const long long int result_id = ir->env.generator++;
 
-	struct ir_op *footer __attribute__((cleanup(ir_op_list_cleanup))) =
-		NULL;
-	ir_alloc(footer);
+	struct ir_op *footer = NULL;
+	check(ir_alloc_op(arena, &footer));
 	struct ir_op *foot_pos = footer;
 
 	foot_pos->opcode = IR_OP_COPY;
@@ -350,22 +336,21 @@ ir_logical_op(const struct ast *a,
 	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	foot_pos->args[1].num = result_id;
 
-	// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO remove?
-	ir_alloc(foot_pos->next);
+	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_JUMP;
 	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	foot_pos->args[0].num = label_end;
 
-	ir_alloc(foot_pos->next);
+	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_LABEL;
 	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	foot_pos->args[0].num = label_false;
 
-	ir_alloc(foot_pos->next);
+	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_COPY;
@@ -374,7 +359,7 @@ ir_logical_op(const struct ast *a,
 	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	foot_pos->args[1].num = result_id;
 
-	ir_alloc(foot_pos->next);
+	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_LABEL;
@@ -385,30 +370,32 @@ ir_logical_op(const struct ast *a,
 	ir_op_list_concat(right, footer);
 	*dst = left;
 
-	left = NULL;   /* release ownership to caller */
-	right = NULL;  /* release ownership to caller */
-	footer = NULL; /* release ownership to caller */
 	return RESULT_OK;
 }
 
 result_t
-ir_expression(const struct ast *a,
+ir_expression(Arena *arena,
+              const struct ast *a,
+              struct intermediate *ir,
               struct ir_val *peek,
-              struct ir_op **dst,
-              struct ir_env *env)
+              struct ir_op **dst)
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT:
-		check(ir_constant(a, peek, dst));
+		check(ir_constant(arena, a, peek, dst));
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
-		check(ir_unary_op(a, dst, env));
+		check(ir_unary_op(arena, a, ir, dst));
 		break;
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
-		check(ir_expression(a->u.op_unary.operand, peek, dst, env));
+		check(ir_expression(arena,
+		                    a->u.op_unary.operand,
+		                    ir,
+		                    peek,
+		                    dst));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -421,13 +408,13 @@ ir_expression(const struct ast *a,
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-		check(ir_binary_op(a, dst, env));
+		check(ir_binary_op(arena, a, ir, dst));
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
-		check(ir_logical_op(a, dst, env, true));
+		check(ir_logical_op(arena, a, ir, dst, true));
 		break;
 	case NODE_EXPRESSION_LOGICAL_OR:
-		check(ir_logical_op(a, dst, env, false));
+		check(ir_logical_op(arena, a, ir, dst, false));
 		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
@@ -437,41 +424,43 @@ ir_expression(const struct ast *a,
 }
 
 static WARN_UNUSED result_t
-ir_function(const struct ast *a, struct ir_function *dst, struct ir_env *env)
+ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 {
+	struct ir_function *f = &ir->function;
+
 	assert(a->node_type == NODE_FUNCTION);
 	assert(a->u.function.identifier->node_type == NODE_IDENTIFIER);
-	dst->identifier = a->u.function.identifier->u.str;
+	f->identifier = a->u.function.identifier->u.str;
 
 	assert(a->u.op_unary.operand != NULL);
-	check(ir_expression(a->u.function.statement, NULL, &dst->ops, env));
+	check(ir_expression(arena, a->u.function.statement, ir, NULL, &f->ops));
 
-	if (env->generator > 0) {
+	if (ir->env.generator > 0) {
 		struct ir_op *last_op = NULL;
-		ir_alloc(last_op);
+		check(ir_alloc_op(arena, &last_op));
 		last_op->opcode = IR_OP_UNARY_IDENTITY;
 		last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		last_op->args[0].num = env->generator - 1;
-		ir_op_list_concat(dst->ops, last_op);
+		last_op->args[0].num = ir->env.generator - 1;
+		ir_op_list_concat(f->ops, last_op);
 	}
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-ir_program(const struct ast *a, struct intermediate *dst)
+ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 {
 	assert(a->node_type == NODE_PROGRAM);
-	check(ir_function(a->u.program.entrypoint_function,
-	                  &dst->function,
-	                  &dst->env));
+	check(ir_function(arena, a->u.program.entrypoint_function, ir));
 	return RESULT_OK;
 }
 
 result_t
-ir_init(const struct ast *a, struct intermediate **ir)
+ir_init(Arena *arena, const struct ast *a, struct intermediate **ir)
 {
-	ir_alloc(*ir);
-	check(ir_program(a, *ir));
+	*ir = arena_alloc(arena, sizeof(**ir));
+	check_if(*ir == NULL, ERR_IR_ALLOC);
+	memset(*ir, 0, sizeof(**ir));
+	check(ir_program(arena, a, *ir));
 	return RESULT_OK;
 }
 
@@ -614,4 +603,5 @@ ir_debug_print(const struct intermediate *ir)
 	ir_debug_print_list(ir->function.ops);
 }
 
-#undef ir_alloc
+#undef ARENA_IMPLEMENTATION
+#undef arena_alloc_and_assign
