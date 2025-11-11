@@ -1,6 +1,5 @@
 #include "passes/ir.h"
 
-#include "arena.h"
 #include "passes.h"
 #include "passes/parse.h"
 #include "sys/array.h"

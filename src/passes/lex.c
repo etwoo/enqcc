@@ -1,6 +1,5 @@
 #include "passes/lex.h"
 
-#include "arena.h"
 #include "passes.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
