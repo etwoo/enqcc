@@ -2,8 +2,10 @@
 #include "result.h"
 
 #define ARENA_IMPLEMENTATION
+#define ARENA_NOSTDIO
 #include "arena.h"
 #undef ARENA_IMPLEMENTATION
+#undef ARENA_NOSTDIO
 
 #include <errno.h>
 #include <fcntl.h>
