@@ -95,6 +95,9 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_IDENTITY));
 		check(parse_constant(arena, tok, &(**dst).u.op_unary.operand));
+	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
+		check(parse_identifier(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
 		check(parse_alloc(arena,
 		                  dst,
@@ -199,6 +202,7 @@ get_precedence(const struct ast *a)
 		break;
 	case NODE_FUNCTION:
 	case NODE_PROGRAM:
+	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -433,9 +437,22 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_IDENTIFIER: {
 		const struct string_view *s = &a->u.str;
-		debug("%*sIDENT %.*s", (int)indent, "", (int)s->sz, s->data);
+		const char *desc = NULL;
+		switch (a->node_type) {
+		case NODE_EXPRESSION_VARIABLE_USAGE:
+			desc = "EXPRESSION VARIABLE USAGE";
+			break;
+		case NODE_IDENTIFIER:
+			desc = "IDENT";
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		debug("%*s%s %.*s", (int)indent, "", desc, (int)s->sz, s->data);
 		break;
 	}
 	case NODE_CONSTANT_INT:
