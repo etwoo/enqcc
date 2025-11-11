@@ -10,12 +10,14 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#define arena_alloc_and_assign(dst, a)                                         \
-	do {                                                                   \
-		(dst) = arena_alloc(a, sizeof(*(dst)));                        \
-		check_if((dst) == NULL, ERR_IR_ALLOC);                         \
-		memset(dst, 0, sizeof(*(dst)));                                \
-	} while (0)
+static WARN_UNUSED result_t
+ir_alloc_op(Arena *arena, struct ir_op **dst)
+{
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_IR_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+	return RESULT_OK;
+}
 
 static void
 ir_op_list_concat(struct ir_op *first, struct ir_op *second)
@@ -52,7 +54,7 @@ ir_constant(Arena *arena,
             struct ir_op **dst)
 {
 	if (peek == NULL) {
-		arena_alloc_and_assign(*dst, arena);
+		check(ir_alloc_op(arena, dst));
 		(**dst).opcode = IR_OP_UNARY_IDENTITY;
 		peek = &(**dst).args[0];
 	}
@@ -75,7 +77,7 @@ ir_unary_op(Arena *arena,
             struct ir_op **dst)
 {
 	struct ir_op *src = NULL;
-	arena_alloc_and_assign(src, arena);
+	check(ir_alloc_op(arena, &src));
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -136,7 +138,7 @@ ir_binary_op(Arena *arena,
              struct ir_op **dst)
 {
 	struct ir_op *src = NULL;
-	arena_alloc_and_assign(src, arena);
+	check(ir_alloc_op(arena, &src));
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -270,7 +272,7 @@ ir_logical_op_arm(Arena *arena,
 	check(ir_expression(arena, a, ir, &peek, &inner));
 
 	struct ir_op *jumper = NULL;
-	arena_alloc_and_assign(jumper, arena);
+	check(ir_alloc_op(arena, &jumper));
 	jumper->opcode =
 		jump_if_zero ? IR_OP_JUMP_IF_ZERO : IR_OP_JUMP_IF_NOT_ZERO;
 
@@ -326,7 +328,7 @@ ir_logical_op(Arena *arena,
 	const long long int result_id = ir->env.generator++;
 
 	struct ir_op *footer = NULL;
-	arena_alloc_and_assign(footer, arena);
+	check(ir_alloc_op(arena, &footer));
 	struct ir_op *foot_pos = footer;
 
 	foot_pos->opcode = IR_OP_COPY;
@@ -335,21 +337,21 @@ ir_logical_op(Arena *arena,
 	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	foot_pos->args[1].num = result_id;
 
-	arena_alloc_and_assign(foot_pos->next, arena);
+	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_JUMP;
 	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	foot_pos->args[0].num = label_end;
 
-	arena_alloc_and_assign(foot_pos->next, arena);
+	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_LABEL;
 	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	foot_pos->args[0].num = label_false;
 
-	arena_alloc_and_assign(foot_pos->next, arena);
+	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_COPY;
@@ -358,7 +360,7 @@ ir_logical_op(Arena *arena,
 	foot_pos->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	foot_pos->args[1].num = result_id;
 
-	arena_alloc_and_assign(foot_pos->next, arena);
+	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_LABEL;
@@ -436,7 +438,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 
 	if (ir->env.generator > 0) {
 		struct ir_op *last_op = NULL;
-		arena_alloc_and_assign(last_op, arena);
+		check(ir_alloc_op(arena, &last_op));
 		last_op->opcode = IR_OP_UNARY_IDENTITY;
 		last_op->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		last_op->args[0].num = ir->env.generator - 1;
@@ -456,7 +458,9 @@ ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 result_t
 ir_init(Arena *arena, const struct ast *a, struct intermediate **ir)
 {
-	arena_alloc_and_assign(*ir, arena);
+	*ir = arena_alloc(arena, sizeof(**ir));
+	check_if(*ir == NULL, ERR_IR_ALLOC);
+	memset(*ir, 0, sizeof(**ir));
 	check(ir_program(arena, a, *ir));
 	return RESULT_OK;
 }
