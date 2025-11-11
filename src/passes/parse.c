@@ -208,7 +208,7 @@ parse_expression(const struct token **tok,
 
 		struct ast *right __attribute__((cleanup(parse_cleanup))) =
 			NULL;
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO: remove
 		check(parse_expression(tok, &right, next_precedence + 1));
 
 		bop->u.op_binary.lhs = left;

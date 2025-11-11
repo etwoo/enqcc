@@ -384,7 +384,7 @@ codegen_fixup_apply(struct assembly *cg,
 {
 	struct fix trampoline __attribute__((cleanup(fix_cleanup))) = {0};
 	for (size_t i = 0; i < ARRAY_SIZE(trampoline.ops); ++i) {
-		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+		// NOLINTNEXTLINE(clang-analyzer-unix.Malloc) // TODO: remove
 		codegen_alloc(trampoline.ops[i]);
 	}
 

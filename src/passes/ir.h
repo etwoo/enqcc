@@ -1,6 +1,7 @@
 #ifndef COMPILER_PASSES_IR_H
 #define COMPILER_PASSES_IR_H
 
+#include "arena.h"
 #include "sys/string_view.h"
 
 struct ir_val {
@@ -48,6 +49,7 @@ struct ir_function {
 struct ir_env {
 	long long int generator;
 	long long int labels;
+	Arena arena;
 };
 
 struct intermediate {
