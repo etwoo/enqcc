@@ -466,11 +466,15 @@ ir_block(Arena *arena,
 			*dst = (**dst).next;
 		} else {
 			/*
-			 * Sanity-check typical reason for lack of new ir_op:
-			 * declaration without an initialization expression.
+			 * Sanity-check typical reasons for lack of new ir_op:
+			 *
+			 * - null expression
+			 * - declaration without an initialization expression
 			 */
-			assert(a->u.block.item->node_type == NODE_DECLARATION);
-			assert(a->u.block.item->u.declare.init == NULL);
+			struct ast *cur = a->u.block.item;
+			assert(cur->node_type == NODE_EXPRESSION_NULL ||
+			       (cur->node_type == NODE_DECLARATION &&
+			        cur->u.declare.init == NULL));
 		}
 		a = a->u.block.next;
 	}
