@@ -35,6 +35,7 @@ typedef struct {
 		ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON,
 		ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION,
 		ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
+		ERR_SEMA_DECL_INVALID_LVALUE,
 	} err;
 	int num; /* may hold errno, CURLcode, CURLUcode, etc */
 	char *msg;

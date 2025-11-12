@@ -224,6 +224,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_UNDECLARED_VARIABLE_USAGE:
 		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
 		break;
+	case ERR_SEMA_DECL_INVALID_LVALUE:
+		s = strdup("Invalid lvalue in variable assignment");
+		break;
 	}
 
 	return s;

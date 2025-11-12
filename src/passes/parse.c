@@ -99,6 +99,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		if (a->u.op_binary.lhs->node_type !=
+		    NODE_EXPRESSION_UNARY_IDENTITY) {
+			return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
+		}
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
 		break;
