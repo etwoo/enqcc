@@ -54,6 +54,7 @@ ir_constant(Arena *arena,
 {
 	if (peek == NULL) {
 		check(ir_alloc_op(arena, dst));
+		assert(*dst != NULL);
 		(**dst).opcode = IR_OP_UNARY_IDENTITY;
 		peek = &(**dst).args[0];
 	}
@@ -373,7 +374,7 @@ ir_logical_op(Arena *arena,
 	return RESULT_OK;
 }
 
-result_t
+static WARN_UNUSED result_t
 ir_expression(Arena *arena,
               const struct ast *a,
               struct intermediate *ir,
@@ -384,10 +385,25 @@ ir_expression(Arena *arena,
 	case NODE_CONSTANT_INT:
 		check(ir_constant(arena, a, peek, dst));
 		break;
-	case NODE_BLOCK:
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+		info("todo_variable_usage"); // TODO
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		info("todo_variable_assignment"); // TODO
+		break;
 	case NODE_DECLARATION:
+		if (a->u.declare.init != NULL) {
+			check(ir_expression(arena,
+			                    a->u.declare.init,
+			                    ir,
+			                    NULL,
+			                    dst));
+		}
+		info("a->u.declare.identifier"); // TODO
+		break;
 	case NODE_EXPRESSION_NULL:
-		break; // TODO: AST->IR for block, decl, null
+		info("todo_expression_null"); // TODO
+		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -428,6 +444,20 @@ ir_expression(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_block(Arena *arena,
+         const struct ast *a,
+         struct intermediate *ir,
+         struct ir_op **dst)
+{
+	while (a != NULL) {
+		assert(a->node_type == NODE_BLOCK);
+		check(ir_expression(arena, a->u.block.item, ir, NULL, dst));
+		a = a->u.block.next;
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 {
 	struct ir_function *f = &ir->function;
@@ -436,7 +466,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	f->identifier = a->u.function.identifier.name;
 
 	assert(a->u.op_unary.operand != NULL);
-	check(ir_expression(arena, a->u.function.block, ir, NULL, &f->ops));
+	check(ir_block(arena, a->u.function.block, ir, &f->ops));
 
 	if (ir->env.generator > 0) {
 		struct ir_op *last_op = NULL;
