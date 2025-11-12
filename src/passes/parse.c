@@ -412,7 +412,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_BLOCK:
 		debug("%*sBLOCK ITEM", (int)indent, "");
 		parse_debug_print(a->u.block.item, indent);
-		if (a->u.block.next) {
+		if (a->u.block.next != NULL) {
 			parse_debug_print(a->u.block.next, indent);
 		}
 		break;
