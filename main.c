@@ -44,8 +44,9 @@ enum compiler_action {
 	ACTION_ALL_PASSES,
 	ACTION_LEX,
 	ACTION_LEX_PARSE,
-	ACTION_LEX_PARSE_IR,
-	ACTION_LEX_PARSE_IR_ASM,
+	ACTION_LEX_PARSE_SEMA,
+	ACTION_LEX_PARSE_SEMA_IR,
+	ACTION_LEX_PARSE_SEMA_IR_ASM,
 	ACTION_USAGE_HELP,
 	ACTION_USAGE_ERROR,
 };
@@ -68,7 +69,13 @@ compile(Arena *arena,
 	check(parse_init(arena, tok, &a));
 	parse_debug_print(a, 0);
 
-	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR) {
+	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA) {
+		return RESULT_OK;
+	}
+
+	// TODO: semantic analysis
+
+	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA_IR) {
 		return RESULT_OK;
 	}
 
@@ -76,7 +83,8 @@ compile(Arena *arena,
 	check(ir_init(arena, a, &ir));
 	ir_debug_print(ir);
 
-	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_IR_ASM) {
+	if (action != ACTION_ALL_PASSES &&
+	    action < ACTION_LEX_PARSE_SEMA_IR_ASM) {
 		return RESULT_OK;
 	}
 
@@ -122,6 +130,7 @@ main(int argc, char *argv[])
 		{"lex", no_argument, &synonym, 'l'},
 		{"parse", no_argument, &synonym, 'p'},
 		{"tacky", no_argument, &synonym, 't'},
+		{"validate", no_argument, &synonym, 'v'},
 		{NULL, 0, NULL, 0},
 	};
 
@@ -132,7 +141,7 @@ main(int argc, char *argv[])
 			action = MAX(action, ACTION_ALL_PASSES);
 			break;
 		case 'c':
-			action = MAX(action, ACTION_LEX_PARSE_IR_ASM);
+			action = MAX(action, ACTION_LEX_PARSE_SEMA_IR_ASM);
 			break;
 		case 'h':
 			action = MAX(action, ACTION_USAGE_HELP);
@@ -144,7 +153,10 @@ main(int argc, char *argv[])
 			action = MAX(action, ACTION_LEX_PARSE);
 			break;
 		case 't':
-			action = MAX(action, ACTION_LEX_PARSE_IR);
+			action = MAX(action, ACTION_LEX_PARSE_SEMA_IR);
+			break;
+		case 'v':
+			action = MAX(action, ACTION_LEX_PARSE_SEMA);
 			break;
 		default:
 			action = MAX(action, ACTION_USAGE_ERROR);
@@ -159,8 +171,9 @@ main(int argc, char *argv[])
 	case ACTION_ALL_PASSES:
 	case ACTION_LEX:
 	case ACTION_LEX_PARSE:
-	case ACTION_LEX_PARSE_IR:
-	case ACTION_LEX_PARSE_IR_ASM:
+	case ACTION_LEX_PARSE_SEMA:
+	case ACTION_LEX_PARSE_SEMA_IR:
+	case ACTION_LEX_PARSE_SEMA_IR_ASM:
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
