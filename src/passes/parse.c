@@ -176,6 +176,8 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
+		// TODO: remove *_UNARY_IDENTITY shit here and in ir.c
+		// flatten and make e.g. NODE_CONSTANT_INT direct child
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_IDENTITY));
 		check(parse_constant(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {

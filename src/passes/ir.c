@@ -66,6 +66,17 @@ ir_op_list_weird_trailing_return_hack(struct ir_op **p)
 	}
 }
 
+// TODO: get rid of peek and associated special-casing
+// TODO: instead, add `long long int *out` parameter that callee uses to signal
+// to caller what TMPVAR id holds the result of the instructions that have been
+// added to <dst>; this avoids the caller from having to guess the right ID to
+// use and will hopefully be less prone to bugs
+// TODO: hopefully these two changes together will make this code actually
+// understandble again-- remove peek, signal explicitly the TMPVAR id to use in
+// the caller to refer to the result of the child instruction (i.e.
+// instructions placed earlier in the collection) -- and in the case of 2-arg
+// ir_binary_op(), there should be TWO such out parameters (or an equivalent
+// out[2] array)
 static WARN_UNUSED result_t
 ir_constant(Arena *arena,
             const struct ast *a,
