@@ -30,7 +30,7 @@ symbols_prepend(Arena *arena,
 	memset(node, 0, sizeof(*node));
 	node->next = *head;
 	node->name = *name;
-	node->unique = *head == NULL ? 1 : (**head).unique + 1;
+	node->unique = *head == NULL ? 0 : (**head).unique + 1;
 	*head = node;
 	return RESULT_OK;
 }
