@@ -425,16 +425,14 @@ ir_expression(Arena *arena,
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			struct ir_op *inner = NULL;
 			check(ir_expression(arena,
 			                    a->u.declare.init,
 			                    ir,
 			                    NULL,
-			                    &inner));
-			inner->opcode = IR_OP_COPY;
-			inner->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-			inner->args[1].num = a->u.declare.identifier.unique;
-			*dst = inner;
+			                    dst));
+			(**dst).opcode = IR_OP_COPY;
+			(**dst).args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+			(**dst).args[1].num = a->u.declare.identifier.unique;
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
