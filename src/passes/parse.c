@@ -201,6 +201,7 @@ get_precedence(const struct ast *a)
 		__attribute__((fallthrough));
 	case NODE_EXPRESSION_LOGICAL_OR:
 		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		precedence += PRECEDENCE_INCREMENT;
 		break;
