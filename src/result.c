@@ -164,6 +164,10 @@ result_to_str(result_t r)
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_KEYWORD_INT in type position");
 		break;
+	case ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER:
+		s = strdup("Parsing variable declaration expects "
+		           "TOKEN_IDENTIFIER in variable name position");
+		break;
 	case ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_SEMICOLON after initializer expression");

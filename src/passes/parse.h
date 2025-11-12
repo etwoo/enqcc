@@ -3,6 +3,11 @@
 
 #include "sys/string_view.h"
 
+struct ast_symbol {
+	struct string_view name;
+	long long int unique;
+};
+
 struct ast {
 	enum {
 		NODE_PROGRAM,
@@ -30,7 +35,6 @@ struct ast {
 		NODE_EXPRESSION_COMPARE_MORE_THAN_EQ,
 		NODE_EXPRESSION_VARIABLE_USAGE,
 		NODE_EXPRESSION_VARIABLE_ASSIGNMENT,
-		NODE_IDENTIFIER,
 		NODE_CONSTANT_INT,
 	} node_type;
 	union {
@@ -38,7 +42,7 @@ struct ast {
 			struct ast *entrypoint_function;
 		} program;
 		struct {
-			struct ast *identifier;
+			struct ast_symbol identifier;
 			struct ast *block;
 		} function;
 		struct {
@@ -46,7 +50,7 @@ struct ast {
 			struct ast *next;
 		} block;
 		struct {
-			struct ast *identifier;
+			struct ast_symbol identifier;
 			struct ast *init;
 		} declare;
 		struct {
@@ -56,12 +60,8 @@ struct ast {
 			struct ast *lhs;
 			struct ast *rhs;
 		} op_binary;
-		struct {
-			struct string_view name;
-			long long int unique;
-		} id;
-		struct string_view str; /* NODE_IDENTIFIER */
-		long long int num;      /* NODE_CONSTANT_INT */
+		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
+		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
 };
 

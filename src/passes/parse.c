@@ -51,19 +51,17 @@ symbols_get(const struct symbol *head, const struct string_view *name)
 static const long long int NOT_YET_UNIQUE = -1;
 
 static WARN_UNUSED result_t
-resolve_var_usage(const struct symbol *head,
-                  const struct string_view *name,
-                  long long int *unique)
+resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
 {
 	assert(NOT_YET_UNIQUE < 0);
-	assert(*unique == NOT_YET_UNIQUE);
-	const struct symbol *resolution = symbols_get(head, name);
+	assert(var->unique == NOT_YET_UNIQUE);
+	const struct symbol *resolution = symbols_get(head, &var->name);
 	if (resolution == NULL) {
 		return make_result(ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
-		                   name->data,
-		                   name->sz);
+		                   var->name.data,
+		                   var->name.sz);
 	}
-	*unique = resolution->unique;
+	var->unique = resolution->unique;
 	return RESULT_OK;
 }
 
@@ -75,7 +73,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_FUNCTION:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
-	case NODE_IDENTIFIER:
 		assert(0); /* logic error in caller */
 		break;
 	case NODE_EXPRESSION_NULL:
@@ -88,7 +85,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -102,11 +98,12 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		check(resolve_var_usage(*sym, &a->u.id.name, &a->u.id.unique));
+		check(resolve_var_usage(*sym, &a->u.var));
 		break;
 	}
 	return RESULT_OK;
@@ -116,17 +113,16 @@ static WARN_UNUSED result_t
 resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 {
 	assert(a->node_type == NODE_DECLARATION);
-	assert(a->u.declare.identifier->node_type == NODE_IDENTIFIER);
 
 	const struct symbol *dup =
-		symbols_get(*sym, &a->u.declare.identifier->u.str);
+		symbols_get(*sym, &a->u.declare.identifier.name);
 	if (dup != NULL) {
 		return make_result(ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION,
 		                   dup->name.data,
 		                   dup->name.sz);
 	}
 
-	check(symbols_prepend(arena, sym, &a->u.declare.identifier->u.str));
+	check(symbols_prepend(arena, sym, &a->u.declare.identifier.name));
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
 	}
@@ -193,19 +189,6 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-parse_identifier(Arena *arena, const struct token **tok, struct ast **dst)
-{
-	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
-	}
-	check(parse_alloc(arena, dst, NODE_IDENTIFIER));
-
-	(**dst).u.str = (**tok).val;
-	token_consume(tok);
-	return RESULT_OK;
-}
-
 static result_t parse_expression(Arena *arena,
                                  const struct token **tok,
                                  struct ast **dst,
@@ -220,8 +203,8 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_constant(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
-		(**dst).u.id.name = (**tok).val;
-		(**dst).u.id.unique = NOT_YET_UNIQUE;
+		(**dst).u.var.name = (**tok).val;
+		(**dst).u.var.unique = NOT_YET_UNIQUE;
 		token_consume(tok);
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
 		check(parse_alloc(arena,
@@ -341,7 +324,6 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-	case NODE_IDENTIFIER:
 	case NODE_CONSTANT_INT:
 		assert(0); /* logic error in caller */
 		break;
@@ -405,7 +387,12 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_identifier(arena, tok, &(**dst).u.declare.identifier));
+	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER);
+	}
+	(**dst).u.declare.identifier.name = (**tok).val;
+	token_consume(tok);
+
 	if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
 		token_consume(tok);
 		check(parse_expression(arena, tok, &(**dst).u.declare.init, 0));
@@ -473,7 +460,11 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_identifier(arena, tok, &(**dst).u.function.identifier));
+	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
+	}
+	(**dst).u.function.identifier.name = (**tok).val;
+	token_consume(tok);
 
 	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN);
@@ -519,6 +510,21 @@ parse_init(Arena *arena, const struct token *tok, struct ast **a)
 	return RESULT_OK;
 }
 
+static void
+parse_debug_print_ast_symbol(const char *description,
+                             const struct ast_symbol *asym,
+                             size_t indent)
+{
+	debug("%*s%s %.*s.%lld%s",
+	      (int)indent,
+	      "",
+	      description,
+	      (int)asym->name.sz,
+	      asym->name.data,
+	      asym->unique,
+	      asym->unique == NOT_YET_UNIQUE ? " (not unique)" : "");
+}
+
 void
 parse_debug_print(const struct ast *a, size_t indent)
 {
@@ -529,9 +535,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.program.entrypoint_function, indent + 1);
 		break;
 	case NODE_FUNCTION:
-		debug("%*sFUNCTION", (int)indent, "");
-		debug("%*sNAME", (int)(indent + 1), "");
-		parse_debug_print(a->u.function.identifier, indent + 2);
+		parse_debug_print_ast_symbol("FUNCTION",
+		                             &a->u.function.identifier,
+		                             indent);
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
 			parse_debug_print(a->u.function.block, indent + 2);
@@ -545,9 +551,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_DECLARATION:
-		debug("%*sDECLARATION", (int)indent, "");
-		debug("%*sIDENTIFIER", (int)(indent + 1), "");
-		parse_debug_print(a->u.declare.identifier, indent + 2);
+		parse_debug_print_ast_symbol("DECLARATION",
+		                             &a->u.declare.identifier,
+		                             indent);
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
@@ -648,20 +654,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		debug("%*sEXPRESSION VARIABLE USAGE %.*s.%lld%s",
-		      (int)indent,
-		      "",
-		      (int)a->u.id.name.sz,
-		      a->u.id.name.data,
-		      a->u.id.unique,
-		      a->u.id.unique == NOT_YET_UNIQUE ? " (not unique)" : "");
-		break;
-	case NODE_IDENTIFIER:
-		debug("%*sIDENT %.*s",
-		      (int)indent,
-		      "",
-		      (int)a->u.str.sz,
-		      a->u.str.data);
+		parse_debug_print_ast_symbol("EXPRESSION VARIABLE USAGE",
+		                             &a->u.var,
+		                             indent);
 		break;
 	case NODE_CONSTANT_INT:
 		debug("%*sCONSTANT %lld", (int)indent, "", a->u.num);

@@ -433,8 +433,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	struct ir_function *f = &ir->function;
 
 	assert(a->node_type == NODE_FUNCTION);
-	assert(a->u.function.identifier->node_type == NODE_IDENTIFIER);
-	f->identifier = a->u.function.identifier->u.str;
+	f->identifier = a->u.function.identifier.name;
 
 	assert(a->u.op_unary.operand != NULL);
 	check(ir_expression(arena, a->u.function.block, ir, NULL, &f->ops));
