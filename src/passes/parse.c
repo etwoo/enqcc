@@ -206,7 +206,6 @@ get_precedence(const struct ast *a)
 		break;
 	case NODE_FUNCTION:
 	case NODE_PROGRAM:
-	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -214,6 +213,7 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_IDENTIFIER:
 	case NODE_CONSTANT_INT:
+	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(0); /* logic error in caller */
 		break;
 	}
