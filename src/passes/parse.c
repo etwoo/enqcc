@@ -127,7 +127,9 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	}
 
 	check(symbols_prepend(arena, sym, &a->u.declare.identifier->u.str));
-	check(resolve_expr(arena, a->u.declare.init, sym));
+	if (a->u.declare.init != NULL) {
+		check(resolve_expr(arena, a->u.declare.init, sym));
+	}
 	return RESULT_OK;
 }
 
