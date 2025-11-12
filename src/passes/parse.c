@@ -246,6 +246,10 @@ parse_expression(Arena *arena,
 			break;
 		}
 
+		const bool is_right_associative =
+			bop->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT;
+		const unsigned incr = is_right_associative ? 0 : 1;
+
 		const unsigned precedence = get_precedence(bop);
 		if (precedence < minimum_precedence) {
 			break;
@@ -254,7 +258,7 @@ parse_expression(Arena *arena,
 		token_consume(tok);
 
 		struct ast *right = NULL;
-		check(parse_expression(arena, tok, &right, precedence + 1));
+		check(parse_expression(arena, tok, &right, precedence + incr));
 
 		bop->u.op_binary.lhs = left;
 		bop->u.op_binary.rhs = right;
