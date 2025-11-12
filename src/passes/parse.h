@@ -56,6 +56,10 @@ struct ast {
 			struct ast *lhs;
 			struct ast *rhs;
 		} op_binary;
+		struct {
+			struct string_view name;
+			long long int unique;
+		} id;
 		struct string_view str; /* NODE_IDENTIFIER */
 		long long int num;      /* NODE_CONSTANT_INT */
 	} u;
