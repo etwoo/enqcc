@@ -82,6 +82,10 @@ ir_unary_op(Arena *arena,
 
 	struct ast *ast_inner = NULL;
 	switch (a->node_type) {
+	case NODE_DECLARATION:
+		src->opcode = IR_OP_COPY;
+		ast_inner = a->u.declare.init;
+		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		src->opcode = IR_OP_UNARY_COMPLEMENT;
 		ast_inner = a->u.op_unary.operand;
@@ -390,20 +394,16 @@ ir_expression(Arena *arena,
 	case NODE_CONSTANT_INT:
 		check(ir_constant(arena, a, peek, dst));
 		break;
+	case NODE_DECLARATION:
+		if (a->u.declare.init != NULL) {
+			check(ir_unary_op(arena, a, ir, dst));
+		}
+		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		check(ir_alloc_op(arena, dst));
 		(**dst).opcode = IR_OP_UNARY_IDENTITY;
 		(**dst).args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		(**dst).args[0].num = a->u.var.unique;
-		break;
-	case NODE_DECLARATION:
-		if (a->u.declare.init != NULL) {
-			check(ir_expression(arena,
-			                    a->u.declare.init,
-			                    ir,
-			                    NULL,
-			                    dst));
-		}
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
@@ -451,13 +451,22 @@ static WARN_UNUSED result_t
 ir_block(Arena *arena,
          const struct ast *a,
          struct intermediate *ir,
-         struct ir_op **dst)
+         struct ir_op **block_ops)
 {
+	struct ir_op *head = NULL;
+
+	struct ir_op **dst = block_ops;
 	while (a != NULL) {
 		assert(a->node_type == NODE_BLOCK);
 		check(ir_expression(arena, a->u.block.item, ir, NULL, dst));
+		if (head == NULL) {
+			head = *dst;
+		}
+		*dst = (**dst).next;
 		a = a->u.block.next;
 	}
+
+	*block_ops = head;
 	return RESULT_OK;
 }
 
@@ -468,8 +477,6 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 
 	assert(a->node_type == NODE_FUNCTION);
 	f->identifier = a->u.function.identifier.name;
-
-	assert(a->u.op_unary.operand != NULL);
 	check(ir_block(arena, a->u.function.block, ir, &f->ops));
 
 	if (ir->env.generator > 0) {
