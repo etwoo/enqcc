@@ -500,6 +500,29 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 		last_op->args[0].num = ir->env.generator - 1;
 		ir_op_list_concat(f->ops, last_op);
 	}
+
+	/*
+	 * Add a final, often-unreachable `return 0` instruction at the end of
+	 * every function, to make functions like:
+	 *
+	 *     int main(void)
+	 *     {
+	 *     }
+	 *
+	 * behave like:
+	 *
+	 *     int main(void)
+	 *     {
+	 *         return 0;
+	 *     }
+	 */
+	struct ir_op *return_0 = NULL;
+	check(ir_alloc_op(arena, &return_0));
+	return_0->opcode = IR_OP_UNARY_IDENTITY;
+	return_0->args[0].subtype = IR_VAL_CONSTANT_INT;
+	return_0->args[0].num = 0;
+	ir_op_list_concat(f->ops, return_0);
+
 	return RESULT_OK;
 }
 
