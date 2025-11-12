@@ -80,15 +80,23 @@ ir_unary_op(Arena *arena,
 	struct ir_op *src = NULL;
 	check(ir_alloc_op(arena, &src));
 
+	struct ast *ast_inner = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		src->opcode = IR_OP_UNARY_COMPLEMENT;
+		ast_inner = a->u.op_unary.operand;
 		break;
 	case NODE_EXPRESSION_UNARY_NEGATE:
 		src->opcode = IR_OP_UNARY_NEGATE;
+		ast_inner = a->u.op_unary.operand;
 		break;
 	case NODE_EXPRESSION_UNARY_NOT:
 		src->opcode = IR_OP_UNARY_NOT;
+		ast_inner = a->u.op_unary.operand;
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		src->opcode = IR_OP_COPY;
+		ast_inner = a->u.op_binary.rhs;
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -96,11 +104,7 @@ ir_unary_op(Arena *arena,
 	}
 
 	struct ir_op *inner = NULL;
-	check(ir_expression(arena,
-	                    a->u.op_unary.operand,
-	                    ir,
-	                    &src->args[0],
-	                    &inner));
+	check(ir_expression(arena, ast_inner, ir, &src->args[0], &inner));
 
 	src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	src->args[1].num = ir->env.generator++;
@@ -387,10 +391,10 @@ ir_expression(Arena *arena,
 		check(ir_constant(arena, a, peek, dst));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		info("todo_variable_usage"); // TODO
-		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		info("todo_variable_assignment"); // TODO
+		check(ir_alloc_op(arena, dst));
+		(**dst).opcode = IR_OP_UNARY_IDENTITY;
+		(**dst).args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		(**dst).args[0].num = a->u.var.unique;
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
@@ -400,11 +404,10 @@ ir_expression(Arena *arena,
 			                    NULL,
 			                    dst));
 		}
-		info("a->u.declare.identifier"); // TODO
 		break;
 	case NODE_EXPRESSION_NULL:
-		info("todo_expression_null"); // TODO
 		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
