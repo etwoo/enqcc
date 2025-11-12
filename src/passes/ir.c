@@ -57,6 +57,15 @@ ir_op_list_find_last_tmpvar_id(struct ir_op *p)
 	return result;
 }
 
+static void
+ir_op_list_weird_trailing_return_hack(struct ir_op **p)
+{
+	assert(p != NULL);
+	if ((**p).opcode == IR_OP_UNARY_IDENTITY && (**p).next == NULL) {
+		*p = NULL;
+	}
+}
+
 static WARN_UNUSED result_t
 ir_constant(Arena *arena,
             const struct ast *a,
@@ -92,10 +101,6 @@ ir_unary_op(Arena *arena,
 
 	struct ast *ast_inner = NULL;
 	switch (a->node_type) {
-	case NODE_DECLARATION:
-		src->opcode = IR_OP_COPY;
-		ast_inner = a->u.declare.init;
-		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		src->opcode = IR_OP_UNARY_COMPLEMENT;
 		ast_inner = a->u.op_unary.operand;
@@ -260,9 +265,13 @@ ir_binary_op(Arena *arena,
 		assert(src->args[0].subtype == IR_VAL_NONE);
 		src->args[0].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[0].num = ir_op_list_find_last_tmpvar_id(left);
+		ir_op_list_weird_trailing_return_hack(&left);
+
 		assert(src->args[1].subtype == IR_VAL_NONE);
 		src->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		src->args[1].num = ir_op_list_find_last_tmpvar_id(right);
+		ir_op_list_weird_trailing_return_hack(&right);
+
 		/*
 		 * Neither peeked value is a constant. Emit IR in this order:
 		 *
@@ -270,9 +279,19 @@ ir_binary_op(Arena *arena,
 		 * 2) results of recursive invocations of ir_expression()
 		 * 3) the present BINARY_OP(opcode, ..., TMPVAR)
 		 */
-		ir_op_list_concat(left, right);
-		ir_op_list_concat(right, src);
-		*dst = left;
+		if (left != NULL && right != NULL) {
+			ir_op_list_concat(left, right);
+			ir_op_list_concat(right, src);
+			*dst = left;
+		} else if (left != NULL) {
+			ir_op_list_concat(left, src);
+			*dst = left;
+		} else if (right != NULL) {
+			ir_op_list_concat(right, src);
+			*dst = right;
+		} else {
+			*dst = src;
+		}
 	}
 
 	return RESULT_OK;
@@ -406,7 +425,16 @@ ir_expression(Arena *arena,
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			check(ir_unary_op(arena, a, ir, dst));
+			struct ir_op *inner = NULL;
+			check(ir_expression(arena,
+			                    a->u.declare.init,
+			                    ir,
+			                    NULL,
+			                    &inner));
+			inner->opcode = IR_OP_COPY;
+			inner->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+			inner->args[1].num = a->u.declare.identifier.unique;
+			*dst = inner;
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
@@ -482,7 +510,9 @@ ir_block(Arena *arena,
 			 * - declaration without an initialization expression
 			 */
 			struct ast *cur = a->u.block.item;
-			assert(cur->node_type == NODE_EXPRESSION_NULL ||
+			assert(cur->node_type ==
+			               NODE_EXPRESSION_UNARY_IDENTITY ||
+			       cur->node_type == NODE_EXPRESSION_NULL ||
 			       (cur->node_type == NODE_DECLARATION &&
 			        cur->u.declare.init == NULL));
 		}
