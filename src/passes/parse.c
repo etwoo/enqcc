@@ -515,12 +515,15 @@ parse_debug_print_ast_symbol(const char *description,
                              const struct ast_symbol *asym,
                              size_t indent)
 {
-	debug("%*s%s %.*s.%lld%s",
-	      (int)indent,
+	debug("%*s%s", (int)indent, "", description);
+	debug("%*sIDENTIFIER %.*s",
+	      (int)indent + 1,
 	      "",
-	      description,
 	      (int)asym->name.sz,
-	      asym->name.data,
+	      asym->name.data);
+	debug("%*sIDENTIFIER.UNIQUE: %lld%s",
+	      (int)indent + 1,
+	      "",
 	      asym->unique,
 	      asym->unique == NOT_YET_UNIQUE ? " (not unique)" : "");
 }
