@@ -91,6 +91,19 @@ static result_t ir_expression(Arena *arena,
                               struct ir_op **dst) WARN_UNUSED;
 
 static WARN_UNUSED result_t
+ir_decl_init(Arena *arena,
+             const struct ast *a,
+             struct intermediate *ir,
+             struct ir_op **dst)
+{
+	check(ir_expression(arena, a, ir, NULL, dst));
+	(**dst).opcode = IR_OP_COPY;
+	(**dst).args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	(**dst).args[1].num = a->u.declare.identifier.unique;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_unary_op(Arena *arena,
             const struct ast *a,
             struct intermediate *ir,
@@ -425,14 +438,7 @@ ir_expression(Arena *arena,
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			check(ir_expression(arena,
-			                    a->u.declare.init,
-			                    ir,
-			                    NULL,
-			                    dst));
-			(**dst).opcode = IR_OP_COPY;
-			(**dst).args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-			(**dst).args[1].num = a->u.declare.identifier.unique;
+			check(ir_decl_init(arena, a->u.declare.init, ir, dst));
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
