@@ -404,7 +404,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sNAME", (int)(indent + 1), "");
 		parse_debug_print(a->u.function.identifier, indent + 2);
 		debug("%*sBODY", (int)(indent + 1), "");
-		parse_debug_print(a->u.function.block, indent + 2);
+		if (a->u.function.block != NULL) {
+			parse_debug_print(a->u.function.block, indent + 2);
+		}
 		break;
 	case NODE_BLOCK:
 		debug("%*sBLOCK ITEM", (int)indent, "");
