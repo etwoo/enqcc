@@ -99,7 +99,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		if (false && a->u.op_binary.lhs->node_type !=
+		if (a->u.op_binary.lhs->node_type !=
 		    NODE_EXPRESSION_VARIABLE_USAGE) {
 			return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
 		}
