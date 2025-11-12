@@ -19,6 +19,16 @@ ir_alloc_op(Arena *arena, struct ir_op **dst)
 	return RESULT_OK;
 }
 
+static struct ir_op *
+ir_op_list_back(struct ir_op *p)
+{
+	assert(p != NULL);
+	while (p != NULL && p->next != NULL) {
+		p = p->next;
+	}
+	return p;
+}
+
 static void
 ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 {
@@ -463,7 +473,7 @@ ir_block(Arena *arena,
 			head = *dst;
 		}
 		if (*dst != NULL) {
-			*dst = (**dst).next;
+			dst = &ir_op_list_back(*dst)->next;
 		} else {
 			/*
 			 * Sanity-check typical reasons for lack of new ir_op:
