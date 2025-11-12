@@ -48,12 +48,14 @@ symbols_get(const struct symbol *head, const struct string_view *name)
 	return NULL;
 }
 
-static const long long int NOT_YET_UNIQUE = -1;
+enum {
+	NOT_YET_UNIQUE = -1,
+};
 
 static WARN_UNUSED result_t
 resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
 {
-	assert(NOT_YET_UNIQUE < 0);
+	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(var->unique == NOT_YET_UNIQUE);
 	const struct symbol *resolution = symbols_get(head, &var->name);
 	if (resolution == NULL) {
