@@ -66,7 +66,8 @@ compile(Arena *arena,
 	}
 
 	struct ast *a = NULL;
-	check(parse_init(arena, tok, &a));
+	struct symbol *sym = NULL;
+	check(parse_init(arena, tok, &a, &sym));
 	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA) {
@@ -74,13 +75,14 @@ compile(Arena *arena,
 	}
 
 	// TODO: semantic analysis
+	// TODO: pass `struct symbol` to semantic analysis pass
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA_IR) {
 		return RESULT_OK;
 	}
 
 	struct intermediate *ir = NULL;
-	check(ir_init(arena, a, &ir));
+	check(ir_init(arena, a, &ir, &sym));
 	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES &&

@@ -2,6 +2,7 @@
 
 #include "passes.h"
 #include "passes/lex.h"
+#include "passes/symbol.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
@@ -10,43 +11,6 @@
 #include <stdbool.h>
 #include <stdlib.h> /* for strtoll() */
 #include <string.h>
-
-// TODO: for typedef support, track types in addition to variables
-struct symbol {
-	struct string_view name;
-	long long int unique;
-	struct symbol *next;
-};
-
-// TODO: when done, use (**head).unique + 1 as first IR generator value
-// TODO: ... or keep first IR generator value as zero if (*head == NULL)
-static WARN_UNUSED result_t
-symbols_prepend(Arena *arena,
-                struct symbol **head,
-                const struct string_view *name)
-{
-	struct symbol *node = arena_alloc(arena, sizeof(*node));
-	check_if(node == NULL, ERR_PARSE_ALLOC);
-	memset(node, 0, sizeof(*node));
-	node->next = *head;
-	node->name = *name;
-	node->unique = *head == NULL ? 0 : (**head).unique + 1;
-	*head = node;
-	return RESULT_OK;
-}
-
-static WARN_UNUSED const struct symbol *
-symbols_get(const struct symbol *head, const struct string_view *name)
-{
-	while (head != NULL) {
-		if (head->name.sz == name->sz &&
-		    0 == strncmp(head->name.data, name->data, name->sz)) {
-			return head;
-		}
-		head = head->next;
-	}
-	return NULL;
-}
 
 enum {
 	NOT_YET_UNIQUE = -1,
@@ -440,17 +404,19 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_block(Arena *arena, const struct token **tok, struct ast **dst)
+parse_block(Arena *arena,
+            const struct token **tok,
+            struct ast **dst,
+            struct symbol **sym)
 {
-	struct symbol *sym = NULL;
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, &(**dst).u.block.item));
-			check(resolve_decl(arena, (**dst).u.block.item, &sym));
+			check(resolve_decl(arena, (**dst).u.block.item, sym));
 		} else {
 			check(parse_stmt(arena, tok, &(**dst).u.block.item));
-			check(resolve_expr(arena, (**dst).u.block.item, &sym));
+			check(resolve_expr(arena, (**dst).u.block.item, sym));
 		}
 		dst = &(**dst).u.block.next;
 	}
@@ -458,7 +424,10 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_function(Arena *arena, const struct token **tok, struct ast **dst)
+parse_function(Arena *arena,
+               const struct token **tok,
+               struct ast **dst,
+               struct symbol **sym)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
 
@@ -493,7 +462,7 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_block(arena, tok, &(**dst).u.function.block));
+	check(parse_block(arena, tok, &(**dst).u.function.block, sym));
 
 	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
@@ -504,12 +473,16 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 result_t
-parse_init(Arena *arena, const struct token *tok, struct ast **a)
+parse_init(Arena *arena,
+           const struct token *tok,
+           struct ast **a,
+           struct symbol **sym)
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
 	check(parse_function(arena,
 	                     &tok,
-	                     &(**a).u.program.entrypoint_function));
+	                     &(**a).u.program.entrypoint_function,
+	                     sym));
 	if (tok != NULL) {
 		return make_result(ERR_PARSE_PROG_EXPECT_END);
 	}

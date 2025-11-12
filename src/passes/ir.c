@@ -2,6 +2,7 @@
 
 #include "passes.h"
 #include "passes/parse.h"
+#include "passes/symbol.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
@@ -488,11 +489,15 @@ ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 }
 
 result_t
-ir_init(Arena *arena, const struct ast *a, struct intermediate **ir)
+ir_init(Arena *arena,
+        const struct ast *a,
+        struct intermediate **ir,
+        struct symbol **sym)
 {
 	*ir = arena_alloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
 	memset(*ir, 0, sizeof(**ir));
+	(**ir).env.generator = *sym == NULL ? 0 : (**sym).unique;
 	check(ir_program(arena, a, *ir));
 	return RESULT_OK;
 }
