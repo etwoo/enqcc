@@ -456,6 +456,7 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 			check(resolve_decl(arena, (**dst).u.block.item, &sym));
 		} else {
 			check(parse_stmt(arena, tok, &(**dst).u.block.item));
+			check(resolve_expr(arena, (**dst).u.block.item, &sym));
 		}
 		dst = &(**dst).u.block.next;
 	}
