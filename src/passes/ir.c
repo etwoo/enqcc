@@ -462,7 +462,16 @@ ir_block(Arena *arena,
 		if (head == NULL) {
 			head = *dst;
 		}
-		*dst = (**dst).next;
+		if (*dst != NULL) {
+			*dst = (**dst).next;
+		} else {
+			/*
+			 * Sanity-check typical reason for lack of new ir_op:
+			 * declaration without an initialization expression.
+			 */
+			assert(a->u.block.item->node_type == NODE_DECLARATION);
+			assert(a->u.block.item->u.declare.init == NULL);
+		}
 		a = a->u.block.next;
 	}
 
