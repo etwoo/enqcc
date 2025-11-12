@@ -565,7 +565,11 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	return_0->opcode = IR_OP_UNARY_IDENTITY;
 	return_0->args[0].subtype = IR_VAL_CONSTANT_INT;
 	return_0->args[0].num = 0;
-	ir_op_list_concat(f->ops, return_0);
+	if (f->ops != NULL) {
+		ir_op_list_concat(f->ops, return_0);
+	} else {
+		f->ops = return_0;
+	}
 
 	return RESULT_OK;
 }
