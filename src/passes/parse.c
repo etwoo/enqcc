@@ -94,6 +94,12 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	}
 
 	check(symbols_prepend(arena, sym, &a->u.declare.identifier.name));
+	assert(a->u.declare.identifier.name.sz == (**sym).name.sz &&
+	       0 == strncmp(a->u.declare.identifier.name.data,
+	                    (**sym).name.data,
+	                    (**sym).name.sz));
+	a->u.declare.identifier.unique = (**sym).unique;
+
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
 	}
