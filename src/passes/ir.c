@@ -384,6 +384,10 @@ ir_expression(Arena *arena,
 	case NODE_CONSTANT_INT:
 		check(ir_constant(arena, a, peek, dst));
 		break;
+	case NODE_BLOCK:
+	case NODE_DECLARATION:
+	case NODE_EXPRESSION_NULL:
+		break; // TODO: AST->IR for block, decl, null
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -433,7 +437,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	f->identifier = a->u.function.identifier->u.str;
 
 	assert(a->u.op_unary.operand != NULL);
-	check(ir_expression(arena, a->u.function.statement, ir, NULL, &f->ops));
+	check(ir_expression(arena, a->u.function.block, ir, NULL, &f->ops));
 
 	if (ir->env.generator > 0) {
 		struct ir_op *last_op = NULL;

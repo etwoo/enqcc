@@ -204,8 +204,11 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		precedence += PRECEDENCE_INCREMENT;
 		break;
-	case NODE_FUNCTION:
 	case NODE_PROGRAM:
+	case NODE_FUNCTION:
+	case NODE_BLOCK:
+	case NODE_DECLARATION:
+	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -263,22 +266,67 @@ parse_expression(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-parse_statement(Arena *arena, const struct token **tok, struct ast **dst)
+parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_IDENTITY));
+	check(parse_alloc(arena, dst, NODE_DECLARATION));
 
-	if (!is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
-		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_KEYWORD_RETURN);
+	if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+		return make_result(ERR_PARSE_DECL_EXPECT_TYPE_INT);
 	}
 	token_consume(tok);
 
-	check(parse_expression(arena, tok, &(**dst).u.op_unary.operand, 0));
+	check(parse_identifier(arena, tok, &(**dst).u.declare.identifier));
+	if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
+		token_consume(tok);
+		check(parse_expression(arena, tok, &(**dst).u.declare.init, 0));
+	}
+
+	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
+		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON);
+	}
+	token_consume(tok);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
+		token_consume(tok);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_IDENTITY));
+		check(parse_expression(arena,
+		                       tok,
+		                       &(**dst).u.op_unary.operand,
+		                       0));
+	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
+		token_consume(tok);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+		return RESULT_OK;
+	} else {
+		check(parse_expression(arena, tok, dst, 0));
+	}
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
 	}
 	token_consume(tok);
 
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_block(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
+		check(parse_alloc(arena, dst, NODE_BLOCK));
+		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+			check(parse_decl(arena, tok, &(**dst).u.block.item));
+		} else {
+			check(parse_stmt(arena, tok, &(**dst).u.block.item));
+		}
+		dst = &(**dst).u.block.next;
+	}
 	return RESULT_OK;
 }
 
@@ -314,7 +362,7 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_statement(arena, tok, &(**dst).u.function.statement));
+	check(parse_block(arena, tok, &(**dst).u.function.block));
 
 	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
@@ -352,7 +400,24 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sNAME", (int)(indent + 1), "");
 		parse_debug_print(a->u.function.identifier, indent + 2);
 		debug("%*sBODY", (int)(indent + 1), "");
-		parse_debug_print(a->u.function.statement, indent + 2);
+		parse_debug_print(a->u.function.block, indent + 2);
+		break;
+	case NODE_BLOCK:
+		debug("%*sBLOCK ITEM", (int)indent, "");
+		parse_debug_print(a->u.block.item, indent);
+		if (a->u.block.next) {
+			parse_debug_print(a->u.block.next, indent);
+		}
+		break;
+	case NODE_DECLARATION:
+		debug("%*sDECLARATION", (int)indent, "");
+		debug("%*sIDENTIFIER", (int)(indent + 1), "");
+		parse_debug_print(a->u.op_binary.lhs, indent + 2);
+		debug("%*sINITIALIZER", (int)(indent + 1), "");
+		parse_debug_print(a->u.op_binary.rhs, indent + 2);
+		break;
+	case NODE_EXPRESSION_NULL:
+		debug("%*sEXPRESSION NULL", (int)indent, "");
 		break;
 	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_UNARY_NEGATE:

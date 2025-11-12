@@ -7,6 +7,9 @@ struct ast {
 	enum {
 		NODE_PROGRAM,
 		NODE_FUNCTION,
+		NODE_BLOCK,
+		NODE_DECLARATION,
+		NODE_EXPRESSION_NULL,
 		NODE_EXPRESSION_UNARY_IDENTITY, /* aka return */
 		NODE_EXPRESSION_UNARY_COMPLEMENT,
 		NODE_EXPRESSION_UNARY_NEGATE,
@@ -36,8 +39,16 @@ struct ast {
 		} program;
 		struct {
 			struct ast *identifier;
-			struct ast *statement;
+			struct ast *block;
 		} function;
+		struct {
+			struct ast *item;
+			struct ast *next;
+		} block;
+		struct {
+			struct ast *identifier;
+			struct ast *init;
+		} declare;
 		struct {
 			struct ast *operand;
 		} op_unary;
