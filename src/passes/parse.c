@@ -417,7 +417,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sDECLARATION", (int)indent, "");
 		debug("%*sIDENTIFIER", (int)(indent + 1), "");
 		parse_debug_print(a->u.declare.identifier, indent + 2);
-		if (a->u.decl.init != NULL) {
+		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
 		}
