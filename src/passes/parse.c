@@ -416,9 +416,11 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_DECLARATION:
 		debug("%*sDECLARATION", (int)indent, "");
 		debug("%*sIDENTIFIER", (int)(indent + 1), "");
-		parse_debug_print(a->u.op_binary.lhs, indent + 2);
-		debug("%*sINITIALIZER", (int)(indent + 1), "");
-		parse_debug_print(a->u.op_binary.rhs, indent + 2);
+		parse_debug_print(a->u.declare.identifier, indent + 2);
+		if (a->u.decl.init != NULL) {
+			debug("%*sINITIALIZER", (int)(indent + 1), "");
+			parse_debug_print(a->u.declare.init, indent + 2);
+		}
 		break;
 	case NODE_EXPRESSION_NULL:
 		debug("%*sEXPRESSION NULL", (int)indent, "");
