@@ -53,7 +53,6 @@ struct ir_env {
 struct intermediate {
 	struct ir_function function;
 	struct ir_env env;
-	struct ir_val eax_val;
 };
 
 #endif

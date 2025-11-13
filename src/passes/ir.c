@@ -29,14 +29,20 @@ ir_op_list_back(struct ir_op *p)
 	return p;
 }
 
-static void
+static struct ir_op *
 ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 {
-	assert(first != NULL);
-	while (first->next != NULL) {
-		first = first->next;
+	struct ir_op *head = NULL;
+	if (first == NULL) {
+		head = second;
+	} else {
+		head = first;
+		while (first->next != NULL) {
+			first = first->next;
+		}
+		first->next = second;
 	}
-	first->next = second;
+	return head;
 }
 
 static result_t ir_expr(Arena *arena,
@@ -65,8 +71,7 @@ ir_decl_init(Arena *arena,
 	assigner->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	assigner->args[1].num = a->u.declare.identifier.unique;
 
-	ir_op_list_concat(inner, assigner);
-	*dst = inner;
+	*dst = ir_op_list_concat(inner, assigner);
 	return RESULT_OK;
 }
 
@@ -82,6 +87,10 @@ ir_unary_op(Arena *arena,
 
 	struct ast *ast_inner = NULL;
 	switch (a->node_type) {
+	case NODE_FUNCTION_RETURN_STATEMENT:
+		unary->opcode = IR_OP_COPY;
+		ast_inner = a->u.op_unary.operand;
+		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		unary->opcode = IR_OP_UNARY_COMPLEMENT;
 		ast_inner = a->u.op_unary.operand;
@@ -121,8 +130,7 @@ ir_unary_op(Arena *arena,
 	 * 2) results of recursive invocation of ir_expr()
 	 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
 	 */
-	ir_op_list_concat(inner, unary);
-	*dst = inner;
+	*dst = ir_op_list_concat(inner, unary);
 	return RESULT_OK;
 }
 
@@ -199,9 +207,7 @@ ir_binary_op(Arena *arena,
 	 * 2) results of recursive invocations of ir_expr()
 	 * 3) the present BINARY_OP(opcode, ..., TMPVAR)
 	 */
-	ir_op_list_concat(left, right);
-	ir_op_list_concat(right, binary);
-	*dst = left;
+	*dst = ir_op_list_concat(left, ir_op_list_concat(right, binary));
 	return RESULT_OK;
 }
 
@@ -236,8 +242,7 @@ ir_logical_op_arm(Arena *arena,
 	jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	jumper->args[1].num = jump_label;
 
-	ir_op_list_concat(inner, jumper);
-	*dst = inner;
+	*dst = ir_op_list_concat(inner, jumper);
 	return RESULT_OK;
 }
 
@@ -306,9 +311,7 @@ ir_logical_op(Arena *arena,
 	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	foot_pos->args[0].num = label_end;
 
-	ir_op_list_concat(left, right);
-	ir_op_list_concat(right, footer);
-	*dst = left;
+	*dst = ir_op_list_concat(left, ir_op_list_concat(right, footer));
 	return RESULT_OK;
 }
 
@@ -324,6 +327,7 @@ ir_expr(Arena *arena,
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_CONSTANT_INT;
 		return_value->num = a->u.num;
+		assert(*dst == NULL); /* does not create new dst op */
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
@@ -337,6 +341,7 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
+	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -426,11 +431,13 @@ ir_block(Arena *arena,
 static WARN_UNUSED result_t
 ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 {
-	struct ir_function *f = &ir->function;
-
 	assert(a->node_type == NODE_FUNCTION);
+
+	struct ir_function *f = &ir->function;
 	f->identifier = a->u.function.identifier.name;
-	check(ir_block(arena, a->u.function.block, ir, &f->ops, &ir->eax_val));
+
+	struct ir_val eax_val = {0};
+	check(ir_block(arena, a->u.function.block, ir, &f->ops, &eax_val));
 
 	/*
 	 * If necessary, add a final, often-unreachable `return 0` instruction
@@ -450,17 +457,13 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	struct ir_op *return_val_or_0 = NULL;
 	check(ir_alloc_op(arena, &return_val_or_0));
 	return_val_or_0->opcode = IR_OP_RET;
-	if (ir->eax_val.subtype == IR_VAL_NONE) {
+	if (eax_val.subtype == IR_VAL_NONE) {
 		return_val_or_0->args[0].subtype = IR_VAL_CONSTANT_INT;
 		return_val_or_0->args[0].num = 0;
 	} else {
-		memcpy(return_val_or_0, &ir->eax_val, sizeof(*return_val_or_0));
+		memcpy(return_val_or_0, &eax_val, sizeof(*return_val_or_0));
 	}
-	if (f->ops != NULL) {
-		ir_op_list_concat(f->ops, return_val_or_0);
-	} else {
-		f->ops = return_val_or_0;
-	}
+	f->ops = ir_op_list_concat(f->ops, return_val_or_0);
 
 	return RESULT_OK;
 }
