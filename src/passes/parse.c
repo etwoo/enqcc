@@ -268,8 +268,6 @@ parse_expr_check_next_token(Arena *arena,
 		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN_EQ);
 	} else if (is_token_type(tok, TOKEN_QUESTION)) {
 		r = parse_alloc(arena, a, NODE_EXPRESSION_TERNARY_CONDITIONAL);
-	} else {
-		return RESULT_OK;
 	}
 	return r;
 }
@@ -429,6 +427,8 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 static WARN_UNUSED result_t
 parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 {
+	bool expect_semicolon_after = true;
+
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
@@ -439,11 +439,13 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		return RESULT_OK;
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
 		check(parse_if_else(arena, tok, dst));
+		expect_semicolon_after = false;
 	} else {
 		check(parse_expr(arena, tok, dst, 0));
 	}
 
-	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
+	if (expect_semicolon_after && !is_token_type(*tok, TOKEN_SEMICOLON)) {
+		lex_debug_print(*tok);
 		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
 	}
 	token_consume(tok);
@@ -490,7 +492,7 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_expr(arena, tok, &(**dst).u.if_.then_clause, 0));
+	check(parse_stmt(arena, tok, &(**dst).u.if_.then_clause));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_ELSE)) {
 		return RESULT_OK;
