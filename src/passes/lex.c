@@ -38,7 +38,9 @@ lex_alloc(Arena *arena, struct token **tok)
 	F('|', TOKEN_VERT_BAR)                                                 \
 	F('=', TOKEN_EQUAL_SIGN)                                               \
 	F('<', TOKEN_LESS_THAN)                                                \
-	F('>', TOKEN_MORE_THAN)
+	F('>', TOKEN_MORE_THAN)                                                \
+	F('?', TOKEN_QUESTION)                                                 \
+	F(':', TOKEN_COLON)
 
 static WARN_UNUSED result_t
 lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
@@ -167,6 +169,10 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 			cur->token_type = TOKEN_KEYWORD_VOID;
 		} else if (0 == strncmp("int", cur->val.data, cur->val.sz)) {
 			cur->token_type = TOKEN_KEYWORD_INT;
+		} else if (0 == strncmp("if", cur->val.data, cur->val.sz)) {
+			cur->token_type = TOKEN_KEYWORD_IF;
+		} else if (0 == strncmp("else", cur->val.data, cur->val.sz)) {
+			cur->token_type = TOKEN_KEYWORD_ELSE;
 		} else {
 			cur->token_type = TOKEN_IDENTIFIER;
 		}
@@ -235,6 +241,12 @@ lex_debug_one(const struct token *tok)
 		break;
 	case TOKEN_KEYWORD_INT:
 		debug("KEYWORD int");
+		break;
+	case TOKEN_KEYWORD_IF:
+		debug("KEYWORD if");
+		break;
+	case TOKEN_KEYWORD_ELSE:
+		debug("KEYWORD else");
 		break;
 	case TOKEN_HYPHEN_HYPHEN:
 		debug("TOKEN_HYPHEN_HYPHEN");
