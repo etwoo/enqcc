@@ -57,28 +57,6 @@ ir_op_list_find_last_tmpvar_id(struct ir_op *p)
 	return result;
 }
 
-// TODO: delete
-// static void
-// ir_op_list_weird_trailing_return_hack(struct ir_op **p)
-// {
-// 	assert(p != NULL);
-// 	if ((**p).opcode == IR_OP_UNARY_IDENTITY && (**p).next == NULL) {
-// 		*p = NULL;
-// 	}
-// }
-
-// TODO: get rid of peek and associated special-casing
-// TODO: instead, add `long long int *out` parameter that callee uses to signal
-// to caller what TMPVAR id holds the result of the instructions that have been
-// added to <dst>; this avoids the caller from having to guess the right ID to
-// use and will hopefully be less prone to bugs
-// TODO: hopefully these two changes together will make this code actually
-// understandble again-- remove peek, signal explicitly the TMPVAR id to use in
-// the caller to refer to the result of the child instruction (i.e.
-// instructions placed earlier in the collection) -- and in the case of 2-arg
-// ir_binary_op(), there should be TWO such out parameters (or an equivalent
-// out[2] array)
-
 static result_t ir_expr(Arena *arena,
                         const struct ast *a,
                         struct intermediate *ir,
@@ -89,14 +67,24 @@ static WARN_UNUSED result_t
 ir_decl_init(Arena *arena,
              const struct ast *a,
              struct intermediate *ir,
-             struct ir_op **dst,
-             struct ir_val *return_value)
+             struct ir_op **dst)
 {
-	check(ir_expr(arena, a, ir, dst, return_value));
-	// TODO
-	////////(**dst).opcode = IR_OP_COPY;
-	////////(**dst).args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	////////(**dst).args[1].num = a->u.declare.identifier.unique;
+	assert(a->node_type == NODE_DECLARATION);
+
+	struct ir_op *assigner = NULL;
+	check(ir_alloc_op(arena, &assigner));
+	assigner->optype = IR_OP_COPY;
+
+	struct ir_op *inner = NULL;
+	struct ir_op inner_return = {0};
+	check(ir_expr(arena, a->u.declare.init, ir, inner, inner_return));
+
+	memcpy(&assigner->args[0], &inner_return.args[1], sizeof(ir_val));
+	assigner->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	assigner->args[1].num = a->declare.identifier.unique;
+
+	ir_op_list_concat(inner, assigner);
+	*dst = inner;
 	return RESULT_OK;
 }
 
@@ -153,7 +141,6 @@ ir_unary_op(Arena *arena,
 	 */
 	ir_op_list_concat(inner, unary);
 	*dst = inner;
-
 	return RESULT_OK;
 }
 
@@ -233,7 +220,6 @@ ir_binary_op(Arena *arena,
 	ir_op_list_concat(left, right);
 	ir_op_list_concat(right, binary);
 	*dst = left;
-
 	return RESULT_OK;
 }
 
@@ -270,7 +256,6 @@ ir_logical_op_arm(Arena *arena,
 
 	ir_op_list_concat(inner, jumper);
 	*dst = inner;
-
 	return RESULT_OK;
 }
 
@@ -282,6 +267,9 @@ ir_logical_op(Arena *arena,
               struct ir_val *return_value,
               bool jz)
 {
+	assert(a->node_type == NODE_EXPRESSION_LOGICAL_AND ||
+	       a->node_type == NODE_EXPRESSION_LOGICAL_OR);
+
 	const long long int LF = ir->env.labels++;
 
 	struct ir_op *left = NULL;
@@ -339,7 +327,6 @@ ir_logical_op(Arena *arena,
 	ir_op_list_concat(left, right);
 	ir_op_list_concat(right, footer);
 	*dst = left;
-
 	return RESULT_OK;
 }
 
@@ -358,7 +345,7 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			check(ir_decl_init(arena, a->u.declare.init, ir, dst));
+			check(ir_decl_init(arena, a, ir, dst));
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
@@ -450,6 +437,7 @@ ir_block(Arena *arena,
 	}
 
 	*block_ops = head;
+	assert(return_value->subtype == IR_VAL_NONE);
 	memcpy(return_value, &block_return, sizeof(*return_value));
 	return RESULT_OK;
 }
