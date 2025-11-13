@@ -43,6 +43,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_FUNCTION:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
+	case NODE_IF_ELSE:
 		assert(0); /* logic error in caller */
 		break;
 	case NODE_EXPRESSION_NULL:
@@ -178,6 +179,9 @@ static result_t parse_expression(Arena *arena,
                                  const struct token **tok,
                                  struct ast **dst,
                                  unsigned minimum_precedence) WARN_UNUSED;
+static result_t parse_if_else(Arena *arena,
+                              const struct token **tok,
+                              struct ast **dst) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
@@ -302,6 +306,7 @@ get_precedence(const struct ast *a)
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
+	case NODE_IF_ELSE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -404,6 +409,8 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
 		return RESULT_OK;
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
+		check(parse_if_else(arena, tok, dst));
 	} else {
 		check(parse_expression(arena, tok, dst, 0));
 	}
@@ -433,6 +440,36 @@ parse_block(Arena *arena,
 		}
 		dst = &(**dst).u.block.next;
 	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_KEYWORD_IF));
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		return make_result(ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_OPEN);
+	}
+	token_consume(tok);
+
+	check(parse_alloc(arena, dst, NODE_IF_ELSE));
+	check(parse_expression(arena, tok, &(**dst).u.if_.condition, 0));
+
+	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		return make_result(ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_CLOSE);
+	}
+	token_consume(tok);
+
+	check(parse_expression(arena, tok, &(**dst).u.if_.then_clause, 0));
+
+	if (!is_token_type(*tok, TOKEN_KEYWORD_ELSE)) {
+		return RESULT_OK;
+	}
+	token_consume(tok);
+
+	check(parse_expression(arena, tok, &(**dst).u.if_.else_clause, 0));
 	return RESULT_OK;
 }
 
@@ -553,6 +590,17 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
+		}
+		break;
+	case NODE_IF_ELSE:
+		debug("%*sIF", (int)indent, "");
+		debug("%*sCONDITION", (int)indent + 1, "");
+		parse_debug_print(a->u.if_.condition, indent + 2);
+		debug("%*sTHEN", (int)indent + 1, "");
+		parse_debug_print(a->u.if_.then_clause, indent + 2);
+		if (a->u.if_.else_clause != NULL) {
+			debug("%*sELSE", (int)indent + 1, "");
+			parse_debug_print(a->u.if_.else_clause, indent + 2);
 		}
 		break;
 	case NODE_EXPRESSION_NULL:

@@ -15,6 +15,7 @@ struct ast {
 		NODE_FUNCTION_RETURN_STATEMENT,
 		NODE_BLOCK,
 		NODE_DECLARATION,
+		NODE_IF_ELSE,
 		NODE_EXPRESSION_NULL,
 		NODE_EXPRESSION_UNARY_COMPLEMENT,
 		NODE_EXPRESSION_UNARY_NEGATE,
@@ -53,6 +54,11 @@ struct ast {
 			struct ast_symbol identifier;
 			struct ast *init;
 		} declare;
+		struct {
+			struct ast *condition;
+			struct ast *then_clause;
+			struct ast *else_clause;
+		} if_;
 		struct {
 			struct ast *operand;
 		} op_unary;
