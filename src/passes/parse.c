@@ -278,7 +278,7 @@ static WARN_UNUSED result_t
 parse_ternary_middle(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_expr(arena, tok, dst, 0));
-	if (!is_token_type(*tok, NODE_CONSTANT_INT)) {
+	if (!is_token_type(*tok, TOKEN_COLON)) {
 		return make_result(ERR_PARSE_EXPR_EXPECT_COLON_IN_TERNARY_OP);
 	}
 	token_consume(tok);
