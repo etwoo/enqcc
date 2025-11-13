@@ -84,6 +84,7 @@ ir_decl_init(Arena *arena,
 struct if_else_prep {
 	struct ir_op *jumper;
 	struct ir_op *body;
+	struct ir_op *assign_result;
 	struct ir_op *jump_target;
 };
 
@@ -93,6 +94,7 @@ ir_if_else_prepare(Arena *arena,
                    struct intermediate *ir,
                    const struct ir_val *jump_operand,
                    const long long int jump_label,
+                   const long long int assign_result_unique,
                    struct if_else_prep *out)
 {
 	check(ir_alloc_op(arena, &out->jumper));
@@ -107,8 +109,16 @@ ir_if_else_prepare(Arena *arena,
 		out->jumper->args[0].num = jump_label;
 	}
 
-	struct ir_val dummy = {0};
-	check(ir_expr(arena, ast_clause, ir, &out->body, &dummy));
+	struct ir_val body_return = {0};
+	check(ir_expr(arena, ast_clause, ir, &out->body, &body_return));
+
+	if (assign_result_unique >= 0) {
+		check(ir_alloc_op(arena, &out->assign_result));
+		out->assign_result->opcode = IR_OP_COPY;
+		ir_val_copy(&body_return, &out->assign_result->args[0]);
+		out->assign_result->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		out->assign_result->args[1].num = assign_result_unique;
+	}
 
 	check(ir_alloc_op(arena, &out->jump_target));
 	out->jump_target->opcode = IR_OP_LABEL;
@@ -121,13 +131,25 @@ static WARN_UNUSED result_t
 ir_if_else(Arena *arena,
            const struct ast *a,
            struct intermediate *ir,
-           struct ir_op **dst)
+           struct ir_op **dst,
+           struct ir_val *return_value)
 {
-	assert(a->node_type == NODE_IF_ELSE);
+	assert(a->node_type == NODE_IF_ELSE ||
+	       a->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL);
 
 	const bool has_else = (a->u.if_.else_clause != NULL);
 	const long long int cond_jump_to = ir->env.labels++;
 	const long long int end_jump_to = has_else ? ir->env.labels++ : -1;
+
+	const long long int assign_result_unique =
+		a->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL
+			? ir->env.generator++
+			: -1;
+	if (assign_result_unique >= 0) {
+		assert(return_value->subtype == IR_VAL_NONE);
+		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
+		return_value->num = assign_result_unique;
+	}
 
 	struct ir_op *cond_ops = NULL;
 	struct ir_val cond_return = {0};
@@ -139,6 +161,7 @@ ir_if_else(Arena *arena,
 	                         ir,
 	                         &cond_return,
 	                         cond_jump_to,
+	                         assign_result_unique,
 	                         &then_p));
 
 	struct if_else_prep or_p = {0};
@@ -148,22 +171,24 @@ ir_if_else(Arena *arena,
 		                         ir,
 		                         NULL,
 		                         end_jump_to,
+		                         assign_result_unique,
 		                         &or_p));
 	}
 
-	*dst = ir_op_list_concat(
+	struct ir_op *collect[] = {
 		cond_ops,
-		ir_op_list_concat(
-			then_p.jumper,
-			ir_op_list_concat(
-				then_p.body,
-				ir_op_list_concat(
-					or_p.jumper,
-					ir_op_list_concat(
-						then_p.jump_target,
-						ir_op_list_concat(
-							or_p.body,
-							or_p.jump_target))))));
+		then_p.jumper,
+		then_p.body,
+		then_p.assign_result,
+		or_p.jumper,
+		then_p.jump_target,
+		or_p.body,
+		or_p.assign_result,
+		or_p.jump_target,
+	};
+	for (size_t i = ARRAY_SIZE(collect); i > 0; --i) {
+		*dst = ir_op_list_concat(*dst, collect[i - 1]);
+	}
 	return RESULT_OK;
 }
 
@@ -460,7 +485,8 @@ ir_expr(Arena *arena,
 		}
 		break;
 	case NODE_IF_ELSE:
-		check(ir_if_else(arena, a, ir, dst));
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		check(ir_if_else(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
@@ -500,9 +526,6 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_LOGICAL_OR:
 		check(ir_logical_op(arena, a, ir, dst, return_value, false));
-		break;
-	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-		assert(0 && "TODO: implement ternary operator");
 		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
