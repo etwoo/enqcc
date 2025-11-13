@@ -15,7 +15,7 @@ struct ir_val {
 
 struct ir_op {
 	enum {
-		IR_OP_UNARY_IDENTITY, /* aka return */
+		IR_OP_RET,
 		IR_OP_UNARY_COMPLEMENT,
 		IR_OP_UNARY_NEGATE,
 		IR_OP_UNARY_NOT,
@@ -53,6 +53,7 @@ struct ir_env {
 struct intermediate {
 	struct ir_function function;
 	struct ir_env env;
+	struct ir_val eax_val;
 };
 
 #endif

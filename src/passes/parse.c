@@ -44,7 +44,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
 		break; /* no resolution work to do */
-	case NODE_EXPRESSION_UNARY_IDENTITY:
+	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -176,10 +176,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
-		// TODO: remove *_UNARY_IDENTITY shit here and in ir.c
-		// flatten and make e.g. NODE_CONSTANT_INT direct child
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_IDENTITY));
-		check(parse_constant(arena, tok, &(**dst).u.op_unary.operand));
+		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
 		(**dst).u.var.name = (**tok).val;
@@ -297,7 +294,6 @@ get_precedence(const struct ast *a)
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
 	case NODE_EXPRESSION_NULL:
-	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -390,7 +386,7 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_IDENTITY));
+		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
 		check(parse_expression(arena,
 		                       tok,
 		                       &(**dst).u.op_unary.operand,
@@ -553,14 +549,14 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_NULL:
 		debug("%*sEXPRESSION NULL", (int)indent, "");
 		break;
-	case NODE_EXPRESSION_UNARY_IDENTITY:
+	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		switch (a->node_type) {
-		case NODE_EXPRESSION_UNARY_IDENTITY:
-			debug("%*sEXPRESSION IDENTITY", (int)indent, "");
+		case NODE_FUNCTION_RETURN_STATEMENT:
+			debug("%*sRETURN", (int)indent, "");
 			break;
 		case NODE_EXPRESSION_UNARY_NEGATE:
 			debug("%*sEXPRESSION NEGATE", (int)indent, "");
