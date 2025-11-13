@@ -491,12 +491,16 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	 *         return 0;
 	 *     }
 	 */
-	struct ir_op *return_0 = NULL;
-	check(ir_alloc_op(arena, &return_0));
-	return_0->opcode = IR_OP_RET;
-	return_0->args[0].subtype = IR_VAL_CONSTANT_INT;
-	return_0->args[0].num = 0;
-	f->ops = ir_op_list_concat(f->ops, return_0);
+	struct ir_op *last_op = f->ops ? ir_op_list_back(f->ops) : NULL;
+	if (last_op == NULL || last_op->opcode != IR_OP_RET) {
+		struct ir_op **return_0 =
+			last_op ? &last_op->next : &f->ops ;
+		check(ir_alloc_op(arena, return_0));
+		assert(*return_0 != NULL);
+		(**return_0).opcode = IR_OP_RET;
+		(**return_0).args[0].subtype = IR_VAL_CONSTANT_INT;
+		(**return_0).args[0].num = 0;
+	}
 
 	return RESULT_OK;
 }
