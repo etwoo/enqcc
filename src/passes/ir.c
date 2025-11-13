@@ -81,6 +81,117 @@ ir_decl_init(Arena *arena,
 	return RESULT_OK;
 }
 
+struct if_else_prep {
+	struct ir_op *jumper;
+	struct ir_op *body;
+	struct ir_op *assign_result;
+	struct ir_op *jump_target;
+};
+
+static WARN_UNUSED result_t
+ir_if_else_prepare(Arena *arena,
+                   const struct ast *ast_clause,
+                   struct intermediate *ir,
+                   const struct ir_val *jump_operand,
+                   const long long int jump_label,
+                   const long long int assign_result_unique,
+                   struct if_else_prep *out)
+{
+	check(ir_alloc_op(arena, &out->jumper));
+	if (jump_operand != NULL) {
+		out->jumper->opcode = IR_OP_JUMP_IF_ZERO;
+		ir_val_copy(jump_operand, &out->jumper->args[0]);
+		out->jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
+		out->jumper->args[1].num = jump_label;
+	} else {
+		out->jumper->opcode = IR_OP_JUMP;
+		out->jumper->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+		out->jumper->args[0].num = jump_label;
+	}
+
+	struct ir_val body_return = {0};
+	check(ir_expr(arena, ast_clause, ir, &out->body, &body_return));
+
+	if (assign_result_unique >= 0) {
+		check(ir_alloc_op(arena, &out->assign_result));
+		out->assign_result->opcode = IR_OP_COPY;
+		ir_val_copy(&body_return, &out->assign_result->args[0]);
+		out->assign_result->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		out->assign_result->args[1].num = assign_result_unique;
+	}
+
+	check(ir_alloc_op(arena, &out->jump_target));
+	out->jump_target->opcode = IR_OP_LABEL;
+	out->jump_target->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	out->jump_target->args[0].num = jump_label;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_if_else(Arena *arena,
+           const struct ast *a,
+           struct intermediate *ir,
+           struct ir_op **dst,
+           struct ir_val *return_value)
+{
+	assert(a->node_type == NODE_IF_ELSE ||
+	       a->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL);
+
+	const bool has_else = (a->u.if_.else_clause != NULL);
+	const long long int cond_jump_to = ir->env.labels++;
+	const long long int end_jump_to = has_else ? ir->env.labels++ : -1;
+	const long long int assign_result_unique =
+		a->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL
+			? ir->env.generator++
+			: -1;
+
+	struct ir_op *cond_ops = NULL;
+	struct ir_val cond_return = {0};
+	check(ir_expr(arena, a->u.if_.condition, ir, &cond_ops, &cond_return));
+
+	struct if_else_prep then_p = {0};
+	check(ir_if_else_prepare(arena,
+	                         a->u.if_.then_clause,
+	                         ir,
+	                         &cond_return,
+	                         cond_jump_to,
+	                         assign_result_unique,
+	                         &then_p));
+
+	struct if_else_prep or_p = {0};
+	if (has_else) {
+		check(ir_if_else_prepare(arena,
+		                         a->u.if_.else_clause,
+		                         ir,
+		                         NULL,
+		                         end_jump_to,
+		                         assign_result_unique,
+		                         &or_p));
+	}
+
+	if (assign_result_unique >= 0) {
+		assert(return_value->subtype == IR_VAL_NONE);
+		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
+		return_value->num = assign_result_unique;
+	}
+
+	struct ir_op *collect[] = {
+		cond_ops,
+		then_p.jumper,
+		then_p.body,
+		then_p.assign_result,
+		or_p.jumper,
+		then_p.jump_target,
+		or_p.body,
+		or_p.assign_result,
+		or_p.jump_target,
+	};
+	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
+		*dst = ir_op_list_concat(*dst, collect[i]);
+	}
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 ir_ret_op(Arena *arena,
           const struct ast *a,
@@ -264,7 +375,7 @@ ir_logical_op_arm(Arena *arena,
 	 * The <inner_return> value generated here is never used directly by
 	 * the caller; it only affects control flow indirectly. Accordingly, we
 	 * only use <inner_return> to set up the following IR_OP_JUMP_*, but we
-	 * do not make an <return_value> visible to our caller.
+	 * do not make a <return_value> visible to our caller.
 	 */
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
@@ -372,6 +483,10 @@ ir_expr(Arena *arena,
 		if (a->u.declare.init != NULL) {
 			check(ir_decl_init(arena, a, ir, dst));
 		}
+		break;
+	case NODE_IF_ELSE:
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		check(ir_if_else(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
