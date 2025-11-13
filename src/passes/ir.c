@@ -140,16 +140,10 @@ ir_if_else(Arena *arena,
 	const bool has_else = (a->u.if_.else_clause != NULL);
 	const long long int cond_jump_to = ir->env.labels++;
 	const long long int end_jump_to = has_else ? ir->env.labels++ : -1;
-
 	const long long int assign_result_unique =
 		a->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL
 			? ir->env.generator++
 			: -1;
-	if (assign_result_unique >= 0) {
-		assert(return_value->subtype == IR_VAL_NONE);
-		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
-		return_value->num = assign_result_unique;
-	}
 
 	struct ir_op *cond_ops = NULL;
 	struct ir_val cond_return = {0};
@@ -173,6 +167,12 @@ ir_if_else(Arena *arena,
 		                         end_jump_to,
 		                         assign_result_unique,
 		                         &or_p));
+	}
+
+	if (assign_result_unique >= 0) {
+		assert(return_value->subtype == IR_VAL_NONE);
+		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
+		return_value->num = assign_result_unique;
 	}
 
 	struct ir_op *collect[] = {
