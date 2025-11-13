@@ -82,6 +82,28 @@ ir_decl_init(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_ret_op(Arena *arena,
+          const struct ast *a,
+          struct intermediate *ir,
+          struct ir_op **dst)
+{
+	assert(a->node_type == NODE_FUNCTION_RETURN_STATEMENT);
+
+	struct ir_op *inner = NULL;
+	struct ir_val inner_return = {0};
+	check(ir_expr(arena, a->u.op_unary.operand, ir, &inner, &inner_return));
+	assert(inner_return.subtype != IR_VAL_NONE);
+
+	struct ir_op *returner = NULL;
+	check(ir_alloc_op(arena, &returner));
+	returner->opcode = IR_OP_RET;
+	ir_val_copy(&inner_return, &returner->args[0]);
+
+	*dst = ir_op_list_concat(inner, returner);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_unary_op(Arena *arena,
             const struct ast *a,
             struct intermediate *ir,
@@ -93,10 +115,6 @@ ir_unary_op(Arena *arena,
 
 	struct ast *ast_inner = NULL;
 	switch (a->node_type) {
-	case NODE_FUNCTION_RETURN_STATEMENT:
-		unary->opcode = IR_OP_COPY;
-		ast_inner = a->u.op_unary.operand;
-		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		unary->opcode = IR_OP_UNARY_COMPLEMENT;
 		ast_inner = a->u.op_unary.operand;
@@ -344,6 +362,10 @@ ir_expr(Arena *arena,
 		return_value->num = a->u.num;
 		assert(*dst == NULL); /* does not create new dst op */
 		break;
+	case NODE_FUNCTION_RETURN_STATEMENT:
+		assert(return_value->subtype == IR_VAL_NONE);
+		check(ir_ret_op(arena, a, ir, dst));
+		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
 			check(ir_decl_init(arena, a, ir, dst));
@@ -356,7 +378,6 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
-	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
