@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <getopt.h> /* for getopt_long() */
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
@@ -65,15 +66,15 @@ compile(Arena *arena,
 		return RESULT_OK;
 	}
 
-	const bool do_sema =
+	const bool skip_sema =
 		action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA;
 
 	struct ast *a = NULL;
 	struct symbol *sym = NULL;
-	check(parse_init(arena, tok, &a, do_sema ? &sym : NULL));
+	check(parse_init(arena, tok, &a, skip_sema ? NULL : &sym));
 	parse_debug_print(a, 0);
 
-	if (!do_sema) {
+	if (skip_sema) {
 		return RESULT_OK;
 	}
 
