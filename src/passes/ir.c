@@ -421,18 +421,20 @@ static WARN_UNUSED result_t
 ir_block(Arena *arena,
          const struct ast *a,
          struct intermediate *ir,
-         struct ir_op **block_ops,
-         struct ir_val *return_value)
+         struct ir_op **block_ops)
 {
 	struct ir_op *head = NULL;
-	struct ir_val block_return = {0};
 
 	struct ir_op **dst = block_ops;
 	while (a != NULL) {
 		assert(a->node_type == NODE_BLOCK);
-		memset(&block_return, 0, sizeof(block_return));
 
+		struct ir_val block_return = {0};
 		check(ir_expr(arena, a->u.block.item, ir, dst, &block_return));
+		/*
+		 * Currently, <block_return> value of each overall block
+		 * expression is unused. Discard it after each loop iteration.
+		 */
 
 		if (head == NULL) {
 			head = *dst;
@@ -459,8 +461,6 @@ ir_block(Arena *arena,
 	}
 
 	*block_ops = head;
-	assert(return_value->subtype == IR_VAL_NONE);
-	ir_val_copy(&block_return, return_value);
 	return RESULT_OK;
 }
 
@@ -472,8 +472,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	struct ir_function *f = &ir->function;
 	f->identifier = a->u.function.identifier.name;
 
-	struct ir_val eax_val = {0};
-	check(ir_block(arena, a->u.function.block, ir, &f->ops, &eax_val));
+	check(ir_block(arena, a->u.function.block, ir, &f->ops));
 
 	/*
 	 * If necessary, add a final, often-unreachable `return 0` instruction
@@ -490,16 +489,12 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	 *         return 0;
 	 *     }
 	 */
-	struct ir_op *return_val_or_0 = NULL;
-	check(ir_alloc_op(arena, &return_val_or_0));
-	return_val_or_0->opcode = IR_OP_RET;
-	if (eax_val.subtype == IR_VAL_NONE) {
-		return_val_or_0->args[0].subtype = IR_VAL_CONSTANT_INT;
-		return_val_or_0->args[0].num = 0;
-	} else {
-		ir_val_copy(&eax_val, &return_val_or_0->args[0]);
-	}
-	f->ops = ir_op_list_concat(f->ops, return_val_or_0);
+	struct ir_op *return_0 = NULL;
+	check(ir_alloc_op(arena, &return_0));
+	return_0->opcode = IR_OP_RET;
+	return_0->args[0].subtype = IR_VAL_CONSTANT_INT;
+	return_0->args[0].num = 0;
+	f->ops = ir_op_list_concat(f->ops, return_0);
 
 	return RESULT_OK;
 }
