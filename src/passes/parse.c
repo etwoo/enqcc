@@ -34,6 +34,10 @@ resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 {
+	if (sym == NULL) {
+		return RESULT_OK; /* skip optional resolve_* during parse */
+	}
+
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
@@ -83,6 +87,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 static WARN_UNUSED result_t
 resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 {
+	if (sym == NULL) {
+		return RESULT_OK; /* skip optional resolve_* during parse */
+	}
+
 	assert(a->node_type == NODE_DECLARATION);
 
 	const struct symbol *dup =

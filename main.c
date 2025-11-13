@@ -67,7 +67,10 @@ compile(Arena *arena,
 
 	struct ast *a = NULL;
 	struct symbol *sym = NULL;
-	check(parse_init(arena, tok, &a, &sym));
+	check(parse_init(arena,
+	                 tok,
+	                 &a,
+	                 action >= ACTION_LEX_PARSE_SEMA ? &sym : NULL));
 	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA) {
