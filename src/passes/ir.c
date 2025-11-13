@@ -125,7 +125,17 @@ ir_unary_op(Arena *arena,
 
 	ir_val_copy(&inner_return, &unary->args[0]);
 	unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	unary->args[1].num = ir->env.generator++;
+	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
+		// TODO: loosen this assert and update implementation once this
+		// once LHS of assignment is no longer restricted to bare Var()
+		// but instead can be an expression like postincrement,
+		// preincrement, array offset, structure member, etc
+		assert(a->u.op_binary.lhs->node_type ==
+		       NODE_EXPRESSION_VARIABLE_USAGE);
+		unary->args[1].num = a->u.op_binary.lhs->u.var.unique;
+	} else {
+		unary->args[1].num = ir->env.generator++;
+	}
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&unary->args[1], return_value);
 
