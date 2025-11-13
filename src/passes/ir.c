@@ -186,8 +186,8 @@ ir_if_else(Arena *arena,
 		or_p.assign_result,
 		or_p.jump_target,
 	};
-	for (size_t i = ARRAY_SIZE(collect); i > 0; --i) {
-		*dst = ir_op_list_concat(*dst, collect[i - 1]);
+	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
+		*dst = ir_op_list_concat(*dst, collect[i]);
 	}
 	return RESULT_OK;
 }
