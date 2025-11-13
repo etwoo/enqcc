@@ -493,8 +493,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	 */
 	struct ir_op *last_op = f->ops ? ir_op_list_back(f->ops) : NULL;
 	if (last_op == NULL || last_op->opcode != IR_OP_RET) {
-		struct ir_op **return_0 =
-			last_op ? &last_op->next : &f->ops ;
+		struct ir_op **return_0 = last_op ? &last_op->next : &f->ops;
 		check(ir_alloc_op(arena, return_0));
 		assert(*return_0 != NULL);
 		(**return_0).opcode = IR_OP_RET;
