@@ -43,8 +43,16 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_FUNCTION:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
-	case NODE_IF_ELSE:
 		assert(0); /* logic error in caller */
+		break;
+	case NODE_IF_ELSE:
+		check(resolve_expr(arena, a->u.if_.condition, sym));
+		check(resolve_expr(arena, a->u.if_.then_clause, sym));
+		if (a->u.if_.else_clause != NULL) {
+			check(resolve_expr(arena,
+			                   a->u.if_.else_clause,
+			                   sym));
+		}
 		break;
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
