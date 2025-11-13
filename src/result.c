@@ -176,19 +176,22 @@ result_to_str(result_t r)
 		s = strdup("Parsing paren-enclosed expression expects "
 		           "TOKEN_PAREN_CLOSE after expression");
 		break;
+	case ERR_PARSE_EXPR_EXPECT_COLON_IN_TERNARY_OP:
+		s = strdup("Parsing ternary conditional operator expects "
+		           "TOKEN_COLON after then-expression and before "
+		           "else-expression");
+		break;
 	case ERR_PARSE_EXPR_EXPECT_REASONABLE:
 		s = strdup(
 			"Parsing expression; encountered unreasonable token");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT:
-		s = strdup(
-			"Parsing function expects TOKEN_KEYWORD_INT in return "
-			"type position");
+		s = strdup("Parsing function expects TOKEN_KEYWORD_INT in "
+		           "return type position");
 		break;
 	case ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER:
-		s = strdup(
-			"Parsing function expects TOKEN_IDENTIFIER in function "
-			"name position");
+		s = strdup("Parsing function expects TOKEN_IDENTIFIER in "
+		           "function name position");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing function expects TOKEN_PAREN_OPEN before "
@@ -209,6 +212,14 @@ result_to_str(result_t r)
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE:
 		s = strdup("Parsing function expects TOKEN_BRACE_CLOSE after "
 		           "function body statement(s)");
+		break;
+	case ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_OPEN:
+		s = strdup("Parsing if statement expects TOKEN_PAREN_OPEN "
+		           "before controlling condition expression");
+		break;
+	case ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing if statement expects TOKEN_PAREN_CLOSE "
+		           "after controlling condition expression");
 		break;
 	case ERR_PARSE_PROG_EXPECT_END:
 		s = strdup("Parsing program expects end of token stream after "
