@@ -291,6 +291,7 @@ get_precedence(const struct ast *a)
 		break;
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
+	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
 	case NODE_EXPRESSION_NULL:

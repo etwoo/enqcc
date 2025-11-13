@@ -39,24 +39,6 @@ ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 	first->next = second;
 }
 
-static long long int
-ir_op_list_find_last_tmpvar_id(struct ir_op *p)
-{
-	long long int result = -1;
-
-	assert(p != NULL);
-	for (; p != NULL; p = p->next) {
-		for (size_t i = 0; i < ARRAY_SIZE(p->args); ++i) {
-			if (p->args[i].subtype == IR_VAL_TEMPORARY_VARIABLE) {
-				result = p->args[i].num;
-			}
-		}
-	}
-
-	assert(result >= 0);
-	return result;
-}
-
 static result_t ir_expr(Arena *arena,
                         const struct ast *a,
                         struct intermediate *ir,
@@ -73,15 +55,15 @@ ir_decl_init(Arena *arena,
 
 	struct ir_op *assigner = NULL;
 	check(ir_alloc_op(arena, &assigner));
-	assigner->optype = IR_OP_COPY;
+	assigner->opcode = IR_OP_COPY;
 
 	struct ir_op *inner = NULL;
-	struct ir_op inner_return = {0};
-	check(ir_expr(arena, a->u.declare.init, ir, inner, inner_return));
+	struct ir_val inner_return = {0};
+	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
 
-	memcpy(&assigner->args[0], &inner_return.args[1], sizeof(ir_val));
+	memcpy(&assigner->args[0], &inner_return, sizeof(inner_return));
 	assigner->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	assigner->args[1].num = a->declare.identifier.unique;
+	assigner->args[1].num = a->u.declare.identifier.unique;
 
 	ir_op_list_concat(inner, assigner);
 	*dst = inner;
@@ -130,7 +112,7 @@ ir_unary_op(Arena *arena,
 	unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	unary->args[1].num = ir->env.generator++;
 	assert(return_value->subtype == IR_VAL_NONE);
-	memcpy(return_value, unary->args[1], sizeof(*return_value));
+	memcpy(return_value, &unary->args[1], sizeof(*return_value));
 
 	/*
 	 * Emit IR in this order:
@@ -208,7 +190,7 @@ ir_binary_op(Arena *arena,
 	binary->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	binary->args[2].num = ir->env.generator++;
 	assert(return_value->subtype == IR_VAL_NONE);
-	memcpy(return_value, binary->args[2], sizeof(*return_value));
+	memcpy(return_value, &binary->args[2], sizeof(*return_value));
 
 	/*
 	 * Emit IR in this order:
@@ -270,13 +252,13 @@ ir_logical_op(Arena *arena,
 	assert(a->node_type == NODE_EXPRESSION_LOGICAL_AND ||
 	       a->node_type == NODE_EXPRESSION_LOGICAL_OR);
 
-	const long long int LF = ir->env.labels++;
+	const long long int lf = ir->env.labels++;
 
 	struct ir_op *left = NULL;
-	check(ir_logical_op_arm(arena, a->u.op_binary.lhs, ir, &left, jz, LF));
+	check(ir_logical_op_arm(arena, a->u.op_binary.lhs, ir, &left, jz, lf));
 
 	struct ir_op *right = NULL;
-	check(ir_logical_op_arm(arena, a->u.op_binary.rhs, ir, &right, jz, LF));
+	check(ir_logical_op_arm(arena, a->u.op_binary.rhs, ir, &right, jz, lf));
 
 	const long long int label_end = ir->env.labels++;
 
@@ -306,7 +288,7 @@ ir_logical_op(Arena *arena,
 
 	foot_pos->opcode = IR_OP_LABEL;
 	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	foot_pos->args[0].num = label_false;
+	foot_pos->args[0].num = lf;
 
 	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
@@ -361,7 +343,6 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_UNARY_NOT:
 		check(ir_unary_op(arena, a, ir, dst, return_value));
 		break;
-	case NODE_EXPRESSION_UNARY_IDENTITY:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expr(arena,
 		              a->u.op_unary.operand,
@@ -469,11 +450,11 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	struct ir_op *return_val_or_0 = NULL;
 	check(ir_alloc_op(arena, &return_val_or_0));
 	return_val_or_0->opcode = IR_OP_RET;
-	if (ir->eax_val->subtype == IR_VAL_NONE) {
+	if (ir->eax_val.subtype == IR_VAL_NONE) {
 		return_val_or_0->args[0].subtype = IR_VAL_CONSTANT_INT;
 		return_val_or_0->args[0].num = 0;
 	} else {
-		memcpy(return_val_or_0, &eax_val, sizeof(*return_val_or_0));
+		memcpy(return_val_or_0, &ir->eax_val, sizeof(*return_val_or_0));
 	}
 	if (f->ops != NULL) {
 		ir_op_list_concat(f->ops, return_val_or_0);
@@ -511,7 +492,7 @@ ir_debug_print_one(const struct ir_op *op)
 {
 	size_t required_args = 0;
 	switch (op->opcode) {
-	case IR_OP_UNARY_IDENTITY:
+	case IR_OP_RET:
 		debug("RETURN");
 		break;
 	case IR_OP_UNARY_COMPLEMENT:
