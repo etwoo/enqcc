@@ -501,7 +501,7 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_expr(arena, tok, &(**dst).u.if_.else_clause, 0));
+	check(parse_stmt(arena, tok, &(**dst).u.if_.else_clause));
 	return RESULT_OK;
 }
 
