@@ -15,6 +15,7 @@ struct ast {
 		NODE_FUNCTION_RETURN_STATEMENT,
 		NODE_BLOCK,
 		NODE_DECLARATION,
+		NODE_IF_ELSE,
 		NODE_EXPRESSION_NULL,
 		NODE_EXPRESSION_UNARY_COMPLEMENT,
 		NODE_EXPRESSION_UNARY_NEGATE,
@@ -35,6 +36,7 @@ struct ast {
 		NODE_EXPRESSION_COMPARE_MORE_THAN_EQ,
 		NODE_EXPRESSION_VARIABLE_USAGE,
 		NODE_EXPRESSION_VARIABLE_ASSIGNMENT,
+		NODE_EXPRESSION_TERNARY_CONDITIONAL,
 		NODE_CONSTANT_INT,
 	} node_type;
 	union {
@@ -54,12 +56,22 @@ struct ast {
 			struct ast *init;
 		} declare;
 		struct {
+			struct ast *condition;
+			struct ast *then_clause;
+			struct ast *else_clause;
+		} if_;
+		struct {
 			struct ast *operand;
 		} op_unary;
 		struct {
 			struct ast *lhs;
 			struct ast *rhs;
 		} op_binary;
+		struct {
+			struct ast *condition;
+			struct ast *then_expr;
+			struct ast *else_expr;
+		} op_ternary;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
