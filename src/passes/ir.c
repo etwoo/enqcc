@@ -490,7 +490,7 @@ ir_init(Arena *arena,
 	*ir = arena_alloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
 	memset(*ir, 0, sizeof(**ir));
-	(**ir).env.generator = *sym == NULL ? 0 : (**sym).unique;
+	(**ir).env.generator = *sym == NULL ? 0 : (**sym).unique + 1;
 	check(ir_program(arena, a, *ir));
 	return RESULT_OK;
 }
