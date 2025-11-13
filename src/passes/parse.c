@@ -49,9 +49,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.if_.condition, sym));
 		check(resolve_expr(arena, a->u.if_.then_clause, sym));
 		if (a->u.if_.else_clause != NULL) {
-			check(resolve_expr(arena,
-			                   a->u.if_.else_clause,
-			                   sym));
+			check(resolve_expr(arena, a->u.if_.else_clause, sym));
 		}
 		break;
 	case NODE_EXPRESSION_NULL:
