@@ -45,6 +45,12 @@ ir_op_list_concat(struct ir_op *first, struct ir_op *second)
 	return head;
 }
 
+static void
+ir_val_copy(const struct ir_val *src, struct ir_val *dst)
+{
+	memcpy(dst, src, sizeof(*dst));
+}
+
 static result_t ir_expr(Arena *arena,
                         const struct ast *a,
                         struct intermediate *ir,
@@ -67,7 +73,7 @@ ir_decl_init(Arena *arena,
 	struct ir_val inner_return = {0};
 	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
 
-	memcpy(&assigner->args[0], &inner_return, sizeof(inner_return));
+	ir_val_copy(&inner_return, &assigner->args[0]);
 	assigner->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	assigner->args[1].num = a->u.declare.identifier.unique;
 
@@ -117,11 +123,11 @@ ir_unary_op(Arena *arena,
 	check(ir_expr(arena, ast_inner, ir, &inner, &inner_return));
 	assert(inner_return.subtype != IR_VAL_NONE);
 
-	memcpy(&unary->args[0], &inner_return, sizeof(inner_return));
+	ir_val_copy(&inner_return, &unary->args[0]);
 	unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	unary->args[1].num = ir->env.generator++;
 	assert(return_value->subtype == IR_VAL_NONE);
-	memcpy(return_value, &unary->args[1], sizeof(*return_value));
+	ir_val_copy(&unary->args[1], return_value);
 
 	/*
 	 * Emit IR in this order:
@@ -193,12 +199,12 @@ ir_binary_op(Arena *arena,
 	check(ir_expr(arena, a->u.op_binary.lhs, ir, &right, &right_return));
 	assert(right_return.subtype != IR_VAL_NONE);
 
-	memcpy(&binary->args[0], &left_return, sizeof(left_return));
-	memcpy(&binary->args[1], &right_return, sizeof(right_return));
+	ir_val_copy(&left_return, &binary->args[0]);
+	ir_val_copy(&right_return, &binary->args[1]);
 	binary->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	binary->args[2].num = ir->env.generator++;
 	assert(return_value->subtype == IR_VAL_NONE);
-	memcpy(return_value, &binary->args[2], sizeof(*return_value));
+	ir_val_copy(&binary->args[2], return_value);
 
 	/*
 	 * Emit IR in this order:
@@ -233,12 +239,11 @@ ir_logical_op_arm(Arena *arena,
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
 	check(ir_expr(arena, a, ir, &inner, &inner_return));
-	assert(inner_return.subtype != IR_VAL_NONE);
 
 	struct ir_op *jumper = NULL;
 	check(ir_alloc_op(arena, &jumper));
 	jumper->opcode = jz ? IR_OP_JUMP_IF_ZERO : IR_OP_JUMP_IF_NOT_ZERO;
-	memcpy(&jumper->args[0], &inner_return, sizeof(inner_return));
+	ir_val_copy(&inner_return, &jumper->args[0]);
 	jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	jumper->args[1].num = jump_label;
 
@@ -424,7 +429,7 @@ ir_block(Arena *arena,
 
 	*block_ops = head;
 	assert(return_value->subtype == IR_VAL_NONE);
-	memcpy(return_value, &block_return, sizeof(*return_value));
+	ir_val_copy(&block_return, return_value);
 	return RESULT_OK;
 }
 
@@ -461,7 +466,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 		return_val_or_0->args[0].subtype = IR_VAL_CONSTANT_INT;
 		return_val_or_0->args[0].num = 0;
 	} else {
-		memcpy(&return_val_or_0->args[0], &eax_val, sizeof(eax_val));
+		ir_val_copy(&eax_val, &return_val_or_0->args[0]);
 	}
 	f->ops = ir_op_list_concat(f->ops, return_val_or_0);
 
