@@ -461,7 +461,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 		return_val_or_0->args[0].subtype = IR_VAL_CONSTANT_INT;
 		return_val_or_0->args[0].num = 0;
 	} else {
-		memcpy(return_val_or_0, &eax_val, sizeof(*return_val_or_0));
+		memcpy(&return_val_or_0->args[0], &eax_val, sizeof(eax_val));
 	}
 	f->ops = ir_op_list_concat(f->ops, return_val_or_0);
 
