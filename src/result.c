@@ -176,6 +176,11 @@ result_to_str(result_t r)
 		s = strdup("Parsing paren-enclosed expression expects "
 		           "TOKEN_PAREN_CLOSE after expression");
 		break;
+	case ERR_PARSE_EXPR_EXPECT_COLON_IN_TERNARY_OP:
+		s = strdup("Parsing ternary conditional operator expects "
+		           "TOKEN_COLON after then-expression and before "
+		           "else-expression");
+		break;
 	case ERR_PARSE_EXPR_EXPECT_REASONABLE:
 		s = strdup(
 			"Parsing expression; encountered unreasonable token");

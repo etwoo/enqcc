@@ -36,6 +36,7 @@ struct ast {
 		NODE_EXPRESSION_COMPARE_MORE_THAN_EQ,
 		NODE_EXPRESSION_VARIABLE_USAGE,
 		NODE_EXPRESSION_VARIABLE_ASSIGNMENT,
+		NODE_EXPRESSION_TERNARY_CONDITIONAL,
 		NODE_CONSTANT_INT,
 	} node_type;
 	union {
@@ -66,6 +67,11 @@ struct ast {
 			struct ast *lhs;
 			struct ast *rhs;
 		} op_binary;
+		struct {
+			struct ast *condition;
+			struct ast *then_expr;
+			struct ast *else_expr;
+		} op_ternary;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;

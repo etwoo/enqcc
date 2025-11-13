@@ -81,6 +81,15 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		check(resolve_var_usage(*sym, &a->u.var));
 		break;
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
+		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym));
+		if (a->u.op_ternary.else_expr != NULL) {
+			check(resolve_expr(arena,
+			                   a->u.op_ternary.else_expr,
+			                   sym));
+		}
+		break;
 	}
 	return RESULT_OK;
 }
@@ -175,10 +184,10 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
-static result_t parse_expression(Arena *arena,
-                                 const struct token **tok,
-                                 struct ast **dst,
-                                 unsigned minimum_precedence) WARN_UNUSED;
+static result_t parse_expr(Arena *arena,
+                           const struct token **tok,
+                           struct ast **dst,
+                           unsigned minimum_precedence) WARN_UNUSED;
 static result_t parse_if_else(Arena *arena,
                               const struct token **tok,
                               struct ast **dst) WARN_UNUSED;
@@ -211,10 +220,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
-		check(parse_expression(arena,
-		                       tok,
-		                       &(**dst).u.op_unary.operand,
-		                       0));
+		check(parse_expr(arena, tok, &(**dst).u.op_unary.operand, 0));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE);
@@ -227,9 +233,9 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_expression_check_next_token(Arena *arena,
-                                  const struct token *tok,
-                                  struct ast **a)
+parse_expr_check_next_token(Arena *arena,
+                            const struct token *tok,
+                            struct ast **a)
 {
 	result_t r = RESULT_OK;
 	if (is_token_type(tok, TOKEN_PLUS_SIGN)) {
@@ -260,10 +266,23 @@ parse_expression_check_next_token(Arena *arena,
 		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN);
 	} else if (is_token_type(tok, TOKEN_MORE_THAN_EQUAL_SIGN)) {
 		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN_EQ);
+	} else if (is_token_type(tok, TOKEN_QUESTION)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_TERNARY_CONDITIONAL);
 	} else {
 		return RESULT_OK;
 	}
 	return r;
+}
+
+static WARN_UNUSED result_t
+parse_ternary_middle(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	check(parse_expr(arena, tok, dst, 0));
+	if (!is_token_type(*tok, NODE_CONSTANT_INT)) {
+		return make_result(ERR_PARSE_EXPR_EXPECT_COLON_IN_TERNARY_OP);
+	}
+	token_consume(tok);
+	return RESULT_OK;
 }
 
 static const unsigned PRECEDENCE_INCREMENT = 10;
@@ -298,6 +317,9 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_LOGICAL_OR:
 		precedence += PRECEDENCE_INCREMENT;
 		__attribute__((fallthrough));
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		precedence += PRECEDENCE_INCREMENT;
 		break;
@@ -328,24 +350,25 @@ get_precedence(const struct ast *a)
  * https://www.oilshell.org/blog/2016/11/01.html
  */
 static WARN_UNUSED result_t
-parse_expression(Arena *arena,
-                 const struct token **tok,
-                 struct ast **dst,
-                 unsigned minimum_precedence)
+parse_expr(Arena *arena,
+           const struct token **tok,
+           struct ast **dst,
+           unsigned minimum_precedence)
 {
 	struct ast *left = NULL;
 	check(parse_factor(arena, tok, &left));
 
 	while (true) {
 		struct ast *bop = NULL;
-		check(parse_expression_check_next_token(arena, *tok, &bop));
+		check(parse_expr_check_next_token(arena, *tok, &bop));
 		if (bop == NULL) {
 			break;
 		}
 
 		const bool is_right_associative =
-			bop->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT;
-		const unsigned incr = is_right_associative ? 0 : 1;
+			bop->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
+			bop->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL;
+		const unsigned inc = is_right_associative ? 0 : 1;
 
 		const unsigned precedence = get_precedence(bop);
 		if (precedence < minimum_precedence) {
@@ -355,10 +378,18 @@ parse_expression(Arena *arena,
 		token_consume(tok);
 
 		struct ast *right = NULL;
-		check(parse_expression(arena, tok, &right, precedence + incr));
-
-		bop->u.op_binary.lhs = left;
-		bop->u.op_binary.rhs = right;
+		if (bop->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL) {
+			struct ast *middle = NULL;
+			check(parse_ternary_middle(arena, tok, &middle));
+			check(parse_expr(arena, tok, &right, precedence + inc));
+			bop->u.op_ternary.condition = left;
+			bop->u.op_ternary.then_expr = middle;
+			bop->u.op_ternary.else_expr = right;
+		} else {
+			check(parse_expr(arena, tok, &right, precedence + inc));
+			bop->u.op_binary.lhs = left;
+			bop->u.op_binary.rhs = right;
+		}
 		left = bop;
 	}
 
@@ -384,7 +415,7 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 
 	if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
 		token_consume(tok);
-		check(parse_expression(arena, tok, &(**dst).u.declare.init, 0));
+		check(parse_expr(arena, tok, &(**dst).u.declare.init, 0));
 	}
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
@@ -401,10 +432,7 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
-		check(parse_expression(arena,
-		                       tok,
-		                       &(**dst).u.op_unary.operand,
-		                       0));
+		check(parse_expr(arena, tok, &(**dst).u.op_unary.operand, 0));
 	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
@@ -412,7 +440,7 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
 		check(parse_if_else(arena, tok, dst));
 	} else {
-		check(parse_expression(arena, tok, dst, 0));
+		check(parse_expr(arena, tok, dst, 0));
 	}
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
@@ -455,21 +483,21 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 	token_consume(tok);
 
 	check(parse_alloc(arena, dst, NODE_IF_ELSE));
-	check(parse_expression(arena, tok, &(**dst).u.if_.condition, 0));
+	check(parse_expr(arena, tok, &(**dst).u.if_.condition, 0));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 		return make_result(ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_CLOSE);
 	}
 	token_consume(tok);
 
-	check(parse_expression(arena, tok, &(**dst).u.if_.then_clause, 0));
+	check(parse_expr(arena, tok, &(**dst).u.if_.then_clause, 0));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_ELSE)) {
 		return RESULT_OK;
 	}
 	token_consume(tok);
 
-	check(parse_expression(arena, tok, &(**dst).u.if_.else_clause, 0));
+	check(parse_expr(arena, tok, &(**dst).u.if_.else_clause, 0));
 	return RESULT_OK;
 }
 
@@ -701,6 +729,19 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("EXPRESSION VARIABLE USAGE",
 		                             &a->u.var,
 		                             indent);
+		break;
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		debug("%*sEXPRESSION TERNARY CONDITIONAL", (int)indent, "");
+		debug("%*sCONDITION", (int)indent + 1, "");
+		parse_debug_print(a->u.op_ternary.condition, indent + 2);
+		debug("%*sTHEN", (int)indent + 1, "");
+		parse_debug_print(a->u.op_ternary.then_expr, indent + 2);
+		if (a->u.op_ternary.else_expr != NULL) {
+			debug("%*sELSE", (int)indent + 1, "");
+			parse_debug_print(a->u.op_ternary.else_expr,
+			                  indent + 2);
+		}
+
 		break;
 	case NODE_CONSTANT_INT:
 		debug("%*sCONSTANT %lld", (int)indent, "", a->u.num);
