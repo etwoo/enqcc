@@ -444,11 +444,13 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_expr(arena, tok, dst, 0));
 	}
 
-	if (expect_semicolon_after && !is_token_type(*tok, TOKEN_SEMICOLON)) {
-		lex_debug_print(*tok);
-		return make_result(ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
+	if (expect_semicolon_after) {
+		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
+			return make_result(
+				ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON);
+		}
+		token_consume(tok);
 	}
-	token_consume(tok);
 
 	return RESULT_OK;
 }
