@@ -61,9 +61,17 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_IF_ELSE:
 		check(resolve_expr(arena, a->u.if_.condition, sym));
-		check(resolve_block(arena, a->u.if_.then_clause, sym));
-		if (a->u.if_.else_clause != NULL) {
+		if (a->u.if_.then_clause->node_type == NODE_BLOCK) {
+			check(resolve_block(arena, a->u.if_.then_clause, sym));
+		} else {
+			check(resolve_expr(arena, a->u.if_.then_clause, sym));
+		}
+		if (a->u.if_.else_clause == NULL) {
+			/* skip missing else clause */
+		} else if (a->u.if_.else_clause->node_type == NODE_BLOCK) {
 			check(resolve_block(arena, a->u.if_.else_clause, sym));
+		} else {
+			check(resolve_expr(arena, a->u.if_.else_clause, sym));
 		}
 		break;
 	case NODE_EXPRESSION_NULL:
