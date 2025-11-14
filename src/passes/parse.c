@@ -19,15 +19,7 @@ enum {
 static WARN_UNUSED result_t
 resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
 {
-	info("%s(ast=%p) start", __func__, (void *)var);
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
-	if (var->unique != NOT_YET_UNIQUE) {
-		info("unexpectedly resolving var %.*s that already has "
-		     "unique=%lld",
-		     (int)var->name.sz,
-		     var->name.data,
-		     var->unique);
-	}
 	assert(var->unique == NOT_YET_UNIQUE);
 	const struct symbol *resolution = symbols_get(head, &var->name, false);
 	if (resolution == NULL) {
@@ -36,11 +28,6 @@ resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
 		                   var->name.sz);
 	}
 	var->unique = resolution->unique;
-	info("%s(%.*s) -> %lld",
-	     __func__,
-	     (int)var->name.sz,
-	     var->name.data,
-	     var->unique);
 	return RESULT_OK;
 }
 
@@ -50,8 +37,6 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	info("%s(ast=%p) start", __func__, (void *)a);
-
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
@@ -125,15 +110,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 static WARN_UNUSED result_t
 resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	info("%s(ast=%p) start", __func__, (void *)a);
 	assert(a->node_type == NODE_DECLARATION);
 
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
 	if (dup != NULL) {
-		info("ERROR ON symbol %.*s",
-		     (int)a->u.declare.identifier.name.sz,
-		     a->u.declare.identifier.name.data);
 		return make_result(ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION,
 		                   dup->name.data,
 		                   dup->name.sz);
@@ -145,20 +126,16 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	                    (**sym).name.data,
 	                    (**sym).name.sz));
 	a->u.declare.identifier.unique = (**sym).unique;
-	info("added symbol %.*s", (int)(**sym).name.sz, (**sym).name.data);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
 	}
-	info("%s(ast=%p) done", __func__, (void *)a);
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	info("%s(ast=%p) start", __func__, (void *)a);
-
 	if (*sym != NULL) {
 		(**sym).level_delimiter = true;
 	}
@@ -193,18 +170,14 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 	if (*sym != NULL) {
 		(**sym).level_delimiter = false;
 	}
-
-	info("%s(ast=%p) done", __func__, (void *)a);
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	info("%s(ast=%p) start", __func__, (void *)a);
 	assert(a->node_type == NODE_FUNCTION);
 	check(resolve_block(arena, a->u.function.block, sym));
-	info("%s(ast=%p) done", __func__, (void *)a);
 	return RESULT_OK;
 }
 
@@ -531,7 +504,6 @@ parse_stmt(Arena *arena,
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
-		info("%s() calls parse_block(*dst=%p)", __func__, (void *)*dst);
 		check(parse_block(arena, tok, dst, sym));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
 		check(parse_if_else(arena, tok, dst, sym));
@@ -557,14 +529,11 @@ parse_block(Arena *arena,
             struct ast **dst,
             struct symbol **sym)
 {
-	info("%s() start dst=%p *dst=%p", __func__, (void *)dst, (void *)*dst);
-
 	if (!is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN);
 	}
 	token_consume(tok);
 
-	info("start loop with dst %p (*dst %p)", (void *)dst, (void *)*dst);
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
@@ -576,18 +545,13 @@ parse_block(Arena *arena,
 			                 sym));
 		}
 		dst = &(**dst).u.block.next;
-		info("prepare for next loop iter with dst %p (*dst %p)",
-		     (void *)dst,
-		     (void *)*dst);
 	}
-	info("end loop with dst %p (*dst %p)", (void *)dst, (void *)*dst);
 
 	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
 	}
 	token_consume(tok);
 
-	info("%s() done", __func__);
 	return RESULT_OK;
 }
 
@@ -658,9 +622,6 @@ parse_function(Arena *arena,
 	}
 	token_consume(tok);
 
-	info("%s() calls parse_block(*dst=%p)",
-	     __func__,
-	     (void *)(**dst).u.function.block);
 	check(parse_block(arena, tok, &(**dst).u.function.block, sym));
 	return RESULT_OK;
 }
