@@ -194,9 +194,6 @@ static result_t parse_expr(Arena *arena,
                            const struct token **tok,
                            struct ast **dst,
                            unsigned minimum_precedence) WARN_UNUSED;
-static result_t parse_if_else(Arena *arena,
-                              const struct token **tok,
-                              struct ast **dst) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
@@ -430,24 +427,39 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static result_t parse_block(Arena *arena,
+                            const struct token **tok,
+                            struct ast **dst,
+                            struct symbol **sym) WARN_UNUSED;
+static result_t parse_if_else(Arena *arena,
+                              const struct token **tok,
+                              struct ast **dst,
+                              struct symbol **sym) WARN_UNUSED;
+
 static WARN_UNUSED result_t
-parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
+parse_stmt(Arena *arena,
+           const struct token **tok,
+           struct ast **dst,
+           struct symbol **sym)
 {
-	bool expect_semicolon_after = true;
+	bool expect_semicolon_after = false;
 
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
 		check(parse_expr(arena, tok, &(**dst).u.op_unary.operand, 0));
+		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
 		return RESULT_OK;
+	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		check(parse_block(arena, tok, dst, sym));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
-		check(parse_if_else(arena, tok, dst));
-		expect_semicolon_after = false;
+		check(parse_if_else(arena, tok, dst, sym));
 	} else {
 		check(parse_expr(arena, tok, dst, 0));
+		expect_semicolon_after = true;
 	}
 
 	if (expect_semicolon_after) {
@@ -467,22 +479,39 @@ parse_block(Arena *arena,
             struct ast **dst,
             struct symbol **sym)
 {
+	if (!is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN);
+	}
+	token_consume(tok);
+
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, &(**dst).u.block.item));
 			check(resolve_decl(arena, (**dst).u.block.item, sym));
 		} else {
-			check(parse_stmt(arena, tok, &(**dst).u.block.item));
+			check(parse_stmt(arena,
+			                 tok,
+			                 &(**dst).u.block.item,
+			                 sym));
 			check(resolve_expr(arena, (**dst).u.block.item, sym));
 		}
 		dst = &(**dst).u.block.next;
 	}
+
+	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
+		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
+	}
+	token_consume(tok);
+
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
+parse_if_else(Arena *arena,
+              const struct token **tok,
+              struct ast **dst,
+              struct symbol **sym)
 {
 	assert(is_token_type(*tok, TOKEN_KEYWORD_IF));
 	token_consume(tok);
@@ -500,14 +529,14 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.if_.then_clause));
+	check(parse_stmt(arena, tok, &(**dst).u.if_.then_clause, sym));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_ELSE)) {
 		return RESULT_OK;
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.if_.else_clause));
+	check(parse_stmt(arena, tok, &(**dst).u.if_.else_clause, sym));
 	return RESULT_OK;
 }
 
@@ -545,18 +574,7 @@ parse_function(Arena *arena,
 	}
 	token_consume(tok);
 
-	if (!is_token_type(*tok, TOKEN_BRACE_OPEN)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN);
-	}
-	token_consume(tok);
-
 	check(parse_block(arena, tok, &(**dst).u.function.block, sym));
-
-	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
-	}
-	token_consume(tok);
-
 	return RESULT_OK;
 }
 
