@@ -152,11 +152,13 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 		(**sym).level_delimiter = true;
 	}
 
-	while (a != NULL) {
+	for (; a != NULL; a = a->u.block.next) {
 		assert(a->node_type == NODE_BLOCK);
 
 		struct ast *cur_item = a->u.block.item;
-		assert(cur_item != NULL);
+		if (cur_item == NULL) {
+			continue;
+		}
 
 		struct symbol *resetter = NULL;
 		switch (cur_item->node_type) {
@@ -175,7 +177,6 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 			check(resolve_expr(arena, cur_item, sym));
 			break;
 		}
-		a = a->u.block.next;
 	}
 
 	if (*sym != NULL) {
