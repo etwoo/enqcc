@@ -21,7 +21,7 @@ resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(var->unique == NOT_YET_UNIQUE);
-	const struct symbol *resolution = symbols_get(head, &var->name);
+	const struct symbol *resolution = symbols_get(head, &var->name, false);
 	if (resolution == NULL) {
 		return make_result(ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
 		                   var->name.data,
@@ -31,13 +31,12 @@ resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
 	return RESULT_OK;
 }
 
+static result_t
+resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
+
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	if (sym == NULL) {
-		return RESULT_OK; /* skip optional resolve_* during parse */
-	}
-
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
@@ -47,8 +46,16 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_IF_ELSE:
 		check(resolve_expr(arena, a->u.if_.condition, sym));
-		check(resolve_expr(arena, a->u.if_.then_clause, sym));
-		if (a->u.if_.else_clause != NULL) {
+		if (a->u.if_.then_clause->node_type == NODE_BLOCK) {
+			check(resolve_block(arena, a->u.if_.then_clause, sym));
+		} else {
+			check(resolve_expr(arena, a->u.if_.then_clause, sym));
+		}
+		if (a->u.if_.else_clause == NULL) {
+			/* skip missing else clause */
+		} else if (a->u.if_.else_clause->node_type == NODE_BLOCK) {
+			check(resolve_block(arena, a->u.if_.else_clause, sym));
+		} else {
 			check(resolve_expr(arena, a->u.if_.else_clause, sym));
 		}
 		break;
@@ -103,14 +110,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 static WARN_UNUSED result_t
 resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	if (sym == NULL) {
-		return RESULT_OK; /* skip optional resolve_* during parse */
-	}
-
 	assert(a->node_type == NODE_DECLARATION);
 
 	const struct symbol *dup =
-		symbols_get(*sym, &a->u.declare.identifier.name);
+		symbols_get(*sym, &a->u.declare.identifier.name, true);
 	if (dup != NULL) {
 		return make_result(ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION,
 		                   dup->name.data,
@@ -127,6 +130,54 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
 	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
+{
+	if (*sym != NULL) {
+		(**sym).level_delimiter = true;
+	}
+
+	for (; a != NULL; a = a->u.block.next) {
+		assert(a->node_type == NODE_BLOCK);
+
+		struct ast *cur_item = a->u.block.item;
+		if (cur_item == NULL) {
+			continue;
+		}
+
+		struct symbol *resetter = NULL;
+		switch (cur_item->node_type) {
+		case NODE_DECLARATION:
+			check(resolve_decl(arena, cur_item, sym));
+			break;
+		case NODE_BLOCK:
+			resetter = *sym;
+			check(resolve_block(arena, cur_item, sym));
+			if (resetter != NULL) {
+				resetter->cookie = (**sym).cookie;
+			}
+			*sym = resetter;
+			break;
+		default:
+			check(resolve_expr(arena, cur_item, sym));
+			break;
+		}
+	}
+
+	if (*sym != NULL) {
+		(**sym).level_delimiter = false;
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
+{
+	assert(a->node_type == NODE_FUNCTION);
+	check(resolve_block(arena, a->u.function.block, sym));
 	return RESULT_OK;
 }
 
@@ -163,6 +214,7 @@ is_token_type(const struct token *tok, unsigned expected)
 static void
 token_consume(const struct token **tok)
 {
+	assert(*tok != NULL);
 	*tok = (**tok).next;
 }
 
@@ -194,9 +246,6 @@ static result_t parse_expr(Arena *arena,
                            const struct token **tok,
                            struct ast **dst,
                            unsigned minimum_precedence) WARN_UNUSED;
-static result_t parse_if_else(Arena *arena,
-                              const struct token **tok,
-                              struct ast **dst) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
@@ -430,24 +479,38 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static result_t parse_block(Arena *arena,
+                            const struct token **tok,
+                            struct ast **dst,
+                            struct symbol **sym) WARN_UNUSED;
+static result_t parse_if_else(Arena *arena,
+                              const struct token **tok,
+                              struct ast **dst,
+                              struct symbol **sym) WARN_UNUSED;
+
 static WARN_UNUSED result_t
-parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
+parse_stmt(Arena *arena,
+           const struct token **tok,
+           struct ast **dst,
+           struct symbol **sym)
 {
-	bool expect_semicolon_after = true;
+	bool expect_semicolon_after = false;
 
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
 		check(parse_expr(arena, tok, &(**dst).u.op_unary.operand, 0));
+		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
-		return RESULT_OK;
+	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		check(parse_block(arena, tok, dst, sym));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
-		check(parse_if_else(arena, tok, dst));
-		expect_semicolon_after = false;
+		check(parse_if_else(arena, tok, dst, sym));
 	} else {
 		check(parse_expr(arena, tok, dst, 0));
+		expect_semicolon_after = true;
 	}
 
 	if (expect_semicolon_after) {
@@ -467,22 +530,37 @@ parse_block(Arena *arena,
             struct ast **dst,
             struct symbol **sym)
 {
+	if (!is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN);
+	}
+	token_consume(tok);
+
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, &(**dst).u.block.item));
-			check(resolve_decl(arena, (**dst).u.block.item, sym));
 		} else {
-			check(parse_stmt(arena, tok, &(**dst).u.block.item));
-			check(resolve_expr(arena, (**dst).u.block.item, sym));
+			check(parse_stmt(arena,
+			                 tok,
+			                 &(**dst).u.block.item,
+			                 sym));
 		}
 		dst = &(**dst).u.block.next;
 	}
+
+	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
+		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
+	}
+	token_consume(tok);
+
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
+parse_if_else(Arena *arena,
+              const struct token **tok,
+              struct ast **dst,
+              struct symbol **sym)
 {
 	assert(is_token_type(*tok, TOKEN_KEYWORD_IF));
 	token_consume(tok);
@@ -500,14 +578,14 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.if_.then_clause));
+	check(parse_stmt(arena, tok, &(**dst).u.if_.then_clause, sym));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_ELSE)) {
 		return RESULT_OK;
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.if_.else_clause));
+	check(parse_stmt(arena, tok, &(**dst).u.if_.else_clause, sym));
 	return RESULT_OK;
 }
 
@@ -545,18 +623,7 @@ parse_function(Arena *arena,
 	}
 	token_consume(tok);
 
-	if (!is_token_type(*tok, TOKEN_BRACE_OPEN)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN);
-	}
-	token_consume(tok);
-
 	check(parse_block(arena, tok, &(**dst).u.function.block, sym));
-
-	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
-	}
-	token_consume(tok);
-
 	return RESULT_OK;
 }
 
@@ -573,6 +640,11 @@ parse_init(Arena *arena,
 	                     sym));
 	if (tok != NULL) {
 		return make_result(ERR_PARSE_PROG_EXPECT_END);
+	}
+	if (sym != NULL) {
+		check(resolve_function(arena,
+		                       (**a).u.program.entrypoint_function,
+		                       sym));
 	}
 
 	return RESULT_OK;
@@ -616,9 +688,11 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	case NODE_BLOCK:
 		debug("%*sBLOCK ITEM", (int)indent, "");
-		parse_debug_print(a->u.block.item, indent + 1);
-		if (a->u.block.next != NULL) {
-			parse_debug_print(a->u.block.next, indent);
+		if (a->u.block.item != NULL) {
+			parse_debug_print(a->u.block.item, indent + 1);
+			if (a->u.block.next != NULL) {
+				parse_debug_print(a->u.block.next, indent);
+			}
 		}
 		break;
 	case NODE_DECLARATION:

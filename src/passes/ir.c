@@ -58,6 +58,78 @@ static result_t ir_expr(Arena *arena,
                         struct ir_val *return_value) WARN_UNUSED;
 
 static WARN_UNUSED result_t
+ir_ret_op(Arena *arena,
+          const struct ast *a,
+          struct intermediate *ir,
+          struct ir_op **dst)
+{
+	assert(a->node_type == NODE_FUNCTION_RETURN_STATEMENT);
+
+	struct ir_op *inner = NULL;
+	struct ir_val inner_return = {0};
+	check(ir_expr(arena, a->u.op_unary.operand, ir, &inner, &inner_return));
+	assert(inner_return.subtype != IR_VAL_NONE);
+
+	struct ir_op *returner = NULL;
+	check(ir_alloc_op(arena, &returner));
+	returner->opcode = IR_OP_RET;
+	ir_val_copy(&inner_return, &returner->args[0]);
+
+	*dst = ir_op_list_concat(inner, returner);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_block(Arena *arena,
+         const struct ast *a,
+         struct intermediate *ir,
+         struct ir_op **block_ops)
+{
+	struct ir_op *head = NULL;
+
+	struct ir_op **dst = block_ops;
+	for (; a != NULL; a = a->u.block.next) {
+		assert(a->node_type == NODE_BLOCK);
+
+		if (a->u.block.item == NULL) {
+			continue;
+		}
+
+		struct ir_val dummy = {0};
+		check(ir_expr(arena, a->u.block.item, ir, dst, &dummy));
+		/*
+		 * Currently, <block_return> value of each overall block
+		 * expression is unused. Discard it after each loop iteration.
+		 */
+
+		if (head == NULL) {
+			head = *dst;
+		}
+
+		if (*dst != NULL) {
+			dst = &ir_op_list_back(*dst)->next;
+		} else {
+			/*
+			 * Sanity-check typical reasons for lack of new ir_op:
+			 *
+			 * - null expression
+			 * - declaration without an initialization expression
+			 */
+			struct ast *cur = a->u.block.item;
+			assert(cur->node_type ==
+			               NODE_FUNCTION_RETURN_STATEMENT ||
+			       cur->node_type == NODE_BLOCK ||
+			       cur->node_type == NODE_EXPRESSION_NULL ||
+			       (cur->node_type == NODE_DECLARATION &&
+			        cur->u.declare.init == NULL));
+		}
+	}
+
+	*block_ops = head;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_decl_init(Arena *arena,
              const struct ast *a,
              struct intermediate *ir,
@@ -189,28 +261,6 @@ ir_if_else(Arena *arena,
 	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
 		*dst = ir_op_list_concat(*dst, collect[i]);
 	}
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-ir_ret_op(Arena *arena,
-          const struct ast *a,
-          struct intermediate *ir,
-          struct ir_op **dst)
-{
-	assert(a->node_type == NODE_FUNCTION_RETURN_STATEMENT);
-
-	struct ir_op *inner = NULL;
-	struct ir_val inner_return = {0};
-	check(ir_expr(arena, a->u.op_unary.operand, ir, &inner, &inner_return));
-	assert(inner_return.subtype != IR_VAL_NONE);
-
-	struct ir_op *returner = NULL;
-	check(ir_alloc_op(arena, &returner));
-	returner->opcode = IR_OP_RET;
-	ir_val_copy(&inner_return, &returner->args[0]);
-
-	*dst = ir_op_list_concat(inner, returner);
 	return RESULT_OK;
 }
 
@@ -479,6 +529,9 @@ ir_expr(Arena *arena,
 		assert(return_value->subtype == IR_VAL_NONE);
 		check(ir_ret_op(arena, a, ir, dst));
 		break;
+	case NODE_BLOCK:
+		check(ir_block(arena, a, ir, dst));
+		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
 			check(ir_decl_init(arena, a, ir, dst));
@@ -531,53 +584,6 @@ ir_expr(Arena *arena,
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
 		                   (int)a->node_type);
 	}
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-ir_block(Arena *arena,
-         const struct ast *a,
-         struct intermediate *ir,
-         struct ir_op **block_ops)
-{
-	struct ir_op *head = NULL;
-
-	struct ir_op **dst = block_ops;
-	while (a != NULL) {
-		assert(a->node_type == NODE_BLOCK);
-
-		struct ir_val block_return = {0};
-		check(ir_expr(arena, a->u.block.item, ir, dst, &block_return));
-		/*
-		 * Currently, <block_return> value of each overall block
-		 * expression is unused. Discard it after each loop iteration.
-		 */
-
-		if (head == NULL) {
-			head = *dst;
-		}
-
-		if (*dst != NULL) {
-			dst = &ir_op_list_back(*dst)->next;
-		} else {
-			/*
-			 * Sanity-check typical reasons for lack of new ir_op:
-			 *
-			 * - null expression
-			 * - declaration without an initialization expression
-			 */
-			struct ast *cur = a->u.block.item;
-			assert(cur->node_type ==
-			               NODE_FUNCTION_RETURN_STATEMENT ||
-			       cur->node_type == NODE_EXPRESSION_NULL ||
-			       (cur->node_type == NODE_DECLARATION &&
-			        cur->u.declare.init == NULL));
-		}
-
-		a = a->u.block.next;
-	}
-
-	*block_ops = head;
 	return RESULT_OK;
 }
 
@@ -636,7 +642,7 @@ ir_init(Arena *arena,
 	*ir = arena_alloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
 	memset(*ir, 0, sizeof(**ir));
-	(**ir).env.generator = *sym == NULL ? 0 : (**sym).unique + 1;
+	(**ir).env.generator = *sym == NULL ? 0 : (**sym).cookie + 1;
 	check(ir_program(arena, a, *ir));
 	return RESULT_OK;
 }
