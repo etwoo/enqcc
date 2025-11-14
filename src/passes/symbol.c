@@ -36,7 +36,6 @@ symbols_get(const struct symbol *head,
 {
 	while (head != NULL) {
 		if (stop_at_delimiter && head->level_delimiter) {
-			info("FOUND NODE BUT STOPPING ON DELIMITER");
 			break;
 		}
 		if (head->name.sz == name->sz &&

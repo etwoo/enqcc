@@ -178,6 +178,10 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 		a = a->u.block.next;
 	}
 
+	if (*sym != NULL) {
+		(**sym).level_delimiter = false;
+	}
+
 	info("%s(ast=%p) done", __func__, (void *)a);
 	return RESULT_OK;
 }
