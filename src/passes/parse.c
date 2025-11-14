@@ -156,9 +156,6 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 		case NODE_BLOCK:
 			resetter = *sym;
 			check(resolve_block(arena, cur_item, sym));
-			if (resetter != NULL) {
-				resetter->unique = (**sym).unique;
-			}
 			*sym = resetter;
 			break;
 		default:
