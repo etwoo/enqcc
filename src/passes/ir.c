@@ -590,6 +590,7 @@ ir_block(Arena *arena,
 			struct ast *cur = a->u.block.item;
 			assert(cur->node_type ==
 			               NODE_FUNCTION_RETURN_STATEMENT ||
+			       cur->node_type == NODE_BLOCK ||
 			       cur->node_type == NODE_EXPRESSION_NULL ||
 			       (cur->node_type == NODE_DECLARATION &&
 			        cur->u.declare.init == NULL));
