@@ -481,14 +481,13 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_BLOCK:
 		if (a->u.block.item != NULL) {
-			const bool has_next = (a->u.block.next != NULL);
 			struct ir_val dummy = {0};
 			check(ir_expr(arena,
 			              a->u.block.item,
 			              ir,
 			              dst,
-			              has_next ? &dummy : return_value));
-			if (has_next) {
+			              &dummy));
+			if (a->u.block.next != NULL) {
 				check(ir_expr(arena,
 				              a->u.block.next,
 				              ir,
