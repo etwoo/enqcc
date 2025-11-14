@@ -3,6 +3,7 @@
 #include "sys/debug.h"
 
 #include <string.h>
+#include <sys/param.h> /* for MAX() */
 
 result_t
 symbols_prepend(Arena *arena,
@@ -13,15 +14,13 @@ symbols_prepend(Arena *arena,
 	check_if(node == NULL, ERR_PARSE_ALLOC);
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
-	if (*head == NULL) {
-		node->unique = 0;
-		node->level = 0;
-	} else {
+	if (*head != NULL) {
 		node->unique = (**head).unique + 1;
 		node->level = (**head).level;
 		if ((**head).level_delimiter) {
 			node->level++;
 		}
+		node->cookie = MAX(node->unique, (**head).cookie);
 	}
 	node->level_delimiter = false;
 	node->next = *head;

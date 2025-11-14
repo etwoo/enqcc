@@ -12,9 +12,10 @@
 // TODO: change symbol table datastructure, avoid quadratic behavior in caller
 struct symbol {
 	struct string_view name;
-	long long int unique;
-	long long int level;
-	bool level_delimiter;
+	long long int unique; /* unique ID for this symbol */
+	long long int level;  /* nesting level of symbol declaration */
+	bool level_delimiter; /* trigger new nesting level if prepending here */
+	long long int cookie; /* maximum unique ID observed in any node */
 	struct symbol *next;
 };
 
