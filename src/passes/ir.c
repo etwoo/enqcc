@@ -560,11 +560,15 @@ ir_block(Arena *arena,
 	struct ir_op *head = NULL;
 
 	struct ir_op **dst = block_ops;
-	while (a != NULL) {
+	for (; a != NULL; a = a->u.block.next) {
 		assert(a->node_type == NODE_BLOCK);
 
-		struct ir_val block_return = {0};
-		check(ir_expr(arena, a->u.block.item, ir, dst, &block_return));
+		if (a->u.block.item == NULL) {
+			continue;
+		}
+
+		struct ir_val dummy = {0};
+		check(ir_expr(arena, a->u.block.item, ir, dst, &dummy));
 		/*
 		 * Currently, <block_return> value of each overall block
 		 * expression is unused. Discard it after each loop iteration.
@@ -590,8 +594,6 @@ ir_block(Arena *arena,
 			       (cur->node_type == NODE_DECLARATION &&
 			        cur->u.declare.init == NULL));
 		}
-
-		a = a->u.block.next;
 	}
 
 	*block_ops = head;
