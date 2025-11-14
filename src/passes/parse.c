@@ -19,30 +19,41 @@ enum {
 static WARN_UNUSED result_t
 resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
 {
+	info("%s(ast=%p) start", __func__, (void *)var);
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
+	if (var->unique != NOT_YET_UNIQUE) {
+		info("unexpectedly resolving var %.*s that already has "
+		     "unique=%lld",
+		     (int)var->name.sz,
+		     var->name.data,
+		     var->unique);
+	}
 	assert(var->unique == NOT_YET_UNIQUE);
-	const struct symbol *resolution = symbols_get(head, &var->name);
+	const struct symbol *resolution = symbols_get(head, &var->name, false);
 	if (resolution == NULL) {
 		return make_result(ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
 		                   var->name.data,
 		                   var->name.sz);
 	}
 	var->unique = resolution->unique;
+	info("%s(%.*s) -> %lld",
+	     __func__,
+	     (int)var->name.sz,
+	     var->name.data,
+	     var->unique);
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	if (sym == NULL) {
-		return RESULT_OK; /* skip optional resolve_* during parse */
-	}
+	info("%s(ast=%p) start", __func__, (void *)a);
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
-	case NODE_BLOCK:
 	case NODE_DECLARATION:
+	case NODE_BLOCK:
 		assert(0); /* logic error in caller */
 		break;
 	case NODE_IF_ELSE:
@@ -103,14 +114,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 static WARN_UNUSED result_t
 resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	if (sym == NULL) {
-		return RESULT_OK; /* skip optional resolve_* during parse */
-	}
-
+	info("%s(ast=%p) start", __func__, (void *)a);
 	assert(a->node_type == NODE_DECLARATION);
 
 	const struct symbol *dup =
-		symbols_get(*sym, &a->u.declare.identifier.name);
+		symbols_get(*sym, &a->u.declare.identifier.name, true);
 	if (dup != NULL) {
 		return make_result(ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION,
 		                   dup->name.data,
@@ -127,6 +135,63 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
 	}
+	info("%s(ast=%p) done", __func__, (void *)a);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
+{
+	info("%s(ast=%p) start", __func__, (void *)a);
+	assert(a->node_type == NODE_BLOCK);
+
+	struct ast *block_item = a->u.block.item;
+	if (block_item == NULL) {
+		info("%s(ast=%p) done on NULL block_item", __func__, (void *)a);
+		return RESULT_OK;
+	}
+
+	if (*sym != NULL) {
+		(**sym).level_delimiter = true;
+	}
+	struct symbol *resetter = *sym;
+
+	switch (block_item->node_type) {
+	case NODE_DECLARATION:
+		check(resolve_decl(arena, block_item, sym));
+		break;
+	case NODE_BLOCK:
+		check(resolve_expr(arena, block_item, sym));
+		if (a->u.block.next != NULL) {
+			info("%s(%p) recurse into resolve_expr(%p)",
+			     __func__,
+			     (void *)block_item,
+			     (void *)a->u.block.next);
+			check(resolve_expr(arena,
+				           a->u.block.next,
+				           sym));
+		}
+		if (resetter != NULL) {
+			resetter->unique = (**sym).unique;
+		}
+		*sym = resetter;
+		break;
+	default:
+		check(resolve_expr(arena, block_item, sym));
+		break;
+	}
+
+	info("%s(ast=%p) done", __func__, (void *)a);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
+{
+	info("%s(ast=%p) start", __func__, (void *)a);
+	assert(a->node_type == NODE_FUNCTION);
+	check(resolve_block(arena, a->u.function.block, sym));
+	info("%s(ast=%p) done", __func__, (void *)a);
 	return RESULT_OK;
 }
 
@@ -453,6 +518,7 @@ parse_stmt(Arena *arena,
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		info("%s() calls parse_block(*dst=%p)", __func__, (void *)*dst);
 		check(parse_block(arena, tok, dst, sym));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
 		check(parse_if_else(arena, tok, dst, sym));
@@ -478,31 +544,37 @@ parse_block(Arena *arena,
             struct ast **dst,
             struct symbol **sym)
 {
+	info("%s() start dst=%p *dst=%p", __func__, (void *)dst, (void *)*dst);
+
 	if (!is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN);
 	}
 	token_consume(tok);
 
+	info("start loop with dst %p (*dst %p)", (void *)dst, (void *)*dst);
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, &(**dst).u.block.item));
-			check(resolve_decl(arena, (**dst).u.block.item, sym));
 		} else {
 			check(parse_stmt(arena,
 			                 tok,
 			                 &(**dst).u.block.item,
 			                 sym));
-			check(resolve_expr(arena, (**dst).u.block.item, sym));
 		}
 		dst = &(**dst).u.block.next;
+		info("prepare for next loop iter with dst %p (*dst %p)",
+		     (void *)dst,
+		     (void *)*dst);
 	}
+	info("end loop with dst %p (*dst %p)", (void *)dst, (void *)*dst);
 
 	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE);
 	}
 	token_consume(tok);
 
+	info("%s() done", __func__);
 	return RESULT_OK;
 }
 
@@ -573,6 +645,9 @@ parse_function(Arena *arena,
 	}
 	token_consume(tok);
 
+	info("%s() calls parse_block(*dst=%p)",
+	     __func__,
+	     (void *)(**dst).u.function.block);
 	check(parse_block(arena, tok, &(**dst).u.function.block, sym));
 	return RESULT_OK;
 }
@@ -590,6 +665,11 @@ parse_init(Arena *arena,
 	                     sym));
 	if (tok != NULL) {
 		return make_result(ERR_PARSE_PROG_EXPECT_END);
+	}
+	if (sym != NULL) {
+		check(resolve_function(arena,
+		                       (**a).u.program.entrypoint_function,
+		                       sym));
 	}
 
 	return RESULT_OK;
