@@ -479,6 +479,24 @@ ir_expr(Arena *arena,
 		assert(return_value->subtype == IR_VAL_NONE);
 		check(ir_ret_op(arena, a, ir, dst));
 		break;
+	case NODE_BLOCK:
+		if (a->u.block.item != NULL) {
+			const bool has_next = (a->u.block.next != NULL);
+			struct ir_val dummy = {0};
+			check(ir_expr(arena,
+			              a->u.block.item,
+			              ir,
+			              dst,
+			              has_next ? &dummy : return_value));
+			if (has_next) {
+				check(ir_expr(arena,
+				              a->u.block.next,
+				              ir,
+				              dst,
+				              return_value));
+			}
+		}
+		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
 			check(ir_decl_init(arena, a, ir, dst));
