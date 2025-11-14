@@ -452,7 +452,6 @@ parse_stmt(Arena *arena,
 	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
-		return RESULT_OK;
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		check(parse_block(arena, tok, dst, sym));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
