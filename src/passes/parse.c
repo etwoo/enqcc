@@ -120,6 +120,9 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
 	if (dup != NULL) {
+		info("ERROR ON symbol %.*s",
+		     (int)a->u.declare.identifier.name.sz,
+		     a->u.declare.identifier.name.data);
 		return make_result(ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION,
 		                   dup->name.data,
 		                   dup->name.sz);
@@ -131,6 +134,7 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	                    (**sym).name.data,
 	                    (**sym).name.sz));
 	a->u.declare.identifier.unique = (**sym).unique;
+	info("added symbol %.*s", (int)(**sym).name.sz, (**sym).name.data);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
@@ -143,42 +147,35 @@ static WARN_UNUSED result_t
 resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 {
 	info("%s(ast=%p) start", __func__, (void *)a);
-	assert(a->node_type == NODE_BLOCK);
-
-	struct ast *block_item = a->u.block.item;
-	if (block_item == NULL) {
-		info("%s(ast=%p) done on NULL block_item", __func__, (void *)a);
-		return RESULT_OK;
-	}
 
 	if (*sym != NULL) {
 		(**sym).level_delimiter = true;
 	}
-	struct symbol *resetter = *sym;
 
-	switch (block_item->node_type) {
-	case NODE_DECLARATION:
-		check(resolve_decl(arena, block_item, sym));
-		break;
-	case NODE_BLOCK:
-		check(resolve_expr(arena, block_item, sym));
-		if (a->u.block.next != NULL) {
-			info("%s(%p) recurse into resolve_expr(%p)",
-			     __func__,
-			     (void *)block_item,
-			     (void *)a->u.block.next);
-			check(resolve_expr(arena,
-				           a->u.block.next,
-				           sym));
+	while (a != NULL) {
+		assert(a->node_type == NODE_BLOCK);
+
+		struct ast *cur_item = a->u.block.item;
+		assert(cur_item != NULL);
+
+		struct symbol *resetter = NULL;
+		switch (cur_item->node_type) {
+		case NODE_DECLARATION:
+			check(resolve_decl(arena, cur_item, sym));
+			break;
+		case NODE_BLOCK:
+			resetter = *sym;
+			check(resolve_block(arena, cur_item, sym));
+			if (resetter != NULL) {
+				resetter->unique = (**sym).unique;
+			}
+			*sym = resetter;
+			break;
+		default:
+			check(resolve_expr(arena, cur_item, sym));
+			break;
 		}
-		if (resetter != NULL) {
-			resetter->unique = (**sym).unique;
-		}
-		*sym = resetter;
-		break;
-	default:
-		check(resolve_expr(arena, block_item, sym));
-		break;
+		a = a->u.block.next;
 	}
 
 	info("%s(ast=%p) done", __func__, (void *)a);
