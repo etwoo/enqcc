@@ -66,7 +66,18 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		 * Recurse into u.loop.body only _after_ resolving variables in
 		 * u.loop.postcond and u.loop.incr. This prevents variables
 		 * declared in the loop body from polluting what variables are
-		 * visible to the loop's controlling expressions.
+		 * visible to the loop's controlling expressions. For example,
+		 * variable resolution should emit an error on `a` below:
+		 *
+		 *    do {
+		 *        int a = a + 1;
+		 *    } while (a < 100);
+		 *
+		 * Variable resolution should also emit an error on `y` here:
+		 *
+		 *    for (int x = 0; x < 10; y = 10) {
+		 *        int y = 100;
+		 *    }
 		 */
 		if (a->u.loop.body->node_type == NODE_BLOCK) {
 			check(resolve_block(arena, a->u.loop.body, sym));
