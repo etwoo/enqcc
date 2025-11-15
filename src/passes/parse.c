@@ -635,6 +635,8 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 			token_consume(tok);
 		}
 		dst = &(**dst).u.block.next;
+		check(parse_alloc(arena, dst, NODE_BLOCK));
+		dst = &(**dst).u.block.item;
 	}
 
 	check(parse_alloc(arena, dst, NODE_LOOP));
