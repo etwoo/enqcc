@@ -43,6 +43,7 @@ typedef struct {
 		ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION,
 		ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
 		ERR_SEMA_DECL_INVALID_LVALUE,
+		ERR_SEMA_BREAK_OR_CONTINUE_OUTSIDE,
 	} err;
 	int num; /* may hold errno, CURLcode, CURLUcode, etc */
 	char *msg;

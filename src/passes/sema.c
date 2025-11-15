@@ -38,6 +38,9 @@ sema_label_impl(struct ast *a, long long int *id)
 	}
 	case NODE_BREAK:
 	case NODE_CONTINUE:
+		if (*id <= 0) {
+			return make_result(ERR_SEMA_BREAK_OR_CONTINUE_OUTSIDE);
+		}
 		a->u.num = *id;
 		break;
 	case NODE_DECLARATION:
