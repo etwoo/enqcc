@@ -880,9 +880,19 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	case NODE_BREAK:
 		debug("%*sBREAK", (int)indent, "");
+		debug("%*sLOOP ID %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.loop.loop_id,
+		      a->u.loop.loop_id == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_CONTINUE:
 		debug("%*sCONTINUE", (int)indent, "");
+		debug("%*sLOOP ID %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.loop.loop_id,
+		      a->u.loop.loop_id == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_EXPRESSION_NULL:
 		debug("%*sEXPRESSION NULL", (int)indent, "");
