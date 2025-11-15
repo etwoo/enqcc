@@ -122,6 +122,32 @@ lex_one_token_peek(struct string_view *pos, struct token *cur)
 	return matched;
 }
 
+static WARN_UNUSED unsigned
+lex_one_token_keyword_maybe(struct string_view *pos)
+{
+	struct {
+		const char *keyword;
+		unsigned value;
+	} candidates[] = {
+		{"return", TOKEN_KEYWORD_RETURN},
+		{"void", TOKEN_KEYWORD_VOID},
+		{"int", TOKEN_KEYWORD_INT},
+		{"if", TOKEN_KEYWORD_IF},
+		{"else", TOKEN_KEYWORD_ELSE},
+		{"do", TOKEN_KEYWORD_DO},
+		{"while", TOKEN_KEYWORD_WHILE},
+		{"for", TOKEN_KEYWORD_FOR},
+		{"break", TOKEN_KEYWORD_BREAK},
+		{"continue", TOKEN_KEYWORD_CONTINUE},
+	};
+	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
+		if (0 == strncmp(candidates[i].keyword, pos->data, pos->sz)) {
+			return candidates[i].value;
+		}
+	}
+	return TOKEN_IDENTIFIER;
+}
+
 static WARN_UNUSED result_t
 lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 {
@@ -163,19 +189,7 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 			pos->sz--;
 		} while (isalnum(*pos->data) || *pos->data == '_');
 		cur->val.sz = pos->data - cur->val.data;
-		if (0 == strncmp("return", cur->val.data, cur->val.sz)) {
-			cur->token_type = TOKEN_KEYWORD_RETURN;
-		} else if (0 == strncmp("void", cur->val.data, cur->val.sz)) {
-			cur->token_type = TOKEN_KEYWORD_VOID;
-		} else if (0 == strncmp("int", cur->val.data, cur->val.sz)) {
-			cur->token_type = TOKEN_KEYWORD_INT;
-		} else if (0 == strncmp("if", cur->val.data, cur->val.sz)) {
-			cur->token_type = TOKEN_KEYWORD_IF;
-		} else if (0 == strncmp("else", cur->val.data, cur->val.sz)) {
-			cur->token_type = TOKEN_KEYWORD_ELSE;
-		} else {
-			cur->token_type = TOKEN_IDENTIFIER;
-		}
+		cur->token_type = lex_one_token_keyword_maybe(&cur->val);
 		check(lex_peek_ok(pos, &cur->val));
 	} else {
 		return make_result(ERR_LEX_NO_MATCH, pos->data, pos->sz);
@@ -247,6 +261,21 @@ lex_debug_one(const struct token *tok)
 		break;
 	case TOKEN_KEYWORD_ELSE:
 		debug("KEYWORD else");
+		break;
+	case TOKEN_KEYWORD_DO:
+		debug("KEYWORD DO");
+		break;
+	case TOKEN_KEYWORD_WHILE:
+		debug("KEYWORD WHILE");
+		break;
+	case TOKEN_KEYWORD_FOR:
+		debug("KEYWORD FOR");
+		break;
+	case TOKEN_KEYWORD_BREAK:
+		debug("KEYWORD BREAK");
+		break;
+	case TOKEN_KEYWORD_CONTINUE:
+		debug("KEYWORD CONTINUE");
 		break;
 	case TOKEN_HYPHEN_HYPHEN:
 		debug("TOKEN_HYPHEN_HYPHEN");
