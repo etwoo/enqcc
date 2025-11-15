@@ -122,24 +122,27 @@ lex_one_token_peek(struct string_view *pos, struct token *cur)
 	return matched;
 }
 
+#define FOREACH_LEX_KEYWORD(F)                                                 \
+	F("return", TOKEN_KEYWORD_RETURN)                                      \
+	F("void", TOKEN_KEYWORD_VOID)                                          \
+	F("int", TOKEN_KEYWORD_INT)                                            \
+	F("if", TOKEN_KEYWORD_IF)                                              \
+	F("else", TOKEN_KEYWORD_ELSE)                                          \
+	F("do", TOKEN_KEYWORD_DO)                                              \
+	F("while", TOKEN_KEYWORD_WHILE)                                        \
+	F("for", TOKEN_KEYWORD_FOR)                                            \
+	F("break", TOKEN_KEYWORD_BREAK)                                        \
+	F("continue", TOKEN_KEYWORD_CONTINUE)
+
 static WARN_UNUSED unsigned
 lex_one_token_keyword_maybe(struct string_view *pos)
 {
+#define INIT_STRUCT(str, enum_value) {str, enum_value},
 	struct {
 		const char *keyword;
 		unsigned value;
-	} candidates[] = {
-		{"return", TOKEN_KEYWORD_RETURN},
-		{"void", TOKEN_KEYWORD_VOID},
-		{"int", TOKEN_KEYWORD_INT},
-		{"if", TOKEN_KEYWORD_IF},
-		{"else", TOKEN_KEYWORD_ELSE},
-		{"do", TOKEN_KEYWORD_DO},
-		{"while", TOKEN_KEYWORD_WHILE},
-		{"for", TOKEN_KEYWORD_FOR},
-		{"break", TOKEN_KEYWORD_BREAK},
-		{"continue", TOKEN_KEYWORD_CONTINUE},
-	};
+	} candidates[] = {FOREACH_LEX_KEYWORD(INIT_STRUCT)};
+#undef INIT_STRUCT
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
 		if (0 == strncmp(candidates[i].keyword, pos->data, pos->sz)) {
 			return candidates[i].value;
@@ -241,41 +244,12 @@ lex_debug_one(const struct token *tok)
 
 	switch (tok->token_type) {
 		FOREACH_LEX_CHAR(TRY_DEBUG_PRINT_TOKEN)
+		FOREACH_LEX_KEYWORD(TRY_DEBUG_PRINT_TOKEN)
 	case TOKEN_IDENTIFIER:
 		debug("IDENTIFIER %.*s", (int)tok->val.sz, tok->val.data);
 		break;
 	case TOKEN_CONSTANT:
 		debug("CONSTANT %.*s", (int)tok->val.sz, tok->val.data);
-		break;
-	case TOKEN_KEYWORD_RETURN:
-		debug("KEYWORD return");
-		break;
-	case TOKEN_KEYWORD_VOID:
-		debug("KEYWORD void");
-		break;
-	case TOKEN_KEYWORD_INT:
-		debug("KEYWORD int");
-		break;
-	case TOKEN_KEYWORD_IF:
-		debug("KEYWORD if");
-		break;
-	case TOKEN_KEYWORD_ELSE:
-		debug("KEYWORD else");
-		break;
-	case TOKEN_KEYWORD_DO:
-		debug("KEYWORD DO");
-		break;
-	case TOKEN_KEYWORD_WHILE:
-		debug("KEYWORD WHILE");
-		break;
-	case TOKEN_KEYWORD_FOR:
-		debug("KEYWORD FOR");
-		break;
-	case TOKEN_KEYWORD_BREAK:
-		debug("KEYWORD BREAK");
-		break;
-	case TOKEN_KEYWORD_CONTINUE:
-		debug("KEYWORD CONTINUE");
 		break;
 	case TOKEN_HYPHEN_HYPHEN:
 		debug("TOKEN_HYPHEN_HYPHEN");
@@ -324,4 +298,5 @@ lex_debug_print(const struct token *tok)
 	}
 }
 
-#undef FOREACH_IMPORTANT_LEX_CHAR
+#undef FOREACH_LEX_CHAR
+#undef FOREACH_LEX_KEYWORD
