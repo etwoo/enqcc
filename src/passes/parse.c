@@ -820,7 +820,21 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_LOOP:
-		assert(0 && "TODO debug print for loop and loop parts");
+		debug("%*sLOOP", (int)indent, "");
+		if (a->u.loop.precondition) {
+			debug("%*sPRECONDITION", (int)indent + 1, "");
+			parse_debug_print(a->u.loop.precondition, indent + 2);
+		}
+		debug("%*sBODY", (int)indent + 1, "");
+		parse_debug_print(a->u.loop.body, indent + 2);
+		if (a->u.loop.incr) {
+			debug("%*sINCREMENTER", (int)indent + 1, "");
+			parse_debug_print(a->u.loop.incr, indent + 2);
+		}
+		if (a->u.loop.postcondition) {
+			debug("%*sPOSTCONDITION", (int)indent + 1, "");
+			parse_debug_print(a->u.loop.postcondition, indent + 2);
+		}
 		break;
 	case NODE_BREAK:
 		debug("%*sBREAK", (int)indent, "");
