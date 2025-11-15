@@ -639,7 +639,13 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 	check(parse_alloc(arena, dst, NODE_LOOP));
 
 	if (loop_type == PARSE_LOOP_FOR || loop_type == PARSE_LOOP_WHILE) {
-		check(parse_expr(arena, tok, &(**dst).u.loop.precond, 0));
+		if (loop_type != PARSE_LOOP_FOR ||
+		    !is_token_type(*tok, TOKEN_SEMICOLON)) {
+			check(parse_expr(arena,
+			                 tok,
+			                 &(**dst).u.loop.precond,
+			                 0));
+		}
 		if ((**dst).u.loop.precond == NULL) {
 			check(parse_alloc_empty(arena,
 			                        &(**dst).u.loop.precond));
