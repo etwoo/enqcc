@@ -62,6 +62,12 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.loop.precond, sym));
 		check(resolve_expr(arena, a->u.loop.postcond, sym));
 		check(resolve_expr(arena, a->u.loop.incr, sym));
+		/*
+		 * Recurse into u.loop.body only _after_ resolving variables in
+		 * u.loop.postcond and u.loop.incr. This prevents variables
+		 * declared in the loop body from polluting what variables are
+		 * visible to the loop's controlling expressions.
+		 */
 		if (a->u.loop.body->node_type == NODE_BLOCK) {
 			check(resolve_block(arena, a->u.loop.body, sym));
 		} else {
