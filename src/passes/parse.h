@@ -64,10 +64,10 @@ struct ast {
 			struct ast *else_clause;
 		} if_;
 		struct {
-			struct ast *body_precondition;
+			struct ast *precondition;
 			struct ast *body;
-			struct ast *body_after;
-			struct ast *body_postcondition;
+			struct ast *incr;
+			struct ast *postcondition;
 		} loop;
 		struct {
 			struct ast *operand;

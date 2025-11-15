@@ -221,6 +221,21 @@ result_to_str(result_t r)
 		s = strdup("Parsing if statement expects TOKEN_PAREN_CLOSE "
 		           "after controlling condition expression");
 		break;
+	case ERR_PARSE_LOOP_EXPECT_TOKEN_PAREN_OPEN:
+		s = strdup("Parsing loop expects TOKEN_PAREN_OPEN before "
+		           "controlling condition expression");
+		break;
+	case ERR_PARSE_LOOP_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing loop expects TOKEN_PAREN_CLOSE after "
+		           "controlling condition expression");
+	case ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON:
+		s = strdup("Parsing loop expects TOKEN_SEMICOLON");
+		break;
+	case ERR_PARSE_LOOP_EXPECT_TOKEN_WHILE:
+		s = strdup("Parsing loop expects TOKEN_KEYWORD_WHILE after "
+		           "do-loop body and before do-loop controlling "
+		           "expression");
+		break;
 	case ERR_PARSE_PROG_EXPECT_END:
 		s = strdup("Parsing program expects end of token stream after "
 		           "function definition(s)");
