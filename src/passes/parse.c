@@ -590,6 +590,10 @@ parse_loop_do_while_suffix(Arena *arena,
 	return RESULT_OK;
 }
 
+enum {
+	UNSET_LOOP_ID = -1,
+};
+
 // NOLINTBEGIN(readability-function-cognitive-complexity) // TODO rm
 static WARN_UNUSED result_t
 parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
@@ -643,6 +647,7 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	check(parse_alloc(arena, dst, NODE_LOOP));
+	(**dst).u.loop.loop_id = UNSET_LOOP_ID;
 
 	if (loop_type == PARSE_LOOP_FOR || loop_type == PARSE_LOOP_WHILE) {
 		if (loop_type == PARSE_LOOP_WHILE ||
@@ -859,6 +864,11 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	case NODE_LOOP:
 		debug("%*sLOOP", (int)indent, "");
+		debug("%*sLOOP ID %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.loop.loop_id,
+		      a->u.loop.loop_id == UNSET_LOOP_ID ? " (unset)" : "");
 		debug("%*sPRECONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.loop.precond, indent + 2);
 		debug("%*sBODY", (int)indent + 1, "");
