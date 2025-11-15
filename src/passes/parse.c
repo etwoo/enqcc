@@ -210,6 +210,15 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+parse_alloc_if_unset(Arena *arena, struct ast **dst)
+{
+	if (*dst == NULL) {
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+	}
+	return RESULT_OK;
+}
+
 static WARN_UNUSED bool
 is_token_type(const struct token *tok, unsigned expected)
 {
@@ -575,15 +584,6 @@ parse_loop_do_while_suffix(Arena *arena,
 	}
 	token_consume(tok);
 
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-parse_alloc_if_unset(Arena *arena, struct ast **dst)
-{
-	if (*dst == NULL) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
-	}
 	return RESULT_OK;
 }
 
