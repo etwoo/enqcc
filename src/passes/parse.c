@@ -60,7 +60,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_LOOP:
 		check(resolve_expr(arena, a->u.loop.precond, sym));
-		check(resolve_block(arena, a->u.loop.body, sym));
+		if (a->u.loop.body->node_type == NODE_BLOCK) {
+			check(resolve_block(arena, a->u.loop.body, sym));
+		} else {
+			check(resolve_expr(arena, a->u.loop.body, sym));
+		}
 		check(resolve_expr(arena, a->u.loop.incr, sym));
 		check(resolve_expr(arena, a->u.loop.postcond, sym));
 		break;
