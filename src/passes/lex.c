@@ -137,14 +137,15 @@ lex_one_token_peek(struct string_view *pos, struct token *cur)
 static WARN_UNUSED unsigned
 lex_one_token_keyword_maybe(struct string_view *pos)
 {
-#define INIT_STRUCT(str, enum_value) {str, enum_value},
+#define INIT_STRUCT(str, enum_value) {str, sizeof(str) - 1, enum_value},
 	struct {
 		const char *keyword;
+		size_t keyword_strlen;
 		unsigned value;
 	} candidates[] = {FOREACH_LEX_KEYWORD(INIT_STRUCT)};
 #undef INIT_STRUCT
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
-		if (strlen(candidates[i].keyword) == pos->sz &&
+		if (candidates[i].keyword_strlen == pos->sz &&
 		    0 == strncmp(candidates[i].keyword, pos->data, pos->sz)) {
 			return candidates[i].value;
 		}
