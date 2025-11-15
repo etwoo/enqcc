@@ -16,6 +16,9 @@ struct ast {
 		NODE_BLOCK,
 		NODE_DECLARATION,
 		NODE_IF_ELSE,
+		NODE_LOOP,
+		NODE_BREAK,
+		NODE_CONTINUE,
 		NODE_EXPRESSION_NULL,
 		NODE_EXPRESSION_UNARY_COMPLEMENT,
 		NODE_EXPRESSION_UNARY_NEGATE,
@@ -60,6 +63,15 @@ struct ast {
 			struct ast *then_clause;
 			struct ast *else_clause;
 		} if_;
+		struct {
+			struct ast *precond;
+			struct ast *body;
+			struct ast *incr;
+			struct ast *postcond;
+			long long int label_end;
+			long long int label_continue;
+			long long int label_start; /* also ID of loop itself */
+		} loop;
 		struct {
 			struct ast *operand;
 		} op_unary;
