@@ -210,6 +210,14 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+parse_alloc_empty(Arena *arena, struct ast **dst)
+{
+	assert(dst != NULL);
+	check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+	return RESULT_OK;
+}
+
 static WARN_UNUSED bool
 is_token_type(const struct token *tok, unsigned expected)
 {
@@ -563,7 +571,7 @@ parse_loop_do_while_suffix(Arena *arena,
 	}
 	token_consume(tok);
 
-	check(parse_expr(arena, tok, &(**dst).u.loop.postcondition, 0));
+	check(parse_expr(arena, tok, &(**dst).u.loop.postcond, 0));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 		return make_result(ERR_PARSE_LOOP_EXPECT_TOKEN_PAREN_CLOSE);
@@ -578,6 +586,7 @@ parse_loop_do_while_suffix(Arena *arena,
 	return RESULT_OK;
 }
 
+// NOLINTBEGIN(readability-function-cognitive-complexity) // TODO rm
 static WARN_UNUSED result_t
 parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 {
@@ -611,7 +620,10 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 		 */
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		struct ast **item_dst = &(**dst).u.block.item;
-		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+		if (is_token_type(*tok, TOKEN_SEMICOLON)) {
+			check(parse_alloc_empty(arena, item_dst));
+			token_consume(tok);
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, item_dst));
 		} else {
 			check(parse_expr(arena, tok, item_dst, 0));
@@ -627,14 +639,23 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 	check(parse_alloc(arena, dst, NODE_LOOP));
 
 	if (loop_type == PARSE_LOOP_FOR || loop_type == PARSE_LOOP_WHILE) {
-		check(parse_expr(arena, tok, &(**dst).u.loop.precondition, 0));
+		check(parse_expr(arena, tok, &(**dst).u.loop.precond, 0));
+		if ((**dst).u.loop.precond == NULL) {
+			check(parse_alloc_empty(arena,
+			                        &(**dst).u.loop.precond));
+		}
 		if (loop_type == PARSE_LOOP_FOR) {
 			if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 				return make_result(
 					ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON);
 			}
 			token_consume(tok);
-			check(parse_expr(arena, tok, &(**dst).u.loop.incr, 0));
+			if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+				check(parse_expr(arena,
+				                 tok,
+				                 &(**dst).u.loop.incr,
+				                 0));
+			}
 		}
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
@@ -644,13 +665,20 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	check(parse_stmt(arena, tok, &(**dst).u.loop.body));
+	if ((**dst).u.loop.body == NULL) {
+		check(parse_alloc_empty(arena, &(**dst).u.loop.body));
+	}
 
 	if (loop_type == PARSE_LOOP_DO) {
 		check(parse_loop_do_while_suffix(arena, tok, dst));
 	}
+	if ((**dst).u.loop.postcond == NULL) {
+		check(parse_alloc_empty(arena, &(**dst).u.loop.postcond));
+	}
 
 	return RESULT_OK;
 }
+// NOLINTEND(readability-function-cognitive-complexity) // TODO rm
 
 static WARN_UNUSED result_t
 parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
@@ -664,7 +692,7 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		token_consume(tok);
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+		check(parse_alloc_empty(arena, dst));
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		check(parse_block(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
@@ -773,9 +801,7 @@ parse_debug_print_ast_symbol(const char *description,
 }
 
 void
-parse_debug_print( // NOLINT(readability-function-cognitive-complexity)
-	const struct ast *a,
-	size_t indent)
+parse_debug_print(const struct ast *a, size_t indent)
 {
 	assert(indent <= INT_MAX);
 	switch (a->node_type) {
@@ -823,22 +849,14 @@ parse_debug_print( // NOLINT(readability-function-cognitive-complexity)
 		break;
 	case NODE_LOOP:
 		debug("%*sLOOP", (int)indent, "");
-		if (a->u.loop.precondition) {
-			debug("%*sPRECONDITION", (int)indent + 1, "");
-			parse_debug_print(a->u.loop.precondition, indent + 2);
-		}
-		if (a->u.loop.body) {
-			debug("%*sBODY", (int)indent + 1, "");
-			parse_debug_print(a->u.loop.body, indent + 2);
-		}
-		if (a->u.loop.incr) {
-			debug("%*sINCREMENTER", (int)indent + 1, "");
-			parse_debug_print(a->u.loop.incr, indent + 2);
-		}
-		if (a->u.loop.postcondition) {
-			debug("%*sPOSTCONDITION", (int)indent + 1, "");
-			parse_debug_print(a->u.loop.postcondition, indent + 2);
-		}
+		debug("%*sPRECONDITION", (int)indent + 1, "");
+		parse_debug_print(a->u.loop.precond, indent + 2);
+		debug("%*sBODY", (int)indent + 1, "");
+		parse_debug_print(a->u.loop.body, indent + 2);
+		debug("%*sINCREMENTER", (int)indent + 1, "");
+		parse_debug_print(a->u.loop.incr, indent + 2);
+		debug("%*sPOSTCONDITION", (int)indent + 1, "");
+		parse_debug_print(a->u.loop.postcond, indent + 2);
 		break;
 	case NODE_BREAK:
 		debug("%*sBREAK", (int)indent, "");
