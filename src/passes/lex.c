@@ -144,7 +144,8 @@ lex_one_token_keyword_maybe(struct string_view *pos)
 	} candidates[] = {FOREACH_LEX_KEYWORD(INIT_STRUCT)};
 #undef INIT_STRUCT
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
-		if (0 == strncmp(candidates[i].keyword, pos->data, pos->sz)) {
+		if (strlen(candidates[i].keyword) == pos->sz &&
+		    0 == strncmp(candidates[i].keyword, pos->data, pos->sz)) {
 			return candidates[i].value;
 		}
 	}
