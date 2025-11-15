@@ -59,9 +59,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 			check(resolve_expr(arena, a->u.if_.else_clause, sym));
 		}
 		break;
-	case NODE_LOOP_DO:
-	case NODE_LOOP_WHILE:
-	case NODE_LOOP_FOR:
+	case NODE_LOOP:
 		assert(0 && "TODO resolve_* for loop parts");
 		break;
 	case NODE_BREAK:
@@ -389,9 +387,7 @@ get_precedence(const struct ast *a)
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
 	case NODE_IF_ELSE:
-	case NODE_LOOP_DO:
-	case NODE_LOOP_WHILE:
-	case NODE_LOOP_FOR:
+	case NODE_LOOP:
 	case NODE_BREAK:
 	case NODE_CONTINUE:
 	case NODE_EXPRESSION_NULL:
@@ -571,7 +567,14 @@ parse_loop(Arena *arena,
 	(void)arena;
 	(void)dst;
 	(void)sym;
-	// TODO
+	// TODO: convert do/while/for into common loop node
+	// while -> sets u.loop.body_precondition
+	// do -> sets u.loop.body_postcondition
+	//   -> NOTE: do requires following semicolon, unlike while/for!
+	// for -> creates containing block, and then within that block
+	//   -> creates decl/expr node to cover loopvar setup
+	//   -> sets u.loop.body_precondition
+	//   -> sets u.loop.body_after for increment op
 	return RESULT_OK;
 }
 
@@ -749,9 +752,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 			parse_debug_print(a->u.if_.else_clause, indent + 2);
 		}
 		break;
-	case NODE_LOOP_DO:
-	case NODE_LOOP_WHILE:
-	case NODE_LOOP_FOR:
+	case NODE_LOOP:
 		assert(0 && "TODO debug print for loop and loop parts");
 		break;
 	case NODE_BREAK:
