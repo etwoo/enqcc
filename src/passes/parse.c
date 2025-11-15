@@ -42,7 +42,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_FUNCTION:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
-		assert(0); /* logic error in caller */
 		break;
 	case NODE_IF_ELSE:
 		check(resolve_expr(arena, a->u.if_.condition, sym));
@@ -61,7 +60,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_LOOP:
 		check(resolve_expr(arena, a->u.loop.precond, sym));
-		check(resolve_expr(arena, a->u.loop.body, sym));
+		check(resolve_block(arena, a->u.loop.body, sym));
 		check(resolve_expr(arena, a->u.loop.incr, sym));
 		check(resolve_expr(arena, a->u.loop.postcond, sym));
 		break;
