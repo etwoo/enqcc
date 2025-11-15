@@ -773,7 +773,9 @@ parse_debug_print_ast_symbol(const char *description,
 }
 
 void
-parse_debug_print(const struct ast *a, size_t indent)
+parse_debug_print( // NOLINT(readability-function-cognitive-complexity)
+	const struct ast *a,
+	size_t indent)
 {
 	assert(indent <= INT_MAX);
 	switch (a->node_type) {
@@ -825,8 +827,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 			debug("%*sPRECONDITION", (int)indent + 1, "");
 			parse_debug_print(a->u.loop.precondition, indent + 2);
 		}
-		debug("%*sBODY", (int)indent + 1, "");
-		parse_debug_print(a->u.loop.body, indent + 2);
+		if (a->u.loop.body) {
+			debug("%*sBODY", (int)indent + 1, "");
+			parse_debug_print(a->u.loop.body, indent + 2);
+		}
 		if (a->u.loop.incr) {
 			debug("%*sINCREMENTER", (int)indent + 1, "");
 			parse_debug_print(a->u.loop.incr, indent + 2);
