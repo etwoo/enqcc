@@ -489,14 +489,10 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 
 static result_t parse_stmt(Arena *arena,
                            const struct token **tok,
-                           struct ast **dst,
-                           struct symbol **sym) WARN_UNUSED;
+                           struct ast **dst) WARN_UNUSED;
 
 static WARN_UNUSED result_t
-parse_block(Arena *arena,
-            const struct token **tok,
-            struct ast **dst,
-            struct symbol **sym)
+parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	if (!is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN);
@@ -509,7 +505,7 @@ parse_block(Arena *arena,
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, item_dst));
 		} else {
-			check(parse_stmt(arena, tok, item_dst, sym));
+			check(parse_stmt(arena, tok, item_dst));
 		}
 		dst = &(**dst).u.block.next;
 	}
@@ -523,10 +519,7 @@ parse_block(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-parse_if_else(Arena *arena,
-              const struct token **tok,
-              struct ast **dst,
-              struct symbol **sym)
+parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_KEYWORD_IF));
 	token_consume(tok);
@@ -544,22 +537,49 @@ parse_if_else(Arena *arena,
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.if_.then_clause, sym));
+	check(parse_stmt(arena, tok, &(**dst).u.if_.then_clause));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_ELSE)) {
 		return RESULT_OK;
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.if_.else_clause, sym));
+	check(parse_stmt(arena, tok, &(**dst).u.if_.else_clause));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-parse_loop(Arena *arena,
-           const struct token **tok,
-           struct ast **dst,
-           struct symbol **sym)
+parse_loop_do_while_suffix(Arena *arena,
+                           const struct token **tok,
+                           struct ast **dst)
+{
+	if (!is_token_type(*tok, TOKEN_KEYWORD_WHILE)) {
+		return make_result(ERR_PARSE_LOOP_EXPECT_TOKEN_WHILE);
+	}
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		return make_result(ERR_PARSE_LOOP_EXPECT_TOKEN_PAREN_OPEN);
+	}
+	token_consume(tok);
+
+	check(parse_expr(arena, tok, &(**dst).u.loop.postcondition, 0));
+
+	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		return make_result(ERR_PARSE_LOOP_EXPECT_TOKEN_PAREN_CLOSE);
+	}
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
+		return make_result(ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON);
+	}
+	token_consume(tok);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	enum {
 		PARSE_LOOP_DO,
@@ -594,7 +614,7 @@ parse_loop(Arena *arena,
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, item_dst));
 		} else {
-			check(parse_expr(arena, tok, item_dst, sym));
+			check(parse_expr(arena, tok, item_dst, 0));
 			if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 				return make_result(
 					ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON);
@@ -623,41 +643,17 @@ parse_loop(Arena *arena,
 		token_consume(tok);
 	}
 
-	check(parse_stmt(arena, tok, &(**dst).u.loop.body, 0));
+	check(parse_stmt(arena, tok, &(**dst).u.loop.body));
 
 	if (loop_type == PARSE_LOOP_DO) {
-		if (!is_token_type(*tok, TOKEN_KEYWORD_WHILE)) {
-			return make_result(ERR_PARSE_LOOP_EXPECT_TOKEN_WHILE);
-		}
-		token_consume(tok);
-		if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-			return make_result(
-				ERR_PARSE_LOOP_EXPECT_TOKEN_PAREN_OPEN);
-		}
-		token_consume(tok);
-
-		check(parse_expr(arena, tok, &(**dst).u.loop.postcondition, 0));
-
-		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-			return make_result(
-				ERR_PARSE_LOOP_EXPECT_TOKEN_PAREN_CLOSE);
-		}
-		token_consume(tok);
-		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
-			return make_result(
-				ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON);
-		}
-		token_consume(tok);
+		check(parse_loop_do_while_suffix(arena, tok, dst));
 	}
 
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-parse_stmt(Arena *arena,
-           const struct token **tok,
-           struct ast **dst,
-           struct symbol **sym)
+parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	bool expect_semicolon_after = false;
 
@@ -670,13 +666,13 @@ parse_stmt(Arena *arena,
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
-		check(parse_block(arena, tok, dst, sym));
+		check(parse_block(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
-		check(parse_if_else(arena, tok, dst, sym));
+		check(parse_if_else(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_DO) ||
 	           is_token_type(*tok, TOKEN_KEYWORD_WHILE) ||
 	           is_token_type(*tok, TOKEN_KEYWORD_FOR)) {
-		check(parse_loop(arena, tok, dst, sym));
+		check(parse_loop(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_BREAK)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_BREAK));
@@ -702,10 +698,7 @@ parse_stmt(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-parse_function(Arena *arena,
-               const struct token **tok,
-               struct ast **dst,
-               struct symbol **sym)
+parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
 
@@ -735,7 +728,7 @@ parse_function(Arena *arena,
 	}
 	token_consume(tok);
 
-	check(parse_block(arena, tok, &(**dst).u.function.block, sym));
+	check(parse_block(arena, tok, &(**dst).u.function.block));
 	return RESULT_OK;
 }
 
@@ -748,8 +741,7 @@ parse_init(Arena *arena,
 	check(parse_alloc(arena, a, NODE_PROGRAM));
 	check(parse_function(arena,
 	                     &tok,
-	                     &(**a).u.program.entrypoint_function,
-	                     sym));
+	                     &(**a).u.program.entrypoint_function));
 	if (tok != NULL) {
 		return make_result(ERR_PARSE_PROG_EXPECT_END);
 	}

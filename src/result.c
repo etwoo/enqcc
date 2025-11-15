@@ -228,6 +228,7 @@ result_to_str(result_t r)
 	case ERR_PARSE_LOOP_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing loop expects TOKEN_PAREN_CLOSE after "
 		           "controlling condition expression");
+		break;
 	case ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing loop expects TOKEN_SEMICOLON");
 		break;
