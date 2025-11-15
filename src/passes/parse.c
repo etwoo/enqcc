@@ -60,7 +60,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		}
 		break;
 	case NODE_LOOP:
-		assert(0 && "TODO resolve_* for loop parts");
+		check(resolve_expr(arena, a->u.loop.precond, sym));
+		check(resolve_expr(arena, a->u.loop.body, sym));
+		check(resolve_expr(arena, a->u.loop.incr, sym));
+		check(resolve_expr(arena, a->u.loop.postcond, sym));
 		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
