@@ -994,7 +994,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 			parse_debug_print(a->u.op_ternary.else_expr,
 			                  indent + 2);
 		}
-
 		break;
 	case NODE_CONSTANT_INT:
 		debug("%*sCONSTANT %lld", (int)indent, "", a->u.num);
