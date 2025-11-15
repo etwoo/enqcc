@@ -78,15 +78,15 @@ compile(Arena *arena,
 		return RESULT_OK;
 	}
 
-	// TODO: semantic analysis
-	// TODO: pass `struct symbol` to semantic analysis pass
+	check(sema_label_loops(a));
+	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA_IR) {
 		return RESULT_OK;
 	}
 
 	struct intermediate *ir = NULL;
-	check(ir_init(arena, a, &ir, &sym));
+	check(ir_init(arena, a, sym, &ir));
 	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES &&

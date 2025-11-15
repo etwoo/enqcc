@@ -636,13 +636,13 @@ ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 result_t
 ir_init(Arena *arena,
         const struct ast *a,
-        struct intermediate **ir,
-        struct symbol **sym)
+        const struct symbol *sym,
+        struct intermediate **ir)
 {
 	*ir = arena_alloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
 	memset(*ir, 0, sizeof(**ir));
-	(**ir).env.generator = *sym == NULL ? 0 : (**sym).cookie + 1;
+	(**ir).env.generator = sym == NULL ? 0 : sym->cookie + 1;
 	check(ir_program(arena, a, *ir));
 	return RESULT_OK;
 }

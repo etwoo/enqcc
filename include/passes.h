@@ -19,12 +19,14 @@ result_t parse_init(Arena *arena,
                     struct symbol **sym) __attribute__((warn_unused_result));
 void parse_debug_print(const struct ast *a, size_t indent);
 
+result_t sema_label_loops(struct ast *a) __attribute__((warn_unused_result));
+
 struct intermediate;
 
 result_t ir_init(Arena *arena,
                  const struct ast *a,
-                 struct intermediate **ir,
-                 struct symbol **sym) __attribute__((warn_unused_result));
+                 const struct symbol *sym,
+                 struct intermediate **ir) __attribute__((warn_unused_result));
 void ir_debug_print(const struct intermediate *ir);
 
 struct assembly;

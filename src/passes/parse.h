@@ -68,6 +68,7 @@ struct ast {
 			struct ast *body;
 			struct ast *incr;
 			struct ast *postcond;
+			long long int loop_id;
 		} loop;
 		struct {
 			struct ast *operand;
