@@ -718,10 +718,12 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_BREAK)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_BREAK));
+		(**dst).u.num = UNSET_LOOP_ID;
 		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_CONTINUE)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_CONTINUE));
+		(**dst).u.num = UNSET_LOOP_ID;
 		expect_semicolon_after = true;
 	} else {
 		check(parse_expr(arena, tok, dst, 0));
@@ -882,16 +884,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sLOOP ID %lld%s",
 		      (int)indent + 1,
 		      "",
-		      a->u.loop.loop_id,
-		      a->u.loop.loop_id == UNSET_LOOP_ID ? " (unset)" : "");
+		      a->u.num,
+		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_CONTINUE:
 		debug("%*sCONTINUE", (int)indent, "");
 		debug("%*sLOOP ID %lld%s",
 		      (int)indent + 1,
 		      "",
-		      a->u.loop.loop_id,
-		      a->u.loop.loop_id == UNSET_LOOP_ID ? " (unset)" : "");
+		      a->u.num,
+		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_EXPRESSION_NULL:
 		debug("%*sEXPRESSION NULL", (int)indent, "");
