@@ -3,21 +3,22 @@
 set -euo pipefail
 
 SKIP_LINK=0
-while getopts "c" option; do
+DRIVER_MODE="--all"
+INPUT_FILE=""
+
+for option in "$@" ; do
 	case "$option" in
-		c) SKIP_LINK=1 ;;
-		*) echo "Unimplemented option" && exit 1 ;;
+		-c) SKIP_LINK=1 ;;
+		--all) DRIVER_MODE="--all" ;;
+		--codegen) DRIVER_MODE="--codegen" ;;
+		--lex) DRIVER_MODE="--lex" ;;
+		--parse) DRIVER_MODE="--parse" ;;
+		--tacky) DRIVER_MODE="--tacky" ;;
+		--validate) DRIVER_MODE="--validate" ;;
+		-*) echo "Unimplemented option" && exit 1 ;;
+		*) INPUT_FILE="$option" ;;
 	esac
 done
-shift $((OPTIND - 1))
-
-if [ $# == 1 ] ; then
-	DRIVER_MODE="--all"
-	INPUT_FILE="$1"
-elif [ $# == 2 ] ; then
-	DRIVER_MODE="$1"
-	INPUT_FILE="$2"
-fi
 
 OUTPUT_FILE="${INPUT_FILE%.*}"
 PREPROCESSED_FILE="$OUTPUT_FILE.i"
