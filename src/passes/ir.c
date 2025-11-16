@@ -762,7 +762,7 @@ ir_init(Arena *arena,
 	*ir = arena_alloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
 	memset(*ir, 0, sizeof(**ir));
-	(**ir).env.generator = sym == NULL ? 0 : sym->cookie + 1;
+	(**ir).env.generator = sym == NULL ? 1 : sym->cookie + 1;
 	(**ir).env.labels = *label_generator + 1;
 	check(ir_program(arena, a, *ir));
 	return RESULT_OK;
