@@ -205,8 +205,10 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 static WARN_UNUSED result_t
 resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	assert(a->node_type == NODE_FUNCTION);
-	check(resolve_block(arena, a->u.function.block, sym));
+	for (; a != NULL; a = a->u.function.next) {
+		assert(a->node_type == NODE_FUNCTION);
+		check(resolve_block(arena, a->u.function.block, sym));
+	}
 	return RESULT_OK;
 }
 
@@ -814,16 +816,15 @@ parse_init(Arena *arena,
            struct symbol **sym)
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
-	check(parse_function(arena,
-	                     &tok,
-	                     &(**a).u.program.entrypoint_function));
-	if (tok != NULL) {
-		return make_result(ERR_PARSE_PROG_EXPECT_END);
+	a = &(**a).u.program.globals;
+	while (tok != NULL) {
+		check(parse_function(arena, &tok, a));
+		assert((**a).node_type == NODE_FUNCTION);
+		a = &(**a).u.function.next;
 	}
+
 	if (sym != NULL) {
-		check(resolve_function(arena,
-		                       (**a).u.program.entrypoint_function,
-		                       sym));
+		check(resolve_function(arena, (**a).u.program.globals, sym));
 	}
 
 	return RESULT_OK;
@@ -854,7 +855,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 		debug("%*sPROGRAM", (int)indent, "");
-		parse_debug_print(a->u.program.entrypoint_function, indent + 1);
+		parse_debug_print(a->u.program.globals, indent + 1);
 		break;
 	case NODE_FUNCTION:
 		parse_debug_print_ast_symbol("FUNCTION",
@@ -863,6 +864,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
 			parse_debug_print(a->u.function.block, indent + 2);
+		}
+		if (a->u.function.next != NULL) {
+			parse_debug_print(a->u.function.next, indent);
 		}
 		break;
 	case NODE_BLOCK:

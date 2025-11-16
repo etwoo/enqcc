@@ -8,11 +8,14 @@ sema_label_impl(struct ast *a, long long int *id)
 {
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		check(sema_label_impl(a->u.program.entrypoint_function, id));
+		check(sema_label_impl(a->u.program.globals, id));
 		break;
 	case NODE_FUNCTION:
 		if (a->u.function.block != NULL) {
 			check(sema_label_impl(a->u.function.block, id));
+		}
+		if (a->u.function.next != NULL) {
+			check(sema_label_impl(a->u.function.next, id));
 		}
 		break;
 	case NODE_BLOCK:

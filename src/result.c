@@ -237,10 +237,6 @@ result_to_str(result_t r)
 		           "do-loop body and before do-loop controlling "
 		           "expression");
 		break;
-	case ERR_PARSE_PROG_EXPECT_END:
-		s = strdup("Parsing program expects end of token stream after "
-		           "function definition(s)");
-		break;
 	case ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");

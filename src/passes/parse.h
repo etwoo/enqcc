@@ -44,11 +44,12 @@ struct ast {
 	} node_type;
 	union {
 		struct {
-			struct ast *entrypoint_function;
+			struct ast *globals;
 		} program;
 		struct {
 			struct ast_symbol identifier;
 			struct ast *block;
+			struct ast *next;
 		} function;
 		struct {
 			struct ast *item;

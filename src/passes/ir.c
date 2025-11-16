@@ -711,6 +711,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 {
 	assert(a->node_type == NODE_FUNCTION);
 
+	// TODO: iterate over all function definitions via ->next member
 	struct ir_function *f = &ir->function;
 	f->identifier = a->u.function.identifier.name;
 
@@ -748,7 +749,7 @@ static WARN_UNUSED result_t
 ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 {
 	assert(a->node_type == NODE_PROGRAM);
-	check(ir_function(arena, a->u.program.entrypoint_function, ir));
+	check(ir_function(arena, a->u.program.globals, ir));
 	return RESULT_OK;
 }
 
