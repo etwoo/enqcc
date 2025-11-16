@@ -2,6 +2,15 @@
 
 set -euo pipefail
 
+SKIP_LINK=0
+while getopts "c" option; do
+	case "$option" in
+		c) SKIP_LINK=1 ;;
+		*) echo "Unimplemented option" && exit 1 ;;
+	esac
+done
+shift $((OPTIND - 1))
+
 if [ $# == 1 ] ; then
 	DRIVER_MODE="--all"
 	INPUT_FILE="$1"
@@ -20,7 +29,11 @@ NQCC=$(realpath "$0/../../build/enqcc")
 $CC -E -P "$INPUT_FILE" -o "$PREPROCESSED_FILE"
 $NQCC "$DRIVER_MODE" "$PREPROCESSED_FILE" "$ASSEMBLY_FILE"
 if [ "$DRIVER_MODE" == "--all" ] ; then
-	$CC "$ASSEMBLY_FILE" -o "$OUTPUT_FILE"
+	if [ "$SKIP_LINK" -eq 1 ] ; then
+		$CC -c "$ASSEMBLY_FILE" -o "$OUTPUT_FILE.o"
+	else
+		$CC "$ASSEMBLY_FILE" -o "$OUTPUT_FILE"
+	fi
 fi
 
 rm -f "$PREPROCESSED_FILE" "$ASSEMBLY_FILE"
