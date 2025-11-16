@@ -2,13 +2,23 @@
 
 set -euo pipefail
 
-if [ $# == 1 ] ; then
-	DRIVER_MODE="--all"
-	INPUT_FILE="$1"
-elif [ $# == 2 ] ; then
-	DRIVER_MODE="$1"
-	INPUT_FILE="$2"
-fi
+SKIP_LINK=0
+DRIVER_MODE="--all"
+INPUT_FILE=""
+
+for option in "$@" ; do
+	case "$option" in
+		-c) SKIP_LINK=1 ;;
+		--all) DRIVER_MODE="--all" ;;
+		--codegen) DRIVER_MODE="--codegen" ;;
+		--lex) DRIVER_MODE="--lex" ;;
+		--parse) DRIVER_MODE="--parse" ;;
+		--tacky) DRIVER_MODE="--tacky" ;;
+		--validate) DRIVER_MODE="--validate" ;;
+		-*) echo "Unimplemented option" && exit 1 ;;
+		*) INPUT_FILE="$option" ;;
+	esac
+done
 
 OUTPUT_FILE="${INPUT_FILE%.*}"
 PREPROCESSED_FILE="$OUTPUT_FILE.i"
@@ -20,7 +30,11 @@ NQCC=$(realpath "$0/../../build/enqcc")
 $CC -E -P "$INPUT_FILE" -o "$PREPROCESSED_FILE"
 $NQCC "$DRIVER_MODE" "$PREPROCESSED_FILE" "$ASSEMBLY_FILE"
 if [ "$DRIVER_MODE" == "--all" ] ; then
-	$CC "$ASSEMBLY_FILE" -o "$OUTPUT_FILE"
+	if [ "$SKIP_LINK" -eq 1 ] ; then
+		$CC -c "$ASSEMBLY_FILE" -o "$OUTPUT_FILE.o"
+	else
+		$CC "$ASSEMBLY_FILE" -o "$OUTPUT_FILE"
+	fi
 fi
 
 rm -f "$PREPROCESSED_FILE" "$ASSEMBLY_FILE"
