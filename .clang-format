@@ -9,6 +9,8 @@ BinPackParameters: false
 BreakBeforeBraces: Linux
 ColumnLimit: 80
 ContinuationIndentWidth: 8
+ForEachMacros:
+  - 'FOREACH_FUNCTION_PARAMETER'
 IncludeBlocks: Regroup
 IndentWidth: 8
 UseTab:	AlignWithSpaces
