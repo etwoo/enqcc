@@ -68,7 +68,9 @@ struct ast {
 			struct ast *body;
 			struct ast *incr;
 			struct ast *postcond;
-			long long int loop_id;
+			long long int label_end;
+			long long int label_continue;
+			long long int label_start; /* also ID of loop itself */
 		} loop;
 		struct {
 			struct ast *operand;

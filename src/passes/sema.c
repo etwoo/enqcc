@@ -30,7 +30,9 @@ sema_label_impl(struct ast *a, long long int *id)
 		}
 		break;
 	case NODE_LOOP: {
-		a->u.loop.loop_id = ++*id;
+		a->u.loop.label_end = ++*id;
+		a->u.loop.label_continue = ++*id;
+		a->u.loop.label_start = ++*id;
 		check(sema_label_impl(a->u.loop.precond, id));
 		check(sema_label_impl(a->u.loop.body, id));
 		check(sema_label_impl(a->u.loop.postcond, id));
@@ -41,7 +43,7 @@ sema_label_impl(struct ast *a, long long int *id)
 		if (*id <= 0) {
 			return make_result(ERR_SEMA_BREAK_OR_CONTINUE_OUTSIDE);
 		}
-		a->u.num = *id;
+		a->u.num = *id; /* associated with most recent label_start */
 		break;
 	case NODE_DECLARATION:
 	case NODE_FUNCTION_RETURN_STATEMENT:

@@ -667,7 +667,9 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	check(parse_alloc(arena, dst, NODE_LOOP));
-	(**dst).u.loop.loop_id = UNSET_LOOP_ID;
+	(**dst).u.loop.label_end = UNSET_LOOP_ID;
+	(**dst).u.loop.label_continue = UNSET_LOOP_ID;
+	(**dst).u.loop.label_start = UNSET_LOOP_ID;
 
 	if (loop_type == PARSE_LOOP_FOR || loop_type == PARSE_LOOP_WHILE) {
 		if (loop_type == PARSE_LOOP_WHILE ||
@@ -889,16 +891,27 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sLOOP ID %lld%s",
 		      (int)indent + 1,
 		      "",
-		      a->u.loop.loop_id,
-		      a->u.loop.loop_id == UNSET_LOOP_ID ? " (unset)" : "");
+		      a->u.loop.label_start,
+		      a->u.loop.label_start == UNSET_LOOP_ID ? " (unset)" : "");
 		debug("%*sPRECONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.loop.precond, indent + 2);
 		debug("%*sBODY", (int)indent + 1, "");
 		parse_debug_print(a->u.loop.body, indent + 2);
+		debug("%*sCONTINUE LABEL %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.loop.label_continue,
+		      a->u.loop.label_continue == UNSET_LOOP_ID ? " (unset)"
+		                                                : "");
 		debug("%*sINCREMENTER", (int)indent + 1, "");
 		parse_debug_print(a->u.loop.incr, indent + 2);
 		debug("%*sPOSTCONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.loop.postcond, indent + 2);
+		debug("%*sEND LABEL %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.loop.label_end,
+		      a->u.loop.label_end == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_BREAK:
 		debug("%*sBREAK", (int)indent, "");
