@@ -3,6 +3,22 @@
 
 #include "sys/string_view.h"
 
+#define FOREACH_ASM_REGISTER(F)                                                \
+	F(AX, "rax", "eax", "al")                                              \
+	F(CX, "rcx", "ecx", "cl")                                              \
+	F(DX, "rdx", "edx", "dl")                                              \
+	F(DI, "rdi", "edi", "dil")                                             \
+	F(SI, "rsi", "esi", "sil")                                             \
+	F(R8, "r8", "r8d", "r8b")                                              \
+	F(R9, "r9", "r9d", "r9b")                                              \
+	F(R10, "r10", "r10d", "r10b")                                          \
+	F(R11, "r11", "r11d", "r11b")                                          \
+	F(RSP, "rsp", "rsp", "r11d")
+
+#define TO_ENUM(register_name, b8, b4, b1) ASM_REGISTER_##register_name,
+enum asm_register { FOREACH_ASM_REGISTER(TO_ENUM) };
+#undef TO_ENUM
+
 struct asm_operand {
 	enum {
 		ASM_OPERAND_NONE,
@@ -11,60 +27,64 @@ struct asm_operand {
 		ASM_OPERAND_PSEUDO_REGISTER,
 		ASM_OPERAND_STACK,
 		ASM_OPERAND_JUMP_TARGET_LABEL,
+		ASM_OPERAND_CALL_TARGET_FUNCTION,
 	} operand_type;
 	union {
 		long long int num;
-		enum {
-			ASM_REGISTER_AX,
-			ASM_REGISTER_DX,
-			ASM_REGISTER_R10, /* aka scratch */
-			ASM_REGISTER_R11, /* aka scratch */
-			ASM_REGISTER_RSP, /* aka frame pointer */
-		} reg;
+		enum asm_register reg;
+		struct string_view function;
 	} u;
 };
 
+#define FOREACH_ASM_OPCODE(F)                                                  \
+	F(MOV)                                                                 \
+	F(UNARY_NEG)                                                           \
+	F(UNARY_NOT)                                                           \
+	F(BINARY_ADD)                                                          \
+	F(BINARY_ADD_QUAD)                                                     \
+	F(BINARY_SUBTRACT)                                                     \
+	F(BINARY_SUBTRACT_QUAD)                                                \
+	F(BINARY_MULTIPLY)                                                     \
+	F(COMPARE)                                                             \
+	F(IDIV)                                                                \
+	F(CDQ)                                                                 \
+	F(JMP)                                                                 \
+	F(JMP_IF_EQ)                                                           \
+	F(JMP_IF_NEQ)                                                          \
+	F(JMP_IF_GT)                                                           \
+	F(JMP_IF_GTE)                                                          \
+	F(JMP_IF_LT)                                                           \
+	F(JMP_IF_LTE)                                                          \
+	F(SET_IF_EQ)                                                           \
+	F(SET_IF_NEQ)                                                          \
+	F(SET_IF_GT)                                                           \
+	F(SET_IF_GTE)                                                          \
+	F(SET_IF_LT)                                                           \
+	F(SET_IF_LTE)                                                          \
+	F(LABEL)                                                               \
+	F(PUSH)                                                                \
+	F(CALL)                                                                \
+	F(RET)
+
+#define TO_ENUM(opcode) ASM_OP_##opcode,
+enum asm_opcode { FOREACH_ASM_OPCODE(TO_ENUM) };
+#undef TO_ENUM
+
 struct asm_op {
-	enum {
-		ASM_OP_MOV,
-		ASM_OP_UNARY_NEG,
-		ASM_OP_UNARY_NOT,
-		ASM_OP_BINARY_ADD,
-		ASM_OP_BINARY_SUBTRACT,
-		ASM_OP_BINARY_SUBTRACT_QUAD,
-		ASM_OP_BINARY_MULTIPLY,
-		ASM_OP_COMPARE,
-		ASM_OP_IDIV, /* divide AX+DX by given divisor */
-		ASM_OP_CDQ,  /* convert to quadword, aka sign extend AX->DX */
-		ASM_OP_JMP,
-		ASM_OP_JMP_IF_EQ,
-		ASM_OP_JMP_IF_NEQ,
-		ASM_OP_JMP_IF_GT,
-		ASM_OP_JMP_IF_GTE,
-		ASM_OP_JMP_IF_LT,
-		ASM_OP_JMP_IF_LTE,
-		ASM_OP_SET_IF_EQ,
-		ASM_OP_SET_IF_NEQ,
-		ASM_OP_SET_IF_GT,
-		ASM_OP_SET_IF_GTE,
-		ASM_OP_SET_IF_LT,
-		ASM_OP_SET_IF_LTE,
-		ASM_OP_LABEL,
-		ASM_OP_RET,
-	} opcode;
+	enum asm_opcode opcode;
 	struct asm_operand args[2];
 	struct asm_op *next;
 };
 
 struct asm_function {
 	struct string_view identifier;
+	long long int stack_usage;
 	struct asm_op *ops;
+	struct asm_function *next;
 };
 
 struct assembly {
-	struct asm_function function;
+	struct asm_function *functions;
 };
-
-extern const long long int CODEGEN_BYTES_PER_VALUE;
 
 #endif
