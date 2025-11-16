@@ -40,7 +40,8 @@ lex_alloc(Arena *arena, struct token **tok)
 	F('<', TOKEN_LESS_THAN)                                                \
 	F('>', TOKEN_MORE_THAN)                                                \
 	F('?', TOKEN_QUESTION)                                                 \
-	F(':', TOKEN_COLON)
+	F(':', TOKEN_COLON)                                                    \
+	F(',', TOKEN_COMMA)
 
 static WARN_UNUSED result_t
 lex_peek_ok(struct string_view *pos, const struct string_view *prefix)

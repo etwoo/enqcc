@@ -14,23 +14,20 @@ static const char MACOS_LABEL_PREFIX[] = "L";
 static const char CUSTOM_LABEL_ID[] = "boba_";
 static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_POP_QUAD[] = "popq";
-static const char STR_OP_PUSH_QUAD[] = "pushq";
+static const char *const STR_OP_PUSH_QUAD = "pushq";
 static const char STR_OP_RET[] = "ret";
-static const char STR_REG_EAX[] = "%eax";
-static const char STR_REG_EAX_LOWEST_BYTE[] = "%al";
-static const char STR_REG_EDX[] = "%edx";
-static const char STR_REG_EDX_LOWEST_BYTE[] = "%dl";
-static const char STR_REG_R10[] = "%r10d";
-static const char STR_REG_R10_LOWEST_BYTE[] = "%r10b";
-static const char STR_REG_R11[] = "%r11d";
-static const char STR_REG_R11_LOWEST_BYTE[] = "%r11b";
 static const char STR_REG_RSP[] = "%rsp"; /* aka frame pointer */
 static const char STR_REG_RBP[] = "%rbp"; /* aka stack pointer */
 
 enum register_alias {
+	REGISTER_ALIAS_8BYTE,
 	REGISTER_ALIAS_4BYTE,
 	REGISTER_ALIAS_1BYTE,
 };
+
+#define TO_STR(register_name, pos, b8, b4, b1) {"%" b8, "%" b4, "%" b1},
+static const char *const REGISTER_AS_STR[][3] = {FOREACH_ASM_REGISTER(TO_STR)};
+#undef TO_STR
 
 static WARN_UNUSED const char *
 get_label_prefix(enum platform plat)
@@ -42,6 +39,21 @@ get_label_prefix(enum platform plat)
 		break;
 	case PLATFORM_LINUX:
 		result = LINUX_LABEL_PREFIX;
+		break;
+	}
+	return result;
+}
+
+static WARN_UNUSED const char *
+get_function_prefix(enum platform plat)
+{
+	const char *result = NULL;
+	switch (plat) {
+	case PLATFORM_MACOS:
+		result = MACOS_FUNC_PREFIX;
+		break;
+	case PLATFORM_LINUX:
+		result = "";
 		break;
 	}
 	return result;
@@ -61,6 +73,7 @@ emit_asm_operand(const struct asm_operand *o,
                  enum register_alias ralias,
                  int fd)
 {
+	const char *fprefix = get_function_prefix(plat);
 	const char *label_prefix = get_label_prefix(plat);
 
 	switch (o->operand_type) {
@@ -71,51 +84,7 @@ emit_asm_operand(const struct asm_operand *o,
 		dprintf(fd, "$%lld", o->u.num);
 		break;
 	case ASM_OPERAND_REGISTER:
-		switch (o->u.reg) {
-		case ASM_REGISTER_AX:
-			switch (ralias) {
-			case REGISTER_ALIAS_4BYTE:
-				dprintf(fd, "%s", STR_REG_EAX);
-				break;
-			case REGISTER_ALIAS_1BYTE:
-				dprintf(fd, "%s", STR_REG_EAX_LOWEST_BYTE);
-				break;
-			}
-			break;
-		case ASM_REGISTER_DX:
-			switch (ralias) {
-			case REGISTER_ALIAS_4BYTE:
-				dprintf(fd, "%s", STR_REG_EDX);
-				break;
-			case REGISTER_ALIAS_1BYTE:
-				dprintf(fd, "%s", STR_REG_EDX_LOWEST_BYTE);
-				break;
-			}
-			break;
-		case ASM_REGISTER_R10:
-			switch (ralias) {
-			case REGISTER_ALIAS_4BYTE:
-				dprintf(fd, "%s", STR_REG_R10);
-				break;
-			case REGISTER_ALIAS_1BYTE:
-				dprintf(fd, "%s", STR_REG_R10_LOWEST_BYTE);
-				break;
-			}
-			break;
-		case ASM_REGISTER_R11:
-			switch (ralias) {
-			case REGISTER_ALIAS_4BYTE:
-				dprintf(fd, "%s", STR_REG_R11);
-				break;
-			case REGISTER_ALIAS_1BYTE:
-				dprintf(fd, "%s", STR_REG_R11_LOWEST_BYTE);
-				break;
-			}
-			break;
-		case ASM_REGISTER_RSP:
-			dprintf(fd, "%s", STR_REG_RSP);
-			break;
-		}
+		dprintf(fd, "%s", REGISTER_AS_STR[o->u.reg][ralias]);
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		assert(0 && "PSEUDOREGISTER should have been eliminated");
@@ -124,10 +93,7 @@ emit_asm_operand(const struct asm_operand *o,
 		if (o->u.num == 0) {
 			dprintf(fd, "(%s)", STR_REG_RBP);
 		} else {
-			dprintf(fd,
-			        "%lld(%s)",
-			        -1 * CODEGEN_BYTES_PER_VALUE * o->u.num,
-			        STR_REG_RBP);
+			dprintf(fd, "%lld(%s)", o->u.num, STR_REG_RBP);
 		}
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
@@ -137,6 +103,24 @@ emit_asm_operand(const struct asm_operand *o,
 		        CUSTOM_LABEL_ID,
 		        o->u.num);
 		break;
+	case ASM_OPERAND_CALL_TARGET_FUNCTION:
+		dprintf(fd,
+		        "%s%.*s",
+		        fprefix,
+		        (int)o->u.function.sz,
+		        o->u.function.data);
+		/*
+		 * XXX: on Linux, CALL currently lack support for functions
+		 * outside of the current translation unit, which require a
+		 * @PLT suffix. One possible way to implement this: pass
+		 * information about functions with definitions (i.e not just
+		 * declarations) from sema.c to emit.c.
+		 *
+		 * In particular, sema_fn_signature_state() already tracks the
+		 * necessary information. emit_asm_operand() could use this to
+		 * determine which functions require the @PLT suffix.
+		 */
+		break;
 	}
 }
 
@@ -144,7 +128,7 @@ static void
 emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
 	const char *label_prefix = get_label_prefix(plat);
-	char *print_opcode = NULL;
+	const char *print_opcode = NULL;
 	enum register_alias ralias = REGISTER_ALIAS_4BYTE;
 
 	if (op->opcode != ASM_OP_LABEL) {
@@ -163,6 +147,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_BINARY_ADD:
 		print_opcode = "addl";
+		break;
+	case ASM_OP_BINARY_ADD_QUAD:
+		print_opcode = "addq";
 		break;
 	case ASM_OP_BINARY_SUBTRACT:
 		print_opcode = "subl";
@@ -236,6 +223,13 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		        CUSTOM_LABEL_ID,
 		        op->args[0].u.num);
 		break;
+	case ASM_OP_PUSH:
+		print_opcode = STR_OP_PUSH_QUAD;
+		ralias = REGISTER_ALIAS_8BYTE;
+		break;
+	case ASM_OP_CALL:
+		print_opcode = "call";
+		break;
 	case ASM_OP_RET:
 		dprintf(fd,
 		        "%s %s, %s\n",
@@ -267,6 +261,20 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	dprintf(fd, "\n");
 }
 
+static void
+emit_asm_fn(const struct asm_function *fn, enum platform plat, int fd)
+{
+	const char *fprefix = get_function_prefix(plat);
+	const struct string_view *fname = &fn->identifier;
+	dprintf(fd, "%s%.*s:\n", fprefix, (int)fname->sz, fname->data);
+	dprintf(fd, "\t%s %s\n", STR_OP_PUSH_QUAD, STR_REG_RBP);
+	dprintf(fd, "\t%s %s, %s\n", STR_OP_MOV_QUAD, STR_REG_RSP, STR_REG_RBP);
+
+	for (struct asm_op *op = fn->ops; op != NULL; op = op->next) {
+		emit_asm_op(op, plat, fd);
+	}
+}
+
 void
 emit_asm(const struct assembly *cg, enum platform plat, int fd)
 {
@@ -274,16 +282,16 @@ emit_asm(const struct assembly *cg, enum platform plat, int fd)
 		return;
 	}
 
-	const char *fprefix = plat == PLATFORM_MACOS ? MACOS_FUNC_PREFIX : "";
-	dprintf(fd, "\t.globl %smain\n", fprefix);
+	const char *fprefix = get_function_prefix(plat);
+	assert(fprefix != NULL);
 
-	const struct string_view *fname = &cg->function.identifier;
-	dprintf(fd, "%s%.*s:\n", fprefix, (int)fname->sz, fname->data);
-	dprintf(fd, "\t%s %s\n", STR_OP_PUSH_QUAD, STR_REG_RBP);
-	dprintf(fd, "\t%s %s, %s\n", STR_OP_MOV_QUAD, STR_REG_RSP, STR_REG_RBP);
-
-	for (struct asm_op *op = cg->function.ops; op != NULL; op = op->next) {
-		emit_asm_op(op, plat, fd);
+	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
+		dprintf(fd,
+		        "\t.globl %s%.*s\n",
+		        fprefix,
+		        (int)f->identifier.sz,
+		        f->identifier.data);
+		emit_asm_fn(f, plat, fd);
 	}
 
 	emit_asm_footer(plat, fd);
