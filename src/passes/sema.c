@@ -47,14 +47,12 @@ sema_label_impl(struct ast *a, long long int *id)
 		if (*id <= 0) {
 			return make_result(ERR_SEMA_BREAK_OUTSIDE);
 		}
-		assert(*id >= 3);   /* NODE_LOOP increments id by three */
-		a->u.num = *id - 2; /* most recent label_start */
+		a->u.num = *id; /* most recent label_end */
 		break;
 	case NODE_CONTINUE:
 		if (*id <= 0) {
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
-		assert(*id >= 3);   /* NODE_LOOP increments id by three */
 		a->u.num = *id - 1; /* most recent label_continue */
 		break;
 	case NODE_DECLARATION:
