@@ -254,8 +254,11 @@ result_to_str(result_t r)
 	case ERR_SEMA_DECL_INVALID_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;
-	case ERR_SEMA_BREAK_OR_CONTINUE_OUTSIDE:
-		s = strdup("Invalid break or continue with no enclosing loop");
+	case ERR_SEMA_BREAK_OUTSIDE:
+		s = strdup("Invalid break with no enclosing loop");
+		break;
+	case ERR_SEMA_CONTINUE_OUTSIDE:
+		s = strdup("Invalid continue with no enclosing loop");
 		break;
 	}
 

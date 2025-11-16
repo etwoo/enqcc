@@ -359,22 +359,13 @@ ir_loop(Arena *arena,
 static WARN_UNUSED result_t
 ir_loop_control_op(Arena *arena, const struct ast *a, struct ir_op **dst)
 {
+	assert(a->node_type == NODE_BREAK || a->node_type == NODE_CONTINUE);
+
 	check(ir_alloc_op(arena, dst));
 	assert(*dst != NULL);
-
 	(**dst).opcode = IR_OP_JUMP;
 	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-
-	switch (a->node_type) {
-	case NODE_BREAK:
-		(**dst).args[0].num = a->u.label_end;
-		break;
-	case NODE_CONTINUE:
-		(**dst).args[0].num = a->u.label_continue;
-		break;
-	default:
-		assert(0); /* logic error in caller */
-	}
+	(**dst).args[0].num = a->u.num;
 
 	return RESULT_OK;
 }

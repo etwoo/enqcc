@@ -30,20 +30,32 @@ sema_label_impl(struct ast *a, long long int *id)
 		}
 		break;
 	case NODE_LOOP: {
-		a->u.loop.label_end = ++*id;
-		a->u.loop.label_continue = ++*id;
+		/*
+		 * If NODE_LOOP id incrementing below changes, update
+		 * associated assertions in NODE_BREAK and NODE_CONTINUE cases,
+		 * like `assert(*id >= 3)`.
+		 */
 		a->u.loop.label_start = ++*id;
+		a->u.loop.label_continue = ++*id;
+		a->u.loop.label_end = ++*id;
 		check(sema_label_impl(a->u.loop.precond, id));
 		check(sema_label_impl(a->u.loop.body, id));
 		check(sema_label_impl(a->u.loop.postcond, id));
 		break;
 	}
 	case NODE_BREAK:
+		if (*id <= 0) {
+			return make_result(ERR_SEMA_BREAK_OUTSIDE);
+		}
+		assert(*id >= 3);   /* NODE_LOOP increments id by three */
+		a->u.num = *id - 2; /* most recent label_start */
+		break;
 	case NODE_CONTINUE:
 		if (*id <= 0) {
-			return make_result(ERR_SEMA_BREAK_OR_CONTINUE_OUTSIDE);
+			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
-		a->u.num = *id; /* associated with most recent label_start */
+		assert(*id >= 3);   /* NODE_LOOP increments id by three */
+		a->u.num = *id - 1; /* most recent label_continue */
 		break;
 	case NODE_DECLARATION:
 	case NODE_FUNCTION_RETURN_STATEMENT:
