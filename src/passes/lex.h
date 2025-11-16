@@ -47,6 +47,7 @@ struct token {
 		TOKEN_MORE_THAN_EQUAL_SIGN,
 		TOKEN_QUESTION,
 		TOKEN_COLON,
+		TOKEN_COMMA,
 	} token_type;
 	struct string_view val;
 	struct token *next;

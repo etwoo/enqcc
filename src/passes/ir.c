@@ -95,6 +95,14 @@ ir_block(Arena *arena,
 			continue;
 		}
 
+		if (a->u.block.item->node_type == NODE_FUNCTION) {
+			/*
+			 * For IR purposes, ignore function declarations that
+			 * appear inside other blocks.
+			 */
+			continue;
+		}
+
 		struct ir_val dummy = {0};
 		check(ir_expr(arena, a->u.block.item, ir, dst, &dummy));
 		/*
@@ -108,20 +116,6 @@ ir_block(Arena *arena,
 
 		if (*dst != NULL) {
 			dst = &ir_op_list_back(*dst)->next;
-		} else {
-			/*
-			 * Sanity-check typical reasons for lack of new ir_op:
-			 *
-			 * - null expression
-			 * - declaration without an initialization expression
-			 */
-			struct ast *cur = a->u.block.item;
-			assert(cur->node_type ==
-			               NODE_FUNCTION_RETURN_STATEMENT ||
-			       cur->node_type == NODE_BLOCK ||
-			       cur->node_type == NODE_EXPRESSION_NULL ||
-			       (cur->node_type == NODE_DECLARATION &&
-			        cur->u.declare.init == NULL));
 		}
 	}
 
@@ -417,12 +411,6 @@ ir_unary_op(Arena *arena,
 	ir_val_copy(&inner_return, &unary->args[0]);
 	unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
-		// TODO: loosen this assert, update implementation once LHS
-		// of assignment is no longer restricted to bare Var()
-		// but instead can be an expression like postincrement,
-		// preincrement, array offset, structure member, etc
-		//
-		// related: resolve_expr(), ERR_SEMA_DECL_INVALID_LVALUE
 		assert(a->u.op_binary.lhs->node_type ==
 		       NODE_EXPRESSION_VARIABLE_USAGE);
 		unary->args[1].num = a->u.op_binary.lhs->u.var.unique;
@@ -624,6 +612,65 @@ ir_logical_op(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_call_args(Arena *arena,
+             const struct ast *a,
+             struct intermediate *ir,
+             struct ir_op **dst,
+             struct ir_op *caller,
+             size_t *pos)
+{
+	assert(a->node_type == NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
+
+	while (a != NULL && a->u.call_args.expr != NULL) {
+		struct ir_val arg_value = {0};
+		check(ir_expr(arena, a->u.call_args.expr, ir, dst, &arg_value));
+		assert(arg_value.subtype != IR_VAL_NONE);
+
+		assert(*pos < FUNCTION_PARAMETER_LIMIT);
+		ir_val_copy(&arg_value, &caller->args[*pos]);
+		*pos = *pos + 1;
+
+		a = a->u.call_args.next;
+		if (*dst != NULL) {
+			dst = &ir_op_list_back(*dst)->next;
+		}
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_call(Arena *arena,
+        const struct ast *a,
+        struct intermediate *ir,
+        struct ir_op **dst,
+        struct ir_val *return_value)
+{
+	assert(a->node_type == NODE_EXPRESSION_FUNCTION_CALL);
+
+	struct ir_op *caller = NULL;
+	check(ir_alloc_op(arena, &caller));
+	caller->opcode = IR_OP_CALL;
+	caller->fun = a->u.call.identifier.name;
+
+	struct ir_op *inner = NULL;
+	size_t pos = 0;
+	if (a->u.call.arguments != NULL) {
+		struct ast *args = a->u.call.arguments;
+		check(ir_call_args(arena, args, ir, &inner, caller, &pos));
+	}
+
+	caller->args[pos].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	caller->args[pos].num = ir->env.generator++;
+
+	assert(return_value->subtype == IR_VAL_NONE);
+	ir_val_copy(&caller->args[pos], return_value);
+
+	*dst = ir_op_list_concat(inner, caller);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_expr(Arena *arena,
         const struct ast *a,
         struct intermediate *ir,
@@ -699,6 +746,9 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_LOGICAL_OR:
 		check(ir_logical_op(arena, a, ir, dst, return_value, false));
 		break;
+	case NODE_EXPRESSION_FUNCTION_CALL:
+		check(ir_call(arena, a, ir, dst, return_value));
+		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
 		                   (int)a->node_type);
@@ -707,12 +757,27 @@ ir_expr(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
+ir_function(Arena *arena,
+            const struct ast *a,
+            struct intermediate *ir,
+            struct ir_function **dst)
 {
 	assert(a->node_type == NODE_FUNCTION);
 
-	struct ir_function *f = &ir->function;
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_IR_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	struct ir_function *f = *dst;
 	f->identifier = a->u.function.identifier.name;
+
+	size_t i = 0;
+	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+		f->params[i].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		f->params[i].num = cur->unique;
+		++i;
+	}
 
 	check(ir_block(arena, a->u.function.block, ir, &f->ops));
 
@@ -748,7 +813,19 @@ static WARN_UNUSED result_t
 ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 {
 	assert(a->node_type == NODE_PROGRAM);
-	check(ir_function(arena, a->u.program.entrypoint_function, ir));
+	assert(a->u.program.globals == NULL ||
+	       a->u.program.globals->node_type == NODE_FUNCTION);
+
+	struct ast *cur = a->u.program.globals;
+	struct ir_function **dst = &ir->functions;
+	for (; cur != NULL; cur = cur->u.function.next) {
+		if (cur->u.function.block != NULL) {
+			check(ir_function(arena, cur, ir, dst));
+			assert(*dst != NULL); /* return_0 fallback guarantee */
+			dst = &(**dst).next;
+		}
+	}
+
 	return RESULT_OK;
 }
 
@@ -768,106 +845,22 @@ ir_init(Arena *arena,
 	return RESULT_OK;
 }
 
+#define TO_STR_AND_N_ARGS(opcode, n_args) {#opcode, n_args},
+static const struct {
+	const char *name;
+	size_t required_args;
+} OPCODE_NAMES[] = {FOREACH_IR_OPCODE(TO_STR_AND_N_ARGS)};
+#undef TO_STR_AND_N_ARGS
+
 static void
 ir_debug_print_one(const struct ir_op *op)
 {
-	size_t required_args = 0;
-	switch (op->opcode) {
-	case IR_OP_RET:
-		debug("RETURN");
-		break;
-	case IR_OP_UNARY_COMPLEMENT:
-	case IR_OP_UNARY_NEGATE:
-	case IR_OP_UNARY_NOT:
-	case IR_OP_JUMP:
-	case IR_OP_LABEL:
-		required_args = 1;
-		debug("UNARY");
-		switch (op->opcode) {
-		case IR_OP_UNARY_COMPLEMENT:
-			debug("  COMPLEMENT");
-			break;
-		case IR_OP_UNARY_NEGATE:
-			debug("  NEGATE");
-			break;
-		case IR_OP_UNARY_NOT:
-			debug("  NOT");
-			break;
-		case IR_OP_JUMP:
-			debug("  JUMP");
-			break;
-		case IR_OP_LABEL:
-			debug("  MARK_LABEL");
-			break;
-		default:
-			assert(0); /* logic error in caller */
-		}
-		break;
-	case IR_OP_BINARY_ADD:
-	case IR_OP_BINARY_SUBTRACT:
-	case IR_OP_BINARY_MULTIPLY:
-	case IR_OP_BINARY_DIVIDE:
-	case IR_OP_BINARY_REMAINDER:
-	case IR_OP_COMPARE_EQUAL:
-	case IR_OP_COMPARE_NOT_EQUAL:
-	case IR_OP_COMPARE_LESS_THAN:
-	case IR_OP_COMPARE_LESS_THAN_EQ:
-	case IR_OP_COMPARE_MORE_THAN:
-	case IR_OP_COMPARE_MORE_THAN_EQ:
-	case IR_OP_COPY:
-	case IR_OP_JUMP_IF_ZERO:
-	case IR_OP_JUMP_IF_NOT_ZERO:
-		required_args = 2;
-		debug("BINARY");
-		switch (op->opcode) {
-		case IR_OP_BINARY_ADD:
-			debug("  ADD");
-			break;
-		case IR_OP_BINARY_SUBTRACT:
-			debug("  SUBTRACT");
-			break;
-		case IR_OP_BINARY_MULTIPLY:
-			debug("  MULTIPLY");
-			break;
-		case IR_OP_BINARY_DIVIDE:
-			debug("  DIVIDE");
-			break;
-		case IR_OP_BINARY_REMAINDER:
-			debug("  REMAINDER");
-			break;
-		case IR_OP_COMPARE_EQUAL:
-			debug("  COMPARE_EQUAL");
-			break;
-		case IR_OP_COMPARE_NOT_EQUAL:
-			debug("  NOT_EQUAL");
-			break;
-		case IR_OP_COMPARE_LESS_THAN:
-			debug("  LESS_THAN");
-			break;
-		case IR_OP_COMPARE_LESS_THAN_EQ:
-			debug("  LESS_THAN_OR_EQUAL");
-			break;
-		case IR_OP_COMPARE_MORE_THAN:
-			debug("  MORE_THAN");
-			break;
-		case IR_OP_COMPARE_MORE_THAN_EQ:
-			debug("  MORE_THAN_OR_EQUAL");
-			break;
-		case IR_OP_COPY:
-			debug("  COPY");
-			break;
-		case IR_OP_JUMP_IF_ZERO:
-			debug("  JUMP_IF_ZERO");
-			break;
-		case IR_OP_JUMP_IF_NOT_ZERO:
-			debug("  JUMP_IF_NOT_ZERO");
-			break;
-		default:
-			assert(0); /* logic error in caller */
-		}
-		break;
+	debug("%s", OPCODE_NAMES[op->opcode].name);
+	if (op->opcode == IR_OP_CALL) {
+		debug("  FUNCTION %.*s", (int)op->fun.sz, op->fun.data);
 	}
 
+	const size_t required_args = OPCODE_NAMES[op->opcode].required_args;
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		switch (op->args[i].subtype) {
 		case IR_VAL_NONE:
@@ -900,9 +893,9 @@ void
 ir_debug_print(const struct intermediate *ir)
 {
 	debug("PROGRAM");
-
-	const struct string_view *entrypoint = &ir->function.identifier;
-	debug("FUNC %.*s", (int)entrypoint->sz, entrypoint->data);
-
-	ir_debug_print_list(ir->function.ops);
+	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
+		const struct string_view *fname = &f->identifier;
+		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
+		ir_debug_print_list(f->ops);
+	}
 }
