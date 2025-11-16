@@ -294,10 +294,13 @@ ir_loop(Arena *arena,
 	check(ir_expr(arena, a->u.loop.precond, ir, &precond, &precond_return));
 
 	struct ir_op *precond_jumper = NULL;
-	check(ir_alloc_op(arena, &precond_jumper));
-	precond_jumper->opcode = IR_OP_JUMP_IF_ZERO;
-	ir_val_copy(&precond_return, &precond_jumper->args[0]);
-	ir_val_copy(&go_end, &precond_jumper->args[1]);
+	if (a->u.loop.precond->node_type != NODE_EXPRESSION_NULL) {
+		assert(precond_return.subtype != IR_VAL_NONE);
+		check(ir_alloc_op(arena, &precond_jumper));
+		precond_jumper->opcode = IR_OP_JUMP_IF_ZERO;
+		ir_val_copy(&precond_return, &precond_jumper->args[0]);
+		ir_val_copy(&go_end, &precond_jumper->args[1]);
+	}
 
 	struct ir_val dummy = {0};
 
@@ -323,10 +326,13 @@ ir_loop(Arena *arena,
 	              &postcond_return));
 
 	struct ir_op *postcond_jumper = NULL;
-	check(ir_alloc_op(arena, &postcond_jumper));
-	postcond_jumper->opcode = IR_OP_JUMP_IF_ZERO;
-	ir_val_copy(&postcond_return, &postcond_jumper->args[0]);
-	ir_val_copy(&go_end, &postcond_jumper->args[1]);
+	if (a->u.loop.postcond->node_type != NODE_EXPRESSION_NULL) {
+		assert(postcond_return.subtype != IR_VAL_NONE);
+		check(ir_alloc_op(arena, &postcond_jumper));
+		postcond_jumper->opcode = IR_OP_JUMP_IF_ZERO;
+		ir_val_copy(&postcond_return, &postcond_jumper->args[0]);
+		ir_val_copy(&go_end, &postcond_jumper->args[1]);
+	}
 
 	struct ir_op *jump_back_to_start = NULL;
 	check(ir_alloc_op(arena, &jump_back_to_start));
