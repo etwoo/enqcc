@@ -73,10 +73,10 @@ sema_label_impl(struct ast *a, long long int *id)
 }
 
 result_t
-sema_label_loops(struct ast *a)
+sema_label_loops(struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
-	long long int id_generator = 0;
-	check(sema_label_impl(a, &id_generator));
+	*generator = 0;
+	check(sema_label_impl(a, generator));
 	return RESULT_OK;
 }

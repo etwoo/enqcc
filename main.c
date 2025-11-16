@@ -78,7 +78,8 @@ compile(Arena *arena,
 		return RESULT_OK;
 	}
 
-	check(sema_label_loops(a));
+	long long int label_generator = 0;
+	check(sema_label_loops(a, &label_generator));
 	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA_IR) {
@@ -86,7 +87,7 @@ compile(Arena *arena,
 	}
 
 	struct intermediate *ir = NULL;
-	check(ir_init(arena, a, sym, &ir));
+	check(ir_init(arena, a, sym, &label_generator, &ir));
 	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES &&

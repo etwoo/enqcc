@@ -265,6 +265,121 @@ ir_if_else(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_loop(Arena *arena,
+        const struct ast *a,
+        struct intermediate *ir,
+        struct ir_op **dst)
+{
+	assert(a->node_type == NODE_LOOP);
+
+	struct ir_val go_start = {0};
+	go_start.subtype = IR_VAL_JUMP_TARGET_LABEL;
+	go_start.num = a->u.loop.label_start;
+
+	struct ir_val go_continue = {0};
+	go_continue.subtype = IR_VAL_JUMP_TARGET_LABEL;
+	go_continue.num = a->u.loop.label_continue;
+
+	struct ir_val go_end = {0};
+	go_end.subtype = IR_VAL_JUMP_TARGET_LABEL;
+	go_end.num = a->u.loop.label_end;
+
+	struct ir_op *start_label = NULL;
+	check(ir_alloc_op(arena, &start_label));
+	start_label->opcode = IR_OP_LABEL;
+	ir_val_copy(&go_start, &start_label->args[0]);
+
+	struct ir_op *precond = NULL;
+	struct ir_val precond_return = {0};
+	check(ir_expr(arena, a->u.loop.precond, ir, &precond, &precond_return));
+
+	struct ir_op *precond_jumper = NULL;
+	check(ir_alloc_op(arena, &precond_jumper));
+	precond_jumper->opcode = IR_OP_JUMP_IF_ZERO;
+	ir_val_copy(&precond_return, &precond_jumper->args[0]);
+	ir_val_copy(&go_end, &precond_jumper->args[1]);
+
+	struct ir_val dummy = {0};
+
+	struct ir_op *body = NULL;
+	memset(&dummy, 0, sizeof(dummy));
+	check(ir_expr(arena, a->u.loop.body, ir, &body, &dummy));
+
+	struct ir_op *continue_label = NULL;
+	check(ir_alloc_op(arena, &continue_label));
+	continue_label->opcode = IR_OP_LABEL;
+	ir_val_copy(&go_continue, &continue_label->args[0]);
+
+	struct ir_op *incr = NULL;
+	memset(&dummy, 0, sizeof(dummy));
+	check(ir_expr(arena, a->u.loop.incr, ir, &incr, &dummy));
+
+	struct ir_op *postcond = NULL;
+	struct ir_val postcond_return = {0};
+	check(ir_expr(arena,
+	              a->u.loop.postcond,
+	              ir,
+	              &postcond,
+	              &postcond_return));
+
+	struct ir_op *postcond_jumper = NULL;
+	check(ir_alloc_op(arena, &postcond_jumper));
+	postcond_jumper->opcode = IR_OP_JUMP_IF_ZERO;
+	ir_val_copy(&postcond_return, &postcond_jumper->args[0]);
+	ir_val_copy(&go_end, &postcond_jumper->args[1]);
+
+	struct ir_op *jump_back_to_start = NULL;
+	check(ir_alloc_op(arena, &jump_back_to_start));
+	jump_back_to_start->opcode = IR_OP_JUMP;
+	ir_val_copy(&go_start, &jump_back_to_start->args[0]);
+
+	struct ir_op *end_label = NULL;
+	check(ir_alloc_op(arena, &end_label));
+	end_label->opcode = IR_OP_LABEL;
+	ir_val_copy(&go_end, &end_label->args[0]);
+
+	struct ir_op *collect[] = {
+		start_label,
+		precond,
+		precond_jumper,
+		body,
+		continue_label,
+		incr,
+		postcond,
+		postcond_jumper,
+		jump_back_to_start,
+		end_label,
+	};
+	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
+		*dst = ir_op_list_concat(*dst, collect[i]);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_loop_control_op(Arena *arena, const struct ast *a, struct ir_op **dst)
+{
+	check(ir_alloc_op(arena, dst));
+	assert(*dst != NULL);
+
+	(**dst).opcode = IR_OP_JUMP;
+	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+
+	switch (a->node_type) {
+	case NODE_BREAK:
+		(**dst).args[0].num = a->u.label_end;
+		break;
+	case NODE_CONTINUE:
+		(**dst).args[0].num = a->u.label_continue;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_unary_op(Arena *arena,
             const struct ast *a,
             struct intermediate *ir,
@@ -541,6 +656,13 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		check(ir_if_else(arena, a, ir, dst, return_value));
 		break;
+	case NODE_LOOP:
+		check(ir_loop(arena, a, ir, dst));
+		break;
+	case NODE_BREAK:
+	case NODE_CONTINUE:
+		check(ir_loop_control_op(arena, a, dst));
+		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
@@ -637,12 +759,14 @@ result_t
 ir_init(Arena *arena,
         const struct ast *a,
         const struct symbol *sym,
+        const long long int *label_generator,
         struct intermediate **ir)
 {
 	*ir = arena_alloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
 	memset(*ir, 0, sizeof(**ir));
 	(**ir).env.generator = sym == NULL ? 0 : sym->cookie + 1;
+	(**ir).env.labels = *label_generator + 1;
 	check(ir_program(arena, a, *ir));
 	return RESULT_OK;
 }
