@@ -581,6 +581,29 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
+parse_loop_for_init(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	check(parse_alloc(arena, dst, NODE_BLOCK));
+
+	struct ast **item_dst = &(**dst).u.block.item;
+	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
+		check(parse_alloc_if_unset(arena, item_dst));
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+		check(parse_decl(arena, tok, item_dst));
+	} else {
+		check(parse_expr(arena, tok, item_dst, 0));
+		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
+			return make_result(
+				ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON);
+		}
+		token_consume(tok);
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_loop_do_while_suffix(Arena *arena,
                            const struct token **tok,
                            struct ast **dst)
@@ -614,7 +637,6 @@ enum {
 	UNSET_LOOP_ID = -1,
 };
 
-// NOLINTBEGIN(readability-function-cognitive-complexity) // TODO rm
 static WARN_UNUSED result_t
 parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 {
@@ -646,21 +668,12 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 		/*
 		 * Create block in case for-init declares a loop variable.
 		 */
-		check(parse_alloc(arena, dst, NODE_BLOCK));
-		struct ast **item_dst = &(**dst).u.block.item;
-		if (is_token_type(*tok, TOKEN_SEMICOLON)) {
-			check(parse_alloc_if_unset(arena, item_dst));
-			token_consume(tok);
-		} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
-			check(parse_decl(arena, tok, item_dst));
-		} else {
-			check(parse_expr(arena, tok, item_dst, 0));
-			if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
-				return make_result(
-					ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON);
-			}
-			token_consume(tok);
-		}
+		check(parse_loop_for_init(arena, tok, dst));
+		assert((**dst).node_type == NODE_BLOCK);
+		/*
+		 * Arrange for loop body to be allocated into next block item,
+		 * following first item that holds loop variable declaration.
+		 */
 		dst = &(**dst).u.block.next;
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		dst = &(**dst).u.block.item;
@@ -715,7 +728,6 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 
 	return RESULT_OK;
 }
-// NOLINTEND(readability-function-cognitive-complexity) // TODO rm
 
 static WARN_UNUSED result_t
 parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
