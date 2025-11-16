@@ -1,11 +1,13 @@
 #ifndef COMPILER_PASSES_PARSE_H
 #define COMPILER_PASSES_PARSE_H
 
+#include "passes/symbol.h"
 #include "sys/string_view.h"
 
 struct ast_symbol {
 	struct string_view name;
 	long long int unique;
+	enum symbol_type stype;
 };
 
 struct ast {
@@ -37,18 +39,22 @@ struct ast {
 		NODE_EXPRESSION_COMPARE_LESS_THAN_EQ,
 		NODE_EXPRESSION_COMPARE_MORE_THAN,
 		NODE_EXPRESSION_COMPARE_MORE_THAN_EQ,
-		NODE_EXPRESSION_VARIABLE_USAGE,
 		NODE_EXPRESSION_VARIABLE_ASSIGNMENT,
+		NODE_EXPRESSION_VARIABLE_USAGE,
 		NODE_EXPRESSION_TERNARY_CONDITIONAL,
+		NODE_EXPRESSION_FUNCTION_CALL,
+		NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS,
 		NODE_CONSTANT_INT,
 	} node_type;
 	union {
 		struct {
-			struct ast *entrypoint_function;
+			struct ast *globals;
 		} program;
 		struct {
 			struct ast_symbol identifier;
+			struct ast_symbol *params;
 			struct ast *block;
+			struct ast *next;
 		} function;
 		struct {
 			struct ast *item;
@@ -84,9 +90,27 @@ struct ast {
 			struct ast *then_expr;
 			struct ast *else_expr;
 		} op_ternary;
+		struct {
+			struct ast_symbol identifier;
+			struct ast *arguments;
+		} call;
+		struct {
+			struct ast *expr;
+			struct ast *next;
+		} call_args;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
 };
+
+/*
+ * Utility macro for iterating over dynamically allocated u.function.params
+ * array, delimited by a final `struct string_view` with NULL data.
+ */
+#define FOREACH_FUNCTION_PARAMETER(iter, arr)                                  \
+	for (struct ast_symbol * (iter) = arr;                                 \
+	     (iter) != NULL && (iter)->name.data != NULL &&                    \
+	     (iter)->name.sz > 0;                                              \
+	     ++(iter))
 
 #endif

@@ -197,13 +197,21 @@ result_to_str(result_t r)
 		s = strdup("Parsing function expects TOKEN_PAREN_OPEN before "
 		           "argument list");
 		break;
-	case ERR_PARSE_FUNC_EXPECT_TOKEN_KEYWORD_VOID:
-		s = strdup("Parsing function expects TOKEN_PAREN_VOID as "
-		           "argument list");
+	case ERR_PARSE_FUNC_PARAM_EXPECT_TYPE_INT:
+		s = strdup("Parsing function parameter expects "
+		           "TOKEN_KEYWORD_INT in parameter type position");
+		break;
+	case ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER:
+		s = strdup("Parsing function parameter expects "
+		           "TOKEN_IDENTIFIER in parameter name position");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing function expects TOKEN_PAREN_CLOSE after "
 		           "argument list");
+		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_SEMICOLON_OR_BRACE_OPEN:
+		s = strdup("Parsing function expects TOKEN_SEMICOLON or "
+		           "TOKEN_BRACE_OPEN after TOKEN_PAREN_CLOSE");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN:
 		s = strdup("Parsing function expects TOKEN_BRACE_OPEN before "
@@ -212,6 +220,10 @@ result_to_str(result_t r)
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE:
 		s = strdup("Parsing function expects TOKEN_BRACE_CLOSE after "
 		           "function body statement(s)");
+		break;
+	case ERR_PARSE_CALL_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing function call expects TOKEN_PAREN_CLOSE "
+		           "after function argument list");
 		break;
 	case ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing if statement expects TOKEN_PAREN_OPEN "
@@ -237,13 +249,30 @@ result_to_str(result_t r)
 		           "do-loop body and before do-loop controlling "
 		           "expression");
 		break;
-	case ERR_PARSE_PROG_EXPECT_END:
-		s = strdup("Parsing program expects end of token stream after "
-		           "function definition(s)");
-		break;
 	case ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
+		break;
+	case ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION:
+		s = my_asprintf("Conflicting function definition: %s", r.msg);
+		break;
+	case ERR_SEMA_NESTED_FUNCTION_DEFINITION:
+		s = my_asprintf("Nested function definition: %s", r.msg);
+		break;
+	case ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION:
+		s = my_asprintf("Duplicate function definition: %s", r.msg);
+		break;
+	case ERR_SEMA_DUPLICATE_FUNCTION_PARAMETER:
+		s = my_asprintf("Duplicate function parameter: %s", r.msg);
+		break;
+	case ERR_SEMA_UNDECLARED_FUNCTION_CALL:
+		s = my_asprintf("Call of undeclared function: %s", r.msg);
+		break;
+	case ERR_SEMA_TOO_MANY_OR_TOO_FEW_CALL_ARGUMENTS:
+		s = my_asprintf("Incorrect arguments to call of: %s", r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_AS_CALLABLE:
+		s = my_asprintf("Call of non-function variable: %s", r.msg);
 		break;
 	case ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION:
 		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
@@ -253,6 +282,12 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_DECL_INVALID_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
+		break;
+	case ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE:
+		s = my_asprintf("Invalid use of function '%s' as lvalue or "
+		                "rvalue; cannot assign value to function or "
+		                "use function as a value",
+		                r.msg);
 		break;
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");

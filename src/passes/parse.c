@@ -16,23 +16,51 @@ enum {
 	NOT_YET_UNIQUE = -1,
 };
 
+static void
+map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
+{
+	dst->unique = src->unique;
+	dst->stype = src->stype;
+}
+
 static WARN_UNUSED result_t
-resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
+resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(var->unique == NOT_YET_UNIQUE);
-	const struct symbol *resolution = symbols_get(head, &var->name, false);
-	if (resolution == NULL) {
+
+	const struct symbol *resolved = symbols_get(head, &var->name, false);
+	if (resolved == NULL) {
 		return make_result(ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
 		                   var->name.data,
 		                   var->name.sz);
 	}
-	var->unique = resolution->unique;
+
+	map_symbol_members(resolved, var);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_function_call(struct symbol *head, struct ast_symbol *callee)
+{
+	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
+	assert(callee->unique == NOT_YET_UNIQUE);
+
+	const struct symbol *resolved = symbols_get(head, &callee->name, false);
+	if (resolved == NULL) {
+		return make_result(ERR_SEMA_UNDECLARED_FUNCTION_CALL,
+		                   callee->name.data,
+		                   callee->name.sz);
+	}
+
+	map_symbol_members(resolved, callee);
 	return RESULT_OK;
 }
 
 static result_t
 resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
+static result_t
+resolve_function(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
@@ -98,12 +126,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		if (a->u.op_binary.lhs->node_type !=
-		    NODE_EXPRESSION_VARIABLE_USAGE) {
-			return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
-		}
-		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -117,6 +139,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
 		break;
@@ -130,6 +153,18 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 			check(resolve_expr(arena,
 			                   a->u.op_ternary.else_expr,
 			                   sym));
+		}
+		break;
+	case NODE_EXPRESSION_FUNCTION_CALL:
+		check(resolve_function_call(*sym, &a->u.call.identifier));
+		if (a->u.call.arguments != NULL) {
+			check(resolve_expr(arena, a->u.call.arguments, sym));
+		}
+		break;
+	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
+		check(resolve_expr(arena, a->u.call_args.expr, sym));
+		if (a->u.call_args.next != NULL) {
+			check(resolve_expr(arena, a->u.call_args.next, sym));
 		}
 		break;
 	}
@@ -149,12 +184,13 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 		                   dup->name.sz);
 	}
 
-	check(symbols_prepend(arena, sym, &a->u.declare.identifier.name));
-	assert(a->u.declare.identifier.name.sz == (**sym).name.sz &&
-	       0 == strncmp(a->u.declare.identifier.name.data,
-	                    (**sym).name.data,
-	                    (**sym).name.sz));
-	a->u.declare.identifier.unique = (**sym).unique;
+	check(symbols_prepend(arena,
+	                      sym,
+	                      &a->u.declare.identifier.name,
+	                      SYMBOL_VARIABLE,
+	                      LINKAGE_NONE,
+	                      0));
+	map_symbol_members(*sym, &a->u.declare.identifier);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
@@ -163,11 +199,17 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
-resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
+resolve_block_with_delimiter(Arena *arena,
+                             struct ast *a,
+                             struct symbol **sym,
+                             struct symbol *level_delimiter_point)
 {
 	if (*sym != NULL) {
-		(**sym).level_delimiter = true;
+		assert(level_delimiter_point != NULL);
+		level_delimiter_point->level_delimiter = true;
 	}
+
+	struct symbol *outer_resetter = *sym;
 
 	for (; a != NULL; a = a->u.block.next) {
 		assert(a->node_type == NODE_BLOCK);
@@ -179,16 +221,16 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 
 		struct symbol *resetter = NULL;
 		switch (cur_item->node_type) {
+		case NODE_FUNCTION:
+			check(resolve_function(arena, cur_item, sym));
+			break;
 		case NODE_DECLARATION:
 			check(resolve_decl(arena, cur_item, sym));
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
 			check(resolve_block(arena, cur_item, sym));
-			if (resetter != NULL) {
-				resetter->cookie = (**sym).cookie;
-			}
-			*sym = resetter;
+			symbols_reset_scope(sym, resetter);
 			break;
 		default:
 			check(resolve_expr(arena, cur_item, sym));
@@ -196,8 +238,42 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 		}
 	}
 
+	symbols_reset_scope(sym, outer_resetter);
+
 	if (*sym != NULL) {
-		(**sym).level_delimiter = false;
+		assert(level_delimiter_point != NULL);
+		level_delimiter_point->level_delimiter = false;
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
+{
+	check(resolve_block_with_delimiter(arena, a, sym, *sym));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_function_params_one(Arena *arena,
+                            struct ast_symbol *a,
+                            struct symbol **sym)
+{
+	check(symbols_prepend(arena,
+	                      sym,
+	                      &a->name,
+	                      SYMBOL_VARIABLE,
+	                      LINKAGE_NONE,
+	                      0));
+	map_symbol_members(*sym, a);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
+{
+	FOREACH_FUNCTION_PARAMETER (cur, a) {
+		check(resolve_function_params_one(arena, cur, sym));
 	}
 	return RESULT_OK;
 }
@@ -206,7 +282,52 @@ static WARN_UNUSED result_t
 resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 {
 	assert(a->node_type == NODE_FUNCTION);
-	check(resolve_block(arena, a->u.function.block, sym));
+
+	const bool is_def = (a->u.function.block != NULL);
+	struct symbol *dup =
+		symbols_get(*sym, &a->u.function.identifier.name, false);
+	if (dup == NULL ||                   /* new symbol in this scope */
+	    dup->stype == SYMBOL_VARIABLE) { /* ... or func shadows var  */
+		long long int n_args = 0;
+		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+			++n_args;
+		}
+		check(symbols_prepend(arena,
+		                      sym,
+		                      &a->u.function.identifier.name,
+		                      is_def ? SYMBOL_FUNCTION_DEFINITION
+		                             : SYMBOL_FUNCTION_DECLARATION,
+		                      LINKAGE_EXTERNAL,
+		                      n_args));
+		map_symbol_members(*sym, &a->u.function.identifier);
+	} else if (is_def) {
+		map_symbol_members(dup, &a->u.function.identifier);
+		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
+		dup->stype = SYMBOL_FUNCTION_DEFINITION;
+	} else {
+		map_symbol_members(dup, &a->u.function.identifier);
+	}
+
+	struct symbol *before_params = *sym;
+	if (*sym != NULL) {
+		assert(before_params != NULL);
+		before_params->level_delimiter = true;
+	}
+
+	check(resolve_function_params(arena, a->u.function.params, sym));
+
+	if (is_def) {
+		check(resolve_block_with_delimiter(arena,
+		                                   a->u.function.block,
+		                                   sym,
+		                                   before_params));
+	}
+
+	symbols_reset_scope(sym, before_params);
+	if (before_params) {
+		before_params->level_delimiter = false;
+	}
+
 	return RESULT_OK;
 }
 
@@ -286,16 +407,62 @@ static result_t parse_expr(Arena *arena,
                            unsigned minimum_precedence) WARN_UNUSED;
 
 static WARN_UNUSED result_t
+parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_IDENTIFIER));
+
+	struct string_view str = (**tok).val;
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
+		(**dst).u.var.name = str;
+		(**dst).u.var.unique = NOT_YET_UNIQUE;
+		return RESULT_OK;
+	}
+
+	check(parse_alloc(arena, dst, NODE_EXPRESSION_FUNCTION_CALL));
+	(**dst).u.call.identifier.name = str;
+	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
+
+	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
+	token_consume(tok);
+
+	if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		token_consume(tok);
+		return RESULT_OK; /* zero-arg function call */
+	}
+
+	dst = &(**dst).u.call.arguments;
+	while (true) {
+		check(parse_alloc(arena,
+		                  dst,
+		                  NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS));
+		check(parse_expr(arena, tok, &(**dst).u.call_args.expr, 0));
+		dst = &(**dst).u.call_args.next;
+
+		if (!is_token_type(*tok, TOKEN_COMMA)) {
+			break;
+		}
+		token_consume(tok);
+	}
+
+	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		return make_result(ERR_PARSE_CALL_EXPECT_TOKEN_PAREN_CLOSE);
+	}
+	token_consume(tok);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
-		(**dst).u.var.name = (**tok).val;
-		(**dst).u.var.unique = NOT_YET_UNIQUE;
-		token_consume(tok);
+		check(parse_symbol(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
 		check(parse_alloc(arena,
 		                  dst,
@@ -429,6 +596,8 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
+	case NODE_EXPRESSION_FUNCTION_CALL:
+	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 	case NODE_CONSTANT_INT:
 		assert(0); /* logic error in caller */
 		break;
@@ -491,6 +660,14 @@ parse_expr(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+parse_peek_ahead_function_maybe(const struct token *tok)
+{
+	return is_token_type(tok, TOKEN_KEYWORD_INT) &&
+	       is_token_type(tok->next, TOKEN_IDENTIFIER) &&
+	       is_token_type(tok->next->next, TOKEN_PAREN_OPEN);
+}
+
 static WARN_UNUSED result_t
 parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 {
@@ -520,6 +697,9 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static result_t parse_function(Arena *arena,
+                               const struct token **tok,
+                               struct ast **dst) WARN_UNUSED;
 static result_t parse_stmt(Arena *arena,
                            const struct token **tok,
                            struct ast **dst) WARN_UNUSED;
@@ -532,10 +712,20 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
+	if (is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
+		token_consume(tok);
+		check(parse_alloc(arena, dst, NODE_BLOCK));
+		dst = &(**dst).u.block.item;
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+		return RESULT_OK;
+	}
+
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		struct ast **item_dst = &(**dst).u.block.item;
-		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+		if (parse_peek_ahead_function_maybe(*tok)) {
+			check(parse_function(arena, tok, item_dst));
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, item_dst));
 		} else {
 			check(parse_stmt(arena, tok, item_dst));
@@ -773,6 +963,71 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
+parse_function_params_impl(const struct token **tok,
+                           struct ast_symbol **dst,
+                           long long int *count)
+{
+	const long long int count_in = *count;
+
+	bool first = true;
+	for (*count = 0; true; *count = *count + 1) {
+		if (first) {
+			first = false;
+		} else {
+			if (!is_token_type(*tok, TOKEN_COMMA)) {
+				break;
+			}
+			token_consume(tok);
+		}
+
+		if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+			return make_result(
+				ERR_PARSE_FUNC_PARAM_EXPECT_TYPE_INT);
+		}
+		token_consume(tok);
+
+		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+			return make_result(
+				ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER);
+		}
+		if (dst != NULL) {
+			assert(*count <= count_in);
+			(*dst)[*count].name = (**tok).val;
+			(*dst)[*count].unique = NOT_YET_UNIQUE;
+		}
+		token_consume(tok);
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_function_params(Arena *arena,
+                      const struct token **tok,
+                      struct ast_symbol **dst)
+{
+	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
+		token_consume(tok);
+		return RESULT_OK;
+	}
+
+	long long int count = 0;
+	{
+		const struct token *copy = *tok;
+		check(parse_function_params_impl(&copy, NULL, &count));
+	}
+	if (count > 0) {
+		size_t bytes = sizeof(**dst) * (count + 1);
+		*dst = arena_alloc(arena, bytes);
+		check_if(*dst == NULL, ERR_PARSE_ALLOC);
+		memset(*dst, 0, bytes);
+		check(parse_function_params_impl(tok, dst, &count));
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
@@ -793,17 +1048,23 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	if (!is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_KEYWORD_VOID);
-	}
-	token_consume(tok);
+	check(parse_function_params(arena, tok, &(**dst).u.function.params));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE);
 	}
 	token_consume(tok);
 
-	check(parse_block(arena, tok, &(**dst).u.function.block));
+	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
+		assert((**dst).u.function.block == NULL);
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		check(parse_block(arena, tok, &(**dst).u.function.block));
+	} else {
+		return make_result(
+			ERR_PARSE_FUNC_EXPECT_TOKEN_SEMICOLON_OR_BRACE_OPEN);
+	}
+
 	return RESULT_OK;
 }
 
@@ -814,16 +1075,18 @@ parse_init(Arena *arena,
            struct symbol **sym)
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
-	check(parse_function(arena,
-	                     &tok,
-	                     &(**a).u.program.entrypoint_function));
-	if (tok != NULL) {
-		return make_result(ERR_PARSE_PROG_EXPECT_END);
+	struct ast *original = *a;
+
+	a = &original->u.program.globals;
+	for (; tok != NULL; a = &(**a).u.function.next) {
+		check(parse_function(arena, &tok, a));
+		assert((**a).node_type == NODE_FUNCTION);
 	}
-	if (sym != NULL) {
-		check(resolve_function(arena,
-		                       (**a).u.program.entrypoint_function,
-		                       sym));
+
+	a = &original->u.program.globals;
+	for (; sym != NULL && *a != NULL; a = &(**a).u.function.next) {
+		assert((**a).node_type == NODE_FUNCTION);
+		check(resolve_function(arena, *a, sym));
 	}
 
 	return RESULT_OK;
@@ -845,6 +1108,23 @@ parse_debug_print_ast_symbol(const char *description,
 	      "",
 	      asym->unique,
 	      asym->unique == NOT_YET_UNIQUE ? " (not unique)" : "");
+
+	const char *symbol_type_as_str = NULL;
+	switch (asym->stype) {
+	case SYMBOL_VARIABLE:
+		symbol_type_as_str = "VARIABLE";
+		break;
+	case SYMBOL_FUNCTION_DECLARATION:
+		symbol_type_as_str = "FUNCTION DECLARATION";
+		break;
+	case SYMBOL_FUNCTION_DEFINITION:
+		symbol_type_as_str = "FUNCTION DEFINITION";
+		break;
+	}
+	debug("%*sIDENTIFIER.TYPE: %s",
+	      (int)indent + 1,
+	      "",
+	      symbol_type_as_str);
 }
 
 void
@@ -854,15 +1134,23 @@ parse_debug_print(const struct ast *a, size_t indent)
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 		debug("%*sPROGRAM", (int)indent, "");
-		parse_debug_print(a->u.program.entrypoint_function, indent + 1);
+		parse_debug_print(a->u.program.globals, indent + 1);
 		break;
 	case NODE_FUNCTION:
 		parse_debug_print_ast_symbol("FUNCTION",
 		                             &a->u.function.identifier,
 		                             indent);
+		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+			parse_debug_print_ast_symbol("PARAMETER",
+			                             cur,
+			                             indent + 1);
+		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
 			parse_debug_print(a->u.function.block, indent + 2);
+		}
+		if (a->u.function.next != NULL) {
+			parse_debug_print(a->u.function.next, indent);
 		}
 		break;
 	case NODE_BLOCK:
@@ -967,7 +1255,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -981,6 +1268,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		switch (a->node_type) {
 		case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 			debug("%*sEXPRESSION ASSIGN", (int)indent, "");
@@ -1046,6 +1334,22 @@ parse_debug_print(const struct ast *a, size_t indent)
 			debug("%*sELSE", (int)indent + 1, "");
 			parse_debug_print(a->u.op_ternary.else_expr,
 			                  indent + 2);
+		}
+		break;
+	case NODE_EXPRESSION_FUNCTION_CALL:
+		parse_debug_print_ast_symbol("CALL",
+		                             &a->u.call.identifier,
+		                             indent);
+		if (a->u.call.arguments != NULL) {
+			debug("%*sARGUMENTS", (int)indent, "");
+			parse_debug_print(a->u.call.arguments, indent + 1);
+		}
+		break;
+	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
+		debug("%*sARGUMENT", (int)indent, "");
+		parse_debug_print(a->u.call_args.expr, indent + 1);
+		if (a->u.call_args.next != NULL) {
+			parse_debug_print(a->u.call_args.next, indent);
 		}
 		break;
 	case NODE_CONSTANT_INT:
