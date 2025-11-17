@@ -867,7 +867,16 @@ parse_function_params(Arena *arena,
 		return RESULT_OK;
 	}
 
-	while (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+	bool first = true;
+	while (true) {
+		if (first) {
+			first = false;
+			if (!is_token_type(*tok, TOKEN_COMMA)) {
+				break;
+			}
+			token_consume(tok);
+		}
+
 		if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			return make_result(
 				ERR_PARSE_FUNC_PARAM_EXPECT_TYPE_INT);
@@ -882,10 +891,6 @@ parse_function_params(Arena *arena,
 		token_consume(tok);
 
 		dst = &(**dst).next;
-
-		if (is_token_type(*tok, TOKEN_COMMA)) {
-			token_consume(tok);
-		}
 	}
 
 	return RESULT_OK;
