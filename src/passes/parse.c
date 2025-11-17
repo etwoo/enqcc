@@ -319,7 +319,7 @@ static WARN_UNUSED result_t
 resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
 {
 	FOREACH_FUNCTION_PARAMETER (cur, a) {
-		check(resolve_function_params_one(arena, a, sym));
+		check(resolve_function_params_one(arena, cur, sym));
 	}
 	return RESULT_OK;
 }
