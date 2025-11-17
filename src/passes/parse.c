@@ -70,13 +70,12 @@ resolve_function_call(struct symbol *head,
 
 	callee->unique = resolved->unique;
 
+	assert(args == NULL ||
+	       args->node_type == NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
+
 	long long int n_args = 0;
-	if (args != NULL) {
-		assert(args->node_type ==
-		       NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
-		for (; args != NULL; args = args->u.call_args.next) {
-			++n_args;
-		}
+	for (; args != NULL; args = args->u.call_args.next) {
+		++n_args;
 	}
 
 	if (n_args != resolved->n_args) {
