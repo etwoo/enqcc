@@ -51,15 +51,14 @@ resolve_function_call(struct symbol *head,
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(callee->unique == NOT_YET_UNIQUE);
 
-	const struct symbol *resolution =
-		symbols_get(head, &callee->name, false);
-	if (resolution == NULL) {
+	const struct symbol *resolved = symbols_get(head, &callee->name, false);
+	if (resolved == NULL) {
 		return make_result(ERR_SEMA_UNDECLARED_FUNCTION_CALL,
 		                   callee->name.data,
 		                   callee->name.sz);
 	}
 
-	switch (resolution->stype) {
+	switch (resolved->stype) {
 	case SYMBOL_VARIABLE:
 		return make_result(ERR_SEMA_TYPECHECK_VARIABLE_AS_CALLABLE,
 		                   callee->name.data,
@@ -69,7 +68,7 @@ resolve_function_call(struct symbol *head,
 		break;
 	}
 
-	callee->unique = resolution->unique;
+	callee->unique = resolved->unique;
 
 	long long int n_args = 0;
 	if (args != NULL) {
