@@ -258,6 +258,9 @@ result_to_str(result_t r)
 		                "external linkage: %s",
 		                r.msg);
 		break;
+	case ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION:
+		s = my_asprintf("Conflicting function definition: %s", r.msg);
+		break;
 	case ERR_SEMA_NESTED_FUNCTION_DEFINITION:
 		s = my_asprintf("Nested function definition: %s", r.msg);
 		break;

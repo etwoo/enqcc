@@ -80,7 +80,7 @@ compile(Arena *arena,
 
 	long long int label_generator = 0;
 	check(sema_label_loops(a, &label_generator));
-	check(sema_typecheck(a, &sym));
+	check(sema_typecheck(arena, a));
 	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA_IR) {
