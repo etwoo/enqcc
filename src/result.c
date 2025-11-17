@@ -222,7 +222,7 @@ result_to_str(result_t r)
 		           "function body statement(s)");
 		break;
 	case ERR_PARSE_CALL_EXPECT_TOKEN_PAREN_CLOSE:
-		s = strdup("Parsing function call expects TOKEN_PAREN_OPEN "
+		s = strdup("Parsing function call expects TOKEN_PAREN_CLOSE "
 		           "after function argument list");
 		break;
 	case ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_OPEN:

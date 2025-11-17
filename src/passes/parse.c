@@ -40,7 +40,8 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
-	case NODE_FUNCTION_CALL: // TODO: resolve variable for call?
+	case NODE_EXPRESSION_FUNCTION_CALL: // TODO: resolve variable for call?
+	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS: // TODO: resolve
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
 		assert(0); /* logic error in caller */
@@ -238,26 +239,6 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 }
 
 static WARN_UNUSED result_t
-parse_alloc_symbol(Arena *arena,
-                   const struct string_view *name,
-                   struct ast_symbol **dst)
-{
-	static struct ast_symbol dummy_workaround_clang_analyzer_null_pointer =
-		{0};
-
-	*dst = arena_alloc(arena, sizeof(**dst));
-	if (*dst == NULL) {
-		*dst = &dummy_workaround_clang_analyzer_null_pointer;
-		return make_result(ERR_PARSE_ALLOC);
-	}
-
-	memset(*dst, 0, sizeof(**dst));
-	(**dst).name = *name;
-	(**dst).unique = NOT_YET_UNIQUE;
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 parse_alloc_if_unset(Arena *arena, struct ast **dst)
 {
 	if (*dst == NULL) {
@@ -303,8 +284,13 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static result_t parse_expr(Arena *arena,
+                           const struct token **tok,
+                           struct ast **dst,
+                           unsigned minimum_precedence) WARN_UNUSED;
+
 static WARN_UNUSED result_t
-parse_factor_symbol(Arena *arena, const struct token **tok, struct ast **dst)
+parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_IDENTIFIER));
 
@@ -318,25 +304,27 @@ parse_factor_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 		return RESULT_OK;
 	}
 
-	check(parse_alloc(arena, dst, NODE_FUNCTION_CALL));
-	(**dst).u.call.identifier.name = str;
-	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
-
 	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
 	token_consume(tok);
 
-	struct ast_symbol **dst_arg = &(**dst).u.call.arguments;
+	check(parse_alloc(arena, dst, NODE_EXPRESSION_FUNCTION_CALL));
+	(**dst).u.call.identifier.name = str;
+	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
+
+	dst = &(**dst).u.call.arguments;
 	while (is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		assert(*dst_arg == NULL);
-		check(parse_alloc_symbol(arena, &(**tok).val, dst_arg));
-		token_consume(tok);
+		check(parse_alloc(arena,
+		                  dst,
+		                  NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS));
+		check(parse_expr(arena, tok, &(**dst).u.call_args.expr, 0));
 
 		if (is_token_type(*tok, TOKEN_COMMA)) {
 			token_consume(tok);
 		} else {
 			break;
 		}
-		dst_arg = &(**dst_arg).next;
+
+		dst = &(**dst).u.call_args.next;
 	}
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
@@ -347,11 +335,6 @@ parse_factor_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
-static result_t parse_expr(Arena *arena,
-                           const struct token **tok,
-                           struct ast **dst,
-                           unsigned minimum_precedence) WARN_UNUSED;
-
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
@@ -359,7 +342,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		check(parse_factor_symbol(arena, tok, dst));
+		check(parse_symbol(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
 		check(parse_alloc(arena,
 		                  dst,
@@ -480,7 +463,6 @@ get_precedence(const struct ast *a)
 		break;
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
-	case NODE_FUNCTION_CALL:
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
@@ -494,6 +476,8 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
+	case NODE_EXPRESSION_FUNCTION_CALL:
+	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 	case NODE_CONSTANT_INT:
 		assert(0); /* logic error in caller */
 		break;
@@ -851,6 +835,26 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
+parse_alloc_symbol(Arena *arena,
+                   const struct string_view *name,
+                   struct ast_symbol **dst)
+{
+	static struct ast_symbol dummy_workaround_clang_analyzer_null_pointer =
+		{0};
+
+	*dst = arena_alloc(arena, sizeof(**dst));
+	if (*dst == NULL) {
+		*dst = &dummy_workaround_clang_analyzer_null_pointer;
+		return make_result(ERR_PARSE_ALLOC);
+	}
+
+	memset(*dst, 0, sizeof(**dst));
+	(**dst).name = *name;
+	(**dst).unique = NOT_YET_UNIQUE;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_function_params(Arena *arena,
                       const struct token **tok,
                       struct ast_symbol **dst)
@@ -971,6 +975,7 @@ parse_debug_print_ast_symbol(const char *description,
 }
 
 void
+// NOLINTNEXTLINE(readability-function-cognitive-complexity) // TODO rm
 parse_debug_print(const struct ast *a, size_t indent)
 {
 	assert(indent <= INT_MAX);
@@ -989,21 +994,11 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		if (a->u.function.params != NULL) {
 			parse_debug_print_ast_symbol("PARAMETER",
-						     a->u.function.params,
-						     indent);
+			                             a->u.function.params,
+			                             indent);
 		}
 		if (a->u.function.next != NULL) {
 			parse_debug_print(a->u.function.next, indent);
-		}
-		break;
-	case NODE_FUNCTION_CALL:
-		parse_debug_print_ast_symbol("CALL",
-		                             &a->u.call.identifier,
-		                             indent);
-		if (a->u.call.arguments != NULL) {
-			parse_debug_print_ast_symbol("ARGUMENT",
-						     a->u.call.arguments,
-						     indent);
 		}
 		break;
 	case NODE_BLOCK:
@@ -1188,6 +1183,23 @@ parse_debug_print(const struct ast *a, size_t indent)
 			parse_debug_print(a->u.op_ternary.else_expr,
 			                  indent + 2);
 		}
+		break;
+	case NODE_EXPRESSION_FUNCTION_CALL:
+		parse_debug_print_ast_symbol("CALL",
+		                             &a->u.call.identifier,
+		                             indent);
+		if (a->u.call.arguments != NULL) {
+			debug("%*sARGUMENTS", (int)indent, "");
+			parse_debug_print(a->u.call.arguments, indent + 1);
+		}
+		break;
+	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
+		debug("%*sARGUMENT", (int)indent, "");
+		parse_debug_print(a->u.call_args.expr, indent);
+		if (a->u.call_args.next != NULL) {
+			parse_debug_print(a->u.call_args.next, indent);
+		}
+
 		break;
 	case NODE_CONSTANT_INT:
 		debug("%*sCONSTANT %lld", (int)indent, "", a->u.num);

@@ -9,11 +9,12 @@ struct ast_symbol {
 	struct ast_symbol *next;
 };
 
+struct ast_list;
+
 struct ast {
 	enum {
 		NODE_PROGRAM,
 		NODE_FUNCTION,
-		NODE_FUNCTION_CALL,
 		NODE_FUNCTION_RETURN_STATEMENT,
 		NODE_BLOCK,
 		NODE_DECLARATION,
@@ -42,6 +43,8 @@ struct ast {
 		NODE_EXPRESSION_VARIABLE_USAGE,
 		NODE_EXPRESSION_VARIABLE_ASSIGNMENT,
 		NODE_EXPRESSION_TERNARY_CONDITIONAL,
+		NODE_EXPRESSION_FUNCTION_CALL,
+		NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS,
 		NODE_CONSTANT_INT,
 	} node_type;
 	union {
@@ -54,10 +57,6 @@ struct ast {
 			struct ast *block;
 			struct ast *next;
 		} function;
-		struct {
-			struct ast_symbol identifier;
-			struct ast_symbol *arguments;
-		} call;
 		struct {
 			struct ast *item;
 			struct ast *next;
@@ -92,6 +91,14 @@ struct ast {
 			struct ast *then_expr;
 			struct ast *else_expr;
 		} op_ternary;
+		struct {
+			struct ast_symbol identifier;
+			struct ast *arguments;
+		} call;
+		struct {
+			struct ast *expr;
+			struct ast *next;
+		} call_args;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;

@@ -18,9 +18,6 @@ sema_label_impl(struct ast *a, long long int *id)
 			check(sema_label_impl(a->u.function.next, id));
 		}
 		break;
-	case NODE_FUNCTION_CALL:
-		assert(0 && "TODO implement sema_label() for call");
-		break;
 	case NODE_BLOCK:
 		if (a->u.block.item != NULL) {
 			check(sema_label_impl(a->u.block.item, id));
@@ -79,6 +76,8 @@ sema_label_impl(struct ast *a, long long int *id)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+	case NODE_EXPRESSION_FUNCTION_CALL:
+	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 	case NODE_CONSTANT_INT:
 		break;
 	}
