@@ -322,11 +322,12 @@ resolve_function_params(Arena *arena,
                         struct symbol **sym,
                         long long int *n_args)
 {
-	assert(n_args != NULL);
 	while (a != NULL) {
 		check(resolve_function_params_one(arena, a, sym));
 		a = a->next;
-		*n_args = *n_args + 1;
+		if (n_args != NULL) {
+			*n_args = *n_args + 1;
+		}
 	}
 	return RESULT_OK;
 }
@@ -375,8 +376,6 @@ resolve_function(Arena *arena,
 		a->u.function.identifier.unique = (**sym).unique;
 	} else if (is_def) {
 		a->u.function.identifier.unique = dup->unique;
-		assert(dup->n_args == 0);
-		n_args_handle = &dup->n_args;
 		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
 		// TODO(typecheck): def params match existing decl params
 		dup->stype = SYMBOL_FUNCTION_DEFINITION;
