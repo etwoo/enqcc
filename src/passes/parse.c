@@ -556,6 +556,14 @@ parse_expr(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+parse_peek_ahead_function_maybe(const struct token *tok)
+{
+	return is_token_type(tok, TOKEN_KEYWORD_INT) &&
+	       is_token_type(tok->next, TOKEN_IDENTIFIER) &&
+	       is_token_type(tok->next->next, TOKEN_PAREN_OPEN);
+}
+
 static WARN_UNUSED result_t
 parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 {
@@ -585,6 +593,9 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static result_t parse_function(Arena *arena,
+                               const struct token **tok,
+                               struct ast **dst) WARN_UNUSED;
 static result_t parse_stmt(Arena *arena,
                            const struct token **tok,
                            struct ast **dst) WARN_UNUSED;
@@ -600,7 +611,9 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		struct ast **item_dst = &(**dst).u.block.item;
-		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+		if (parse_peek_ahead_function_maybe(*tok)) {
+			check(parse_function(arena, tok, item_dst));
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			check(parse_decl(arena, tok, item_dst));
 		} else {
 			check(parse_stmt(arena, tok, item_dst));
