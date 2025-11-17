@@ -197,9 +197,13 @@ result_to_str(result_t r)
 		s = strdup("Parsing function expects TOKEN_PAREN_OPEN before "
 		           "argument list");
 		break;
-	case ERR_PARSE_FUNC_EXPECT_TOKEN_KEYWORD_VOID:
-		s = strdup("Parsing function expects TOKEN_PAREN_VOID as "
-		           "argument list");
+	case ERR_PARSE_FUNC_PARAM_EXPECT_TYPE_INT:
+		s = strdup("Parsing function parameter expects "
+		           "TOKEN_KEYWORD_INT in parameter type position");
+		break;
+	case ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER:
+		s = strdup("Parsing function parameter expects "
+		           "TOKEN_IDENTIFIER in parameter name position");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing function expects TOKEN_PAREN_CLOSE after "

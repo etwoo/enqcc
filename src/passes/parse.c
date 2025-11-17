@@ -775,6 +775,42 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
+parse_function_params(Arena *arena,
+                      const struct token **tok,
+                      struct ast_symbol **dst)
+{
+	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
+		return RESULT_OK;
+	}
+
+	while (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+			return make_result(
+				ERR_PARSE_FUNC_PARAM_EXPECT_TYPE_INT);
+		}
+		token_consume(tok);
+
+		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+			return make_result(
+				ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER);
+		}
+		*dst = arena_alloc(arena, sizeof(**dst));
+		memset(*dst, 0, sizeof(**dst));
+		(**dst).name = (**tok).val;
+		(**dst).unique = NOT_YET_UNIQUE;
+		token_consume(tok);
+
+		dst = &(**dst).next;
+
+		if (is_token_type(*tok, TOKEN_COMMA)) {
+			token_consume(tok);
+		}
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
@@ -795,10 +831,7 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	if (!is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_KEYWORD_VOID);
-	}
-	token_consume(tok);
+	check(parse_function_params(arena, tok, &(**dst).u.function.params));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE);
