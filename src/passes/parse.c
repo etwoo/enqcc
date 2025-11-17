@@ -62,6 +62,8 @@ resolve_function_call(struct symbol *head, struct ast_symbol *var)
 
 static result_t
 resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
+static result_t
+resolve_function(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
@@ -224,6 +226,9 @@ resolve_block_with_delimiter(Arena *arena,
 
 		struct symbol *resetter = NULL;
 		switch (cur_item->node_type) {
+		case NODE_FUNCTION:
+			check(resolve_function(arena, cur_item, sym));
+			break;
 		case NODE_DECLARATION:
 			check(resolve_decl(arena, cur_item, sym));
 			break;
