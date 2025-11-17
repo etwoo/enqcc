@@ -1070,9 +1070,9 @@ parse_init(Arena *arena,
 	}
 
 	a = &original->u.program.globals;
-	for (; sym != NULL && a != NULL; a = &(**a).u.function.next) {
+	for (; sym != NULL && *a != NULL; a = &(**a).u.function.next) {
 		assert((**a).node_type == NODE_FUNCTION);
-		check(resolve_function(arena, (**a).u.program.globals, sym));
+		check(resolve_function(arena, *a, sym));
 	}
 
 	return RESULT_OK;
