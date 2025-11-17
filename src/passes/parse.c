@@ -309,10 +309,10 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
 
 	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
-	token_consume(tok);
 
 	dst = &(**dst).u.call.arguments;
 	do {
+		token_consume(tok);
 		if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			break;
 		}
