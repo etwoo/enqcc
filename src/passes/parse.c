@@ -891,6 +891,9 @@ parse_debug_print_ast_symbol(const char *description,
 	      "",
 	      asym->unique,
 	      asym->unique == NOT_YET_UNIQUE ? " (not unique)" : "");
+	if (asym->next != NULL) {
+		parse_debug_print_ast_symbol(description, asym->next, indent);
+	}
 }
 
 void
@@ -910,6 +913,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.function.block != NULL) {
 			parse_debug_print(a->u.function.block, indent + 2);
 		}
+		parse_debug_print_ast_symbol("PARAMETER",
+		                             a->u.function.params,
+		                             indent);
 		if (a->u.function.next != NULL) {
 			parse_debug_print(a->u.function.next, indent);
 		}
