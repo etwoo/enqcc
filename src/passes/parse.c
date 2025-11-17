@@ -871,6 +871,7 @@ parse_function_params(Arena *arena,
 	while (true) {
 		if (first) {
 			first = false;
+		} else {
 			if (!is_token_type(*tok, TOKEN_COMMA)) {
 				break;
 			}
