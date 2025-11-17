@@ -8,12 +8,16 @@
 result_t
 symbols_prepend(Arena *arena,
                 struct symbol **head,
-                const struct string_view *name)
+                const struct string_view *name,
+                enum symbol_type stype,
+		enum symbol_linkage linkage)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_PARSE_ALLOC);
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
+	node->stype = stype;
+	node->linkage = linkage;
 	if (*head != NULL) {
 		node->unique = (**head).unique + 1;
 		node->level = (**head).level;
@@ -28,8 +32,8 @@ symbols_prepend(Arena *arena,
 	return RESULT_OK;
 }
 
-const struct symbol *
-symbols_get(const struct symbol *head,
+struct symbol *
+symbols_get(struct symbol *head,
             const struct string_view *name,
             bool stop_at_delimiter)
 {
@@ -44,4 +48,13 @@ symbols_get(const struct symbol *head,
 		head = head->next;
 	}
 	return NULL;
+}
+
+void
+symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point)
+{
+	if (reset_point != NULL) {
+		reset_point->cookie = (**symbols).cookie;
+	}
+	*symbols = reset_point;
 }

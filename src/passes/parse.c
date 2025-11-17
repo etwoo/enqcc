@@ -17,16 +17,55 @@ enum {
 };
 
 static WARN_UNUSED result_t
-resolve_var_usage(const struct symbol *head, struct ast_symbol *var)
+resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(var->unique == NOT_YET_UNIQUE);
+
 	const struct symbol *resolution = symbols_get(head, &var->name, false);
 	if (resolution == NULL) {
 		return make_result(ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
 		                   var->name.data,
 		                   var->name.sz);
 	}
+
+	switch (resolution->stype) {
+	case SYMBOL_VARIABLE:
+		break;
+	case SYMBOL_FUNCTION_DECLARATION:
+	case SYMBOL_FUNCTION_DEFINITION:
+		assert(0 && "var refers to a fn; fn pointers unimplemented!");
+		break;
+	}
+
+	var->unique = resolution->unique;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_function_call(struct symbol *head, struct ast_symbol *var)
+{
+	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
+	assert(var->unique == NOT_YET_UNIQUE);
+
+	const struct symbol *resolution = symbols_get(head, &var->name, false);
+	if (resolution == NULL) {
+		return make_result(ERR_SEMA_UNDECLARED_FUNCTION_CALL,
+		                   var->name.data,
+		                   var->name.sz);
+	}
+
+	switch (resolution->stype) {
+	case SYMBOL_VARIABLE:
+		return make_result(ERR_SEMA_TYPECHECK_VARIABLE_AS_CALLABLE,
+		                   var->name.data,
+		                   var->name.sz);
+	case SYMBOL_FUNCTION_DECLARATION:
+	case SYMBOL_FUNCTION_DEFINITION:
+		assert(0 && "var refers to a fn; fn pointers unimplemented!");
+		break;
+	}
+
 	var->unique = resolution->unique;
 	return RESULT_OK;
 }
@@ -40,8 +79,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
-	case NODE_EXPRESSION_FUNCTION_CALL: // TODO: resolve variable for call?
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS: // TODO: resolve
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
 		assert(0); /* logic error in caller */
@@ -134,6 +171,16 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 			                   sym));
 		}
 		break;
+	case NODE_EXPRESSION_FUNCTION_CALL:
+		check(resolve_function_call(*sym, &a->u.call.identifier));
+		check(resolve_expr(arena, a->u.call.arguments, sym));
+		break;
+	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
+		check(resolve_expr(arena, a->u.call_args.expr, sym));
+		if (a->u.call_args.next != NULL) {
+			check(resolve_expr(arena, a->u.call_args.next, sym));
+		}
+		break;
 	}
 	return RESULT_OK;
 }
@@ -151,11 +198,11 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 		                   dup->name.sz);
 	}
 
-	check(symbols_prepend(arena, sym, &a->u.declare.identifier.name));
-	assert(a->u.declare.identifier.name.sz == (**sym).name.sz &&
-	       0 == strncmp(a->u.declare.identifier.name.data,
-	                    (**sym).name.data,
-	                    (**sym).name.sz));
+	check(symbols_prepend(arena,
+	                      sym,
+	                      &a->u.declare.identifier.name,
+	                      SYMBOL_VARIABLE,
+	                      LINKAGE_NONE));
 	a->u.declare.identifier.unique = (**sym).unique;
 
 	if (a->u.declare.init != NULL) {
@@ -187,10 +234,7 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 		case NODE_BLOCK:
 			resetter = *sym;
 			check(resolve_block(arena, cur_item, sym));
-			if (resetter != NULL) {
-				resetter->cookie = (**sym).cookie;
-			}
-			*sym = resetter;
+			symbols_reset_scope(sym, resetter);
 			break;
 		default:
 			check(resolve_expr(arena, cur_item, sym));
@@ -205,12 +249,84 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
+resolve_function_params_one(struct ast_symbol *a, struct symbol **sym)
+{
+	const struct symbol *dup = symbols_get(*sym, &a->name, true);
+	if (dup != NULL) {
+		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_PARAMETER,
+		                   dup->name.data,
+		                   dup->name.sz);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_function_params(struct ast_symbol *a, struct symbol **sym)
+{
+	while (a != NULL) {
+		check(resolve_function_params_one(a, sym));
+		a = a->next;
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 {
 	assert(a->node_type == NODE_FUNCTION);
-	if (a->u.function.block != NULL) {
+	const bool is_def = (a->u.function.block != NULL);
+
+	struct symbol *dup =
+		symbols_get(*sym, &a->u.declare.identifier.name, false);
+
+	if (is_def && dup != NULL && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
+		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION,
+		                   dup->name.data,
+		                   dup->name.sz);
+	}
+
+	if (dup != NULL && dup->stype == SYMBOL_VARIABLE) {
+		return make_result(ERR_SEMA_REDEFINE_VARIABLE_TO_FUNCTION,
+		                   dup->name.data,
+		                   dup->name.sz);
+	}
+
+	if (dup == NULL) {
+		check(symbols_prepend(arena,
+		                      sym,
+		                      &a->u.function.identifier.name,
+		                      is_def ? SYMBOL_FUNCTION_DEFINITION
+		                             : SYMBOL_FUNCTION_DECLARATION,
+		                      LINKAGE_EXTERNAL));
+		a->u.function.identifier.unique = (**sym).unique;
+	} else if (is_def) {
+		a->u.function.identifier.unique = dup->unique;
+		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
+		// TODO(typecheck): def params match existing decl params
+		dup->stype = SYMBOL_FUNCTION_DEFINITION;
+	} else {
+		a->u.function.identifier.unique = dup->unique;
+		// TODO(typecheck): decl params match existing def/decl params
+	}
+
+	struct symbol *resetter = *sym;
+	if (*sym != NULL) {
+		(**sym).level_delimiter = true;
+	}
+
+	if (a->u.function.params != NULL) {
+		check(resolve_function_params(a->u.function.params, sym));
+	}
+
+	if (is_def) {
 		check(resolve_block(arena, a->u.function.block, sym));
 	}
+
+	if (*sym != NULL) {
+		(**sym).level_delimiter = false;
+	}
+	symbols_reset_scope(sym, resetter);
+
 	return RESULT_OK;
 }
 

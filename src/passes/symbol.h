@@ -8,10 +8,24 @@
 
 #include <stdbool.h>
 
+enum symbol_type {
+	SYMBOL_VARIABLE,
+	SYMBOL_FUNCTION_DECLARATION,
+	SYMBOL_FUNCTION_DEFINITION,
+};
+
+enum symbol_linkage {
+	LINKAGE_NONE,
+	LINKAGE_INTERNAL,
+	LINKAGE_EXTERNAL,
+};
+
 // TODO: for typedef support, add tracking for types (like variables)
 // TODO: change symbol table datastructure, avoid quadratic behavior in caller
 struct symbol {
 	struct string_view name;
+	enum symbol_type stype;
+	enum symbol_linkage linkage;
 	long long int unique; /* unique ID for this symbol */
 	long long int level;  /* nesting level of symbol declaration */
 	bool level_delimiter; /* trigger new nesting level if prepending here */
@@ -21,9 +35,12 @@ struct symbol {
 
 result_t symbols_prepend(Arena *arena,
                          struct symbol **head,
-                         const struct string_view *name) WARN_UNUSED;
-const struct symbol *symbols_get(const struct symbol *head,
-                                 const struct string_view *name,
-                                 bool stop_at_delimiter) WARN_UNUSED;
+                         const struct string_view *name,
+                         enum symbol_type stype,
+                         enum symbol_linkage linkage) WARN_UNUSED;
+struct symbol *symbols_get(struct symbol *head,
+                           const struct string_view *name,
+                           bool stop_at_delimiter) WARN_UNUSED;
+void symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point);
 
 #endif

@@ -253,6 +253,23 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
+	case ERR_SEMA_REDEFINE_VARIABLE_TO_FUNCTION:
+		s = my_asprintf(
+			"Redefinition of '%s' from variable to function",
+			r.msg);
+		break;
+	case ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION:
+		s = my_asprintf("Duplicate function definition: %s", r.msg);
+		break;
+	case ERR_SEMA_DUPLICATE_FUNCTION_PARAMETER:
+		s = my_asprintf("Duplicate function parameter: %s", r.msg);
+		break;
+	case ERR_SEMA_UNDECLARED_FUNCTION_CALL:
+		s = my_asprintf("Call of undeclared function: %s", r.msg);
+		break;
+	case ERR_SEMA_TYPECHECK_VARIABLE_AS_CALLABLE:
+		s = my_asprintf("Call of non-function variable: %s", r.msg);
+		break;
 	case ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION:
 		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
 		break;
