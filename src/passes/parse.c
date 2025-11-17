@@ -338,6 +338,10 @@ resolve_function(Arena *arena,
 	}
 
 	struct symbol *before_params = *sym;
+	if (*sym != NULL) {
+		assert(before_params != NULL);
+		before_params->level_delimiter = true;
+	}
 
 	if (a->u.function.params != NULL) {
 		check(resolve_function_params(arena,
