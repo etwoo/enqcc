@@ -6,7 +6,6 @@
 struct ast_symbol {
 	struct string_view name;
 	long long int unique;
-	struct ast_symbol *next;
 };
 
 struct ast {

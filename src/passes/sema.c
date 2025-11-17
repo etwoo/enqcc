@@ -100,11 +100,10 @@ sema_register_fn(Arena *arena, struct ast *a, struct symbol **s)
 	assert(a->node_type == NODE_FUNCTION);
 
 	long long int n_args = 0;
-	{
-		struct ast_symbol *i = NULL;
-		for (i = a->u.function.params; i != NULL; i = i->next) {
-			++n_args;
-		}
+	for (struct ast_symbol *cur = a->u.function.params;
+	     cur != NULL && cur->name.data != NULL && cur->name.sz > 0;
+	     ++cur) {
+		++n_args;
 	}
 
 	const struct string_view *fname = &a->u.function.identifier.name;

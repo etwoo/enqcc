@@ -322,9 +322,8 @@ resolve_function_params(Arena *arena,
                         struct symbol **sym,
                         long long int *n_args)
 {
-	while (a != NULL) {
+	for (; a != NULL && a->name.data != NULL && a->name.sz > 0; ++a) {
 		check(resolve_function_params_one(arena, a, sym));
-		a = a->next;
 		if (n_args != NULL) {
 			*n_args = *n_args + 1;
 		}
@@ -388,12 +387,10 @@ resolve_function(Arena *arena,
 		before_params->level_delimiter = true;
 	}
 
-	if (a->u.function.params != NULL) {
-		check(resolve_function_params(arena,
-		                              a->u.function.params,
-		                              sym,
-		                              n_args_handle));
-	}
+	check(resolve_function_params(arena,
+		                      a->u.function.params,
+		                      sym,
+		                      n_args_handle));
 
 	if (is_def) {
 		check(resolve_block_with_delimiter(arena,
@@ -1034,37 +1031,14 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_alloc_symbol(Arena *arena,
-                   const struct string_view *name,
-                   struct ast_symbol **dst)
+parse_function_params_impl(const struct token **tok,
+                           struct ast_symbol **dst,
+                           long long int *count)
 {
-	static struct ast_symbol dummy_workaround_clang_analyzer_null_pointer =
-		{0};
-
-	*dst = arena_alloc(arena, sizeof(**dst));
-	if (*dst == NULL) {
-		*dst = &dummy_workaround_clang_analyzer_null_pointer;
-		return make_result(ERR_PARSE_ALLOC);
-	}
-
-	memset(*dst, 0, sizeof(**dst));
-	(**dst).name = *name;
-	(**dst).unique = NOT_YET_UNIQUE;
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-parse_function_params(Arena *arena,
-                      const struct token **tok,
-                      struct ast_symbol **dst)
-{
-	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
-		token_consume(tok);
-		return RESULT_OK;
-	}
+	const long long int count_in = *count;
 
 	bool first = true;
-	while (true) {
+	for (*count = 0; true; *count = *count + 1) {
 		if (first) {
 			first = false;
 		} else {
@@ -1084,10 +1058,38 @@ parse_function_params(Arena *arena,
 			return make_result(
 				ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER);
 		}
-		check(parse_alloc_symbol(arena, &(**tok).val, dst));
+		if (dst != NULL) {
+			assert(*count <= count_in);
+			(*dst)[*count].name = (**tok).val;
+			(*dst)[*count].unique = NOT_YET_UNIQUE;
+		}
 		token_consume(tok);
+	}
 
-		dst = &(**dst).next;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_function_params(Arena *arena,
+                      const struct token **tok,
+                      struct ast_symbol **dst)
+{
+	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
+		token_consume(tok);
+		return RESULT_OK;
+	}
+
+	long long int count = 0;
+	{
+		const struct token *copy = *tok;
+		check(parse_function_params_impl(&copy, NULL, &count));
+	}
+	if (count > 0) {
+		size_t bytes = sizeof(**dst) * (count + 1);
+		*dst = arena_alloc(arena, bytes);
+		check_if(*dst == NULL, ERR_PARSE_ALLOC);
+		memset(*dst, 0, bytes);
+		check(parse_function_params_impl(tok, dst, &count));
 	}
 
 	return RESULT_OK;
@@ -1174,9 +1176,6 @@ parse_debug_print_ast_symbol(const char *description,
 	      "",
 	      asym->unique,
 	      asym->unique == NOT_YET_UNIQUE ? " (not unique)" : "");
-	if (asym->next != NULL) {
-		parse_debug_print_ast_symbol(description, asym->next, indent);
-	}
 }
 
 void
@@ -1193,9 +1192,11 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("FUNCTION",
 		                             &a->u.function.identifier,
 		                             indent);
-		if (a->u.function.params != NULL) {
+		for (struct ast_symbol *cur = a->u.function.params;
+		     cur != NULL && cur->name.data != NULL && cur->name.sz > 0;
+		     ++cur) {
 			parse_debug_print_ast_symbol("PARAMETER",
-			                             a->u.function.params,
+			                             cur,
 			                             indent + 1);
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
