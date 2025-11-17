@@ -10,7 +10,7 @@ symbols_prepend(Arena *arena,
                 struct symbol **head,
                 const struct string_view *name,
                 enum symbol_type stype,
-		enum symbol_linkage linkage)
+                enum symbol_linkage linkage)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_PARSE_ALLOC);
