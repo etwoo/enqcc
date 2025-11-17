@@ -204,10 +204,14 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
-resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
+resolve_block_with_delimiter(Arena *arena,
+                             struct ast *a,
+                             struct symbol **sym,
+                             struct symbol *level_delimiter_point)
 {
 	if (*sym != NULL) {
-		(**sym).level_delimiter = true;
+		assert(level_delimiter_point != NULL);
+		level_delimiter_point->level_delimiter = true;
 	}
 
 	for (; a != NULL; a = a->u.block.next) {
@@ -235,13 +239,23 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 	}
 
 	if (*sym != NULL) {
-		(**sym).level_delimiter = false;
+		assert(level_delimiter_point != NULL);
+		level_delimiter_point->level_delimiter = false;
 	}
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_function_params_one(struct ast_symbol *a, struct symbol **sym)
+resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
+{
+	check(resolve_block_with_delimiter(arena, a, sym, *sym));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_function_params_one(Arena *arena,
+                            struct ast_symbol *a,
+                            struct symbol **sym)
 {
 	const struct symbol *dup = symbols_get(*sym, &a->name, true);
 	if (dup != NULL) {
@@ -249,14 +263,20 @@ resolve_function_params_one(struct ast_symbol *a, struct symbol **sym)
 		                   dup->name.data,
 		                   dup->name.sz);
 	}
+	check(symbols_prepend(arena,
+	                      sym,
+	                      &a->name,
+	                      SYMBOL_VARIABLE,
+	                      LINKAGE_NONE));
+	a->unique = (**sym).unique;
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_function_params(struct ast_symbol *a, struct symbol **sym)
+resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
 {
 	while (a != NULL) {
-		check(resolve_function_params_one(a, sym));
+		check(resolve_function_params_one(arena, a, sym));
 		a = a->next;
 	}
 	return RESULT_OK;
@@ -301,23 +321,22 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 		// TODO(typecheck): decl params match existing def/decl params
 	}
 
-	struct symbol *resetter = *sym;
-	if (*sym != NULL) {
-		(**sym).level_delimiter = true;
-	}
+	struct symbol *before_params = *sym;
 
 	if (a->u.function.params != NULL) {
-		check(resolve_function_params(a->u.function.params, sym));
+		check(resolve_function_params(arena,
+		                              a->u.function.params,
+		                              sym));
 	}
 
 	if (is_def) {
-		check(resolve_block(arena, a->u.function.block, sym));
+		check(resolve_block_with_delimiter(arena,
+		                                   a->u.function.block,
+		                                   sym,
+		                                   before_params));
 	}
 
-	if (*sym != NULL) {
-		(**sym).level_delimiter = false;
-	}
-	symbols_reset_scope(sym, resetter);
+	symbols_reset_scope(sym, before_params);
 
 	return RESULT_OK;
 }
