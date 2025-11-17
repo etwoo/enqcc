@@ -205,10 +205,8 @@ resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
 static WARN_UNUSED result_t
 resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 {
-	for (; a != NULL; a = a->u.function.next) {
-		assert(a->node_type == NODE_FUNCTION);
-		check(resolve_block(arena, a->u.function.block, sym));
-	}
+	assert(a->node_type == NODE_FUNCTION);
+	check(resolve_block(arena, a->u.function.block, sym));
 	return RESULT_OK;
 }
 
@@ -816,14 +814,17 @@ parse_init(Arena *arena,
            struct symbol **sym)
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
-	a = &(**a).u.program.globals;
-	while (tok != NULL) {
-		check(parse_function(arena, &tok, a));
+	struct ast *original = *a;
+
+	a = &original->u.program.globals;
+	for (; tok != NULL; a = &(**a).u.function.next) {
 		assert((**a).node_type == NODE_FUNCTION);
-		a = &(**a).u.function.next;
+		check(parse_function(arena, &tok, a));
 	}
 
-	if (sym != NULL) {
+	a = &original->u.program.globals;
+	for (; sym != NULL && a != NULL; a = &(**a).u.function.next) {
+		assert((**a).node_type == NODE_FUNCTION);
 		check(resolve_function(arena, (**a).u.program.globals, sym));
 	}
 
