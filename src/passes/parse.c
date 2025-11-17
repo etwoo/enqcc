@@ -225,14 +225,6 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 		                   dup->name.sz);
 	}
 
-	const struct symbol *global =
-		symbols_get(*sym, &a->u.declare.identifier.name, false);
-	if (global != NULL && global->linkage == LINKAGE_EXTERNAL) {
-		return make_result(ERR_SEMA_LINKAGE_EXTERNAL_REDEFINED_NONE,
-		                   global->name.data,
-		                   global->name.sz);
-	}
-
 	check(symbols_prepend(arena,
 	                      sym,
 	                      &a->u.declare.identifier.name,
@@ -257,6 +249,8 @@ resolve_block_with_delimiter(Arena *arena,
 		assert(level_delimiter_point != NULL);
 		level_delimiter_point->level_delimiter = true;
 	}
+
+	struct symbol *outer_resetter = *sym;
 
 	for (; a != NULL; a = a->u.block.next) {
 		assert(a->node_type == NODE_BLOCK);
@@ -284,6 +278,8 @@ resolve_block_with_delimiter(Arena *arena,
 			break;
 		}
 	}
+
+	symbols_reset_scope(sym, outer_resetter);
 
 	if (*sym != NULL) {
 		assert(level_delimiter_point != NULL);

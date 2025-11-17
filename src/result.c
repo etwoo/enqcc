@@ -253,11 +253,6 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
-	case ERR_SEMA_LINKAGE_EXTERNAL_REDEFINED_NONE:
-		s = my_asprintf("Symbol with external linkage redefined with "
-		                "no linkage: %s",
-		                r.msg);
-		break;
 	case ERR_SEMA_LINKAGE_NONE_REDEFINED_EXTERNAL:
 		s = my_asprintf("Symbol with no linkage redefined with "
 		                "external linkage: %s",
