@@ -1000,9 +1000,11 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("CALL",
 		                             &a->u.call.identifier,
 		                             indent);
-		parse_debug_print_ast_symbol("ARGUMENT",
-		                             a->u.call.arguments,
-		                             indent);
+		if (a->u.call.arguments != NULL) {
+			parse_debug_print_ast_symbol("ARGUMENT",
+						     a->u.call.arguments,
+						     indent);
+		}
 		break;
 	case NODE_BLOCK:
 		debug("%*sBLOCK ITEM", (int)indent, "");
