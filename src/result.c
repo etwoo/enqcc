@@ -290,13 +290,11 @@ result_to_str(result_t r)
 	case ERR_SEMA_DECL_INVALID_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;
-	case ERR_SEMA_DECL_INVALID_LVALUE_SYM_FUNC:
-		s = strdup("Invalid lvalue in variable assignment: cannot "
-		           "assign value to function");
-		break;
-	case ERR_SEMA_DECL_INVALID_RVALUE_SYM_FUNC:
-		s = strdup("Invalid rvalue in variable assignment: cannot "
-		           "use function as a value");
+	case ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE:
+		s = my_asprintf("Invalid use of function '%s' as lvalue or "
+		                "rvalue; cannot assign value to function or "
+		                "use function as a value",
+		                r.msg);
 		break;
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");

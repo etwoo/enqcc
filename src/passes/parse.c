@@ -29,6 +29,16 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 		                   var->name.sz);
 	}
 
+	switch (resolution->stype) {
+	case SYMBOL_VARIABLE:
+		break;
+	case SYMBOL_FUNCTION_DECLARATION:
+	case SYMBOL_FUNCTION_DEFINITION:
+		return make_result(ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE,
+		                   var->name.data,
+		                   var->name.sz);
+	}
+
 	var->unique = resolution->unique;
 	return RESULT_OK;
 }
@@ -74,35 +84,6 @@ resolve_function_call(struct symbol *head,
 		return make_result(ERR_SEMA_TYPECHECK_FUNCTION_CALL_ARGUMENTS,
 		                   callee->name.data,
 		                   callee->name.sz);
-	}
-
-	return RESULT_OK;
-}
-
-static WARN_UNUSED bool
-is_first_match_function(struct symbol *head, struct string_view *name)
-{
-	const struct symbol *needle = symbols_get(head, name, false);
-	return (needle != NULL &&
-	        (needle->stype == SYMBOL_FUNCTION_DECLARATION ||
-	         needle->stype == SYMBOL_FUNCTION_DEFINITION));
-}
-
-static WARN_UNUSED result_t
-sema_typecheck_variable_assignment(struct ast *a, struct symbol **sym)
-{
-	if (a->u.op_binary.lhs->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
-		return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
-	}
-	assert(a->u.op_binary.lhs->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
-
-	if (is_first_match_function(*sym, &a->u.op_binary.lhs->u.var.name)) {
-		return make_result(ERR_SEMA_DECL_INVALID_LVALUE_SYM_FUNC);
-	}
-
-	if (a->u.op_binary.rhs->node_type == NODE_EXPRESSION_VARIABLE_USAGE &&
-	    is_first_match_function(*sym, &a->u.op_binary.rhs->u.var.name)) {
-		return make_result(ERR_SEMA_DECL_INVALID_RVALUE_SYM_FUNC);
 	}
 
 	return RESULT_OK;
@@ -180,8 +161,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		check(sema_typecheck_variable_assignment(a, sym));
-		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
