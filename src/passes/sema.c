@@ -92,3 +92,11 @@ sema_label_loops(struct ast *a, long long int *generator)
 	check(sema_label_impl(a, generator));
 	return RESULT_OK;
 }
+
+result_t
+sema_typecheck(struct ast *a, struct symbol **sym)
+{
+	(void)a; // TODO: implement typecheck
+	(void)sym; // TODO: implement typecheck
+	return RESULT_OK;
+}

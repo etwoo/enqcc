@@ -21,6 +21,8 @@ void parse_debug_print(const struct ast *a, size_t indent);
 
 result_t sema_label_loops(struct ast *a, long long int *generator)
 	__attribute__((warn_unused_result));
+result_t sema_typecheck(struct ast *a, struct symbol **sym)
+	__attribute__((warn_unused_result));
 
 struct intermediate;
 
