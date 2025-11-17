@@ -22,14 +22,14 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(var->unique == NOT_YET_UNIQUE);
 
-	const struct symbol *resolution = symbols_get(head, &var->name, false);
-	if (resolution == NULL) {
+	const struct symbol *resolved = symbols_get(head, &var->name, false);
+	if (resolved == NULL) {
 		return make_result(ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
 		                   var->name.data,
 		                   var->name.sz);
 	}
 
-	switch (resolution->stype) {
+	switch (resolved->stype) {
 	case SYMBOL_VARIABLE:
 		break;
 	case SYMBOL_FUNCTION_DECLARATION:
@@ -39,7 +39,7 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 		                   var->name.sz);
 	}
 
-	var->unique = resolution->unique;
+	var->unique = resolved->unique;
 	return RESULT_OK;
 }
 
@@ -79,7 +79,7 @@ resolve_function_call(struct symbol *head,
 		}
 	}
 
-	if (n_args != resolution->n_args) {
+	if (n_args != resolved->n_args) {
 		return make_result(ERR_SEMA_TYPECHECK_FUNCTION_CALL_ARGUMENTS,
 		                   callee->name.data,
 		                   callee->name.sz);
