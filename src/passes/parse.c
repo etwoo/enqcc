@@ -206,7 +206,9 @@ static WARN_UNUSED result_t
 resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 {
 	assert(a->node_type == NODE_FUNCTION);
-	check(resolve_block(arena, a->u.function.block, sym));
+	if (a->u.function.block != NULL) {
+		check(resolve_block(arena, a->u.function.block, sym));
+	}
 	return RESULT_OK;
 }
 
@@ -803,7 +805,16 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_block(arena, tok, &(**dst).u.function.block));
+	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
+		assert((**dst).u.function.block == NULL);
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		check(parse_block(arena, tok, &(**dst).u.function.block));
+	} else {
+		return make_result(
+			ERR_PARSE_FUNC_EXPECT_TOKEN_SEMICOLON_OR_BRACE_OPEN);
+	}
+
 	return RESULT_OK;
 }
 

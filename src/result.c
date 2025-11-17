@@ -205,6 +205,10 @@ result_to_str(result_t r)
 		s = strdup("Parsing function expects TOKEN_PAREN_CLOSE after "
 		           "argument list");
 		break;
+	case ERR_PARSE_FUNC_EXPECT_TOKEN_SEMICOLON_OR_BRACE_OPEN:
+		s = strdup("Parsing function expects TOKEN_SEMICOLON or "
+		           "TOKEN_BRACE_OPEN after TOKEN_PAREN_CLOSE");
+		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN:
 		s = strdup("Parsing function expects TOKEN_BRACE_OPEN before "
 		           "function body statement(s)");

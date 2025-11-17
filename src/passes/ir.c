@@ -715,6 +715,7 @@ ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
 	struct ir_function *f = &ir->function;
 	f->identifier = a->u.function.identifier.name;
 
+	// TODO: handle declaration with NULL block vs definition with non-NULL
 	check(ir_block(arena, a->u.function.block, ir, &f->ops));
 
 	/*
