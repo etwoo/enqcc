@@ -29,15 +29,6 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 		                   var->name.sz);
 	}
 
-	switch (resolution->stype) {
-	case SYMBOL_VARIABLE:
-		break;
-	case SYMBOL_FUNCTION_DECLARATION:
-	case SYMBOL_FUNCTION_DEFINITION:
-		assert(0 && "var refers to a fn; fn pointers unimplemented!");
-		break;
-	}
-
 	var->unique = resolution->unique;
 	return RESULT_OK;
 }
@@ -62,7 +53,6 @@ resolve_function_call(struct symbol *head, struct ast_symbol *var)
 		                   var->name.sz);
 	case SYMBOL_FUNCTION_DECLARATION:
 	case SYMBOL_FUNCTION_DEFINITION:
-		assert(0 && "var refers to a fn; fn pointers unimplemented!");
 		break;
 	}
 
