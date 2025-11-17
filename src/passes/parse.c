@@ -197,7 +197,7 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	const struct symbol *global =
 		symbols_get(*sym, &a->u.declare.identifier.name, false);
 	if (global != NULL && global->linkage == LINKAGE_EXTERNAL) {
-		return make_result(ERR_SEMA_SYMBOL_LINKAGE_MISMATCH,
+		return make_result(ERR_SEMA_LINKAGE_EXTERNAL_REDEFINED_NONE,
 		                   global->name.data,
 		                   global->name.sz);
 	}
@@ -314,6 +314,12 @@ resolve_function(Arena *arena,
 
 	struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, false);
+
+	if (dup != NULL && dup->linkage == LINKAGE_NONE) {
+		return make_result(ERR_SEMA_LINKAGE_NONE_REDEFINED_EXTERNAL,
+		                   dup->name.data,
+		                   dup->name.sz);
+	}
 
 	if (is_def && dup != NULL && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION,
