@@ -89,7 +89,7 @@ is_first_match_function(struct symbol *head, struct string_view *name)
 }
 
 static WARN_UNUSED result_t
-resolve_variable_assignment_preflight(struct ast *a, struct symbol **sym)
+sema_typecheck_variable_assignment(struct ast *a, struct symbol **sym)
 {
 	if (a->u.op_binary.lhs->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
 		return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
@@ -100,7 +100,8 @@ resolve_variable_assignment_preflight(struct ast *a, struct symbol **sym)
 		return make_result(ERR_SEMA_DECL_INVALID_LVALUE_SYM_FUNC);
 	}
 
-	if (is_first_match_function(*sym, &a->u.op_binary.rhs->u.var.name)) {
+	if (a->u.op_binary.rhs->node_type == NODE_EXPRESSION_VARIABLE_USAGE &&
+	    is_first_match_function(*sym, &a->u.op_binary.rhs->u.var.name)) {
 		return make_result(ERR_SEMA_DECL_INVALID_RVALUE_SYM_FUNC);
 	}
 
@@ -179,7 +180,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		check(resolve_variable_assignment_preflight(a, sym));
+		check(sema_typecheck_variable_assignment(a, sym));
 		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
