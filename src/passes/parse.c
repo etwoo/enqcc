@@ -377,11 +377,9 @@ resolve_function(Arena *arena,
 	} else if (is_def) {
 		a->u.function.identifier.unique = dup->unique;
 		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
-		// TODO(typecheck): def params match existing decl params
 		dup->stype = SYMBOL_FUNCTION_DEFINITION;
 	} else {
 		a->u.function.identifier.unique = dup->unique;
-		// TODO(typecheck): decl params match existing def/decl params
 	}
 
 	struct symbol *before_params = *sym;
