@@ -856,6 +856,7 @@ parse_function_params(Arena *arena,
                       struct ast_symbol **dst)
 {
 	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
+		token_consume(tok);
 		return RESULT_OK;
 	}
 
@@ -986,9 +987,11 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.function.block != NULL) {
 			parse_debug_print(a->u.function.block, indent + 2);
 		}
-		parse_debug_print_ast_symbol("PARAMETER",
-		                             a->u.function.params,
-		                             indent);
+		if (a->u.function.params != NULL) {
+			parse_debug_print_ast_symbol("PARAMETER",
+						     a->u.function.params,
+						     indent);
+		}
 		if (a->u.function.next != NULL) {
 			parse_debug_print(a->u.function.next, indent);
 		}
