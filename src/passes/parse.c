@@ -316,13 +316,11 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 		if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			break;
 		}
-
 		check(parse_alloc(arena,
 		                  dst,
 		                  NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS));
 		check(parse_expr(arena, tok, &(**dst).u.call_args.expr, 0));
 		dst = &(**dst).u.call_args.next;
-
 	} while (is_token_type(*tok, TOKEN_COMMA));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
