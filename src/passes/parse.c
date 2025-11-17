@@ -388,9 +388,9 @@ resolve_function(Arena *arena,
 	}
 
 	check(resolve_function_params(arena,
-		                      a->u.function.params,
-		                      sym,
-		                      n_args_handle));
+	                              a->u.function.params,
+	                              sym,
+	                              n_args_handle));
 
 	if (is_def) {
 		check(resolve_block_with_delimiter(arena,
