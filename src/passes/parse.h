@@ -13,6 +13,7 @@ struct ast {
 	enum {
 		NODE_PROGRAM,
 		NODE_FUNCTION,
+		NODE_FUNCTION_CALL,
 		NODE_FUNCTION_RETURN_STATEMENT,
 		NODE_BLOCK,
 		NODE_DECLARATION,
@@ -53,6 +54,10 @@ struct ast {
 			struct ast *block;
 			struct ast *next;
 		} function;
+		struct {
+			struct ast_symbol identifier;
+			struct ast_symbol *arguments;
+		} call;
 		struct {
 			struct ast *item;
 			struct ast *next;

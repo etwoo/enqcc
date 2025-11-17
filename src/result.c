@@ -221,6 +221,10 @@ result_to_str(result_t r)
 		s = strdup("Parsing function expects TOKEN_BRACE_CLOSE after "
 		           "function body statement(s)");
 		break;
+	case ERR_PARSE_CALL_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing function call TOKEN_PAREN_OPEN after "
+		           "function argument list");
+		break;
 	case ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing if statement expects TOKEN_PAREN_OPEN "
 		           "before controlling condition expression");

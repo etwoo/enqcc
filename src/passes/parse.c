@@ -40,6 +40,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
+	case NODE_FUNCTION_CALL: // TODO: resolve variable for call?
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
 		assert(0); /* logic error in caller */
@@ -237,6 +238,26 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 }
 
 static WARN_UNUSED result_t
+parse_alloc_symbol(Arena *arena,
+                   const struct string_view *name,
+                   struct ast_symbol **dst)
+{
+	static struct ast_symbol dummy_workaround_clang_analyzer_null_pointer =
+		{0};
+
+	*dst = arena_alloc(arena, sizeof(**dst));
+	if (*dst == NULL) {
+		*dst = &dummy_workaround_clang_analyzer_null_pointer;
+		return make_result(ERR_PARSE_ALLOC);
+	}
+
+	memset(*dst, 0, sizeof(**dst));
+	(**dst).name = *name;
+	(**dst).unique = NOT_YET_UNIQUE;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_alloc_if_unset(Arena *arena, struct ast **dst)
 {
 	if (*dst == NULL) {
@@ -282,6 +303,50 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+parse_factor_symbol(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_IDENTIFIER));
+
+	struct string_view str = (**tok).val;
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
+		(**dst).u.var.name = str;
+		(**dst).u.var.unique = NOT_YET_UNIQUE;
+		return RESULT_OK;
+	}
+
+	check(parse_alloc(arena, dst, NODE_FUNCTION_CALL));
+	(**dst).u.call.identifier.name = str;
+	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
+
+	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
+	token_consume(tok);
+
+	struct ast_symbol **dst_arg = &(**dst).u.call.arguments;
+	while (is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		assert(*dst_arg == NULL);
+		check(parse_alloc_symbol(arena, &(**tok).val, dst_arg));
+		token_consume(tok);
+
+		if (is_token_type(*tok, TOKEN_COMMA)) {
+			token_consume(tok);
+		} else {
+			break;
+		}
+		dst_arg = &(**dst_arg).next;
+	}
+
+	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		return make_result(ERR_PARSE_CALL_EXPECT_TOKEN_PAREN_CLOSE);
+	}
+	token_consume(tok);
+
+	return RESULT_OK;
+}
+
 static result_t parse_expr(Arena *arena,
                            const struct token **tok,
                            struct ast **dst,
@@ -294,10 +359,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
-		(**dst).u.var.name = (**tok).val;
-		(**dst).u.var.unique = NOT_YET_UNIQUE;
-		token_consume(tok);
+		check(parse_factor_symbol(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
 		check(parse_alloc(arena,
 		                  dst,
@@ -418,6 +480,7 @@ get_precedence(const struct ast *a)
 		break;
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
+	case NODE_FUNCTION_CALL:
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
@@ -794,10 +857,7 @@ parse_function_params(Arena *arena,
 			return make_result(
 				ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER);
 		}
-		*dst = arena_alloc(arena, sizeof(**dst));
-		memset(*dst, 0, sizeof(**dst));
-		(**dst).name = (**tok).val;
-		(**dst).unique = NOT_YET_UNIQUE;
+		check(parse_alloc_symbol(arena, &(**tok).val, dst));
 		token_consume(tok);
 
 		dst = &(**dst).next;
@@ -919,6 +979,14 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.function.next != NULL) {
 			parse_debug_print(a->u.function.next, indent);
 		}
+		break;
+	case NODE_FUNCTION_CALL:
+		parse_debug_print_ast_symbol("CALL",
+		                             &a->u.call.identifier,
+		                             indent);
+		parse_debug_print_ast_symbol("ARGUMENT",
+		                             a->u.call.arguments,
+		                             indent);
 		break;
 	case NODE_BLOCK:
 		debug("%*sBLOCK ITEM", (int)indent, "");

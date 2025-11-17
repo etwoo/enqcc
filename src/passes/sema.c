@@ -18,6 +18,9 @@ sema_label_impl(struct ast *a, long long int *id)
 			check(sema_label_impl(a->u.function.next, id));
 		}
 		break;
+	case NODE_FUNCTION_CALL:
+		assert(0 && "TODO implement sema_label() for call");
+		break;
 	case NODE_BLOCK:
 		if (a->u.block.item != NULL) {
 			check(sema_label_impl(a->u.block.item, id));
