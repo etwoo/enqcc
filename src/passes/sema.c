@@ -100,9 +100,7 @@ sema_register_fn(Arena *arena, struct ast *a, struct symbol **s)
 	assert(a->node_type == NODE_FUNCTION);
 
 	long long int n_args = 0;
-	for (struct ast_symbol *cur = a->u.function.params;
-	     cur != NULL && cur->name.data != NULL && cur->name.sz > 0;
-	     ++cur) {
+	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 		++n_args;
 	}
 
@@ -110,14 +108,12 @@ sema_register_fn(Arena *arena, struct ast *a, struct symbol **s)
 
 	struct symbol *dup = symbols_get(*s, fname, false);
 	if (dup == NULL) {
-		long long int *n_args_handle = NULL;
 		check(symbols_prepend(arena,
 		                      s,
 		                      fname,
 		                      SYMBOL_FUNCTION_DECLARATION,
 		                      LINKAGE_EXTERNAL,
-		                      &n_args_handle));
-		*n_args_handle = n_args;
+		                      n_args));
 	} else if (n_args != dup->n_args) {
 		return make_result(ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION,
 		                   fname->data,

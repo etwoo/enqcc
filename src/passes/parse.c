@@ -229,7 +229,7 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	                      &a->u.declare.identifier.name,
 	                      SYMBOL_VARIABLE,
 	                      LINKAGE_NONE,
-	                      NULL));
+	                      0));
 	a->u.declare.identifier.unique = (**sym).unique;
 
 	if (a->u.declare.init != NULL) {
@@ -310,22 +310,16 @@ resolve_function_params_one(Arena *arena,
 	                      &a->name,
 	                      SYMBOL_VARIABLE,
 	                      LINKAGE_NONE,
-	                      NULL));
+	                      0));
 	a->unique = (**sym).unique;
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_function_params(Arena *arena,
-                        struct ast_symbol *a,
-                        struct symbol **sym,
-                        long long int *n_args)
+resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
 {
-	for (; a != NULL && a->name.data != NULL && a->name.sz > 0; ++a) {
+	FOREACH_FUNCTION_PARAMETER (cur, a) {
 		check(resolve_function_params_one(arena, a, sym));
-		if (n_args != NULL) {
-			*n_args = *n_args + 1;
-		}
 	}
 	return RESULT_OK;
 }
@@ -361,16 +355,19 @@ resolve_function(Arena *arena,
 		                   dup->name.sz);
 	}
 
-	long long int *n_args_handle = NULL;
 	if (dup == NULL ||                   /* new symbol in this scope  */
 	    dup->stype == SYMBOL_VARIABLE) { /* function shadows variable */
+		long long int n_args = 0;
+		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+			++n_args;
+		}
 		check(symbols_prepend(arena,
 		                      sym,
 		                      &a->u.function.identifier.name,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
 		                      LINKAGE_EXTERNAL,
-		                      &n_args_handle));
+		                      n_args));
 		a->u.function.identifier.unique = (**sym).unique;
 	} else if (is_def) {
 		a->u.function.identifier.unique = dup->unique;
@@ -386,10 +383,7 @@ resolve_function(Arena *arena,
 		before_params->level_delimiter = true;
 	}
 
-	check(resolve_function_params(arena,
-	                              a->u.function.params,
-	                              sym,
-	                              n_args_handle));
+	check(resolve_function_params(arena, a->u.function.params, sym));
 
 	if (is_def) {
 		check(resolve_block_with_delimiter(arena,
@@ -1191,9 +1185,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("FUNCTION",
 		                             &a->u.function.identifier,
 		                             indent);
-		for (struct ast_symbol *cur = a->u.function.params;
-		     cur != NULL && cur->name.data != NULL && cur->name.sz > 0;
-		     ++cur) {
+		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             cur,
 			                             indent + 1);

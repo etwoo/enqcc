@@ -39,8 +39,7 @@ result_t symbols_prepend(Arena *arena,
                          const struct string_view *name,
                          enum symbol_type stype,
                          enum symbol_linkage linkage,
-                         long long int **n_args_handle) // TODO: refactor
-	WARN_UNUSED;
+                         long long int n_args) WARN_UNUSED;
 struct symbol *symbols_get(struct symbol *head,
                            const struct string_view *name,
                            bool stop_at_delimiter) WARN_UNUSED;

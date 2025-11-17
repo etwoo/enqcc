@@ -101,4 +101,14 @@ struct ast {
 	} u;
 };
 
+/*
+ * Utility macro for iterating over dynamically allocated u.function.params
+ * array, delimited by a final `struct string_view` with NULL data.
+ */
+#define FOREACH_FUNCTION_PARAMETER(iter, arr)                                  \
+	for (struct ast_symbol * (iter) = arr;                                 \
+	     (iter) != NULL && (iter)->name.data != NULL &&                    \
+	     (iter)->name.sz > 0;                                              \
+	     ++(iter))
+
 #endif

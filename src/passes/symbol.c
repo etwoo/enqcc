@@ -11,7 +11,7 @@ symbols_prepend(Arena *arena,
                 const struct string_view *name,
                 enum symbol_type stype,
                 enum symbol_linkage linkage,
-                long long int **n_args_handle)
+                long long int n_args)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_PARSE_ALLOC);
@@ -19,9 +19,7 @@ symbols_prepend(Arena *arena,
 	node->name = *name;
 	node->stype = stype;
 	node->linkage = linkage;
-	if (n_args_handle != NULL) {
-		*n_args_handle = &node->n_args;
-	}
+	node->n_args = n_args;
 	if (*head != NULL) {
 		node->unique = (**head).unique + 1;
 		node->level = (**head).level;
