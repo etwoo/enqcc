@@ -312,15 +312,17 @@ resolve_function(Arena *arena,
 		                   a->u.declare.identifier.name.sz);
 	}
 
-	struct symbol *dup =
-		symbols_get(*sym, &a->u.declare.identifier.name, false);
-
-	if (dup != NULL && dup->linkage == LINKAGE_NONE) {
-		return make_result(ERR_SEMA_LINKAGE_NONE_REDEFINED_EXTERNAL,
-		                   dup->name.data,
-		                   dup->name.sz);
+	struct symbol *local =
+		symbols_get(*sym, &a->u.declare.identifier.name, true);
+	if (local != NULL && local->linkage == LINKAGE_NONE) {
+		return make_result(
+			ERR_SEMA_LINKAGE_NONE_REDEFINED_EXTERNAL,
+			local->name.data,
+			local->name.sz);
 	}
 
+	struct symbol *dup =
+		symbols_get(*sym, &a->u.declare.identifier.name, false);
 	if (is_def && dup != NULL && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION,
 		                   dup->name.data,
