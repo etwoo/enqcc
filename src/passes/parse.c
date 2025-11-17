@@ -163,7 +163,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(*sym, &a->u.call.identifier));
-		check(resolve_expr(arena, a->u.call.arguments, sym));
+		if (a->u.call.arguments != NULL) {
+			check(resolve_expr(arena, a->u.call.arguments, sym));
+		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 		check(resolve_expr(arena, a->u.call_args.expr, sym));
