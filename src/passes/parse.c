@@ -818,8 +818,8 @@ parse_init(Arena *arena,
 
 	a = &original->u.program.globals;
 	for (; tok != NULL; a = &(**a).u.function.next) {
-		assert((**a).node_type == NODE_FUNCTION);
 		check(parse_function(arena, &tok, a));
+		assert((**a).node_type == NODE_FUNCTION);
 	}
 
 	a = &original->u.program.globals;
