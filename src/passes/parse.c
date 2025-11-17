@@ -313,13 +313,8 @@ resolve_function(Arena *arena,
 		                   dup->name.sz);
 	}
 
-	if (dup != NULL && dup->stype == SYMBOL_VARIABLE) {
-		return make_result(ERR_SEMA_REDEFINE_VARIABLE_TO_FUNCTION,
-		                   dup->name.data,
-		                   dup->name.sz);
-	}
-
-	if (dup == NULL) {
+	if (dup == NULL ||                   /* new symbol in this scope  */
+	    dup->stype == SYMBOL_VARIABLE) { /* function shadows variable */
 		check(symbols_prepend(arena,
 		                      sym,
 		                      &a->u.function.identifier.name,

@@ -253,11 +253,6 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
-	case ERR_SEMA_REDEFINE_VARIABLE_TO_FUNCTION:
-		s = my_asprintf(
-			"Redefinition of '%s' from variable to function",
-			r.msg);
-		break;
 	case ERR_SEMA_NESTED_FUNCTION_DEFINITION:
 		s = my_asprintf("Nested function definition: %s", r.msg);
 		break;
