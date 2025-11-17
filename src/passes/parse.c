@@ -989,14 +989,14 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("FUNCTION",
 		                             &a->u.function.identifier,
 		                             indent);
-		debug("%*sBODY", (int)(indent + 1), "");
-		if (a->u.function.block != NULL) {
-			parse_debug_print(a->u.function.block, indent + 2);
-		}
 		if (a->u.function.params != NULL) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             a->u.function.params,
-			                             indent);
+			                             indent + 1);
+		}
+		debug("%*sBODY", (int)(indent + 1), "");
+		if (a->u.function.block != NULL) {
+			parse_debug_print(a->u.function.block, indent + 2);
 		}
 		if (a->u.function.next != NULL) {
 			parse_debug_print(a->u.function.next, indent);
