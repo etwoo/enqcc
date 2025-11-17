@@ -79,6 +79,15 @@ resolve_function_call(struct symbol *head,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+is_first_match_function(struct symbol *head, struct string_view *name)
+{
+	const struct symbol *needle = symbols_get(head, name, false);
+	return (needle != NULL &&
+	        (needle->stype == SYMBOL_FUNCTION_DECLARATION ||
+	         needle->stype == SYMBOL_FUNCTION_DEFINITION));
+}
+
 static WARN_UNUSED result_t
 resolve_variable_assignment_preflight(struct ast *a, struct symbol **sym)
 {
@@ -87,15 +96,13 @@ resolve_variable_assignment_preflight(struct ast *a, struct symbol **sym)
 	}
 	assert(a->u.op_binary.lhs->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
 
-	const struct symbol *lhs_symbol =
-		symbols_get(*sym, &a->u.op_binary.lhs->u.var.name, false);
-	if (lhs_symbol != NULL &&
-	    (lhs_symbol->stype == SYMBOL_FUNCTION_DECLARATION ||
-	     lhs_symbol->stype == SYMBOL_FUNCTION_DEFINITION)) {
+	if (is_first_match_function(*sym, &a->u.op_binary.lhs->u.var.name)) {
 		return make_result(ERR_SEMA_DECL_INVALID_LVALUE_SYM_FUNC);
 	}
 
-	// TODO: check rhs, cannot use func symbol as rvalue either
+	if (is_first_match_function(*sym, &a->u.op_binary.rhs->u.var.name)) {
+		return make_result(ERR_SEMA_DECL_INVALID_RVALUE_SYM_FUNC);
+	}
 
 	return RESULT_OK;
 }

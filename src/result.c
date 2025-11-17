@@ -294,6 +294,10 @@ result_to_str(result_t r)
 		s = strdup("Invalid lvalue in variable assignment: cannot "
 		           "assign value to function");
 		break;
+	case ERR_SEMA_DECL_INVALID_RVALUE_SYM_FUNC:
+		s = strdup("Invalid rvalue in variable assignment: cannot "
+		           "use function as a value");
+		break;
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");
 		break;
