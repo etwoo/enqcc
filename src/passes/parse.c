@@ -304,28 +304,23 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 		return RESULT_OK;
 	}
 
-
 	check(parse_alloc(arena, dst, NODE_EXPRESSION_FUNCTION_CALL));
 	(**dst).u.call.identifier.name = str;
 	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
 
-	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
-	token_consume(tok);
+	unsigned expected = TOKEN_PAREN_OPEN;
 
 	dst = &(**dst).u.call.arguments;
-	while (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+	while (is_token_type(*tok, expected)) {
+		token_consume(tok);
+
 		check(parse_alloc(arena,
 		                  dst,
 		                  NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS));
 		check(parse_expr(arena, tok, &(**dst).u.call_args.expr, 0));
 
-		if (is_token_type(*tok, TOKEN_COMMA)) {
-			token_consume(tok);
-		} else {
-			break;
-		}
-
 		dst = &(**dst).u.call_args.next;
+		expected = TOKEN_COMMA;
 	}
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
