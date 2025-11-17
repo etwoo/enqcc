@@ -161,6 +161,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		if (a->u.op_binary.lhs->node_type !=
+		    NODE_EXPRESSION_VARIABLE_USAGE) {
+			return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
+		}
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
