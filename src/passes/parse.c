@@ -314,6 +314,10 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 	while (is_token_type(*tok, expected)) {
 		token_consume(tok);
 
+		if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			break;
+		}
+
 		check(parse_alloc(arena,
 		                  dst,
 		                  NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS));
