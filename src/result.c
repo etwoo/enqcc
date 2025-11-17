@@ -258,6 +258,9 @@ result_to_str(result_t r)
 			"Redefinition of '%s' from variable to function",
 			r.msg);
 		break;
+	case ERR_SEMA_NESTED_FUNCTION_DEFINITION:
+		s = my_asprintf("Nested function definition: %s", r.msg);
+		break;
 	case ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION:
 		s = my_asprintf("Duplicate function definition: %s", r.msg);
 		break;
