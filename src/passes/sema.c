@@ -95,7 +95,7 @@ sema_label_loops(struct ast *a, long long int *generator)
 }
 
 static WARN_UNUSED result_t
-sema_register_function(Arena *arena, struct ast *a, struct symbol **s)
+sema_register_fn(Arena *arena, struct ast *a, struct symbol **s)
 {
 	assert(a->node_type == NODE_FUNCTION);
 
@@ -136,7 +136,7 @@ sema_typecheck_fn(Arena *arena, struct ast *a, struct symbol **s)
 		check(sema_typecheck_fn(arena, a->u.program.globals, s));
 		break;
 	case NODE_FUNCTION:
-		check(sema_register_function(arena, a, s));
+		check(sema_register_fn(arena, a, s));
 		if (a->u.function.block != NULL) {
 			check(sema_typecheck_fn(arena, a->u.function.block, s));
 		}
