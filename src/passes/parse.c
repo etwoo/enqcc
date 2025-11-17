@@ -343,12 +343,12 @@ resolve_function(Arena *arena,
 	const bool is_def = (a->u.function.block != NULL);
 	if (is_def && !allow_definition) {
 		return make_result(ERR_SEMA_NESTED_FUNCTION_DEFINITION,
-		                   a->u.declare.identifier.name.data,
-		                   a->u.declare.identifier.name.sz);
+		                   a->u.function.identifier.name.data,
+		                   a->u.function.identifier.name.sz);
 	}
 
 	struct symbol *local =
-		symbols_get(*sym, &a->u.declare.identifier.name, true);
+		symbols_get(*sym, &a->u.function.identifier.name, true);
 	if (local != NULL && local->linkage == LINKAGE_NONE) {
 		return make_result(ERR_SEMA_LINKAGE_NONE_REDEFINED_EXTERNAL,
 		                   local->name.data,
@@ -356,7 +356,7 @@ resolve_function(Arena *arena,
 	}
 
 	struct symbol *dup =
-		symbols_get(*sym, &a->u.declare.identifier.name, false);
+		symbols_get(*sym, &a->u.function.identifier.name, false);
 	if (is_def && dup != NULL && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION,
 		                   dup->name.data,
