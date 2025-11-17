@@ -79,6 +79,27 @@ resolve_function_call(struct symbol *head,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+resolve_variable_assignment_preflight(struct ast *a, struct symbol **sym)
+{
+	if (a->u.op_binary.lhs->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
+		return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
+	}
+	assert(a->u.op_binary.lhs->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
+
+	const struct symbol *lhs_symbol =
+		symbols_get(*sym, &a->u.op_binary.lhs->u.var.name, false);
+	if (lhs_symbol != NULL &&
+	    (lhs_symbol->stype == SYMBOL_FUNCTION_DECLARATION ||
+	     lhs_symbol->stype == SYMBOL_FUNCTION_DEFINITION)) {
+		return make_result(ERR_SEMA_DECL_INVALID_LVALUE_SYM_FUNC);
+	}
+
+	// TODO: check rhs, cannot use func symbol as rvalue either
+
+	return RESULT_OK;
+}
+
 static result_t
 resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 static result_t resolve_function(Arena *arena,
@@ -151,10 +172,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		if (a->u.op_binary.lhs->node_type !=
-		    NODE_EXPRESSION_VARIABLE_USAGE) {
-			return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
-		}
+		check(resolve_variable_assignment_preflight(a, sym));
 		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
