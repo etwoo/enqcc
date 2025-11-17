@@ -9,8 +9,6 @@ struct ast_symbol {
 	struct ast_symbol *next;
 };
 
-struct ast_list;
-
 struct ast {
 	enum {
 		NODE_PROGRAM,

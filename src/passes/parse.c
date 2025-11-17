@@ -34,29 +34,48 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 }
 
 static WARN_UNUSED result_t
-resolve_function_call(struct symbol *head, struct ast_symbol *var)
+resolve_function_call(struct symbol *head,
+                      struct ast_symbol *callee,
+                      struct ast *args)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
-	assert(var->unique == NOT_YET_UNIQUE);
+	assert(callee->unique == NOT_YET_UNIQUE);
 
-	const struct symbol *resolution = symbols_get(head, &var->name, false);
+	const struct symbol *resolution =
+		symbols_get(head, &callee->name, false);
 	if (resolution == NULL) {
 		return make_result(ERR_SEMA_UNDECLARED_FUNCTION_CALL,
-		                   var->name.data,
-		                   var->name.sz);
+		                   callee->name.data,
+		                   callee->name.sz);
 	}
 
 	switch (resolution->stype) {
 	case SYMBOL_VARIABLE:
 		return make_result(ERR_SEMA_TYPECHECK_VARIABLE_AS_CALLABLE,
-		                   var->name.data,
-		                   var->name.sz);
+		                   callee->name.data,
+		                   callee->name.sz);
 	case SYMBOL_FUNCTION_DECLARATION:
 	case SYMBOL_FUNCTION_DEFINITION:
 		break;
 	}
 
-	var->unique = resolution->unique;
+	callee->unique = resolution->unique;
+
+	long long int n_args = 0;
+	if (args != NULL) {
+		assert(args->node_type ==
+		       NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
+		for (; args != NULL; args = args->u.call_args.next) {
+			++n_args;
+		}
+	}
+
+	if (n_args != resolution->n_args) {
+		return make_result(ERR_SEMA_TYPECHECK_FUNCTION_CALL_ARGUMENTS,
+		                   callee->name.data,
+		                   callee->name.sz);
+	}
+
 	return RESULT_OK;
 }
 
@@ -166,7 +185,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		check(resolve_function_call(*sym, &a->u.call.identifier));
+		check(resolve_function_call(*sym,
+		                            &a->u.call.identifier,
+		                            a->u.call.arguments));
 		if (a->u.call.arguments != NULL) {
 			check(resolve_expr(arena, a->u.call.arguments, sym));
 		}
@@ -206,7 +227,8 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	                      sym,
 	                      &a->u.declare.identifier.name,
 	                      SYMBOL_VARIABLE,
-	                      LINKAGE_NONE));
+	                      LINKAGE_NONE,
+	                      NULL));
 	a->u.declare.identifier.unique = (**sym).unique;
 
 	if (a->u.declare.init != NULL) {
@@ -282,17 +304,23 @@ resolve_function_params_one(Arena *arena,
 	                      sym,
 	                      &a->name,
 	                      SYMBOL_VARIABLE,
-	                      LINKAGE_NONE));
+	                      LINKAGE_NONE,
+	                      NULL));
 	a->unique = (**sym).unique;
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
+resolve_function_params(Arena *arena,
+                        struct ast_symbol *a,
+                        struct symbol **sym,
+                        long long int *n_args)
 {
+	assert(n_args != NULL);
 	while (a != NULL) {
 		check(resolve_function_params_one(arena, a, sym));
 		a = a->next;
+		*n_args = *n_args + 1;
 	}
 	return RESULT_OK;
 }
@@ -315,10 +343,9 @@ resolve_function(Arena *arena,
 	struct symbol *local =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
 	if (local != NULL && local->linkage == LINKAGE_NONE) {
-		return make_result(
-			ERR_SEMA_LINKAGE_NONE_REDEFINED_EXTERNAL,
-			local->name.data,
-			local->name.sz);
+		return make_result(ERR_SEMA_LINKAGE_NONE_REDEFINED_EXTERNAL,
+		                   local->name.data,
+		                   local->name.sz);
 	}
 
 	struct symbol *dup =
@@ -329,6 +356,7 @@ resolve_function(Arena *arena,
 		                   dup->name.sz);
 	}
 
+	long long int *n_args_handle = NULL;
 	if (dup == NULL ||                   /* new symbol in this scope  */
 	    dup->stype == SYMBOL_VARIABLE) { /* function shadows variable */
 		check(symbols_prepend(arena,
@@ -336,10 +364,13 @@ resolve_function(Arena *arena,
 		                      &a->u.function.identifier.name,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      LINKAGE_EXTERNAL));
+		                      LINKAGE_EXTERNAL,
+		                      &n_args_handle));
 		a->u.function.identifier.unique = (**sym).unique;
 	} else if (is_def) {
 		a->u.function.identifier.unique = dup->unique;
+		assert(dup->n_args == 0);
+		n_args_handle = &dup->n_args;
 		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
 		// TODO(typecheck): def params match existing decl params
 		dup->stype = SYMBOL_FUNCTION_DEFINITION;
@@ -357,7 +388,8 @@ resolve_function(Arena *arena,
 	if (a->u.function.params != NULL) {
 		check(resolve_function_params(arena,
 		                              a->u.function.params,
-		                              sym));
+		                              sym,
+		                              n_args_handle));
 	}
 
 	if (is_def) {

@@ -275,6 +275,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_UNDECLARED_FUNCTION_CALL:
 		s = my_asprintf("Call of undeclared function: %s", r.msg);
 		break;
+	case ERR_SEMA_TYPECHECK_FUNCTION_CALL_ARGUMENTS:
+		s = my_asprintf("Incorrect arguments to call of: %s", r.msg);
+		break;
 	case ERR_SEMA_TYPECHECK_VARIABLE_AS_CALLABLE:
 		s = my_asprintf("Call of non-function variable: %s", r.msg);
 		break;

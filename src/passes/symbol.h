@@ -26,6 +26,7 @@ struct symbol {
 	struct string_view name;
 	enum symbol_type stype;
 	enum symbol_linkage linkage;
+	long long int n_args; /* int arg count; TODO: more types -> refactor */
 	long long int unique; /* unique ID for this symbol */
 	long long int level;  /* nesting level of symbol declaration */
 	bool level_delimiter; /* trigger new nesting level if prepending here */
@@ -37,7 +38,9 @@ result_t symbols_prepend(Arena *arena,
                          struct symbol **head,
                          const struct string_view *name,
                          enum symbol_type stype,
-                         enum symbol_linkage linkage) WARN_UNUSED;
+                         enum symbol_linkage linkage,
+                         long long int **n_args_handle) // TODO: refactor
+	WARN_UNUSED;
 struct symbol *symbols_get(struct symbol *head,
                            const struct string_view *name,
                            bool stop_at_delimiter) WARN_UNUSED;
