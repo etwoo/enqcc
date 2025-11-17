@@ -405,6 +405,9 @@ resolve_function(Arena *arena,
 	}
 
 	symbols_reset_scope(sym, before_params);
+	if (before_params) {
+		before_params->level_delimiter = false;
+	}
 
 	return RESULT_OK;
 }
