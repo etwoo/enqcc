@@ -194,6 +194,14 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 		                   dup->name.sz);
 	}
 
+	const struct symbol *global =
+		symbols_get(*sym, &a->u.declare.identifier.name, false);
+	if (global != NULL && global->linkage == LINKAGE_EXTERNAL) {
+		return make_result(ERR_SEMA_SYMBOL_LINKAGE_MISMATCH,
+		                   global->name.data,
+		                   global->name.sz);
+	}
+
 	check(symbols_prepend(arena,
 	                      sym,
 	                      &a->u.declare.identifier.name,

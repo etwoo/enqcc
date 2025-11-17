@@ -253,6 +253,11 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
+	case ERR_SEMA_SYMBOL_LINKAGE_MISMATCH:
+		s = my_asprintf("Symbol with external linkage redefined with "
+		                "no linkage: %s",
+		                r.msg);
+		break;
 	case ERR_SEMA_NESTED_FUNCTION_DEFINITION:
 		s = my_asprintf("Nested function definition: %s", r.msg);
 		break;
