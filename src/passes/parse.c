@@ -34,6 +34,7 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 		break;
 	case SYMBOL_FUNCTION_DECLARATION:
 	case SYMBOL_FUNCTION_DEFINITION:
+		// TODO: move this check to sema.c
 		return make_result(ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE,
 		                   var->name.data,
 		                   var->name.sz);
@@ -1277,7 +1278,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -1291,6 +1291,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		switch (a->node_type) {
 		case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 			debug("%*sEXPRESSION ASSIGN", (int)indent, "");
@@ -1373,7 +1374,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.call_args.next != NULL) {
 			parse_debug_print(a->u.call_args.next, indent);
 		}
-
 		break;
 	case NODE_CONSTANT_INT:
 		debug("%*sCONSTANT %lld", (int)indent, "", a->u.num);

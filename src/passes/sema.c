@@ -5,58 +5,62 @@
 #include "sys/debug.h"
 
 static WARN_UNUSED result_t
-sema_walk(Arena *arena,
-          struct ast *a,
-          result_t (*f)(Arena *arena, struct ast *a, void *userdata),
-          void *u)
+sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 {
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		check(f(arena, a, u));
-		check(sema_walk(arena, a->u.program.globals, f, u));
+		check(f(a, u));
+		check(sema_walk(a->u.program.globals, f, u));
 		break;
 	case NODE_FUNCTION:
-		check(f(arena, a, u));
+		check(f(a, u));
 		if (a->u.function.block != NULL) {
-			check(sema_walk(arena, a->u.function.block, f, u));
+			check(sema_walk(a->u.function.block, f, u));
 		}
 		if (a->u.function.next != NULL) {
-			check(sema_walk(arena, a->u.function.next, f, u));
+			check(sema_walk(a->u.function.next, f, u));
 		}
 		break;
 	case NODE_BLOCK:
 		if (a->u.block.item != NULL) {
-			check(sema_walk(arena, a->u.block.item, f, u));
+			check(sema_walk(a->u.block.item, f, u));
 			if (a->u.block.next != NULL) {
-				check(sema_walk(arena, a->u.block.next, f, u));
+				check(sema_walk(a->u.block.next, f, u));
 			}
 		}
 		break;
+	case NODE_DECLARATION:
+		if (a->u.declare.init != NULL) {
+			check(sema_walk(a->u.declare.init, f, u));
+		}
+		break;
 	case NODE_IF_ELSE:
-		check(sema_walk(arena, a->u.if_.then_clause, f, u));
+		check(sema_walk(a->u.if_.condition, f, u));
+		check(sema_walk(a->u.if_.then_clause, f, u));
 		if (a->u.if_.else_clause != NULL) {
-			check(sema_walk(arena, a->u.if_.else_clause, f, u));
+			check(sema_walk(a->u.if_.else_clause, f, u));
 		}
 		break;
 	case NODE_LOOP:
-		check(f(arena, a, u));
-		check(sema_walk(arena, a->u.loop.precond, f, u));
-		check(sema_walk(arena, a->u.loop.body, f, u));
-		check(sema_walk(arena, a->u.loop.postcond, f, u));
+		check(f(a, u));
+		check(sema_walk(a->u.loop.precond, f, u));
+		check(sema_walk(a->u.loop.body, f, u));
+		check(sema_walk(a->u.loop.incr, f, u));
+		check(sema_walk(a->u.loop.postcond, f, u));
 		break;
 	case NODE_BREAK:
-		check(f(arena, a, u));
+		check(f(a, u));
 		break;
 	case NODE_CONTINUE:
-		check(f(arena, a, u));
+		check(f(a, u));
 		break;
-	case NODE_DECLARATION:
 	case NODE_FUNCTION_RETURN_STATEMENT:
-	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+		check(sema_walk(a->u.op_unary.operand, f, u));
+		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -70,11 +74,34 @@ sema_walk(Arena *arena,
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		check(sema_walk(a->u.op_binary.lhs, f, u));
+		check(sema_walk(a->u.op_binary.rhs, f, u));
+		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+		check(f(a, u));
+		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		check(sema_walk(a->u.op_binary.lhs, f, u));
+		check(sema_walk(a->u.op_ternary.condition, f, u));
+		check(sema_walk(a->u.op_ternary.then_expr, f, u));
+		if (a->u.op_ternary.else_expr != NULL) {
+			check(sema_walk(a->u.op_ternary.else_expr, f, u));
+		}
+		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
+		check(f(a, u));
+		if (a->u.call.arguments != NULL) {
+			check(sema_walk(a->u.call.arguments, f, u));
+		}
+		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
+		check(sema_walk(a->u.call_args.expr, f, u));
+		if (a->u.call_args.next != NULL) {
+			check(sema_walk(a->u.call_args.next, f, u));
+		}
+		break;
+	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
 		break;
 	}
@@ -82,7 +109,7 @@ sema_walk(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-sema_loop_id(Arena *arena MAYBE_UNUSED, struct ast *a, void *userdata)
+sema_loop_id(struct ast *a, void *userdata)
 {
 	long long int *id = userdata;
 	switch (a->node_type) {
@@ -115,11 +142,12 @@ sema_label_loops(struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
 	*generator = 0;
-	check(sema_walk(NULL, a, sema_loop_id, generator));
+	check(sema_walk(a, sema_loop_id, generator));
 	return RESULT_OK;
 }
 
 struct sema_fn_signature_state {
+	Arena *arena;
 	struct ast *ast_program_globals;
 	struct symbol *symbols;
 };
@@ -141,7 +169,7 @@ ast_contains(const struct ast *haystack, const struct ast *needle)
 }
 
 static WARN_UNUSED result_t
-sema_fn_signature(Arena *arena, struct ast *a, void *userdata)
+sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_fn_signature_state *state = userdata;
 
@@ -175,7 +203,7 @@ sema_fn_signature(Arena *arena, struct ast *a, void *userdata)
 	struct symbol **s = &state->symbols;
 	struct symbol *dup = symbols_get(*s, fname, false);
 	if (dup == NULL) {
-		check(symbols_prepend(arena,
+		check(symbols_prepend(state->arena,
 		                      s,
 		                      fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
@@ -200,6 +228,7 @@ sema_typecheck(Arena *arena, struct ast *a)
 {
 	debug("Checking function signatures");
 	struct sema_fn_signature_state state = {0};
-	check(sema_walk(arena, a, sema_fn_signature, &state));
+	state.arena = arena;
+	check(sema_walk(a, sema_fn_signature, &state));
 	return RESULT_OK;
 }
