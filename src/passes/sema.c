@@ -61,6 +61,9 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(sema_walk(a->u.op_unary.operand, f, u));
 		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		check(f(a, u));
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -74,7 +77,6 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(sema_walk(a->u.op_binary.lhs, f, u));
 		check(sema_walk(a->u.op_binary.rhs, f, u));
 		break;
@@ -143,6 +145,20 @@ sema_label_loops(struct ast *a, long long int *generator)
 	debug("Labeling loops, loop breaks, and continues");
 	*generator = 0;
 	check(sema_walk(a, sema_loop_id, generator));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	if (a->node_type != NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
+		return RESULT_OK;
+	}
+
+	if (a->u.op_binary.lhs->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
+		return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
+	}
+
 	return RESULT_OK;
 }
 
@@ -241,9 +257,13 @@ sema_fn_signature(struct ast *a, void *userdata)
 result_t
 sema_typecheck(Arena *arena, struct ast *a)
 {
+	debug("Checking lvalues");
+	check(sema_walk(a, sema_lvalue, NULL));
+
 	debug("Checking function signatures");
 	struct sema_fn_signature_state state = {0};
 	state.arena = arena;
 	check(sema_walk(a, sema_fn_signature, &state));
+
 	return RESULT_OK;
 }

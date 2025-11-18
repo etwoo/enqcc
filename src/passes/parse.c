@@ -140,12 +140,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		if (a->u.op_binary.lhs->node_type !=
-		    NODE_EXPRESSION_VARIABLE_USAGE) {
-			return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
-		}
-		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -159,6 +153,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
 		break;
