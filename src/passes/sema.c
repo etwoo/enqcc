@@ -12,6 +12,7 @@ sema_walk(Arena *arena,
 {
 	switch (a->node_type) {
 	case NODE_PROGRAM:
+		check(f(arena, a, u));
 		check(sema_walk(arena, a->u.program.globals, f, u));
 		break;
 	case NODE_FUNCTION:
@@ -118,23 +119,60 @@ sema_label_loops(struct ast *a, long long int *generator)
 	return RESULT_OK;
 }
 
+struct sema_fn_signature_state {
+	struct ast *ast_program_globals;
+	struct symbol *symbols;
+};
+
+static WARN_UNUSED bool
+ast_contains(const struct ast *haystack, const struct ast *needle)
+{
+	assert(haystack->node_type == NODE_FUNCTION);
+	assert(needle->node_type == NODE_FUNCTION);
+
+	while (haystack != NULL) {
+		if (needle == haystack) {
+			return true;
+		}
+		haystack = haystack->u.function.next;
+	}
+
+	return false;
+}
+
 static WARN_UNUSED result_t
 sema_fn_signature(Arena *arena, struct ast *a, void *userdata)
 {
-	if (a->node_type != NODE_FUNCTION) {
+	struct sema_fn_signature_state *state = userdata;
+
+	switch (a->node_type) {
+	case NODE_FUNCTION:
+		break;
+	case NODE_PROGRAM:
+		state->ast_program_globals = a->u.program.globals;
+		return RESULT_OK;
+	default:
 		return RESULT_OK;
 	}
 
-	struct symbol **s = (struct symbol **)userdata;
+	const struct string_view *fname = &a->u.function.identifier.name;
+	const bool is_def = (a->u.function.block != NULL);
+	if (is_def) {
+		assert(state->ast_program_globals != NULL);
+		bool allow_def = ast_contains(state->ast_program_globals, a);
+		if (!allow_def) {
+			return make_result(ERR_SEMA_NESTED_FUNCTION_DEFINITION,
+			                   fname->data,
+			                   fname->sz);
+		}
+	}
 
 	long long int n_args = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 		++n_args;
 	}
 
-	const struct string_view *fname = &a->u.function.identifier.name;
-	const bool is_def = (a->u.function.block != NULL);
-
+	struct symbol **s = &state->symbols;
 	struct symbol *dup = symbols_get(*s, fname, false);
 	if (dup == NULL) {
 		check(symbols_prepend(arena,
@@ -161,7 +199,7 @@ result_t
 sema_typecheck(Arena *arena, struct ast *a)
 {
 	debug("Checking function signatures");
-	struct symbol *fn_signatures = NULL;
-	check(sema_walk(arena, a, sema_fn_signature, (void *)&fn_signatures));
+	struct sema_fn_signature_state state = {0};
+	check(sema_walk(arena, a, sema_fn_signature, &state));
 	return RESULT_OK;
 }

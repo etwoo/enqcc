@@ -91,8 +91,7 @@ static result_t
 resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 static result_t resolve_function(Arena *arena,
                                  struct ast *a,
-                                 struct symbol **sym,
-                                 bool allow_definition) WARN_UNUSED;
+                                 struct symbol **sym) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
@@ -261,7 +260,7 @@ resolve_block_with_delimiter(Arena *arena,
 		struct symbol *resetter = NULL;
 		switch (cur_item->node_type) {
 		case NODE_FUNCTION:
-			check(resolve_function(arena, cur_item, sym, false));
+			check(resolve_function(arena, cur_item, sym));
 			break;
 		case NODE_DECLARATION:
 			check(resolve_decl(arena, cur_item, sym));
@@ -326,17 +325,9 @@ resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
 static WARN_UNUSED result_t
 resolve_function(Arena *arena,
                  struct ast *a,
-                 struct symbol **sym,
-                 bool allow_definition)
+                 struct symbol **sym)
 {
 	assert(a->node_type == NODE_FUNCTION);
-
-	const bool is_def = (a->u.function.block != NULL);
-	if (is_def && !allow_definition) {
-		return make_result(ERR_SEMA_NESTED_FUNCTION_DEFINITION,
-		                   a->u.function.identifier.name.data,
-		                   a->u.function.identifier.name.sz);
-	}
 
 	struct symbol *local =
 		symbols_get(*sym, &a->u.function.identifier.name, true);
@@ -346,6 +337,7 @@ resolve_function(Arena *arena,
 		                   local->name.sz);
 	}
 
+	const bool is_def = (a->u.function.block != NULL);
 	struct symbol *dup =
 		symbols_get(*sym, &a->u.function.identifier.name, false);
 	if (dup == NULL ||                   /* new symbol in this scope  */
@@ -1140,7 +1132,7 @@ parse_init(Arena *arena,
 	a = &original->u.program.globals;
 	for (; sym != NULL && *a != NULL; a = &(**a).u.function.next) {
 		assert((**a).node_type == NODE_FUNCTION);
-		check(resolve_function(arena, *a, sym, true));
+		check(resolve_function(arena, *a, sym));
 	}
 
 	return RESULT_OK;
