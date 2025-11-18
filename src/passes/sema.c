@@ -160,6 +160,7 @@ sema_fn_signature(Arena *arena, struct ast *a, void *userdata)
 result_t
 sema_typecheck(Arena *arena, struct ast *a)
 {
+	debug("Checking function signatures");
 	struct symbol *fn_signatures = NULL;
 	check(sema_walk(arena, a, sema_fn_signature, (void *)&fn_signatures));
 	return RESULT_OK;
