@@ -286,8 +286,8 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	const bool is_def = (a->u.function.block != NULL);
 	struct symbol *dup =
 		symbols_get(*sym, &a->u.function.identifier.name, false);
-	if (dup == NULL ||                   /* new symbol in this scope  */
-	    dup->stype == SYMBOL_VARIABLE) { /* function shadows variable */
+	if (dup == NULL ||                   /* new symbol in this scope */
+	    dup->stype == SYMBOL_VARIABLE) { /* ... or func shadows var  */
 		long long int n_args = 0;
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			++n_args;
