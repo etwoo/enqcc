@@ -176,7 +176,7 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	if (a->node_type == NODE_EXPRESSION_FUNCTION_CALL &&
 	    a->u.var.stype == SYMBOL_VARIABLE) {
-		return make_result(ERR_SEMA_TYPECHECK_VARIABLE_AS_CALLABLE,
+		return make_result(ERR_SEMA_VARIABLE_AS_CALLABLE,
 		                   a->u.var.name.data,
 		                   a->u.var.name.sz);
 	}
@@ -297,7 +297,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		return make_result(
 			is_def_or_decl
 				? ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION
-				: ERR_SEMA_TYPECHECK_FUNCTION_CALL_ARGUMENTS,
+				: ERR_SEMA_TOO_MANY_OR_TOO_FEW_CALL_ARGUMENTS,
 			fname->data,
 			fname->sz);
 	}
