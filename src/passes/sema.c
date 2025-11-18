@@ -171,6 +171,18 @@ sema_var_usage(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	if (a->node_type == NODE_EXPRESSION_FUNCTION_CALL &&
+	    a->u.var.stype == SYMBOL_VARIABLE) {
+		return make_result(ERR_SEMA_TYPECHECK_VARIABLE_AS_CALLABLE,
+		                   a->u.var.name.data,
+		                   a->u.var.name.sz);
+	}
+	return RESULT_OK;
+}
+
 struct sema_fn_signature_state {
 	Arena *arena;
 	struct ast *ast_program_globals;
@@ -301,6 +313,9 @@ sema_typecheck(Arena *arena, struct ast *a)
 
 	debug("Checking variable usage");
 	check(sema_walk(a, sema_var_usage, NULL));
+
+	debug("Checking function calls");
+	check(sema_walk(a, sema_fn_call, NULL));
 
 	debug("Checking function signatures");
 	struct sema_fn_signature_state state = {0};
