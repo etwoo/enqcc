@@ -152,7 +152,7 @@ static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT &&
-	    a->u.op_binary.lhs->node_type == NODE_EXPRESSION_VARIABLE_USAGE) {
+	    a->u.op_binary.lhs->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
 		return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
 	}
 	return RESULT_OK;
