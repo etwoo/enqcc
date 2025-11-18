@@ -838,7 +838,7 @@ ir_debug_print_one(const struct ir_op *op)
 		debug("RETURN");
 		break;
 	case IR_OP_CALL:
-		debug("CALL");
+		debug("CALL %.*s", (int)op->fun.sz, op->fun.data);
 		break;
 	case IR_OP_UNARY_COMPLEMENT:
 	case IR_OP_UNARY_NEGATE:
