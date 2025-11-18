@@ -153,6 +153,10 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT &&
 	    a->u.op_binary.lhs->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
+		/*
+		 * See related assertions in src/passes/ir.c on u.op_binary.lhs
+		 * and NODE_EXPRESSION_VARIABLE_USAGE.
+		 */
 		return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
 	}
 	return RESULT_OK;

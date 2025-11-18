@@ -417,12 +417,6 @@ ir_unary_op(Arena *arena,
 	ir_val_copy(&inner_return, &unary->args[0]);
 	unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
-		// TODO: loosen this assert, update implementation once LHS
-		// of assignment is no longer restricted to bare Var()
-		// but instead can be an expression like postincrement,
-		// preincrement, array offset, structure member, etc
-		//
-		// related: resolve_expr(), ERR_SEMA_DECL_INVALID_LVALUE
 		assert(a->u.op_binary.lhs->node_type ==
 		       NODE_EXPRESSION_VARIABLE_USAGE);
 		unary->args[1].num = a->u.op_binary.lhs->u.var.unique;
