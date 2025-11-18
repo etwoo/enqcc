@@ -274,6 +274,9 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_LABEL;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		break;
+	case IR_OP_CALL:
+		assert(0 && "codegen for function call: unimplemented");
+		break;
 	}
 
 	return RESULT_OK;
@@ -308,7 +311,9 @@ codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 	*cg = arena_alloc(arena, sizeof(**cg));
 	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);
 	memset(*cg, 0, sizeof(**cg));
-	check(codegen_function(arena, &ir->function, &(**cg).function));
+	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
+		check(codegen_function(arena, f, &(**cg).function));
+	}
 	return RESULT_OK;
 }
 

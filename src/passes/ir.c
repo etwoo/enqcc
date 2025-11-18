@@ -618,6 +618,52 @@ ir_logical_op(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_call(Arena *arena,
+        const struct ast *a,
+        struct intermediate *ir,
+        struct ir_op **dst,
+        struct ir_val *return_value)
+{
+	assert(a->node_type == NODE_EXPRESSION_FUNCTION_CALL);
+
+	struct ir_op *caller = NULL;
+	check(ir_alloc_op(arena, &caller));
+	caller->opcode = IR_OP_CALL;
+	caller->fun = a->u.call.identifier.name;
+
+	size_t pos = 0;
+	if (a->u.call.arguments != NULL) {
+		assert(a->u.call.arguments->node_type ==
+		       NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
+
+		for (struct ast *arguments = a->u.call.arguments;
+		     arguments != NULL;
+		     arguments = arguments->u.call_args.next) {
+			assert(arguments->u.call_args.expr != NULL);
+			struct ast *cur = arguments->u.call_args.expr;
+
+			struct ir_val arg_value = {0};
+			check(ir_expr(arena, cur, ir, dst, &arg_value));
+
+			assert(pos < FUNCTION_PARAMETER_LIMIT);
+			ir_val_copy(&arg_value, &caller->args[pos]);
+			++pos;
+
+			dst = &ir_op_list_back(*dst)->next;
+		}
+	}
+
+	caller->args[pos].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	caller->args[pos].num = ir->env.generator++;
+
+	assert(return_value->subtype == IR_VAL_NONE);
+	ir_val_copy(&caller->args[pos], return_value);
+
+	*dst = caller;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_expr(Arena *arena,
         const struct ast *a,
         struct intermediate *ir,
@@ -693,6 +739,9 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_LOGICAL_OR:
 		check(ir_logical_op(arena, a, ir, dst, return_value, false));
 		break;
+	case NODE_EXPRESSION_FUNCTION_CALL:
+		check(ir_call(arena, a, ir, dst, return_value));
+		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
 		                   (int)a->node_type);
@@ -701,15 +750,20 @@ ir_expr(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_function(Arena *arena, const struct ast *a, struct intermediate *ir)
+ir_function(Arena *arena,
+            const struct ast *a,
+            struct intermediate *ir,
+            struct ir_function **dst)
 {
 	assert(a->node_type == NODE_FUNCTION);
 
-	// TODO: iterate over all function definitions via ->next member
-	struct ir_function *f = &ir->function;
-	f->identifier = a->u.function.identifier.name;
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_IR_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
 
-	// TODO: handle declaration with NULL block vs definition with non-NULL
+	struct ir_function *f = *dst;
+	f->identifier = a->u.function.identifier.name;
 	check(ir_block(arena, a->u.function.block, ir, &f->ops));
 
 	/*
@@ -744,7 +798,18 @@ static WARN_UNUSED result_t
 ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 {
 	assert(a->node_type == NODE_PROGRAM);
-	check(ir_function(arena, a->u.program.globals, ir));
+	assert(a->u.program.globals == NULL ||
+	       a->u.program.globals->node_type == NODE_FUNCTION);
+
+	struct ast *cur = a->u.program.globals;
+	struct ir_function **dst = &ir->functions;
+	for (; cur != NULL; cur = cur->u.function.next) {
+		if (cur->u.function.block != NULL) {
+			check(ir_function(arena, cur, ir, dst));
+			dst = &(**dst).next;
+		}
+	}
+
 	return RESULT_OK;
 }
 
@@ -771,6 +836,9 @@ ir_debug_print_one(const struct ir_op *op)
 	switch (op->opcode) {
 	case IR_OP_RET:
 		debug("RETURN");
+		break;
+	case IR_OP_CALL:
+		debug("CALL");
 		break;
 	case IR_OP_UNARY_COMPLEMENT:
 	case IR_OP_UNARY_NEGATE:
@@ -896,9 +964,8 @@ void
 ir_debug_print(const struct intermediate *ir)
 {
 	debug("PROGRAM");
-
-	const struct string_view *entrypoint = &ir->function.identifier;
-	debug("FUNC %.*s", (int)entrypoint->sz, entrypoint->data);
-
-	ir_debug_print_list(ir->function.ops);
+	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
+		debug("FUNC %.*s", (int)f->identifier.sz, f->identifier.data);
+		ir_debug_print_list(f->ops);
+	}
 }

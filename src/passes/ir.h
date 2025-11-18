@@ -3,6 +3,8 @@
 
 #include "sys/string_view.h"
 
+#define FUNCTION_PARAMETER_LIMIT 32
+
 struct ir_val {
 	enum {
 		IR_VAL_NONE,
@@ -35,14 +37,17 @@ struct ir_op {
 		IR_OP_JUMP_IF_ZERO,
 		IR_OP_JUMP_IF_NOT_ZERO,
 		IR_OP_LABEL,
+		IR_OP_CALL,
 	} opcode;
-	struct ir_val args[3];
+	struct string_view fun;
+	struct ir_val args[FUNCTION_PARAMETER_LIMIT + 1];
 	struct ir_op *next;
 };
 
 struct ir_function {
 	struct string_view identifier;
 	struct ir_op *ops;
+	struct ir_function *next;
 };
 
 struct ir_env {
@@ -51,7 +56,7 @@ struct ir_env {
 };
 
 struct intermediate {
-	struct ir_function function;
+	struct ir_function *functions;
 	struct ir_env env;
 };
 
