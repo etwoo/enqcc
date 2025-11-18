@@ -95,6 +95,14 @@ ir_block(Arena *arena,
 			continue;
 		}
 
+		if (a->u.block.item->node_type == NODE_FUNCTION) {
+			/*
+			 * For IR purposes, ignore function declarations that
+			 * appear inside other blocks.
+			 */
+			continue;
+		}
+
 		struct ir_val dummy = {0};
 		check(ir_expr(arena, a->u.block.item, ir, dst, &dummy));
 		/*
