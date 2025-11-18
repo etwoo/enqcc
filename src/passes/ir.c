@@ -612,6 +612,34 @@ ir_logical_op(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_call_args(Arena *arena,
+             const struct ast *a,
+             struct intermediate *ir,
+             struct ir_op **dst,
+             struct ir_op *caller,
+             size_t *pos)
+{
+	assert(a->node_type == NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
+
+	while (a != NULL && a->u.call_args.expr != NULL) {
+		struct ir_val arg_value = {0};
+		check(ir_expr(arena, a->u.call_args.expr, ir, dst, &arg_value));
+		assert(arg_value.subtype != IR_VAL_NONE);
+
+		assert(*pos < FUNCTION_PARAMETER_LIMIT);
+		ir_val_copy(&arg_value, &caller->args[*pos]);
+		*pos = *pos + 1;
+
+		a = a->u.call_args.next;
+		if (*dst != NULL) {
+			dst = &ir_op_list_back(*dst)->next;
+		}
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_call(Arena *arena,
         const struct ast *a,
         struct intermediate *ir,
@@ -627,27 +655,8 @@ ir_call(Arena *arena,
 
 	size_t pos = 0;
 	if (a->u.call.arguments != NULL) {
-		assert(a->u.call.arguments->node_type ==
-		       NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
-
-		for (struct ast *arguments = a->u.call.arguments;
-		     arguments != NULL;
-		     arguments = arguments->u.call_args.next) {
-			assert(arguments->u.call_args.expr != NULL);
-			struct ast *cur = arguments->u.call_args.expr;
-
-			struct ir_val arg_value = {0};
-			check(ir_expr(arena, cur, ir, dst, &arg_value));
-			assert(arg_value.subtype != IR_VAL_NONE);
-
-			assert(pos < FUNCTION_PARAMETER_LIMIT);
-			ir_val_copy(&arg_value, &caller->args[pos]);
-			++pos;
-
-			if (*dst != NULL) {
-				dst = &ir_op_list_back(*dst)->next;
-			}
-		}
+		struct ast *args = a->u.call.arguments;
+		check(ir_call_args(arena, args, ir, dst, caller, &pos));
 	}
 
 	caller->args[pos].subtype = IR_VAL_TEMPORARY_VARIABLE;
