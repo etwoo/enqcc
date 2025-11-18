@@ -1120,7 +1120,6 @@ parse_debug_print_ast_symbol(const char *description,
 }
 
 void
-// NOLINTNEXTLINE(readability-function-cognitive-complexity) // TODO rm
 parse_debug_print(const struct ast *a, size_t indent)
 {
 	assert(indent <= INT_MAX);
