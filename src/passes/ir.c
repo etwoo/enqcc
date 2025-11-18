@@ -108,20 +108,6 @@ ir_block(Arena *arena,
 
 		if (*dst != NULL) {
 			dst = &ir_op_list_back(*dst)->next;
-		} else {
-			/*
-			 * Sanity-check typical reasons for lack of new ir_op:
-			 *
-			 * - null expression
-			 * - declaration without an initialization expression
-			 */
-			struct ast *cur = a->u.block.item;
-			assert(cur->node_type ==
-			               NODE_FUNCTION_RETURN_STATEMENT ||
-			       cur->node_type == NODE_BLOCK ||
-			       cur->node_type == NODE_EXPRESSION_NULL ||
-			       (cur->node_type == NODE_DECLARATION &&
-			        cur->u.declare.init == NULL));
 		}
 	}
 
@@ -644,12 +630,15 @@ ir_call(Arena *arena,
 
 			struct ir_val arg_value = {0};
 			check(ir_expr(arena, cur, ir, dst, &arg_value));
+			assert(arg_value.subtype != IR_VAL_NONE);
 
 			assert(pos < FUNCTION_PARAMETER_LIMIT);
 			ir_val_copy(&arg_value, &caller->args[pos]);
 			++pos;
 
-			dst = &ir_op_list_back(*dst)->next;
+			if (*dst != NULL) {
+				dst = &ir_op_list_back(*dst)->next;
+			}
 		}
 	}
 
