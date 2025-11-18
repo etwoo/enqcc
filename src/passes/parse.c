@@ -16,6 +16,13 @@ enum {
 	NOT_YET_UNIQUE = -1,
 };
 
+static void
+map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
+{
+	dst->unique = src->unique;
+	dst->stype = src->stype;
+}
+
 static WARN_UNUSED result_t
 resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 {
@@ -29,17 +36,7 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 		                   var->name.sz);
 	}
 
-	switch (resolved->stype) {
-	case SYMBOL_VARIABLE:
-		break;
-	case SYMBOL_FUNCTION_DECLARATION:
-	case SYMBOL_FUNCTION_DEFINITION:
-		return make_result(ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE,
-		                   var->name.data,
-		                   var->name.sz);
-	}
-
-	var->unique = resolved->unique;
+	map_symbol_members(resolved, var);
 	return RESULT_OK;
 }
 
@@ -66,15 +63,14 @@ resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 		break;
 	}
 
-	callee->unique = resolved->unique;
+	map_symbol_members(resolved, callee);
 	return RESULT_OK;
 }
 
 static result_t
 resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
-static result_t resolve_function(Arena *arena,
-                                 struct ast *a,
-                                 struct symbol **sym) WARN_UNUSED;
+static result_t
+resolve_function(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
@@ -204,7 +200,7 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	                      SYMBOL_VARIABLE,
 	                      LINKAGE_NONE,
 	                      0));
-	a->u.declare.identifier.unique = (**sym).unique;
+	map_symbol_members(*sym, &a->u.declare.identifier);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
@@ -279,7 +275,7 @@ resolve_function_params_one(Arena *arena,
 	                      SYMBOL_VARIABLE,
 	                      LINKAGE_NONE,
 	                      0));
-	a->unique = (**sym).unique;
+	map_symbol_members(*sym, a);
 	return RESULT_OK;
 }
 
@@ -293,9 +289,7 @@ resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
-resolve_function(Arena *arena,
-                 struct ast *a,
-                 struct symbol **sym)
+resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 {
 	assert(a->node_type == NODE_FUNCTION);
 
@@ -315,13 +309,13 @@ resolve_function(Arena *arena,
 		                             : SYMBOL_FUNCTION_DECLARATION,
 		                      LINKAGE_EXTERNAL,
 		                      n_args));
-		a->u.function.identifier.unique = (**sym).unique;
+		map_symbol_members(*sym, &a->u.function.identifier);
 	} else if (is_def) {
-		a->u.function.identifier.unique = dup->unique;
+		map_symbol_members(dup, &a->u.function.identifier);
 		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
 		dup->stype = SYMBOL_FUNCTION_DEFINITION;
 	} else {
-		a->u.function.identifier.unique = dup->unique;
+		map_symbol_members(dup, &a->u.function.identifier);
 	}
 
 	struct symbol *before_params = *sym;
@@ -1116,6 +1110,23 @@ parse_debug_print_ast_symbol(const char *description,
 	      "",
 	      asym->unique,
 	      asym->unique == NOT_YET_UNIQUE ? " (not unique)" : "");
+
+	const char *symbol_type_as_str = NULL;
+	switch (asym->stype) {
+	case SYMBOL_VARIABLE:
+		symbol_type_as_str = "VARIABLE";
+		break;
+	case SYMBOL_FUNCTION_DECLARATION:
+		symbol_type_as_str = "FUNCTION DECLARATION";
+		break;
+	case SYMBOL_FUNCTION_DEFINITION:
+		symbol_type_as_str = "FUNCTION DEFINITION";
+		break;
+	}
+	debug("%*sIDENTIFIER.TYPE: %s",
+	      (int)indent + 1,
+	      "",
+	      symbol_type_as_str);
 }
 
 void

@@ -1,11 +1,13 @@
 #ifndef COMPILER_PASSES_PARSE_H
 #define COMPILER_PASSES_PARSE_H
 
+#include "passes/symbol.h"
 #include "sys/string_view.h"
 
 struct ast_symbol {
 	struct string_view name;
 	long long int unique;
+	enum symbol_type stype;
 };
 
 struct ast {

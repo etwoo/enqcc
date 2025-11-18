@@ -158,6 +158,19 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_var_usage(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	if (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE &&
+	    (a->u.var.stype == SYMBOL_FUNCTION_DECLARATION ||
+	     a->u.var.stype == SYMBOL_FUNCTION_DEFINITION)) {
+		return make_result(ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE,
+		                   a->u.var.name.data,
+		                   a->u.var.name.sz);
+	}
+	return RESULT_OK;
+}
+
 struct sema_fn_signature_state {
 	Arena *arena;
 	struct ast *ast_program_globals;
@@ -285,6 +298,9 @@ sema_typecheck(Arena *arena, struct ast *a)
 {
 	debug("Checking lvalues");
 	check(sema_walk(a, sema_lvalue, NULL));
+
+	debug("Checking variable usage");
+	check(sema_walk(a, sema_var_usage, NULL));
 
 	debug("Checking function signatures");
 	struct sema_fn_signature_state state = {0};
