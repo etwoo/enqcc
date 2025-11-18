@@ -273,12 +273,6 @@ resolve_function_params_one(Arena *arena,
                             struct ast_symbol *a,
                             struct symbol **sym)
 {
-	const struct symbol *dup = symbols_get(*sym, &a->name, true);
-	if (dup != NULL) {
-		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_PARAMETER,
-		                   dup->name.data,
-		                   dup->name.sz);
-	}
 	check(symbols_prepend(arena,
 	                      sym,
 	                      &a->name,

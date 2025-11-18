@@ -164,6 +164,35 @@ struct sema_fn_signature_state {
 	struct symbol *symbols;
 };
 
+static WARN_UNUSED result_t
+sema_fn_param_names(struct ast_symbol *params)
+{
+	struct ast_symbol *dup = NULL;
+
+	/* O(n^2) search over <params> for duplicates */
+	FOREACH_FUNCTION_PARAMETER (i, params) {
+		struct string_view *iname = &i->name;
+		FOREACH_FUNCTION_PARAMETER (j, i + 1) {
+			struct string_view *jname = &j->name;
+			if (iname->sz == jname->sz &&
+			    0 == strncmp(iname->data, jname->data, iname->sz)) {
+				dup = i;
+				break;
+			}
+		}
+		if (dup != NULL) {
+			break;
+		}
+	}
+
+	if (dup != NULL) {
+		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_PARAMETER,
+		                   dup->name.data,
+		                   dup->name.sz);
+	}
+	return RESULT_OK;
+}
+
 static WARN_UNUSED bool
 ast_contains(const struct ast *haystack, const struct ast *needle)
 {
@@ -198,6 +227,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			++n_args;
 		}
+		check(sema_fn_param_names(a->u.function.params));
 		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
 		break;
