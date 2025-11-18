@@ -21,12 +21,11 @@ enum symbol_linkage {
 };
 
 // TODO: for typedef support, add tracking for types (like variables)
-// TODO: change symbol table datastructure, avoid quadratic behavior in caller
 struct symbol {
 	struct string_view name;
 	enum symbol_type stype;
 	enum symbol_linkage linkage;
-	long long int n_args; /* int arg count; TODO: more types -> refactor */
+	long long int n_args; /* number of func params, if SYMBOL_FUNCTION_* */
 	long long int unique; /* unique ID for this symbol */
 	long long int level;  /* nesting level of symbol declaration */
 	bool level_delimiter; /* trigger new nesting level if prepending here */
