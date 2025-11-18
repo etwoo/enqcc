@@ -15,6 +15,7 @@ sema_walk(Arena *arena,
 		check(sema_walk(arena, a->u.program.globals, f, u));
 		break;
 	case NODE_FUNCTION:
+		check(f(arena, a, u));
 		if (a->u.function.block != NULL) {
 			check(sema_walk(arena, a->u.function.block, f, u));
 		}
@@ -80,7 +81,7 @@ sema_walk(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-sema_label_loops_impl(Arena *arena MAYBE_UNUSED, struct ast *a, void *userdata)
+sema_set_loop_id(Arena *arena MAYBE_UNUSED, struct ast *a, void *userdata)
 {
 	long long int *id = userdata;
 	switch (a->node_type) {
@@ -113,14 +114,18 @@ sema_label_loops(struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
 	*generator = 0;
-	check(sema_walk(NULL, a, sema_label_loops_impl, generator));
+	check(sema_walk(NULL, a, sema_set_loop_id, generator));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-sema_register_fn(Arena *arena, struct ast *a, struct symbol **s)
+sema_set_fn_signature(Arena *arena, struct ast *a, void *userdata)
 {
-	assert(a->node_type == NODE_FUNCTION);
+	if (a->node_type != NODE_FUNCTION) {
+		return RESULT_OK;
+	}
+
+	struct symbol **s = (struct symbol **)userdata;
 
 	long long int n_args = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
@@ -146,81 +151,10 @@ sema_register_fn(Arena *arena, struct ast *a, struct symbol **s)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-sema_typecheck_fn(Arena *arena, struct ast *a, struct symbol **s)
-{
-	switch (a->node_type) {
-	case NODE_PROGRAM:
-		check(sema_typecheck_fn(arena, a->u.program.globals, s));
-		break;
-	case NODE_FUNCTION:
-		check(sema_register_fn(arena, a, s));
-		if (a->u.function.block != NULL) {
-			check(sema_typecheck_fn(arena, a->u.function.block, s));
-		}
-		if (a->u.function.next != NULL) {
-			check(sema_typecheck_fn(arena, a->u.function.next, s));
-		}
-		break;
-	case NODE_BLOCK:
-		if (a->u.block.item != NULL) {
-			check(sema_typecheck_fn(arena, a->u.block.item, s));
-			if (a->u.block.next != NULL) {
-				check(sema_typecheck_fn(arena,
-				                        a->u.block.next,
-				                        s));
-			}
-		}
-		break;
-	case NODE_IF_ELSE:
-		check(sema_typecheck_fn(arena, a->u.if_.then_clause, s));
-		if (a->u.if_.else_clause != NULL) {
-			check(sema_typecheck_fn(arena,
-			                        a->u.if_.else_clause,
-			                        s));
-		}
-		break;
-	case NODE_LOOP: {
-		check(sema_typecheck_fn(arena, a->u.loop.body, s));
-		break;
-	}
-	case NODE_FUNCTION_RETURN_STATEMENT:
-	case NODE_DECLARATION:
-	case NODE_BREAK:
-	case NODE_CONTINUE:
-	case NODE_EXPRESSION_NULL:
-	case NODE_EXPRESSION_UNARY_NEGATE:
-	case NODE_EXPRESSION_UNARY_NOT:
-	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-	case NODE_EXPRESSION_PAREN_ENCLOSED:
-	case NODE_EXPRESSION_BINARY_ADD:
-	case NODE_EXPRESSION_BINARY_SUBTRACT:
-	case NODE_EXPRESSION_BINARY_MULTIPLY:
-	case NODE_EXPRESSION_BINARY_DIVIDE:
-	case NODE_EXPRESSION_BINARY_REMAINDER:
-	case NODE_EXPRESSION_LOGICAL_AND:
-	case NODE_EXPRESSION_LOGICAL_OR:
-	case NODE_EXPRESSION_COMPARE_EQUAL:
-	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
-	case NODE_EXPRESSION_COMPARE_LESS_THAN:
-	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
-	case NODE_EXPRESSION_COMPARE_MORE_THAN:
-	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-	case NODE_EXPRESSION_VARIABLE_USAGE:
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-	case NODE_EXPRESSION_FUNCTION_CALL:
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-	case NODE_CONSTANT_INT:
-		break;
-	}
-	return RESULT_OK;
-}
-
 result_t
 sema_typecheck(Arena *arena, struct ast *a)
 {
-	struct symbol *all_function_signatures = NULL;
-	check(sema_typecheck_fn(arena, a, &all_function_signatures));
+	struct symbol *symbols = NULL;
+	check(sema_walk(arena, a, sema_set_fn_signature, (void *)&symbols));
 	return RESULT_OK;
 }
