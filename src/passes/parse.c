@@ -34,7 +34,6 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 		break;
 	case SYMBOL_FUNCTION_DECLARATION:
 	case SYMBOL_FUNCTION_DEFINITION:
-		// TODO: move this check to sema.c
 		return make_result(ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE,
 		                   var->name.data,
 		                   var->name.sz);
