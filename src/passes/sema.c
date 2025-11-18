@@ -262,9 +262,9 @@ sema_fn_signature(struct ast *a, void *userdata)
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		fname = &a->u.call.identifier.name;
-		for (struct ast *argments = a->u.call.arguments;
-		     argments != NULL;
-		     argments = argments->u.call_args.next) {
+		for (struct ast *arguments = a->u.call.arguments;
+		     arguments != NULL;
+		     arguments = arguments->u.call_args.next) {
 			++n_args;
 		}
 		break;
