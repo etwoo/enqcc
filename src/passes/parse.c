@@ -44,9 +44,7 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 }
 
 static WARN_UNUSED result_t
-resolve_function_call(struct symbol *head,
-                      struct ast_symbol *callee,
-                      struct ast *args)
+resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(callee->unique == NOT_YET_UNIQUE);
@@ -69,21 +67,6 @@ resolve_function_call(struct symbol *head,
 	}
 
 	callee->unique = resolved->unique;
-
-	assert(args == NULL ||
-	       args->node_type == NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
-
-	long long int n_args = 0;
-	for (; args != NULL; args = args->u.call_args.next) {
-		++n_args;
-	}
-
-	if (n_args != resolved->n_args) {
-		return make_result(ERR_SEMA_TYPECHECK_FUNCTION_CALL_ARGUMENTS,
-		                   callee->name.data,
-		                   callee->name.sz);
-	}
-
 	return RESULT_OK;
 }
 
@@ -192,9 +175,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		check(resolve_function_call(*sym,
-		                            &a->u.call.identifier,
-		                            a->u.call.arguments));
+		check(resolve_function_call(*sym, &a->u.call.identifier));
 		if (a->u.call.arguments != NULL) {
 			check(resolve_expr(arena, a->u.call.arguments, sym));
 		}

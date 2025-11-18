@@ -172,19 +172,35 @@ static WARN_UNUSED result_t
 sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_fn_signature_state *state = userdata;
+	const struct string_view *fname = NULL;
+	long long int n_args = 0;
+	bool is_def = false;
+	bool is_def_or_decl = false;
 
 	switch (a->node_type) {
-	case NODE_FUNCTION:
-		break;
 	case NODE_PROGRAM:
 		state->ast_program_globals = a->u.program.globals;
 		return RESULT_OK;
+	case NODE_FUNCTION:
+		fname = &a->u.function.identifier.name;
+		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+			++n_args;
+		}
+		is_def = (a->u.function.block != NULL);
+		is_def_or_decl = true;
+		break;
+	case NODE_EXPRESSION_FUNCTION_CALL:
+		fname = &a->u.call.identifier.name;
+		for (struct ast *argments = a->u.call.arguments;
+		     argments != NULL;
+		     argments = argments->u.call_args.next) {
+			++n_args;
+		}
+		break;
 	default:
 		return RESULT_OK;
 	}
 
-	const struct string_view *fname = &a->u.function.identifier.name;
-	const bool is_def = (a->u.function.block != NULL);
 	if (is_def) {
 		assert(state->ast_program_globals != NULL);
 		bool allow_def = ast_contains(state->ast_program_globals, a);
@@ -195,14 +211,10 @@ sema_fn_signature(struct ast *a, void *userdata)
 		}
 	}
 
-	long long int n_args = 0;
-	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-		++n_args;
-	}
-
 	struct symbol **s = &state->symbols;
 	struct symbol *dup = symbols_get(*s, fname, false);
 	if (dup == NULL) {
+		assert(is_def_or_decl);
 		check(symbols_prepend(state->arena,
 		                      s,
 		                      fname,
@@ -215,9 +227,12 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                   dup->name.data,
 		                   dup->name.sz);
 	} else if (n_args != dup->n_args) {
-		return make_result(ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION,
-		                   fname->data,
-		                   fname->sz);
+		return make_result(
+			is_def_or_decl
+				? ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION
+				: ERR_SEMA_TYPECHECK_FUNCTION_CALL_ARGUMENTS,
+			fname->data,
+			fname->sz);
 	}
 
 	return RESULT_OK;
