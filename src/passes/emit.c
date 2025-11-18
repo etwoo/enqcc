@@ -47,6 +47,21 @@ get_label_prefix(enum platform plat)
 	return result;
 }
 
+static WARN_UNUSED const char *
+get_function_prefix(enum platform plat)
+{
+	const char *result = NULL;
+	switch (plat) {
+	case PLATFORM_MACOS:
+		result = MACOS_FUNC_PREFIX;
+		break;
+	case PLATFORM_LINUX:
+		result = "";
+		break;
+	}
+	return result;
+}
+
 static void
 emit_asm_footer(enum platform plat, int fd)
 {
@@ -267,6 +282,20 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	dprintf(fd, "\n");
 }
 
+static void
+emit_asm_fn(const struct asm_function *fn, enum platform plat, int fd)
+{
+	const char *fprefix = get_function_prefix(plat);
+	const struct string_view *fname = &fn->identifier;
+	dprintf(fd, "%s%.*s:\n", fprefix, (int)fname->sz, fname->data);
+	dprintf(fd, "\t%s %s\n", STR_OP_PUSH_QUAD, STR_REG_RBP);
+	dprintf(fd, "\t%s %s, %s\n", STR_OP_MOV_QUAD, STR_REG_RSP, STR_REG_RBP);
+
+	for (struct asm_op *op = fn->ops; op != NULL; op = op->next) {
+		emit_asm_op(op, plat, fd);
+	}
+}
+
 void
 emit_asm(const struct assembly *cg, enum platform plat, int fd)
 {
@@ -274,16 +303,10 @@ emit_asm(const struct assembly *cg, enum platform plat, int fd)
 		return;
 	}
 
-	const char *fprefix = plat == PLATFORM_MACOS ? MACOS_FUNC_PREFIX : "";
-	dprintf(fd, "\t.globl %smain\n", fprefix);
+	dprintf(fd, "\t.globl %smain\n", get_function_prefix(plat));
 
-	const struct string_view *fname = &cg->function.identifier;
-	dprintf(fd, "%s%.*s:\n", fprefix, (int)fname->sz, fname->data);
-	dprintf(fd, "\t%s %s\n", STR_OP_PUSH_QUAD, STR_REG_RBP);
-	dprintf(fd, "\t%s %s, %s\n", STR_OP_MOV_QUAD, STR_REG_RSP, STR_REG_RBP);
-
-	for (struct asm_op *op = cg->function.ops; op != NULL; op = op->next) {
-		emit_asm_op(op, plat, fd);
+	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
+		emit_asm_fn(f, plat, fd);
 	}
 
 	emit_asm_footer(plat, fd);

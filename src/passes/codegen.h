@@ -59,10 +59,11 @@ struct asm_op {
 struct asm_function {
 	struct string_view identifier;
 	struct asm_op *ops;
+	struct asm_function *next;
 };
 
 struct assembly {
-	struct asm_function function;
+	struct asm_function *functions;
 };
 
 extern const long long int CODEGEN_BYTES_PER_VALUE;
