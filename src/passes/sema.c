@@ -81,7 +81,7 @@ sema_walk(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-sema_set_loop_id(Arena *arena MAYBE_UNUSED, struct ast *a, void *userdata)
+sema_loop_id(Arena *arena MAYBE_UNUSED, struct ast *a, void *userdata)
 {
 	long long int *id = userdata;
 	switch (a->node_type) {
@@ -114,12 +114,12 @@ sema_label_loops(struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
 	*generator = 0;
-	check(sema_walk(NULL, a, sema_set_loop_id, generator));
+	check(sema_walk(NULL, a, sema_loop_id, generator));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-sema_set_fn_signature(Arena *arena, struct ast *a, void *userdata)
+sema_fn_signature(Arena *arena, struct ast *a, void *userdata)
 {
 	if (a->node_type != NODE_FUNCTION) {
 		return RESULT_OK;
@@ -133,15 +133,21 @@ sema_set_fn_signature(Arena *arena, struct ast *a, void *userdata)
 	}
 
 	const struct string_view *fname = &a->u.function.identifier.name;
+	const bool is_def = (a->u.function.block != NULL);
 
 	struct symbol *dup = symbols_get(*s, fname, false);
 	if (dup == NULL) {
 		check(symbols_prepend(arena,
 		                      s,
 		                      fname,
-		                      SYMBOL_FUNCTION_DECLARATION,
+		                      is_def ? SYMBOL_FUNCTION_DEFINITION
+		                             : SYMBOL_FUNCTION_DECLARATION,
 		                      LINKAGE_EXTERNAL,
 		                      n_args));
+	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
+		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION,
+		                   dup->name.data,
+		                   dup->name.sz);
 	} else if (n_args != dup->n_args) {
 		return make_result(ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION,
 		                   fname->data,
@@ -154,7 +160,7 @@ sema_set_fn_signature(Arena *arena, struct ast *a, void *userdata)
 result_t
 sema_typecheck(Arena *arena, struct ast *a)
 {
-	struct symbol *symbols = NULL;
-	check(sema_walk(arena, a, sema_set_fn_signature, (void *)&symbols));
+	struct symbol *fn_signatures = NULL;
+	check(sema_walk(arena, a, sema_fn_signature, (void *)&fn_signatures));
 	return RESULT_OK;
 }

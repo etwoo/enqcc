@@ -348,12 +348,6 @@ resolve_function(Arena *arena,
 
 	struct symbol *dup =
 		symbols_get(*sym, &a->u.function.identifier.name, false);
-	if (is_def && dup != NULL && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
-		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION,
-		                   dup->name.data,
-		                   dup->name.sz);
-	}
-
 	if (dup == NULL ||                   /* new symbol in this scope  */
 	    dup->stype == SYMBOL_VARIABLE) { /* function shadows variable */
 		long long int n_args = 0;
