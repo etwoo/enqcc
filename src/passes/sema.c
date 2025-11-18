@@ -5,54 +5,48 @@
 #include "sys/debug.h"
 
 static WARN_UNUSED result_t
-sema_label_impl(struct ast *a, long long int *id)
+sema_walk(Arena *arena,
+          struct ast *a,
+          result_t (*f)(Arena *arena, struct ast *a, void *userdata),
+          void *u)
 {
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		check(sema_label_impl(a->u.program.globals, id));
+		check(sema_walk(arena, a->u.program.globals, f, u));
 		break;
 	case NODE_FUNCTION:
 		if (a->u.function.block != NULL) {
-			check(sema_label_impl(a->u.function.block, id));
+			check(sema_walk(arena, a->u.function.block, f, u));
 		}
 		if (a->u.function.next != NULL) {
-			check(sema_label_impl(a->u.function.next, id));
+			check(sema_walk(arena, a->u.function.next, f, u));
 		}
 		break;
 	case NODE_BLOCK:
 		if (a->u.block.item != NULL) {
-			check(sema_label_impl(a->u.block.item, id));
+			check(sema_walk(arena, a->u.block.item, f, u));
 			if (a->u.block.next != NULL) {
-				check(sema_label_impl(a->u.block.next, id));
+				check(sema_walk(arena, a->u.block.next, f, u));
 			}
 		}
 		break;
 	case NODE_IF_ELSE:
-		check(sema_label_impl(a->u.if_.then_clause, id));
+		check(sema_walk(arena, a->u.if_.then_clause, f, u));
 		if (a->u.if_.else_clause != NULL) {
-			check(sema_label_impl(a->u.if_.else_clause, id));
+			check(sema_walk(arena, a->u.if_.else_clause, f, u));
 		}
 		break;
-	case NODE_LOOP: {
-		a->u.loop.label_start = ++*id;
-		a->u.loop.label_continue = ++*id; /* see NODE_CONTINUE case */
-		a->u.loop.label_end = ++*id;      /* see NODE_BREAK case */
-		check(sema_label_impl(a->u.loop.precond, id));
-		check(sema_label_impl(a->u.loop.body, id));
-		check(sema_label_impl(a->u.loop.postcond, id));
+	case NODE_LOOP:
+		check(f(arena, a, u));
+		check(sema_walk(arena, a->u.loop.precond, f, u));
+		check(sema_walk(arena, a->u.loop.body, f, u));
+		check(sema_walk(arena, a->u.loop.postcond, f, u));
 		break;
-	}
 	case NODE_BREAK:
-		if (*id <= 0) {
-			return make_result(ERR_SEMA_BREAK_OUTSIDE);
-		}
-		a->u.num = *id; /* most recent label_end */
+		check(f(arena, a, u));
 		break;
 	case NODE_CONTINUE:
-		if (*id <= 0) {
-			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
-		}
-		a->u.num = *id - 1; /* most recent label_continue */
+		check(f(arena, a, u));
 		break;
 	case NODE_DECLARATION:
 	case NODE_FUNCTION_RETURN_STATEMENT:
@@ -85,12 +79,41 @@ sema_label_impl(struct ast *a, long long int *id)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_label_loops_impl(Arena *arena MAYBE_UNUSED, struct ast *a, void *userdata)
+{
+	long long int *id = userdata;
+	switch (a->node_type) {
+	case NODE_LOOP:
+		a->u.loop.label_start = ++*id;
+		a->u.loop.label_continue = ++*id; /* see NODE_CONTINUE case */
+		a->u.loop.label_end = ++*id;      /* see NODE_BREAK case */
+		break;
+	case NODE_BREAK:
+		if (*id <= 0) {
+			return make_result(ERR_SEMA_BREAK_OUTSIDE);
+		}
+		a->u.num = *id; /* most recent label_end */
+		break;
+	case NODE_CONTINUE:
+		if (*id <= 0) {
+			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
+		}
+		a->u.num = *id - 1; /* most recent label_continue */
+		break;
+	default:
+		break;
+	}
+
+	return RESULT_OK;
+}
+
 result_t
 sema_label_loops(struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
 	*generator = 0;
-	check(sema_label_impl(a, generator));
+	check(sema_walk(NULL, a, sema_label_loops_impl, generator));
 	return RESULT_OK;
 }
 
