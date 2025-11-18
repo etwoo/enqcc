@@ -53,16 +53,6 @@ resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 		                   callee->name.sz);
 	}
 
-	switch (resolved->stype) {
-	case SYMBOL_VARIABLE:
-		return make_result(ERR_SEMA_TYPECHECK_VARIABLE_AS_CALLABLE,
-		                   callee->name.data,
-		                   callee->name.sz);
-	case SYMBOL_FUNCTION_DECLARATION:
-	case SYMBOL_FUNCTION_DEFINITION:
-		break;
-	}
-
 	map_symbol_members(resolved, callee);
 	return RESULT_OK;
 }
