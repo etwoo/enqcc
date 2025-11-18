@@ -329,14 +329,6 @@ resolve_function(Arena *arena,
 {
 	assert(a->node_type == NODE_FUNCTION);
 
-	struct symbol *local =
-		symbols_get(*sym, &a->u.function.identifier.name, true);
-	if (local != NULL && local->linkage == LINKAGE_NONE) {
-		return make_result(ERR_SEMA_LINKAGE_NONE_REDEFINED_EXTERNAL,
-		                   local->name.data,
-		                   local->name.sz);
-	}
-
 	const bool is_def = (a->u.function.block != NULL);
 	struct symbol *dup =
 		symbols_get(*sym, &a->u.function.identifier.name, false);
