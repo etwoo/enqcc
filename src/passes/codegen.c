@@ -546,7 +546,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 				debug("Map PSEUDO %lld to STACK %lld",
 				      arg->u.num,
 				      arg->u.num - range[0]);
-				arg->u.num -= range[0];
+				arg->u.num -= (range[0] - 1);
 			}
 		}
 	}
@@ -564,10 +564,13 @@ codegen_replace_pseudoregisters(struct assembly *cg)
 		debug("Found pseudoregister ID range: [%lld, %lld]",
 		      range[0],
 		      range[1]);
+		if (range[0] == LLONG_MAX || range[1] == 0) {
+			continue;
+		}
 
 		assert(f->stack_usage == 0);
-		f->stack_usage +=
-			CODEGEN_BYTES_PER_VALUE * (range[1] - range[0]);
+		f->stack_usage = 1 + (range[1] - range[0]);
+		f->stack_usage *= CODEGEN_BYTES_PER_VALUE;
 		debug("Updated stack usage of %.*s to %lld",
 		      (int)f->identifier.sz,
 		      f->identifier.data,
