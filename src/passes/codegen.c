@@ -469,9 +469,7 @@ codegen_function_params(Arena *arena, struct ir_val *ir, struct asm_op **dst)
 }
 
 static WARN_UNUSED result_t
-codegen_function(Arena *arena,
-                 struct ir_function *f,
-                 struct asm_function **dst)
+codegen_function(Arena *arena, struct ir_function *f, struct asm_function **dst)
 {
 	assert(dst != NULL);
 	*dst = arena_alloc(arena, sizeof(**dst));
