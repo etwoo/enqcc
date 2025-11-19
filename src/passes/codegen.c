@@ -306,38 +306,14 @@ codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED enum asm_register
-codegen_position_to_register(long long int pos)
-{
-	assert(pos < ARGS_PASSED_VIA_REGISTER);
-
-	enum asm_register reg = 0;
-	switch (pos) {
-	case 0:
-		reg = ASM_REGISTER_DI;
-		break;
-	case 1:
-		reg = ASM_REGISTER_SI;
-		break;
-	case 2:
-		reg = ASM_REGISTER_DX;
-		break;
-	case 3:
-		reg = ASM_REGISTER_CX;
-		break;
-	case 4:
-		reg = ASM_REGISTER_R8;
-		break;
-	case 5: /* NOLINT(*-magic-numbers) */ // TODO: rm?
-		reg = ASM_REGISTER_R9;
-		break;
-	default:
-		assert(0); /* logic error in caller */
-		break;
-	}
-
-	return reg;
-}
+static const unsigned POS_TO_REG[] = {
+	ASM_REGISTER_DI,
+	ASM_REGISTER_SI,
+	ASM_REGISTER_DX,
+	ASM_REGISTER_CX,
+	ASM_REGISTER_R8,
+	ASM_REGISTER_R9,
+};
 
 static WARN_UNUSED result_t
 codegen_copy_reg_to_pseudo(Arena *arena,
@@ -345,10 +321,13 @@ codegen_copy_reg_to_pseudo(Arena *arena,
                            long long int pos,
                            struct asm_op **dst)
 {
+	assert(pos < ARGS_PASSED_VIA_REGISTER);
+	assert(ARGS_PASSED_VIA_REGISTER <= ARRAY_SIZE(POS_TO_REG));
+
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
-	(**dst).args[0].u.reg = codegen_position_to_register(pos);
+	(**dst).args[0].u.reg = POS_TO_REG[pos];
 	codegen_set_operand_pseudo(&(**dst).args[1], ir);
 	return RESULT_OK;
 }

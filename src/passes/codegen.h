@@ -3,19 +3,6 @@
 
 #include "sys/string_view.h"
 
-enum asm_register {
-	ASM_REGISTER_AX,
-	ASM_REGISTER_CX,  /* 4th argument to functions */
-	ASM_REGISTER_DX,  /* 3rd argument to functions */
-	ASM_REGISTER_DI,  /* 1st argument to functions */
-	ASM_REGISTER_SI,  /* 2nd argument to functions */
-	ASM_REGISTER_R8,  /* 5th argument to functions */
-	ASM_REGISTER_R9,  /* 6th argument to functions */
-	ASM_REGISTER_R10, /* aka scratch */
-	ASM_REGISTER_R11, /* aka scratch */
-	ASM_REGISTER_RSP, /* aka frame pointer */
-};
-
 struct asm_operand {
 	enum {
 		ASM_OPERAND_NONE,
@@ -27,7 +14,18 @@ struct asm_operand {
 	} operand_type;
 	union {
 		long long int num;
-		enum asm_register reg;
+		enum {
+			ASM_REGISTER_AX,
+			ASM_REGISTER_CX,  /* 4th argument to functions */
+			ASM_REGISTER_DX,  /* 3rd argument to functions */
+			ASM_REGISTER_DI,  /* 1st argument to functions */
+			ASM_REGISTER_SI,  /* 2nd argument to functions */
+			ASM_REGISTER_R8,  /* 5th argument to functions */
+			ASM_REGISTER_R9,  /* 6th argument to functions */
+			ASM_REGISTER_R10, /* aka scratch */
+			ASM_REGISTER_R11, /* aka scratch */
+			ASM_REGISTER_RSP, /* aka frame pointer */
+		} reg;
 	} u;
 };
 
