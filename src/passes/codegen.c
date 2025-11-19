@@ -458,9 +458,8 @@ static WARN_UNUSED result_t
 codegen_function_params(Arena *arena,
                         struct intermediate *ir,
                         long long int n_args,
-                        struct asm_function *cg)
+                        struct asm_op **dst)
 {
-	struct asm_op **dst = &cg->ops;
 	for (long long int i = 0; i < n_args; ++i) {
 		if (i < ARGS_PASSED_VIA_REGISTER) {
 			check(codegen_copy_reg_to_pseudo(arena, ir, i, dst));
@@ -484,7 +483,17 @@ codegen_function(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = f->identifier;
-	check(codegen_function_params(arena, ir, f->n_args, *dst));
+
+	struct asm_op **dst_ops = &(**dst).ops;
+
+	assert(*dst_ops == NULL);
+	check(codegen_function_params(arena, ir, f->n_args, dst_ops));
+
+	while (*dst_ops != NULL) {
+		dst_ops = &(**dst_ops).next;
+	}
+
+	assert(*dst_ops == NULL);
 	check(codegen_statement(arena, f->ops, &(**dst).ops));
 
 	return RESULT_OK;
