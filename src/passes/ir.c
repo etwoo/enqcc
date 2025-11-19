@@ -653,10 +653,11 @@ ir_call(Arena *arena,
 	caller->opcode = IR_OP_CALL;
 	caller->fun = a->u.call.identifier.name;
 
+	struct ir_op *inner = NULL;
 	size_t pos = 0;
 	if (a->u.call.arguments != NULL) {
 		struct ast *args = a->u.call.arguments;
-		check(ir_call_args(arena, args, ir, dst, caller, &pos));
+		check(ir_call_args(arena, args, ir, &inner, caller, &pos));
 	}
 
 	caller->args[pos].subtype = IR_VAL_TEMPORARY_VARIABLE;
@@ -665,7 +666,7 @@ ir_call(Arena *arena,
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&caller->args[pos], return_value);
 
-	*dst = caller;
+	*dst = ir_op_list_concat(inner, caller);
 	return RESULT_OK;
 }
 
