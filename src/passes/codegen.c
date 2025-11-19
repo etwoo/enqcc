@@ -10,7 +10,6 @@
 #include <stdbool.h>
 
 const long long int CODEGEN_BYTES_PER_VALUE = 4;
-static const long long int ARGS_PASSED_VIA_REGISTER = 6;
 
 static WARN_UNUSED result_t
 codegen_alloc_op(Arena *arena, struct asm_op **dst)
@@ -306,7 +305,10 @@ codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	return RESULT_OK;
 }
 
-static const unsigned REGISTER_FOR_ARGPOS[] = {
+enum {
+	ARGS_PASSED_VIA_REGISTER = 6,
+};
+static const unsigned REGISTER_FOR_ARG[] = {
 	ASM_REGISTER_DI,
 	ASM_REGISTER_SI,
 	ASM_REGISTER_DX,
@@ -322,12 +324,13 @@ codegen_copy_reg_to_pseudo(Arena *arena,
                            struct asm_op **dst)
 {
 	assert(pos < ARGS_PASSED_VIA_REGISTER);
-	assert(ARGS_PASSED_VIA_REGISTER <= ARRAY_SIZE(REGISTER_FOR_ARGPOS));
+	static_assert(ARGS_PASSED_VIA_REGISTER <= ARRAY_SIZE(REGISTER_FOR_ARG),
+	              "table does not cover all register-passed arg positions");
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
-	(**dst).args[0].u.reg = REGISTER_FOR_ARGPOS[pos];
+	(**dst).args[0].u.reg = REGISTER_FOR_ARG[pos];
 	codegen_set_operand_pseudo(&(**dst).args[1], ir);
 	return RESULT_OK;
 }
