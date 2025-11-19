@@ -296,9 +296,12 @@ emit_asm(const struct assembly *cg, enum platform plat, int fd)
 		return;
 	}
 
-	dprintf(fd, "\t.globl %smain\n", get_function_prefix(plat));
-
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
+		dprintf(fd,
+		        "\t.globl %s%.*s\n",
+		        get_function_prefix(plat),
+		        (int)f->identifier.sz,
+		        f->identifier.data);
 		emit_asm_fn(f, plat, fd);
 	}
 
