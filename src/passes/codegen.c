@@ -8,6 +8,7 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <sys/param.h> /* for MIN() and MAX() */
 
 const long long int CODEGEN_BYTES_PER_VALUE = 4;
 static const long long int CODEGEN_BYTES_PER_STACK_PUSH = 8;
@@ -522,14 +523,30 @@ codegen_init(Arena *arena, struct intermediate *ir, struct assembly **cg)
 }
 
 static WARN_UNUSED result_t
-codegen_replace_pseudoregisters_fn(struct asm_function *cg)
+codegen_replace_pseudoregisters_fn(struct asm_function *cg,
+                                   long long int range[2],
+                                   bool preflight)
 {
 	for (struct asm_op *op = cg->ops; op != NULL; op = op->next) {
 		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 			struct asm_operand *arg = &op->args[i];
-			if (arg->operand_type == ASM_OPERAND_PSEUDO_REGISTER) {
+			if (arg->operand_type != ASM_OPERAND_PSEUDO_REGISTER) {
+				continue;
+			}
+
+			if (preflight) {
+				assert(range != NULL);
+				range[0] = MIN(range[0], arg->u.num);
+				range[1] = MAX(range[1], arg->u.num);
+				continue;
+			} else {
 				arg->operand_type = ASM_OPERAND_STACK;
-				arg->u.num = cg->stack_usage++;
+				assert(arg->u.num >= range[0]);
+				assert(arg->u.num <= range[1]);
+				debug("Map PSEUDO %lld to STACK %lld",
+				      arg->u.num,
+				      arg->u.num - range[0]);
+				arg->u.num -= range[0];
 			}
 		}
 	}
@@ -540,9 +557,24 @@ result_t
 codegen_replace_pseudoregisters(struct assembly *cg)
 {
 	debug("Replacing pseudoregisters with stack addresses");
+
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
-		check(codegen_replace_pseudoregisters_fn(f));
+		long long int range[2] = {0, 0};
+		check(codegen_replace_pseudoregisters_fn(f, range, true));
+		debug("Found pseudoregister ID range: [%lld, %lld]",
+		      range[0],
+		      range[1]);
+
+		assert(f->stack_usage == 0);
+		f->stack_usage += range[1] - range[0];
+		debug("Updated stack usage of %.*s to %lld",
+		      (int)f->identifier.sz,
+		      f->identifier.data,
+		      f->stack_usage);
+
+		check(codegen_replace_pseudoregisters_fn(f, range, false));
 	}
+
 	return RESULT_OK;
 }
 
