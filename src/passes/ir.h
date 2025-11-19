@@ -40,7 +40,7 @@ struct ir_op {
 		IR_OP_CALL,
 	} opcode;
 	struct string_view fun;
-	struct ir_val args[FUNCTION_PARAMETER_LIMIT + 1];
+	struct ir_val args[FUNCTION_PARAMETER_LIMIT];
 	struct ir_op *next;
 };
 
