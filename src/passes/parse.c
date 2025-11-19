@@ -1347,7 +1347,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 		debug("%*sARGUMENT", (int)indent, "");
-		parse_debug_print(a->u.call_args.expr, indent);
+		parse_debug_print(a->u.call_args.expr, indent + 1);
 		if (a->u.call_args.next != NULL) {
 			parse_debug_print(a->u.call_args.next, indent);
 		}
