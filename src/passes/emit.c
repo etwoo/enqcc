@@ -76,6 +76,7 @@ emit_asm_operand(const struct asm_operand *o,
                  enum register_alias ralias,
                  int fd)
 {
+	const char *fprefix = get_function_prefix(plat);
 	const char *label_prefix = get_label_prefix(plat);
 
 	switch (o->operand_type) {
@@ -161,7 +162,22 @@ emit_asm_operand(const struct asm_operand *o,
 		        o->u.num);
 		break;
 	case ASM_OPERAND_CALL_TARGET_FUNCTION:
-		dprintf(fd, "%.*s", (int)o->u.function.sz, o->u.function.data);
+		dprintf(fd,
+		        "%s%.*s",
+		        fprefix,
+		        (int)o->u.function.sz,
+		        o->u.function.data);
+		/*
+		 * XXX: on Linux, CALL currently lack support for functions
+		 * outside of the current translation unit, which require a
+		 * @PLT suffix. One possible way to implement this: pass
+		 * information about functions with definitions (i.e not just
+		 * declarations) from sema.c to emit.c.
+		 *
+		 * In particular, sema_fn_signature_state() already tracks the
+		 * necessary information. emit_asm_operand() could use this to
+		 * determine which functions require the @PLT suffix.
+		 */
 		break;
 	}
 }
