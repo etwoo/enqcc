@@ -7,6 +7,7 @@
 #include "sys/debug.h"
 
 #include <assert.h>
+#include <limits.h> /* for LLONG_MAX */
 #include <stdbool.h>
 #include <sys/param.h> /* for MIN() and MAX() */
 
@@ -43,7 +44,7 @@ codegen_alloc_modify_rsp(Arena *arena,
 	(**dst).opcode =
 		add ? ASM_OP_BINARY_ADD_QUAD : ASM_OP_BINARY_SUBTRACT_QUAD;
 	(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	(**dst).args[0].u.num = CODEGEN_BYTES_PER_VALUE * n;
+	(**dst).args[0].u.num = n;
 	(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
 	(**dst).args[1].u.reg = ASM_REGISTER_RSP;
 	return RESULT_OK;
@@ -538,7 +539,6 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 				assert(range != NULL);
 				range[0] = MIN(range[0], arg->u.num);
 				range[1] = MAX(range[1], arg->u.num);
-				continue;
 			} else {
 				arg->operand_type = ASM_OPERAND_STACK;
 				assert(arg->u.num >= range[0]);
@@ -559,14 +559,15 @@ codegen_replace_pseudoregisters(struct assembly *cg)
 	debug("Replacing pseudoregisters with stack addresses");
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
-		long long int range[2] = {0, 0};
+		long long int range[2] = {LLONG_MAX, 0};
 		check(codegen_replace_pseudoregisters_fn(f, range, true));
 		debug("Found pseudoregister ID range: [%lld, %lld]",
 		      range[0],
 		      range[1]);
 
 		assert(f->stack_usage == 0);
-		f->stack_usage += range[1] - range[0];
+		f->stack_usage +=
+			CODEGEN_BYTES_PER_VALUE * (range[1] - range[0]);
 		debug("Updated stack usage of %.*s to %lld",
 		      (int)f->identifier.sz,
 		      f->identifier.data,
