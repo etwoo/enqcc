@@ -114,6 +114,7 @@ static void
 codegen_set_operand_pseudo(struct asm_operand *dst, struct intermediate *ir)
 {
 	dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
+	// TODO: target PSEUDO here should match the PSEUDO used for the associated argument in the actual function body; right now there's no overlap, and the TMPVAR that gets populated here doesn't actually get used! this means functions that take arguments don't work?!? example: tests/chapter_9/valid/arguments_in_registers/single_arg
 	dst->u.num = ir->env.generator++;
 }
 
