@@ -712,6 +712,14 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
+	if (is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
+		token_consume(tok);
+		check(parse_alloc(arena, dst, NODE_BLOCK));
+		dst = &(**dst).u.block.item;
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+		return RESULT_OK;
+	}
+
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(parse_alloc(arena, dst, NODE_BLOCK));
 		struct ast **item_dst = &(**dst).u.block.item;
