@@ -306,7 +306,7 @@ codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	return RESULT_OK;
 }
 
-static const unsigned POSITION_TO_REGISTER[] = {
+static const unsigned REGISTER_FOR_ARGPOS[] = {
 	ASM_REGISTER_DI,
 	ASM_REGISTER_SI,
 	ASM_REGISTER_DX,
@@ -322,12 +322,12 @@ codegen_copy_reg_to_pseudo(Arena *arena,
                            struct asm_op **dst)
 {
 	assert(pos < ARGS_PASSED_VIA_REGISTER);
-	assert(ARGS_PASSED_VIA_REGISTER <= ARRAY_SIZE(POSITION_TO_REGISTER));
+	assert(ARGS_PASSED_VIA_REGISTER <= ARRAY_SIZE(REGISTER_FOR_ARGPOS));
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
-	(**dst).args[0].u.reg = POSITION_TO_REGISTER[pos];
+	(**dst).args[0].u.reg = REGISTER_FOR_ARGPOS[pos];
 	codegen_set_operand_pseudo(&(**dst).args[1], ir);
 	return RESULT_OK;
 }
