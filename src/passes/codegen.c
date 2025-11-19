@@ -168,7 +168,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	}
 
 	long long int stack_args = 0;
-	for (size_t i = n_args; i >= ARGS_PASSED_VIA_REGISTER; --i) {
+	for (size_t i = n_args; i > ARGS_PASSED_VIA_REGISTER; --i) {
 		size_t pos = i - 1;
 		check(codegen_alloc_op(arena, dst));
 		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT) {
