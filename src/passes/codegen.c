@@ -537,6 +537,16 @@ codegen_replace_pseudoregisters(struct assembly *cg)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED long long int
+round_up_to_multiple_of(long long int n, long long int base)
+{
+	const long long int rounded = (((n + base - 1) / base)) * base;
+	assert(rounded >= n);
+	assert(rounded - n < base);
+	assert(rounded % base == 0);
+	return rounded;
+}
+
 static WARN_UNUSED result_t
 codegen_fixup_alloc_stack(Arena *arena, struct asm_function *cg)
 {
@@ -545,7 +555,8 @@ codegen_fixup_alloc_stack(Arena *arena, struct asm_function *cg)
 	}
 
 	struct asm_op *alloc_stack = NULL;
-	check(codegen_alloc_subq_rsp(arena, &alloc_stack, cg->stack_usage));
+	const long long int fix = round_up_to_multiple_of(cg->stack_usage, 16);
+	check(codegen_alloc_subq_rsp(arena, &alloc_stack, fix));
 	codegen_op_list_prepend(alloc_stack, &cg->ops);
 	return RESULT_OK;
 }
