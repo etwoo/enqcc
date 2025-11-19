@@ -439,12 +439,17 @@ codegen_copy_stack_to_pseudo(Arena *arena,
 
 	const long long int stack_base = 16;
 	const long long int stack_bytes_per = CODEGEN_BYTES_PER_STACK_PUSH;
-	const long long int stack_offset = pos - ARGS_PASSED_VIA_REGISTER;
+	const long long int stack_pos = pos - ARGS_PASSED_VIA_REGISTER;
+	const long long int stack_bytes_offset =
+		(stack_base + (stack_bytes_per * stack_pos));
+	assert(stack_bytes_offset % CODEGEN_BYTES_PER_VALUE == 0);
+	const long long int logical_offset =
+		-1 * stack_bytes_offset / CODEGEN_BYTES_PER_VALUE;
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
-	(**dst).args[0].u.num = stack_base + (stack_bytes_per * stack_offset);
+	(**dst).args[0].u.num = logical_offset;
 	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 	(**dst).args[1].u.num = ir[pos].num;
 
