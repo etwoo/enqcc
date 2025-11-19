@@ -207,8 +207,8 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
-	codegen_map_operand(&src->args[n_args], &(**dst).args[0]);
-	codegen_set_operand_eax(&(**dst).args[1]);
+	codegen_set_operand_eax(&(**dst).args[0]);
+	codegen_map_operand(&src->args[n_args], &(**dst).args[1]);
 	return RESULT_OK;
 }
 
