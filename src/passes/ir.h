@@ -46,6 +46,7 @@ struct ir_op {
 
 struct ir_function {
 	struct string_view identifier;
+	long long int n_args;
 	struct ir_op *ops;
 	struct ir_function *next;
 };

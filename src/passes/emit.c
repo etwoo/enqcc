@@ -130,6 +130,14 @@ emit_asm_operand(const struct asm_operand *o,
 		case ASM_REGISTER_RSP:
 			dprintf(fd, "%s", STR_REG_RSP);
 			break;
+		case ASM_REGISTER_CX:
+		case ASM_REGISTER_DI:
+		case ASM_REGISTER_SI:
+		case ASM_REGISTER_R8:
+		case ASM_REGISTER_R9:
+			assert(0 && "emit_asm unimplemented for this register");
+			// TODO: emit_asm for new registers
+			break;
 		}
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:

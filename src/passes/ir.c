@@ -769,7 +769,11 @@ ir_function(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	struct ir_function *f = *dst;
+
 	f->identifier = a->u.function.identifier.name;
+	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+		f->n_args++;
+	}
 	check(ir_block(arena, a->u.function.block, ir, &f->ops));
 
 	/*
@@ -812,6 +816,7 @@ ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 	for (; cur != NULL; cur = cur->u.function.next) {
 		if (cur->u.function.block != NULL) {
 			check(ir_function(arena, cur, ir, dst));
+			assert(*dst != NULL); /* return_0 fallback guarantee */
 			dst = &(**dst).next;
 		}
 	}

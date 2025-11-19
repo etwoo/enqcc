@@ -10,6 +10,7 @@
 #include <stdbool.h>
 
 const long long int CODEGEN_BYTES_PER_VALUE = 4;
+static const long long int ARGS_PASSED_VIA_REGISTER = 6;
 
 static WARN_UNUSED result_t
 codegen_alloc_op(Arena *arena, struct asm_op **dst)
@@ -64,6 +65,13 @@ codegen_set_operand_r11(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
 	dst->u.reg = ASM_REGISTER_R11;
+}
+
+static void
+codegen_set_operand_pseudo(struct asm_operand *dst, struct intermediate *ir)
+{
+	dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
+	dst->u.num = ir->env.generator++;
 }
 
 static void
@@ -276,6 +284,9 @@ codegen_statement_one(Arena *arena,
 		break;
 	case IR_OP_CALL:
 		assert(0 && "codegen for function call: unimplemented");
+		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
+			// TODO: create copy ops
+		}
 		break;
 	}
 
@@ -295,9 +306,95 @@ codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED enum asm_register
+codegen_position_to_register(long long int pos)
+{
+	assert(pos < ARGS_PASSED_VIA_REGISTER);
+
+	enum asm_register reg = 0;
+	switch (pos) {
+	case 0:
+		reg = ASM_REGISTER_DI;
+		break;
+	case 1:
+		reg = ASM_REGISTER_SI;
+		break;
+	case 2:
+		reg = ASM_REGISTER_DX;
+		break;
+	case 3:
+		reg = ASM_REGISTER_CX;
+		break;
+	case 4:
+		reg = ASM_REGISTER_R8;
+		break;
+	case 5: /* NOLINT(*-magic-numbers) */ // TODO: rm?
+		reg = ASM_REGISTER_R9;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	return reg;
+}
+
+static WARN_UNUSED result_t
+codegen_copy_reg_to_pseudo(Arena *arena,
+                           struct intermediate *ir,
+                           long long int pos,
+                           struct asm_op **dst)
+{
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
+	(**dst).args[0].u.reg = codegen_position_to_register(pos);
+	codegen_set_operand_pseudo(&(**dst).args[1], ir);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_copy_stack_to_pseudo(Arena *arena,
+                             struct intermediate *ir,
+                             long long int pos,
+                             struct asm_op **dst)
+{
+	const long long int stack_base = 16;
+	const long long int stack_bytes_per_value = 8;
+	const long long int stack_offset = ARGS_PASSED_VIA_REGISTER + 1;
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
+	(**dst).args[0].u.num =
+		stack_base + (stack_bytes_per_value * (pos - stack_offset));
+	codegen_set_operand_pseudo(&(**dst).args[1], ir);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_function_params(Arena *arena,
+                        struct intermediate *ir,
+                        long long int n_args,
+                        struct asm_function *cg)
+{
+	struct asm_op **dst = &cg->ops;
+	for (long long int i = 0; i < n_args; ++i) {
+		if (i < ARGS_PASSED_VIA_REGISTER) {
+			check(codegen_copy_reg_to_pseudo(arena, ir, i, dst));
+		} else {
+			check(codegen_copy_stack_to_pseudo(arena, ir, i, dst));
+		}
+		dst = &(**dst).next;
+	}
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 codegen_function(Arena *arena,
-                 const struct ir_function *ir,
+                 struct intermediate *ir,
+                 const struct ir_function *f,
                  struct asm_function **dst)
 {
 	assert(dst != NULL);
@@ -305,26 +402,27 @@ codegen_function(Arena *arena,
 	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
 	memset(*dst, 0, sizeof(**dst));
 
-	(**dst).identifier = ir->identifier;
-	check(codegen_statement(arena, ir->ops, &(**dst).ops));
+	(**dst).identifier = f->identifier;
+	check(codegen_function_params(arena, ir, f->n_args, *dst));
+	check(codegen_statement(arena, f->ops, &(**dst).ops));
 
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 codegen_program(Arena *arena,
-                const struct intermediate *ir,
+                struct intermediate *ir,
                 struct asm_function **dst)
 {
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
-		check(codegen_function(arena, f, dst));
+		check(codegen_function(arena, ir, f, dst));
 		dst = &(**dst).next;
 	}
 	return RESULT_OK;
 }
 
 result_t
-codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
+codegen_init(Arena *arena, struct intermediate *ir, struct assembly **cg)
 {
 	*cg = arena_alloc(arena, sizeof(**cg));
 	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);
@@ -341,6 +439,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg)
 			struct asm_operand *arg = &op->args[i];
 			if (arg->operand_type == ASM_OPERAND_PSEUDO_REGISTER) {
 				arg->operand_type = ASM_OPERAND_STACK;
+				arg->u.num = cg->stack_usage++;
 			}
 		}
 	}
@@ -358,16 +457,17 @@ codegen_replace_pseudoregisters(struct assembly *cg)
 }
 
 static WARN_UNUSED result_t
-codegen_fixup_alloc_stack(Arena *arena,
-                          const struct intermediate *ir,
-                          struct asm_function *cg)
+codegen_fixup_alloc_stack(Arena *arena, struct asm_function *cg)
 {
+	if (cg->stack_usage == 0) {
+		return RESULT_OK;
+	}
+
 	struct asm_op *alloc_stack = NULL;
 	check(codegen_alloc_op(arena, &alloc_stack));
 	alloc_stack->opcode = ASM_OP_BINARY_SUBTRACT_QUAD;
 	alloc_stack->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	alloc_stack->args[0].u.num =
-		CODEGEN_BYTES_PER_VALUE * (ir->env.generator - 1);
+	alloc_stack->args[0].u.num = CODEGEN_BYTES_PER_VALUE * cg->stack_usage;
 	alloc_stack->args[1].operand_type = ASM_OPERAND_REGISTER;
 	alloc_stack->args[1].u.reg = ASM_REGISTER_RSP;
 
@@ -588,15 +688,11 @@ fix_mul(struct asm_op *cur, struct fix *trampoline)
 }
 
 static WARN_UNUSED result_t
-codegen_fixup_instructions_fn(Arena *arena,
-                              const struct intermediate *ir,
-                              struct asm_function *cg)
+codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
 {
 	debug("Fixing up invalid instructions");
 
-	if (ir->env.generator > 1) {
-		check(codegen_fixup_alloc_stack(arena, ir, cg));
-	}
+	check(codegen_fixup_alloc_stack(arena, cg));
 
 	struct asm_op *prev = NULL;
 	struct asm_op *cur = cg->ops;
@@ -617,12 +713,10 @@ codegen_fixup_instructions_fn(Arena *arena,
 }
 
 result_t
-codegen_fixup_instructions(Arena *arena,
-                           const struct intermediate *ir,
-                           struct assembly *cg)
+codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 {
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
-		check(codegen_fixup_instructions_fn(arena, ir, f));
+		check(codegen_fixup_instructions_fn(arena, f));
 	}
 	return RESULT_OK;
 }
@@ -641,8 +735,23 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		case ASM_REGISTER_AX:
 			debug("  EAX");
 			break;
+		case ASM_REGISTER_CX:
+			debug("  ECX");
+			break;
 		case ASM_REGISTER_DX:
 			debug("  EDX");
+			break;
+		case ASM_REGISTER_DI:
+			debug("  EDI");
+			break;
+		case ASM_REGISTER_SI:
+			debug("  ESI");
+			break;
+		case ASM_REGISTER_R8:
+			debug("  R8");
+			break;
+		case ASM_REGISTER_R9:
+			debug("  R9");
 			break;
 		case ASM_REGISTER_R10:
 			debug("  R10");
@@ -763,6 +872,7 @@ codegen_debug_print(const struct assembly *cg)
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
+		debug("  STACK_USAGE %lld", f->stack_usage);
 
 		for (struct asm_op *op = f->ops; op != NULL; op = op->next) {
 			codegen_debug_print_op(op);

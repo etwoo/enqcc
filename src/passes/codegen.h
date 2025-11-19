@@ -3,6 +3,19 @@
 
 #include "sys/string_view.h"
 
+enum asm_register {
+	ASM_REGISTER_AX,
+	ASM_REGISTER_CX,  /* 4th argument to functions */
+	ASM_REGISTER_DX,  /* 3rd argument to functions */
+	ASM_REGISTER_DI,  /* 1st argument to functions */
+	ASM_REGISTER_SI,  /* 2nd argument to functions */
+	ASM_REGISTER_R8,  /* 5th argument to functions */
+	ASM_REGISTER_R9,  /* 6th argument to functions */
+	ASM_REGISTER_R10, /* aka scratch */
+	ASM_REGISTER_R11, /* aka scratch */
+	ASM_REGISTER_RSP, /* aka frame pointer */
+};
+
 struct asm_operand {
 	enum {
 		ASM_OPERAND_NONE,
@@ -14,13 +27,7 @@ struct asm_operand {
 	} operand_type;
 	union {
 		long long int num;
-		enum {
-			ASM_REGISTER_AX,
-			ASM_REGISTER_DX,
-			ASM_REGISTER_R10, /* aka scratch */
-			ASM_REGISTER_R11, /* aka scratch */
-			ASM_REGISTER_RSP, /* aka frame pointer */
-		} reg;
+		enum asm_register reg;
 	} u;
 };
 
@@ -50,6 +57,8 @@ struct asm_op {
 		ASM_OP_SET_IF_LT,
 		ASM_OP_SET_IF_LTE,
 		ASM_OP_LABEL,
+		//ASM_OP_PUSH, // TODO: impl function call
+		//ASM_OP_CALL, // TODO: impl function call
 		ASM_OP_RET,
 	} opcode;
 	struct asm_operand args[2];
@@ -58,6 +67,7 @@ struct asm_op {
 
 struct asm_function {
 	struct string_view identifier;
+	long long int stack_usage;
 	struct asm_op *ops;
 	struct asm_function *next;
 };

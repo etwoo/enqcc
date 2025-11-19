@@ -103,7 +103,7 @@ compile(Arena *arena,
 	check(codegen_replace_pseudoregisters(cg));
 	codegen_debug_print(cg);
 
-	check(codegen_fixup_instructions(arena, ir, cg));
+	check(codegen_fixup_instructions(arena, cg));
 	codegen_debug_print(cg);
 
 	if (action != ACTION_ALL_PASSES) {
