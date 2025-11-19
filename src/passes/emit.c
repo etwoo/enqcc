@@ -14,23 +14,31 @@ static const char MACOS_LABEL_PREFIX[] = "L";
 static const char CUSTOM_LABEL_ID[] = "boba_";
 static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_POP_QUAD[] = "popq";
-static const char STR_OP_PUSH_QUAD[] = "pushq";
+static const char *const STR_OP_PUSH_QUAD = "pushq";
 static const char STR_OP_RET[] = "ret";
-static const char STR_REG_EAX[] = "%eax";
-static const char STR_REG_EAX_LOWEST_BYTE[] = "%al";
-static const char STR_REG_EDX[] = "%edx";
-static const char STR_REG_EDX_LOWEST_BYTE[] = "%dl";
-static const char STR_REG_R10[] = "%r10d";
-static const char STR_REG_R10_LOWEST_BYTE[] = "%r10b";
-static const char STR_REG_R11[] = "%r11d";
-static const char STR_REG_R11_LOWEST_BYTE[] = "%r11b";
 static const char STR_REG_RSP[] = "%rsp"; /* aka frame pointer */
 static const char STR_REG_RBP[] = "%rbp"; /* aka stack pointer */
 
 enum register_alias {
+	REGISTER_ALIAS_8BYTE,
 	REGISTER_ALIAS_4BYTE,
 	REGISTER_ALIAS_1BYTE,
 };
+
+/* clang-format off */
+static const char *const REGISTER_AS_STR[][3] = {
+	{"%rax", "%eax" , "%al"  },
+	{"%rcx", "%ecx" , "%cl"  },
+	{"%rdx", "%edx" , "%dl"  },
+	{"%rdi", "%edi" , "%dil" },
+	{"%rsi", "%esi" , "%sil" },
+	{"%r8" , "%r8d" , "%r8b" },
+	{"%r9" , "%r9d" , "%r9b" },
+	{"%r10", "%r10d", "%r10b"},
+	{"%r11", "%r11d", "%r11b"},
+	{"%rsp", "%rsp" , "%r11d"},
+};
+/* clang-format on */
 
 static WARN_UNUSED const char *
 get_label_prefix(enum platform plat)
@@ -87,59 +95,7 @@ emit_asm_operand(const struct asm_operand *o,
 		dprintf(fd, "$%lld", o->u.num);
 		break;
 	case ASM_OPERAND_REGISTER:
-		switch (o->u.reg) {
-		case ASM_REGISTER_AX:
-			switch (ralias) {
-			case REGISTER_ALIAS_4BYTE:
-				dprintf(fd, "%s", STR_REG_EAX);
-				break;
-			case REGISTER_ALIAS_1BYTE:
-				dprintf(fd, "%s", STR_REG_EAX_LOWEST_BYTE);
-				break;
-			}
-			break;
-		case ASM_REGISTER_DX:
-			switch (ralias) {
-			case REGISTER_ALIAS_4BYTE:
-				dprintf(fd, "%s", STR_REG_EDX);
-				break;
-			case REGISTER_ALIAS_1BYTE:
-				dprintf(fd, "%s", STR_REG_EDX_LOWEST_BYTE);
-				break;
-			}
-			break;
-		case ASM_REGISTER_R10:
-			switch (ralias) {
-			case REGISTER_ALIAS_4BYTE:
-				dprintf(fd, "%s", STR_REG_R10);
-				break;
-			case REGISTER_ALIAS_1BYTE:
-				dprintf(fd, "%s", STR_REG_R10_LOWEST_BYTE);
-				break;
-			}
-			break;
-		case ASM_REGISTER_R11:
-			switch (ralias) {
-			case REGISTER_ALIAS_4BYTE:
-				dprintf(fd, "%s", STR_REG_R11);
-				break;
-			case REGISTER_ALIAS_1BYTE:
-				dprintf(fd, "%s", STR_REG_R11_LOWEST_BYTE);
-				break;
-			}
-			break;
-		case ASM_REGISTER_RSP:
-			dprintf(fd, "%s", STR_REG_RSP);
-			break;
-		case ASM_REGISTER_CX:
-		case ASM_REGISTER_DI:
-		case ASM_REGISTER_SI:
-		case ASM_REGISTER_R8:
-		case ASM_REGISTER_R9:
-			assert(0 && "emit_asm unimplemented for this register");
-			// TODO: emit_asm for new registers
-			break;
-		}
+		dprintf(fd, "%s", REGISTER_AS_STR[o->u.reg][ralias]);
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		assert(0 && "PSEUDOREGISTER should have been eliminated");
@@ -186,7 +142,7 @@ static void
 emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
 	const char *label_prefix = get_label_prefix(plat);
-	char *print_opcode = NULL;
+	const char *print_opcode = NULL;
 	enum register_alias ralias = REGISTER_ALIAS_4BYTE;
 
 	if (op->opcode != ASM_OP_LABEL) {
@@ -282,10 +238,11 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		        op->args[0].u.num);
 		break;
 	case ASM_OP_PUSH:
-		assert(0 && "TODO emit_asm for PUSH");
+		print_opcode = STR_OP_PUSH_QUAD;
+		ralias = REGISTER_ALIAS_8BYTE;
 		break;
 	case ASM_OP_CALL:
-		assert(0 && "TODO emit_asm for CALL");
+		print_opcode = "call";
 		break;
 	case ASM_OP_RET:
 		dprintf(fd,
