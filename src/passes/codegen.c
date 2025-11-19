@@ -785,8 +785,6 @@ fix_mul(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED result_t
 codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
 {
-	debug("Fixing up invalid instructions");
-
 	check(codegen_fixup_alloc_stack(arena, cg));
 
 	struct asm_op *prev = NULL;
@@ -810,6 +808,7 @@ codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
 result_t
 codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 {
+	debug("Fixing up invalid instructions");
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		check(codegen_fixup_instructions_fn(arena, f));
 	}
