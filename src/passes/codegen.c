@@ -494,7 +494,7 @@ codegen_function(Arena *arena,
 	}
 
 	assert(*dst_ops == NULL);
-	check(codegen_statement(arena, f->ops, &(**dst).ops));
+	check(codegen_statement(arena, f->ops, dst_ops));
 
 	return RESULT_OK;
 }
