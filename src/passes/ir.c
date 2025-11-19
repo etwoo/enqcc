@@ -770,12 +770,15 @@ ir_function(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	struct ir_function *f = *dst;
-
 	f->identifier = a->u.function.identifier.name;
-	// TODO: copy TMPVAR IDs -- or just whatever the ir_val is -- for each of the ast_symbol params -- basically u.function.params[i].unique
+
+	size_t i = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-		f->n_args++;
+		f->params[i].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		f->params[i].num = cur->unique;
+		++i;
 	}
+
 	check(ir_block(arena, a->u.function.block, ir, &f->ops));
 
 	/*

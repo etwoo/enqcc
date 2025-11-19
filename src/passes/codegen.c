@@ -111,15 +111,6 @@ codegen_set_operand_r11(struct asm_operand *dst)
 }
 
 static void
-codegen_set_operand_pseudo(struct asm_operand *dst, struct intermediate *ir)
-{
-	dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
-	// TODO: target PSEUDO here should match the PSEUDO used for the associated argument in the actual function body; right now there's no overlap, and the TMPVAR that gets populated here doesn't actually get used! this means functions that take arguments don't work?!? example: tests/chapter_9/valid/arguments_in_registers/single_arg
-	// TODO: maybe ir_function->n_args should be augmented with an array of ir_val structs of type IR_VAL_TEMPORARY_VARIABLE that hold the TMPVAR IDs that we generated for each of the PARAMS? we have this info when we debug-print the AST, so it should be straightforward to thread it through the IR into CG
-	dst->u.num = ir->env.generator++;
-}
-
-static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->subtype) {
@@ -421,7 +412,7 @@ codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 
 static WARN_UNUSED result_t
 codegen_copy_reg_to_pseudo(Arena *arena,
-                           struct intermediate *ir,
+                           struct ir_val *ir,
                            long long int pos,
                            struct asm_op **dst)
 {
@@ -433,13 +424,14 @@ codegen_copy_reg_to_pseudo(Arena *arena,
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
 	(**dst).args[0].u.reg = REGISTER_FOR_ARG[pos];
-	codegen_set_operand_pseudo(&(**dst).args[1], ir);
+	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
+	(**dst).args[1].u.num = ir[pos].num;
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 codegen_copy_stack_to_pseudo(Arena *arena,
-                             struct intermediate *ir,
+                             struct ir_val *ir,
                              long long int pos,
                              struct asm_op **dst)
 {
@@ -453,18 +445,19 @@ codegen_copy_stack_to_pseudo(Arena *arena,
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
 	(**dst).args[0].u.num = stack_base + (stack_bytes_per * stack_offset);
-	codegen_set_operand_pseudo(&(**dst).args[1], ir);
+	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
+	(**dst).args[1].u.num = ir[pos].num;
 
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-codegen_function_params(Arena *arena,
-                        struct intermediate *ir,
-                        long long int n_args,
-                        struct asm_op **dst)
+codegen_function_params(Arena *arena, struct ir_val *ir, struct asm_op **dst)
 {
-	for (long long int i = 0; i < n_args; ++i) {
+	for (long long int i = 0; i < FUNCTION_PARAMETER_LIMIT; ++i) {
+		if (ir[i].subtype == IR_VAL_NONE) {
+			break;
+		}
 		if (i < ARGS_PASSED_VIA_REGISTER) {
 			check(codegen_copy_reg_to_pseudo(arena, ir, i, dst));
 		} else {
@@ -477,8 +470,7 @@ codegen_function_params(Arena *arena,
 
 static WARN_UNUSED result_t
 codegen_function(Arena *arena,
-                 struct intermediate *ir,
-                 const struct ir_function *f,
+                 struct ir_function *f,
                  struct asm_function **dst)
 {
 	assert(dst != NULL);
@@ -491,7 +483,7 @@ codegen_function(Arena *arena,
 	struct asm_op **dst_ops = &(**dst).ops;
 
 	assert(*dst_ops == NULL);
-	check(codegen_function_params(arena, ir, f->n_args, dst_ops));
+	check(codegen_function_params(arena, f->params, dst_ops));
 
 	while (*dst_ops != NULL) {
 		dst_ops = &(**dst_ops).next;
@@ -509,7 +501,7 @@ codegen_program(Arena *arena,
                 struct asm_function **dst)
 {
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
-		check(codegen_function(arena, ir, f, dst));
+		check(codegen_function(arena, f, dst));
 		dst = &(**dst).next;
 	}
 	return RESULT_OK;
