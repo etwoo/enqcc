@@ -10,6 +10,18 @@
 #include <stdbool.h>
 
 const long long int CODEGEN_BYTES_PER_VALUE = 4;
+static const long long int CODEGEN_BYTES_PER_STACK_PUSH = 8;
+enum {
+	ARGS_PASSED_VIA_REGISTER = 6,
+};
+static const unsigned REGISTER_FOR_ARG[] = {
+	ASM_REGISTER_DI,
+	ASM_REGISTER_SI,
+	ASM_REGISTER_DX,
+	ASM_REGISTER_CX,
+	ASM_REGISTER_R8,
+	ASM_REGISTER_R9,
+};
 
 static WARN_UNUSED result_t
 codegen_alloc_op(Arena *arena, struct asm_op **dst)
@@ -17,6 +29,36 @@ codegen_alloc_op(Arena *arena, struct asm_op **dst)
 	*dst = arena_alloc(arena, sizeof(**dst));
 	check_if((dst) == NULL, ERR_CODEGEN_ALLOC);
 	memset(*dst, 0, sizeof(**dst));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_alloc_modify_rsp(Arena *arena,
+                         struct asm_op **dst,
+                         bool add,
+                         long long int n)
+{
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode =
+		add ? ASM_OP_BINARY_ADD_QUAD : ASM_OP_BINARY_SUBTRACT_QUAD;
+	(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+	(**dst).args[0].u.num = CODEGEN_BYTES_PER_VALUE * n;
+	(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
+	(**dst).args[1].u.reg = ASM_REGISTER_RSP;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_alloc_subq_rsp(Arena *arena, struct asm_op **dst, long long int n)
+{
+	check(codegen_alloc_modify_rsp(arena, dst, false, n));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_alloc_addq_rsp(Arena *arena, struct asm_op **dst, long long int n)
+{
+	check(codegen_alloc_modify_rsp(arena, dst, true, n));
 	return RESULT_OK;
 }
 
@@ -97,6 +139,77 @@ static void
 codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 {
 	memcpy(dst, src, sizeof(*dst));
+}
+
+static WARN_UNUSED result_t
+codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
+{
+	assert(src->opcode == IR_OP_CALL);
+	assert(src->fun.data != NULL && src->fun.sz > 0);
+
+	size_t n_args = 0;
+	for (size_t i = 0; i < ARRAY_SIZE(src->args); ++i) {
+		if (src->args[i].subtype == IR_VAL_NONE) {
+			break;
+		}
+		++n_args;
+	}
+	assert(n_args > 0); /* one arg minimum, for return value at least */
+	--n_args;
+
+	const long long int stack_padding = n_args % 2 == 1 ? 8 : 0;
+	if (stack_padding > 0) {
+		check(codegen_alloc_subq_rsp(arena, dst, stack_padding));
+		dst = &(**dst).next;
+	}
+
+	for (size_t i = 0; i < n_args && i < ARGS_PASSED_VIA_REGISTER; ++i) {
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[i], &(**dst).args[0]);
+		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
+		(**dst).args[1].u.reg = REGISTER_FOR_ARG[i];
+		dst = &(**dst).next;
+	}
+
+	long long int stack_args = 0;
+	for (size_t i = n_args; i >= ARGS_PASSED_VIA_REGISTER; --i) {
+		size_t pos = i - 1;
+		check(codegen_alloc_op(arena, dst));
+		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT) {
+			(**dst).opcode = ASM_OP_PUSH;
+			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
+		} else {
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
+			codegen_set_operand_eax(&(**dst).args[1]);
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_PUSH;
+			codegen_set_operand_eax(&(**dst).args[0]);
+		}
+		dst = &(**dst).next;
+		++stack_args;
+	}
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_CALL;
+	(**dst).args[0].operand_type = ASM_OPERAND_CALL_TARGET_FUNCTION;
+	(**dst).args[0].u.function = src->fun;
+	dst = &(**dst).next;
+
+	const long long int stack_deallocate =
+		(CODEGEN_BYTES_PER_STACK_PUSH * stack_args) + stack_padding;
+	if (stack_deallocate > 0) {
+		check(codegen_alloc_addq_rsp(arena, dst, stack_deallocate));
+		dst = &(**dst).next;
+	}
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_map_operand(&src->args[n_args], &(**dst).args[0]);
+	codegen_set_operand_eax(&(**dst).args[1]);
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
@@ -282,10 +395,7 @@ codegen_statement_one(Arena *arena,
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		break;
 	case IR_OP_CALL:
-		assert(0 && "codegen for function call: unimplemented");
-		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
-			// TODO: create copy ops
-		}
+		check(codegen_op_call(arena, src, dst));
 		break;
 	}
 
@@ -304,18 +414,6 @@ codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	}
 	return RESULT_OK;
 }
-
-enum {
-	ARGS_PASSED_VIA_REGISTER = 6,
-};
-static const unsigned REGISTER_FOR_ARG[] = {
-	ASM_REGISTER_DI,
-	ASM_REGISTER_SI,
-	ASM_REGISTER_DX,
-	ASM_REGISTER_CX,
-	ASM_REGISTER_R8,
-	ASM_REGISTER_R9,
-};
 
 static WARN_UNUSED result_t
 codegen_copy_reg_to_pseudo(Arena *arena,
@@ -341,15 +439,16 @@ codegen_copy_stack_to_pseudo(Arena *arena,
                              long long int pos,
                              struct asm_op **dst)
 {
+	assert(pos >= ARGS_PASSED_VIA_REGISTER);
+
 	const long long int stack_base = 16;
-	const long long int stack_bytes_per_value = 8;
-	const long long int stack_offset = ARGS_PASSED_VIA_REGISTER + 1;
+	const long long int stack_bytes_per = CODEGEN_BYTES_PER_STACK_PUSH;
+	const long long int stack_offset = pos - ARGS_PASSED_VIA_REGISTER;
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
-	(**dst).args[0].u.num =
-		stack_base + (stack_bytes_per_value * (pos - stack_offset));
+	(**dst).args[0].u.num = stack_base + (stack_bytes_per * stack_offset);
 	codegen_set_operand_pseudo(&(**dst).args[1], ir);
 
 	return RESULT_OK;
@@ -446,13 +545,7 @@ codegen_fixup_alloc_stack(Arena *arena, struct asm_function *cg)
 	}
 
 	struct asm_op *alloc_stack = NULL;
-	check(codegen_alloc_op(arena, &alloc_stack));
-	alloc_stack->opcode = ASM_OP_BINARY_SUBTRACT_QUAD;
-	alloc_stack->args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	alloc_stack->args[0].u.num = CODEGEN_BYTES_PER_VALUE * cg->stack_usage;
-	alloc_stack->args[1].operand_type = ASM_OPERAND_REGISTER;
-	alloc_stack->args[1].u.reg = ASM_REGISTER_RSP;
-
+	check(codegen_alloc_subq_rsp(arena, &alloc_stack, cg->stack_usage));
 	codegen_op_list_prepend(alloc_stack, &cg->ops);
 	return RESULT_OK;
 }
@@ -756,6 +849,11 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		debug("  LABEL %lld", operand->u.num);
 		break;
+	case ASM_OPERAND_CALL_TARGET_FUNCTION:
+		debug("  FUNCTION %.*s",
+		      (int)operand->u.function.sz,
+		      operand->u.function.data);
+		break;
 	}
 }
 
@@ -775,6 +873,7 @@ codegen_debug_print_op(const struct asm_op *op)
 		debug("NOT");
 		break;
 	case ASM_OP_BINARY_ADD:
+	case ASM_OP_BINARY_ADD_QUAD:
 		debug("ADD");
 		break;
 	case ASM_OP_BINARY_SUBTRACT:
@@ -834,6 +933,12 @@ codegen_debug_print_op(const struct asm_op *op)
 		break;
 	case ASM_OP_LABEL:
 		debug("MARK_LABEL");
+		break;
+	case ASM_OP_PUSH:
+		debug("PUSH");
+		break;
+	case ASM_OP_CALL:
+		debug("CALL");
 		break;
 	case ASM_OP_RET:
 		debug("RET");

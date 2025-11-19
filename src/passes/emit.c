@@ -160,6 +160,9 @@ emit_asm_operand(const struct asm_operand *o,
 		        CUSTOM_LABEL_ID,
 		        o->u.num);
 		break;
+	case ASM_OPERAND_CALL_TARGET_FUNCTION:
+		dprintf(fd, "%.*s", (int)o->u.function.sz, o->u.function.data);
+		break;
 	}
 }
 
@@ -186,6 +189,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_BINARY_ADD:
 		print_opcode = "addl";
+		break;
+	case ASM_OP_BINARY_ADD_QUAD:
+		print_opcode = "addq";
 		break;
 	case ASM_OP_BINARY_SUBTRACT:
 		print_opcode = "subl";
@@ -258,6 +264,12 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		        label_prefix,
 		        CUSTOM_LABEL_ID,
 		        op->args[0].u.num);
+		break;
+	case ASM_OP_PUSH:
+		assert(0 && "TODO emit_asm for PUSH");
+		break;
+	case ASM_OP_CALL:
+		assert(0 && "TODO emit_asm for CALL");
 		break;
 	case ASM_OP_RET:
 		dprintf(fd,

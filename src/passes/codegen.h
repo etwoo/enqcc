@@ -11,6 +11,7 @@ struct asm_operand {
 		ASM_OPERAND_PSEUDO_REGISTER,
 		ASM_OPERAND_STACK,
 		ASM_OPERAND_JUMP_TARGET_LABEL,
+		ASM_OPERAND_CALL_TARGET_FUNCTION,
 	} operand_type;
 	union {
 		long long int num;
@@ -26,6 +27,7 @@ struct asm_operand {
 			ASM_REGISTER_R11, /* aka scratch */
 			ASM_REGISTER_RSP, /* aka frame pointer */
 		} reg;
+		struct string_view function;
 	} u;
 };
 
@@ -35,6 +37,7 @@ struct asm_op {
 		ASM_OP_UNARY_NEG,
 		ASM_OP_UNARY_NOT,
 		ASM_OP_BINARY_ADD,
+		ASM_OP_BINARY_ADD_QUAD,
 		ASM_OP_BINARY_SUBTRACT,
 		ASM_OP_BINARY_SUBTRACT_QUAD,
 		ASM_OP_BINARY_MULTIPLY,
@@ -55,8 +58,8 @@ struct asm_op {
 		ASM_OP_SET_IF_LT,
 		ASM_OP_SET_IF_LTE,
 		ASM_OP_LABEL,
-		//ASM_OP_PUSH, // TODO: impl function call
-		//ASM_OP_CALL, // TODO: impl function call
+		ASM_OP_PUSH,
+		ASM_OP_CALL,
 		ASM_OP_RET,
 	} opcode;
 	struct asm_operand args[2];
