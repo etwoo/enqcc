@@ -772,6 +772,7 @@ ir_function(Arena *arena,
 	struct ir_function *f = *dst;
 
 	f->identifier = a->u.function.identifier.name;
+	// TODO: copy TMPVAR IDs -- or just whatever the ir_val is -- for each of the ast_symbol params -- basically u.function.params[i].unique
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 		f->n_args++;
 	}
