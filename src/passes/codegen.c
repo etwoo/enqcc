@@ -477,7 +477,7 @@ codegen_function_params(Arena *arena,
 
 static WARN_UNUSED result_t
 codegen_function(Arena *arena,
-                 const struct ir_function *f,
+                 const struct ir_function *ir,
                  struct asm_function **dst)
 {
 	assert(dst != NULL);
@@ -485,19 +485,19 @@ codegen_function(Arena *arena,
 	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
 	memset(*dst, 0, sizeof(**dst));
 
-	(**dst).identifier = f->identifier;
+	(**dst).identifier = ir->identifier;
 
 	struct asm_op **dst_ops = &(**dst).ops;
 
 	assert(*dst_ops == NULL);
-	check(codegen_function_params(arena, f->params, dst_ops));
+	check(codegen_function_params(arena, ir->params, dst_ops));
 
 	while (*dst_ops != NULL) {
 		dst_ops = &(**dst_ops).next;
 	}
 
 	assert(*dst_ops == NULL);
-	check(codegen_statement(arena, f->ops, dst_ops));
+	check(codegen_statement(arena, ir->ops, dst_ops));
 
 	return RESULT_OK;
 }
