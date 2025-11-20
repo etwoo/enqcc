@@ -488,7 +488,6 @@ codegen_function(Arena *arena,
 	(**dst).identifier = ir->identifier;
 
 	struct asm_op **dst_ops = &(**dst).ops;
-
 	assert(*dst_ops == NULL);
 	check(codegen_function_params(arena, ir->params, dst_ops));
 
