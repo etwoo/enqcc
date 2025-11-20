@@ -849,7 +849,7 @@ ir_init(Arena *arena,
 static const struct {
 	const char *name;
 	size_t required_args;
-} OPCODE_NAMES[] = {FOREACH_IR_OPCODE(TO_STR_AND_ARG_COUNT)};
+} OPCODE_NAMES[] = {FOREACH_IR_OPCODE(TO_STR_AND_N_ARGS)};
 #undef TO_STR_AND_N_ARGS
 
 static void

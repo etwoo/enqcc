@@ -1127,19 +1127,24 @@ parse_debug_print_ast_symbol(const char *description,
 	      symbol_type_as_str);
 }
 
+#define TO_STR(node_type) #node_type,
+static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODETYPE(TO_STR)};
+#undef TO_STR
+
 void
 parse_debug_print(const struct ast *a, size_t indent)
 {
 	assert(indent <= INT_MAX);
+	debug("%*s%s", (int)indent, "", NODETYPE_NAMES[a->node_type]);
+
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		debug("%*sPROGRAM", (int)indent, "");
 		parse_debug_print(a->u.program.globals, indent + 1);
 		break;
 	case NODE_FUNCTION:
-		parse_debug_print_ast_symbol("FUNCTION",
+		parse_debug_print_ast_symbol("NAME",
 		                             &a->u.function.identifier,
-		                             indent);
+		                             indent + 1);
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             cur,
@@ -1154,7 +1159,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_BLOCK:
-		debug("%*sBLOCK ITEM", (int)indent, "");
 		if (a->u.block.item != NULL) {
 			parse_debug_print(a->u.block.item, indent + 1);
 			if (a->u.block.next != NULL) {
@@ -1172,7 +1176,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_IF_ELSE:
-		debug("%*sIF", (int)indent, "");
 		debug("%*sCONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.if_.condition, indent + 2);
 		debug("%*sTHEN", (int)indent + 1, "");
@@ -1183,7 +1186,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_LOOP:
-		debug("%*sLOOP", (int)indent, "");
 		debug("%*sLOOP ID %lld%s",
 		      (int)indent + 1,
 		      "",
@@ -1210,7 +1212,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.loop.label_end == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_BREAK:
-		debug("%*sBREAK", (int)indent, "");
 		debug("%*sLOOP ID %lld%s",
 		      (int)indent + 1,
 		      "",
@@ -1218,7 +1219,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_CONTINUE:
-		debug("%*sCONTINUE", (int)indent, "");
 		debug("%*sLOOP ID %lld%s",
 		      (int)indent + 1,
 		      "",
@@ -1226,34 +1226,12 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_EXPRESSION_NULL:
-		debug("%*sEXPRESSION NULL", (int)indent, "");
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
-		switch (a->node_type) {
-		case NODE_FUNCTION_RETURN_STATEMENT:
-			debug("%*sRETURN", (int)indent, "");
-			break;
-		// TODO: auto-generate unary expression debug strings?
-		case NODE_EXPRESSION_UNARY_NEGATE:
-			debug("%*sEXPRESSION NEGATE", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_UNARY_NOT:
-			debug("%*sEXPRESSION NOT", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_UNARY_COMPLEMENT:
-			debug("%*sEXPRESSION COMPLEMENT", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_PAREN_ENCLOSED:
-			debug("%*sEXPRESSION PARENTHESIZED", (int)indent, "");
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -1270,54 +1248,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		switch (a->node_type) {
-		// TODO: auto-generate binary expression debug strings?
-		case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-			debug("%*sEXPRESSION ASSIGN", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_BINARY_ADD:
-			debug("%*sEXPRESSION ADD", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_BINARY_SUBTRACT:
-			debug("%*sEXPRESSION SUBTRACT", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_BINARY_MULTIPLY:
-			debug("%*sEXPRESSION MULTIPLY", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_BINARY_DIVIDE:
-			debug("%*sEXPRESSION DIVIDE", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_BINARY_REMAINDER:
-			debug("%*sEXPRESSION REMAINDER", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_LOGICAL_AND:
-			debug("%*sEXPRESSION LOGICAL AND", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_LOGICAL_OR:
-			debug("%*sEXPRESSION LOGICAL OR", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_COMPARE_EQUAL:
-			debug("%*sEXPRESSION COMPARE EQUAL", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
-			debug("%*sEXPRESSION NOT EQUAL", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_COMPARE_LESS_THAN:
-			debug("%*sEXPRESSION LESS THAN", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
-			debug("%*sEXPRESSION LESS THAN OR EQ", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_COMPARE_MORE_THAN:
-			debug("%*sEXPRESSION MORE THAN", (int)indent, "");
-			break;
-		case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-			debug("%*sEXPRESSION MORE THAN OR EQ", (int)indent, "");
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
@@ -1327,7 +1257,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             indent);
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-		debug("%*sEXPRESSION TERNARY CONDITIONAL", (int)indent, "");
 		debug("%*sCONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.op_ternary.condition, indent + 2);
 		debug("%*sTHEN", (int)indent + 1, "");
@@ -1339,23 +1268,22 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		parse_debug_print_ast_symbol("CALL",
+		parse_debug_print_ast_symbol("FUNCTION",
 		                             &a->u.call.identifier,
-		                             indent);
+		                             indent + 1);
 		if (a->u.call.arguments != NULL) {
 			debug("%*sARGUMENTS", (int)indent, "");
 			parse_debug_print(a->u.call.arguments, indent + 1);
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-		debug("%*sARGUMENT", (int)indent, "");
 		parse_debug_print(a->u.call_args.expr, indent + 1);
 		if (a->u.call_args.next != NULL) {
 			parse_debug_print(a->u.call_args.next, indent);
 		}
 		break;
 	case NODE_CONSTANT_INT:
-		debug("%*sCONSTANT %lld", (int)indent, "", a->u.num);
+		debug("%*sVALUE %lld", (int)indent + 1, "", a->u.num);
 		break;
 	}
 }
