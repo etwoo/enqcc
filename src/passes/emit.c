@@ -25,8 +25,14 @@ enum register_alias {
 	REGISTER_ALIAS_1BYTE,
 };
 
+#define INCREMENT(register_name) +1 /* NOLINT(bugprone-macro-parentheses) */
+enum {
+	REGISTER_COUNT = 0 FOREACH_ASM_REGISTER(INCREMENT),
+};
+#undef INCREMENT
+
 /* clang-format off */
-static const char *const REGISTER_AS_STR[][3] = {
+static const char *const REGISTER_AS_STR[REGISTER_COUNT][3] = {
 	{"%rax", "%eax" , "%al"  },
 	{"%rcx", "%ecx" , "%cl"  },
 	{"%rdx", "%edx" , "%dl"  },
