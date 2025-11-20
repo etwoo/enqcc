@@ -857,7 +857,7 @@ ir_debug_print_one(const struct ir_op *op)
 {
 	debug("%s", OPCODE_NAMES[op->opcode].name);
 	if (op->opcode == IR_OP_CALL) {
-		debug("  %.*s", (int)op->fun.sz, op->fun.data);
+		debug("  FUNCTION %.*s", (int)op->fun.sz, op->fun.data);
 	}
 
 	const size_t required_args = OPCODE_NAMES[op->opcode].required_args;
@@ -894,7 +894,9 @@ ir_debug_print(const struct intermediate *ir)
 {
 	debug("PROGRAM");
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
-		debug("FUNC %.*s", (int)f->identifier.sz, f->identifier.data);
+		debug("FUNCTION %.*s",
+		      (int)f->identifier.sz,
+		      f->identifier.data);
 		ir_debug_print_list(f->ops);
 	}
 }
