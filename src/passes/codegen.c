@@ -536,7 +536,6 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			}
 
 			if (preflight) {
-				assert(range != NULL);
 				range[0] = MIN(range[0], arg->u.num);
 				range[1] = MAX(range[1], arg->u.num);
 			} else {
