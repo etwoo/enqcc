@@ -845,27 +845,22 @@ ir_init(Arena *arena,
 	return RESULT_OK;
 }
 
+#define TO_STR_AND_N_ARGS(opcode, n_args) {#opcode, n_args},
+static const struct {
+	const char *name;
+	size_t required_args;
+} OPCODE_NAMES[] = {FOREACH_IR_OPCODE(TO_STR_AND_ARG_COUNT)};
+#undef TO_STR_AND_N_ARGS
+
 static void
 ir_debug_print_one(const struct ir_op *op)
 {
-	// TODO: generate datastructure instead of code
-#define DEBUG_PRINT_IR_OPCODE(opcode, op_requires_n_args)                      \
-	case IR_OP_##opcode:                                                   \
-		debug("%s", #opcode);                                          \
-		required_args = op_requires_n_args;                            \
-		break;
-
-	size_t required_args = 0;
-	switch (op->opcode) {
-		FOREACH_IR_OPCODE(DEBUG_PRINT_IR_OPCODE)
-	}
-
-#undef DEBUG_PRINT_IR_OPCODE
-
+	debug("%s", OPCODE_NAMES[op->opcode].name);
 	if (op->opcode == IR_OP_CALL) {
 		debug("  %.*s", (int)op->fun.sz, op->fun.data);
 	}
 
+	const size_t required_args = OPCODE_NAMES[op->opcode].required_args;
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		switch (op->args[i].subtype) {
 		case IR_VAL_NONE:
