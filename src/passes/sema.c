@@ -157,7 +157,7 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 		 * See related assertions in src/passes/ir.c on u.op_binary.lhs
 		 * and NODE_EXPRESSION_VARIABLE_USAGE.
 		 */
-		return make_result(ERR_SEMA_DECL_INVALID_LVALUE);
+		return make_result(ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE);
 	}
 	return RESULT_OK;
 }
@@ -168,7 +168,7 @@ sema_var_usage(struct ast *a, void *userdata MAYBE_UNUSED)
 	if (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE &&
 	    (a->u.var.stype == SYMBOL_FUNCTION_DECLARATION ||
 	     a->u.var.stype == SYMBOL_FUNCTION_DEFINITION)) {
-		return make_result(ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE,
+		return make_result(ERR_SEMA_VARIABLE_DECLARATION_INVALID_FUNC,
 		                   a->u.var.name.data,
 		                   a->u.var.name.sz);
 	}
@@ -180,7 +180,7 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	if (a->node_type == NODE_EXPRESSION_FUNCTION_CALL &&
 	    a->u.var.stype == SYMBOL_VARIABLE) {
-		return make_result(ERR_SEMA_VARIABLE_AS_CALLABLE,
+		return make_result(ERR_SEMA_FUNCTION_CALL_UNCALLABLE,
 		                   a->u.var.name.data,
 		                   a->u.var.name.sz);
 	}
@@ -215,7 +215,7 @@ sema_fn_param_names(struct ast_symbol *params)
 	}
 
 	if (dup != NULL) {
-		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_PARAMETER,
+		return make_result(ERR_SEMA_FUNCTION_DEFINITION_PARAM_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
 	}
@@ -276,7 +276,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		assert(state->ast_program_globals != NULL);
 		bool allow_def = ast_contains(state->ast_program_globals, a);
 		if (!allow_def) {
-			return make_result(ERR_SEMA_NESTED_FUNCTION_DEFINITION,
+			return make_result(ERR_SEMA_FUNCTION_DEFINITION_NESTED,
 			                   fname->data,
 			                   fname->sz);
 		}
@@ -294,14 +294,14 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      LINKAGE_EXTERNAL,
 		                      n_args));
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
-		return make_result(ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION,
+		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
 	} else if (n_args != dup->n_args) {
 		return make_result(
 			is_def_or_decl
-				? ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION
-				: ERR_SEMA_TOO_MANY_OR_TOO_FEW_CALL_ARGUMENTS,
+				? ERR_SEMA_FUNCTION_DEFINITION_CONFLICT
+				: ERR_SEMA_FUNCTION_CALL_WRONG_NUMBER_OF_ARGS,
 			fname->data,
 			fname->sz);
 	}

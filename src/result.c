@@ -253,47 +253,47 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
-	case ERR_SEMA_CONFLICTING_FUNCTION_DEFINITION:
-		s = my_asprintf("Conflicting function definition: %s", r.msg);
-		break;
-	case ERR_SEMA_NESTED_FUNCTION_DEFINITION:
-		s = my_asprintf("Nested function definition: %s", r.msg);
-		break;
-	case ERR_SEMA_DUPLICATE_FUNCTION_DEFINITION:
-		s = my_asprintf("Duplicate function definition: %s", r.msg);
-		break;
-	case ERR_SEMA_DUPLICATE_FUNCTION_PARAMETER:
-		s = my_asprintf("Duplicate function parameter: %s", r.msg);
-		break;
-	case ERR_SEMA_UNDECLARED_FUNCTION_CALL:
-		s = my_asprintf("Call of undeclared function: %s", r.msg);
-		break;
-	case ERR_SEMA_TOO_MANY_OR_TOO_FEW_CALL_ARGUMENTS:
-		s = my_asprintf("Incorrect arguments to call of: %s", r.msg);
-		break;
-	case ERR_SEMA_VARIABLE_AS_CALLABLE:
-		s = my_asprintf("Call of non-function variable: %s", r.msg);
-		break;
-	case ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION:
-		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
-		break;
-	case ERR_SEMA_UNDECLARED_VARIABLE_USAGE:
-		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
-		break;
-	case ERR_SEMA_DECL_INVALID_LVALUE:
-		s = strdup("Invalid lvalue in variable assignment");
-		break;
-	case ERR_SEMA_DECL_INVALID_FUNC_AS_VALUE:
-		s = my_asprintf("Invalid use of function '%s' as lvalue or "
-		                "rvalue; cannot assign value to function or "
-		                "use function as a value",
-		                r.msg);
-		break;
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");
 		break;
 	case ERR_SEMA_CONTINUE_OUTSIDE:
 		s = strdup("Invalid continue with no enclosing loop");
+		break;
+	case ERR_SEMA_FUNCTION_CALL_UNCALLABLE:
+		s = my_asprintf("Call of non-function variable: %s", r.msg);
+		break;
+	case ERR_SEMA_FUNCTION_CALL_UNDECLARED:
+		s = my_asprintf("Call of undeclared function: %s", r.msg);
+		break;
+	case ERR_SEMA_FUNCTION_CALL_WRONG_NUMBER_OF_ARGS:
+		s = my_asprintf("Incorrect arguments to call of: %s", r.msg);
+		break;
+	case ERR_SEMA_FUNCTION_DEFINITION_CONFLICT:
+		s = my_asprintf("Conflicting function definition: %s", r.msg);
+		break;
+	case ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE:
+		s = my_asprintf("Duplicate function definition: %s", r.msg);
+		break;
+	case ERR_SEMA_FUNCTION_DEFINITION_NESTED:
+		s = my_asprintf("Nested function definition: %s", r.msg);
+		break;
+	case ERR_SEMA_FUNCTION_DEFINITION_PARAM_DUPLICATE:
+		s = my_asprintf("Duplicate function parameter: %s", r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
+		s = strdup("Invalid lvalue in variable assignment");
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE:
+		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_INVALID_FUNC:
+		s = my_asprintf("Invalid use of function '%s' as lvalue or "
+		                "rvalue; cannot assign value to function or "
+		                "use function as a value",
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION:
+		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
 		break;
 	}
 

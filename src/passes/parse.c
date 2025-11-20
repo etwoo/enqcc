@@ -31,7 +31,7 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 
 	const struct symbol *resolved = symbols_get(head, &var->name, false);
 	if (resolved == NULL) {
-		return make_result(ERR_SEMA_UNDECLARED_VARIABLE_USAGE,
+		return make_result(ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION,
 		                   var->name.data,
 		                   var->name.sz);
 	}
@@ -48,7 +48,7 @@ resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 
 	const struct symbol *resolved = symbols_get(head, &callee->name, false);
 	if (resolved == NULL) {
-		return make_result(ERR_SEMA_UNDECLARED_FUNCTION_CALL,
+		return make_result(ERR_SEMA_FUNCTION_CALL_UNDECLARED,
 		                   callee->name.data,
 		                   callee->name.sz);
 	}
@@ -179,7 +179,7 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
 	if (dup != NULL) {
-		return make_result(ERR_SEMA_DUPLICATE_VARIABLE_DECLARATION,
+		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
 	}
