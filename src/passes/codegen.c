@@ -16,7 +16,7 @@ static const long long int CODEGEN_BYTES_PER_STACK_PUSH = 8;
 enum {
 	ARGS_PASSED_VIA_REGISTER = 6,
 };
-static const unsigned REGISTER_FOR_ARG[] = {
+static const enum asm_register REGISTER_FOR_ARG[] = {
 	ASM_REGISTER_DI,
 	ASM_REGISTER_SI,
 	ASM_REGISTER_DX,
@@ -844,6 +844,11 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 static void
 codegen_debug_print_operand(const struct asm_operand *operand)
 {
+#define DEBUG_PRINT_ASM_REGISTER(register_name)                                \
+	case ASM_REGISTER_##register_name:                                     \
+		debug("  %s", #register_name);                                 \
+		break;
+
 	switch (operand->operand_type) {
 	case ASM_OPERAND_NONE:
 		break;
@@ -852,36 +857,7 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		break;
 	case ASM_OPERAND_REGISTER:
 		switch (operand->u.reg) {
-		case ASM_REGISTER_AX:
-			debug("  EAX");
-			break;
-		case ASM_REGISTER_CX:
-			debug("  ECX");
-			break;
-		case ASM_REGISTER_DX:
-			debug("  EDX");
-			break;
-		case ASM_REGISTER_DI:
-			debug("  EDI");
-			break;
-		case ASM_REGISTER_SI:
-			debug("  ESI");
-			break;
-		case ASM_REGISTER_R8:
-			debug("  R8");
-			break;
-		case ASM_REGISTER_R9:
-			debug("  R9");
-			break;
-		case ASM_REGISTER_R10:
-			debug("  R10");
-			break;
-		case ASM_REGISTER_R11:
-			debug("  R11");
-			break;
-		case ASM_REGISTER_RSP:
-			debug("  RSP");
-			break;
+			FOREACH_ASM_REGISTER(DEBUG_PRINT_ASM_REGISTER)
 		}
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
@@ -900,97 +876,23 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		      operand->u.function.data);
 		break;
 	}
+
+#undef DEBUG_PRINT_ASM_REGISTER
 }
 
 static void
 codegen_debug_print_op(const struct asm_op *op)
 {
-	bool print_operands = true;
-
+#define DEBUG_PRINT_ASM_OPCODE(opcode)                                         \
+	case ASM_OP_##opcode:                                                  \
+		debug("%s", #opcode);                                        \
+		break;
 	switch (op->opcode) {
-	case ASM_OP_MOV:
-		debug("MOV");
-		break;
-	case ASM_OP_UNARY_NEG:
-		debug("NEG");
-		break;
-	case ASM_OP_UNARY_NOT:
-		debug("NOT");
-		break;
-	case ASM_OP_BINARY_ADD:
-	case ASM_OP_BINARY_ADD_QUAD:
-		debug("ADD");
-		break;
-	case ASM_OP_BINARY_SUBTRACT:
-	case ASM_OP_BINARY_SUBTRACT_QUAD:
-		debug("SUBTRACT");
-		break;
-	case ASM_OP_BINARY_MULTIPLY:
-		debug("MULTIPLY");
-		break;
-	case ASM_OP_COMPARE:
-		debug("COMPARE");
-		break;
-	case ASM_OP_IDIV:
-		debug("IDIV");
-		break;
-	case ASM_OP_CDQ:
-		debug("CDQ");
-		break;
-	case ASM_OP_JMP:
-		debug("JMP");
-		break;
-	case ASM_OP_JMP_IF_EQ:
-		debug("JMP_IF_EQ");
-		break;
-	case ASM_OP_JMP_IF_NEQ:
-		debug("JMP_IF_NEQ");
-		break;
-	case ASM_OP_JMP_IF_GT:
-		debug("JMP_IF_GT");
-		break;
-	case ASM_OP_JMP_IF_GTE:
-		debug("JMP_IF_GTE");
-		break;
-	case ASM_OP_JMP_IF_LT:
-		debug("JMP_IF_LT");
-		break;
-	case ASM_OP_JMP_IF_LTE:
-		debug("JMP_IF_LTE");
-		break;
-	case ASM_OP_SET_IF_EQ:
-		debug("SET_IF_EQ");
-		break;
-	case ASM_OP_SET_IF_NEQ:
-		debug("SET_IF_NEQ");
-		break;
-	case ASM_OP_SET_IF_GT:
-		debug("SET_IF_GT");
-		break;
-	case ASM_OP_SET_IF_GTE:
-		debug("SET_IF_GTE");
-		break;
-	case ASM_OP_SET_IF_LT:
-		debug("SET_IF_LT");
-		break;
-	case ASM_OP_SET_IF_LTE:
-		debug("SET_IF_LTE");
-		break;
-	case ASM_OP_LABEL:
-		debug("MARK_LABEL");
-		break;
-	case ASM_OP_PUSH:
-		debug("PUSH");
-		break;
-	case ASM_OP_CALL:
-		debug("CALL");
-		break;
-	case ASM_OP_RET:
-		debug("RET");
-		print_operands = false;
-		break;
+		FOREACH_ASM_OPCODE(DEBUG_PRINT_ASM_OPCODE)
 	}
+#undef DEBUG_PRINT_ASM_OPCODE
 
+	const bool print_operands = (op->opcode != ASM_OP_RET);
 	for (size_t i = 0; print_operands && i < ARRAY_SIZE(op->args); ++i) {
 		codegen_debug_print_operand(&op->args[i]);
 	}

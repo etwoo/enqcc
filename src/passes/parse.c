@@ -1237,6 +1237,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		case NODE_FUNCTION_RETURN_STATEMENT:
 			debug("%*sRETURN", (int)indent, "");
 			break;
+		// TODO: auto-generate unary expression debug strings?
 		case NODE_EXPRESSION_UNARY_NEGATE:
 			debug("%*sEXPRESSION NEGATE", (int)indent, "");
 			break;
@@ -1270,6 +1271,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		switch (a->node_type) {
+		// TODO: auto-generate binary expression debug strings?
 		case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 			debug("%*sEXPRESSION ASSIGN", (int)indent, "");
 			break;

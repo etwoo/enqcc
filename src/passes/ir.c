@@ -864,6 +864,7 @@ ir_debug_print_one(const struct ir_op *op)
 		required_args = 1;
 		debug("UNARY");
 		switch (op->opcode) {
+		// TODO: auto-generate unary opcode debug strings?
 		case IR_OP_UNARY_COMPLEMENT:
 			debug("  COMPLEMENT");
 			break;
@@ -900,6 +901,7 @@ ir_debug_print_one(const struct ir_op *op)
 		required_args = 2;
 		debug("BINARY");
 		switch (op->opcode) {
+		// TODO: auto-generate binary opcode debug strings?
 		case IR_OP_BINARY_ADD:
 			debug("  ADD");
 			break;
