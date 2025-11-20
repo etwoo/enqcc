@@ -7,7 +7,7 @@
 #include "sys/debug.h"
 
 #include <assert.h>
-#include <limits.h> /* for LLONG_MAX */
+#include <limits.h> /* for LLONG_MIN and LLONG_MAX */
 #include <stdbool.h>
 #include <sys/param.h> /* for MIN() and MAX() */
 
