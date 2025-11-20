@@ -25,7 +25,7 @@ enum register_alias {
 	REGISTER_ALIAS_1BYTE,
 };
 
-#define TO_STR(register_name, b8, b4, b1) {"%" b8, "%" b4, "%" b1},
+#define TO_STR(register_name, pos, b8, b4, b1) {"%" b8, "%" b4, "%" b1},
 static const char *const REGISTER_AS_STR[][3] = {FOREACH_ASM_REGISTER(TO_STR)};
 #undef TO_STR
 
