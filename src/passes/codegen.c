@@ -561,9 +561,10 @@ codegen_replace_pseudoregisters(struct assembly *cg)
 		if (range[0] == LLONG_MAX || range[1] == LLONG_MIN) {
 			continue;
 		}
+
+		const long long int span = range[1] - range[0];
 		assert(f->stack_usage == 0);
-		f->stack_usage = 1 + (range[1] - range[0]);
-		f->stack_usage *= CODEGEN_BYTES_PER_VALUE;
+		f->stack_usage = CODEGEN_BYTES_PER_VALUE * (span + 1);
 
 		check(codegen_replace_pseudoregisters_fn(f, range, false));
 	}
