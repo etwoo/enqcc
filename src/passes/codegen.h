@@ -3,7 +3,7 @@
 
 #include "sys/string_view.h"
 
-#define FOREACH_CALL_REGISTER(F)                                           \
+#define FOREACH_CALL_REGISTER(F)                                               \
 	F(DI, "rdi", "edi", "dil")                                             \
 	F(SI, "rsi", "esi", "sil")                                             \
 	F(DX, "rdx", "edx", "dl")                                              \
@@ -12,8 +12,8 @@
 	F(R9, "r9", "r9d", "r9b")
 
 #define FOREACH_ASM_REGISTER(F)                                                \
+	FOREACH_CALL_REGISTER(F)                                               \
 	F(AX, "rax", "eax", "al")                                              \
-	FOREACH_FUNCCALL_REGISTER(F)                                           \
 	F(R10, "r10", "r10d", "r10b")                                          \
 	F(R11, "r11", "r11d", "r11b")                                          \
 	F(RSP, "rsp", "rsp", "r11d")
