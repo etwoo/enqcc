@@ -892,12 +892,10 @@ void
 codegen_debug_print(const struct assembly *cg)
 {
 	debug("PROGRAM");
-
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
 		debug("  STACK_USAGE %lld", f->stack_usage);
-
 		for (struct asm_op *op = f->ops; op != NULL; op = op->next) {
 			codegen_debug_print_op(op);
 		}

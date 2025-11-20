@@ -894,9 +894,8 @@ ir_debug_print(const struct intermediate *ir)
 {
 	debug("PROGRAM");
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
-		debug("FUNCTION %.*s",
-		      (int)f->identifier.sz,
-		      f->identifier.data);
+		const struct string_view *fname = &f->identifier;
+		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
 		ir_debug_print_list(f->ops);
 	}
 }
