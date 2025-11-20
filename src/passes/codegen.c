@@ -11,11 +11,13 @@
 #include <stdbool.h>
 #include <sys/param.h> /* for MIN() and MAX() */
 
-const long long int CODEGEN_BYTES_PER_VALUE = 4;
-static const long long int CODEGEN_BYTES_PER_STACK_PUSH = 8;
 enum {
-	ARGS_PASSED_VIA_REGISTER = 6,
+	CODEGEN_BYTES_PER_VALUE = 4,
+	CODEGEN_REGISTER_ARGS = 6,
+	CODEGEN_BYTES_PER_PUSH = 8,
+	CODEGEN_BYTES_ARG_FIRST = 16,
 };
+
 static const enum asm_register REGISTER_FOR_ARG[] = {
 	ASM_REGISTER_DI,
 	ASM_REGISTER_SI,
@@ -158,7 +160,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		dst = &(**dst).next;
 	}
 
-	for (size_t i = 0; i < n_args && i < ARGS_PASSED_VIA_REGISTER; ++i) {
+	for (size_t i = 0; i < n_args && i < CODEGEN_REGISTER_ARGS; ++i) {
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[i], &(**dst).args[0]);
@@ -168,7 +170,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	}
 
 	long long int stack_args = 0;
-	for (size_t i = n_args; i > ARGS_PASSED_VIA_REGISTER; --i) {
+	for (size_t i = n_args; i > CODEGEN_REGISTER_ARGS; --i) {
 		size_t pos = i - 1;
 		check(codegen_alloc_op(arena, dst));
 		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT) {
@@ -194,7 +196,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	dst = &(**dst).next;
 
 	const long long int stack_deallocate =
-		(CODEGEN_BYTES_PER_STACK_PUSH * stack_args) + stack_padding;
+		(CODEGEN_BYTES_PER_PUSH * stack_args) + stack_padding;
 	if (stack_deallocate > 0) {
 		check(codegen_alloc_addq_rsp(arena, dst, stack_deallocate));
 		dst = &(**dst).next;
@@ -416,8 +418,8 @@ codegen_copy_reg_to_pseudo(Arena *arena,
                            long long int pos,
                            struct asm_op **dst)
 {
-	assert(pos < ARGS_PASSED_VIA_REGISTER);
-	static_assert(ARGS_PASSED_VIA_REGISTER <= ARRAY_SIZE(REGISTER_FOR_ARG),
+	assert(pos < CODEGEN_REGISTER_ARGS);
+	static_assert(CODEGEN_REGISTER_ARGS <= ARRAY_SIZE(REGISTER_FOR_ARG),
 	              "table does not cover all register-passed arg positions");
 
 	check(codegen_alloc_op(arena, dst));
@@ -435,21 +437,18 @@ codegen_copy_stack_to_pseudo(Arena *arena,
                              long long int pos,
                              struct asm_op **dst)
 {
-	assert(pos >= ARGS_PASSED_VIA_REGISTER);
+	assert(pos >= CODEGEN_REGISTER_ARGS);
 
-	const long long int byte_min = 16; /* offset of first stack argument */
-	assert(byte_min % CODEGEN_BYTES_PER_STACK_PUSH == 0);
-	const long long int stack_pos = pos - ARGS_PASSED_VIA_REGISTER;
+	const long long int stack_pos = pos - CODEGEN_REGISTER_ARGS;
 	assert(stack_pos >= 0);
-	const long long int byte_offset =
-		byte_min + (CODEGEN_BYTES_PER_STACK_PUSH * stack_pos);
-	assert(byte_offset % CODEGEN_BYTES_PER_VALUE == 0);
-	const long long int logical_pos = byte_offset / CODEGEN_BYTES_PER_VALUE;
+	const long long int stack_offset =
+		CODEGEN_BYTES_ARG_FIRST + (CODEGEN_BYTES_PER_PUSH * stack_pos);
+	assert(stack_offset % CODEGEN_BYTES_PER_VALUE == 0);
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
-	(**dst).args[0].u.num = -1 * logical_pos;
+	(**dst).args[0].u.num = stack_offset;
 	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 	(**dst).args[1].u.num = ir[pos].num;
 
@@ -465,7 +464,7 @@ codegen_function_params(Arena *arena,
 		if (ir[i].subtype == IR_VAL_NONE) {
 			break;
 		}
-		if (i < ARGS_PASSED_VIA_REGISTER) {
+		if (i < CODEGEN_REGISTER_ARGS) {
 			check(codegen_copy_reg_to_pseudo(arena, ir, i, dst));
 		} else {
 			check(codegen_copy_stack_to_pseudo(arena, ir, i, dst));
@@ -538,12 +537,15 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			if (preflight) {
 				range[0] = MIN(range[0], arg->u.num);
 				range[1] = MAX(range[1], arg->u.num);
-			} else {
-				arg->operand_type = ASM_OPERAND_STACK;
-				assert(arg->u.num >= range[0]);
-				assert(arg->u.num <= range[1]);
-				arg->u.num -= (range[0] - 1);
+				continue;
 			}
+
+			arg->operand_type = ASM_OPERAND_STACK;
+			assert(arg->u.num >= range[0]);
+			assert(arg->u.num <= range[1]);
+			assert(range[0] > 0);
+			const long long int adj = arg->u.num - (range[0] - 1);
+			arg->u.num = -1 * adj * CODEGEN_BYTES_PER_VALUE;
 		}
 	}
 	return RESULT_OK;
@@ -861,8 +863,7 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  PSEUDO %lld", operand->u.num);
 		break;
 	case ASM_OPERAND_STACK:
-		debug("  STACK %lld",
-		      -1 * CODEGEN_BYTES_PER_VALUE * operand->u.num);
+		debug("  STACK %lld", operand->u.num);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		debug("  LABEL %lld", operand->u.num);

@@ -104,10 +104,7 @@ emit_asm_operand(const struct asm_operand *o,
 		if (o->u.num == 0) {
 			dprintf(fd, "(%s)", STR_REG_RBP);
 		} else {
-			dprintf(fd,
-			        "%lld(%s)",
-			        -1 * CODEGEN_BYTES_PER_VALUE * o->u.num,
-			        STR_REG_RBP);
+			dprintf(fd, "%lld(%s)", o->u.num, STR_REG_RBP);
 		}
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:

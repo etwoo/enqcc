@@ -87,6 +87,4 @@ struct assembly {
 	struct asm_function *functions;
 };
 
-extern const long long int CODEGEN_BYTES_PER_VALUE;
-
 #endif
