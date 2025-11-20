@@ -11,16 +11,14 @@
 #include <stdbool.h>
 #include <sys/param.h> /* for MIN() and MAX() */
 
-enum {
-	CODEGEN_BYTES_PER_VALUE = 4,
-	CODEGEN_REGISTER_ARGS = 6,
-	CODEGEN_BYTES_PER_PUSH = 8,
-	CODEGEN_BYTES_ARG_FIRST = 16,
-};
-
 #define TO_ENUM(register_name, b8, b4, b1) ASM_REGISTER_##register_name,
 static const enum asm_register CALL_REG[] = {FOREACH_CALL_REGISTER(TO_ENUM)};
 #undef TO_ENUM
+
+static const long long int CODEGEN_REGISTER_ARGS = ARRAY_SIZE(CALL_REG);
+static const long long int CODEGEN_BYTES_PER_VALUE = 4;
+static const long long int CODEGEN_BYTES_PER_PUSH = 8;
+static const long long int CODEGEN_BYTES_ARG_FIRST = 16;
 
 static WARN_UNUSED result_t
 codegen_alloc_op(Arena *arena, struct asm_op **dst)
