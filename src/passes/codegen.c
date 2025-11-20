@@ -841,14 +841,13 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 	return RESULT_OK;
 }
 
+#define TO_STR(register_name) #register_name,
+static const char *const REGISTER_NAMES[] = {FOREACH_ASM_REGISTER(TO_STR)};
+#undef TO_STR
+
 static void
 codegen_debug_print_operand(const struct asm_operand *operand)
 {
-#define DEBUG_PRINT_ASM_REGISTER(register_name)                                \
-	case ASM_REGISTER_##register_name:                                     \
-		debug("  %s", #register_name);                                 \
-		break;
-
 	switch (operand->operand_type) {
 	case ASM_OPERAND_NONE:
 		break;
@@ -856,9 +855,7 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  IMMEDIATE %lld", operand->u.num);
 		break;
 	case ASM_OPERAND_REGISTER:
-		switch (operand->u.reg) {
-			FOREACH_ASM_REGISTER(DEBUG_PRINT_ASM_REGISTER)
-		}
+		debug("  REGISTER %s", REGISTER_NAMES[operand->u.reg]);
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		debug("  PSEUDO %lld", operand->u.num);
@@ -876,8 +873,6 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		      operand->u.function.data);
 		break;
 	}
-
-#undef DEBUG_PRINT_ASM_REGISTER
 }
 
 static void
@@ -885,7 +880,7 @@ codegen_debug_print_op(const struct asm_op *op)
 {
 #define DEBUG_PRINT_ASM_OPCODE(opcode)                                         \
 	case ASM_OP_##opcode:                                                  \
-		debug("%s", #opcode);                                        \
+		debug("%s", #opcode);                                          \
 		break;
 	switch (op->opcode) {
 		FOREACH_ASM_OPCODE(DEBUG_PRINT_ASM_OPCODE)
