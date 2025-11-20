@@ -841,7 +841,7 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 	return RESULT_OK;
 }
 
-#define TO_STR(register_name) #register_name,
+#define TO_STR(register_name, b8, b4, b1) #register_name,
 static const char *const REGISTER_NAMES[] = {FOREACH_ASM_REGISTER(TO_STR)};
 #undef TO_STR
 

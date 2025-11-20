@@ -25,26 +25,9 @@ enum register_alias {
 	REGISTER_ALIAS_1BYTE,
 };
 
-#define INCREMENT(register_name) +1 /* NOLINT(bugprone-macro-parentheses) */
-enum {
-	REGISTER_COUNT = 0 FOREACH_ASM_REGISTER(INCREMENT),
-};
-#undef INCREMENT
-
-/* clang-format off */
-static const char *const REGISTER_AS_STR[REGISTER_COUNT][3] = {
-	{"%rax", "%eax" , "%al"  },
-	{"%rcx", "%ecx" , "%cl"  },
-	{"%rdx", "%edx" , "%dl"  },
-	{"%rdi", "%edi" , "%dil" },
-	{"%rsi", "%esi" , "%sil" },
-	{"%r8" , "%r8d" , "%r8b" },
-	{"%r9" , "%r9d" , "%r9b" },
-	{"%r10", "%r10d", "%r10b"},
-	{"%r11", "%r11d", "%r11b"},
-	{"%rsp", "%rsp" , "%r11d"},
-};
-/* clang-format on */
+#define TO_STR(register_name, b8, b4, b1) {"%" b8, "%" b4, "%" b1},
+static const char *const REGISTER_AS_STR[][3] = {FOREACH_ASM_REGISTER(TO_STR)};
+#undef TO_STR
 
 static WARN_UNUSED const char *
 get_label_prefix(enum platform plat)

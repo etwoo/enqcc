@@ -4,18 +4,18 @@
 #include "sys/string_view.h"
 
 #define FOREACH_ASM_REGISTER(F)                                                \
-	F(AX)                                                                  \
-	F(CX)                                                                  \
-	F(DX)                                                                  \
-	F(DI)                                                                  \
-	F(SI)                                                                  \
-	F(R8)                                                                  \
-	F(R9)                                                                  \
-	F(R10)                                                                 \
-	F(R11)                                                                 \
-	F(RSP)
+	F(AX, "rax", "eax", "al")                                              \
+	F(CX, "rcx", "ecx", "cl")                                              \
+	F(DX, "rdx", "edx", "dl")                                              \
+	F(DI, "rdi", "edi", "dil")                                             \
+	F(SI, "rsi", "esi", "sil")                                             \
+	F(R8, "r8", "r8d", "r8b")                                              \
+	F(R9, "r9", "r9d", "r9b")                                              \
+	F(R10, "r10", "r10d", "r10b")                                          \
+	F(R11, "r11", "r11d", "r11b")                                          \
+	F(RSP, "rsp", "rsp", "r11d")
 
-#define TO_ENUM(register_name) ASM_REGISTER_##register_name,
+#define TO_ENUM(register_name, b8, b4, b1) ASM_REGISTER_##register_name,
 enum asm_register { FOREACH_ASM_REGISTER(TO_ENUM) };
 #undef TO_ENUM
 
