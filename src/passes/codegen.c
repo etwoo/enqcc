@@ -544,7 +544,6 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 				arg->operand_type = ASM_OPERAND_STACK;
 				assert(arg->u.num >= range[0]);
 				assert(arg->u.num <= range[1]);
-				const long long int tmp = arg->u.num;
 				arg->u.num -= (range[0] - 1);
 			}
 		}
