@@ -412,7 +412,7 @@ codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 
 static WARN_UNUSED result_t
 codegen_copy_reg_to_pseudo(Arena *arena,
-                           struct ir_val *ir,
+                           const struct ir_val *ir,
                            long long int pos,
                            struct asm_op **dst)
 {
@@ -431,7 +431,7 @@ codegen_copy_reg_to_pseudo(Arena *arena,
 
 static WARN_UNUSED result_t
 codegen_copy_stack_to_pseudo(Arena *arena,
-                             struct ir_val *ir,
+                             const struct ir_val *ir,
                              long long int pos,
                              struct asm_op **dst)
 {
@@ -457,7 +457,9 @@ codegen_copy_stack_to_pseudo(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-codegen_function_params(Arena *arena, struct ir_val *ir, struct asm_op **dst)
+codegen_function_params(Arena *arena,
+                        const struct ir_val *ir,
+                        struct asm_op **dst)
 {
 	for (long long int i = 0; i < FUNCTION_PARAMETER_LIMIT; ++i) {
 		if (ir[i].subtype == IR_VAL_NONE) {
@@ -474,7 +476,9 @@ codegen_function_params(Arena *arena, struct ir_val *ir, struct asm_op **dst)
 }
 
 static WARN_UNUSED result_t
-codegen_function(Arena *arena, struct ir_function *f, struct asm_function **dst)
+codegen_function(Arena *arena,
+                 const struct ir_function *f,
+                 struct asm_function **dst)
 {
 	assert(dst != NULL);
 	*dst = arena_alloc(arena, sizeof(**dst));
@@ -500,7 +504,7 @@ codegen_function(Arena *arena, struct ir_function *f, struct asm_function **dst)
 
 static WARN_UNUSED result_t
 codegen_program(Arena *arena,
-                struct intermediate *ir,
+                const struct intermediate *ir,
                 struct asm_function **dst)
 {
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
@@ -511,7 +515,7 @@ codegen_program(Arena *arena,
 }
 
 result_t
-codegen_init(Arena *arena, struct intermediate *ir, struct assembly **cg)
+codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 {
 	*cg = arena_alloc(arena, sizeof(**cg));
 	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);

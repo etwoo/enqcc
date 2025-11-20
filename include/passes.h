@@ -36,7 +36,7 @@ void ir_debug_print(const struct intermediate *ir);
 struct assembly;
 
 result_t codegen_init(Arena *arena,
-                      struct intermediate *ir,
+                      const struct intermediate *ir,
                       struct assembly **cg) __attribute__((warn_unused_result));
 result_t codegen_replace_pseudoregisters(struct assembly *cg)
 	__attribute__((warn_unused_result));
