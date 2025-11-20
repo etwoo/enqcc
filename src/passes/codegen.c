@@ -875,21 +875,15 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 	}
 }
 
+#define TO_STR(opcode) #opcode,
+static const char *const OPCODE_NAMES[] = {FOREACH_ASM_OPCODE(TO_STR)};
+#undef TO_STR
+
 static void
 codegen_debug_print_op(const struct asm_op *op)
 {
-	// TODO: create a str array like REGISTER_NAMES, aka OPCODE_NAMES
-#define DEBUG_PRINT_ASM_OPCODE(opcode)                                         \
-	case ASM_OP_##opcode:                                                  \
-		debug("%s", #opcode);                                          \
-		break;
-	switch (op->opcode) {
-		FOREACH_ASM_OPCODE(DEBUG_PRINT_ASM_OPCODE)
-	}
-#undef DEBUG_PRINT_ASM_OPCODE
-
-	const bool print_operands = (op->opcode != ASM_OP_RET);
-	for (size_t i = 0; print_operands && i < ARRAY_SIZE(op->args); ++i) {
+	debug("%s", OPCODE_NAMES[op->opcode]);
+	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		codegen_debug_print_operand(&op->args[i]);
 	}
 }
