@@ -848,6 +848,7 @@ ir_init(Arena *arena,
 static void
 ir_debug_print_one(const struct ir_op *op)
 {
+	// TODO: generate datastructure instead of code
 #define DEBUG_PRINT_IR_OPCODE(opcode, op_requires_n_args)                      \
 	case IR_OP_##opcode:                                                   \
 		debug("%s", #opcode);                                          \

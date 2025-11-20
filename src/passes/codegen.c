@@ -878,6 +878,7 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 static void
 codegen_debug_print_op(const struct asm_op *op)
 {
+	// TODO: create a str array like REGISTER_NAMES, aka OPCODE_NAMES
 #define DEBUG_PRINT_ASM_OPCODE(opcode)                                         \
 	case ASM_OP_##opcode:                                                  \
 		debug("%s", #opcode);                                          \
