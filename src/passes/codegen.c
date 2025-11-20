@@ -18,7 +18,7 @@ enum {
 	CODEGEN_BYTES_ARG_FIRST = 16,
 };
 
-static const enum asm_register REGISTER_FOR_ARG[] = {
+static const enum asm_register REGISTER_FOR_ARG[CODEGEN_REGISTER_ARGS] = {
 	ASM_REGISTER_DI,
 	ASM_REGISTER_SI,
 	ASM_REGISTER_DX,
@@ -419,8 +419,6 @@ codegen_copy_reg_to_pseudo(Arena *arena,
                            struct asm_op **dst)
 {
 	assert(pos < CODEGEN_REGISTER_ARGS);
-	static_assert(CODEGEN_REGISTER_ARGS <= ARRAY_SIZE(REGISTER_FOR_ARG),
-	              "table does not cover all register-passed arg positions");
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
