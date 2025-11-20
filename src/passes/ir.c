@@ -848,106 +848,21 @@ ir_init(Arena *arena,
 static void
 ir_debug_print_one(const struct ir_op *op)
 {
+#define DEBUG_PRINT_IR_OPCODE(opcode, op_requires_n_args)                      \
+	case IR_OP_##opcode:                                                   \
+		debug("%s", #opcode);                                          \
+		required_args = op_requires_n_args;                            \
+		break;
+
 	size_t required_args = 0;
 	switch (op->opcode) {
-	case IR_OP_RET:
-		debug("RETURN");
-		break;
-	case IR_OP_CALL:
-		debug("CALL %.*s", (int)op->fun.sz, op->fun.data);
-		break;
-	case IR_OP_UNARY_COMPLEMENT:
-	case IR_OP_UNARY_NEGATE:
-	case IR_OP_UNARY_NOT:
-	case IR_OP_JUMP:
-	case IR_OP_LABEL:
-		required_args = 1;
-		debug("UNARY");
-		switch (op->opcode) {
-		// TODO: auto-generate unary opcode debug strings?
-		case IR_OP_UNARY_COMPLEMENT:
-			debug("  COMPLEMENT");
-			break;
-		case IR_OP_UNARY_NEGATE:
-			debug("  NEGATE");
-			break;
-		case IR_OP_UNARY_NOT:
-			debug("  NOT");
-			break;
-		case IR_OP_JUMP:
-			debug("  JUMP");
-			break;
-		case IR_OP_LABEL:
-			debug("  MARK_LABEL");
-			break;
-		default:
-			assert(0); /* logic error in caller */
-		}
-		break;
-	case IR_OP_BINARY_ADD:
-	case IR_OP_BINARY_SUBTRACT:
-	case IR_OP_BINARY_MULTIPLY:
-	case IR_OP_BINARY_DIVIDE:
-	case IR_OP_BINARY_REMAINDER:
-	case IR_OP_COMPARE_EQUAL:
-	case IR_OP_COMPARE_NOT_EQUAL:
-	case IR_OP_COMPARE_LESS_THAN:
-	case IR_OP_COMPARE_LESS_THAN_EQ:
-	case IR_OP_COMPARE_MORE_THAN:
-	case IR_OP_COMPARE_MORE_THAN_EQ:
-	case IR_OP_COPY:
-	case IR_OP_JUMP_IF_ZERO:
-	case IR_OP_JUMP_IF_NOT_ZERO:
-		required_args = 2;
-		debug("BINARY");
-		switch (op->opcode) {
-		// TODO: auto-generate binary opcode debug strings?
-		case IR_OP_BINARY_ADD:
-			debug("  ADD");
-			break;
-		case IR_OP_BINARY_SUBTRACT:
-			debug("  SUBTRACT");
-			break;
-		case IR_OP_BINARY_MULTIPLY:
-			debug("  MULTIPLY");
-			break;
-		case IR_OP_BINARY_DIVIDE:
-			debug("  DIVIDE");
-			break;
-		case IR_OP_BINARY_REMAINDER:
-			debug("  REMAINDER");
-			break;
-		case IR_OP_COMPARE_EQUAL:
-			debug("  COMPARE_EQUAL");
-			break;
-		case IR_OP_COMPARE_NOT_EQUAL:
-			debug("  NOT_EQUAL");
-			break;
-		case IR_OP_COMPARE_LESS_THAN:
-			debug("  LESS_THAN");
-			break;
-		case IR_OP_COMPARE_LESS_THAN_EQ:
-			debug("  LESS_THAN_OR_EQUAL");
-			break;
-		case IR_OP_COMPARE_MORE_THAN:
-			debug("  MORE_THAN");
-			break;
-		case IR_OP_COMPARE_MORE_THAN_EQ:
-			debug("  MORE_THAN_OR_EQUAL");
-			break;
-		case IR_OP_COPY:
-			debug("  COPY");
-			break;
-		case IR_OP_JUMP_IF_ZERO:
-			debug("  JUMP_IF_ZERO");
-			break;
-		case IR_OP_JUMP_IF_NOT_ZERO:
-			debug("  JUMP_IF_NOT_ZERO");
-			break;
-		default:
-			assert(0); /* logic error in caller */
-		}
-		break;
+		FOREACH_IR_OPCODE(DEBUG_PRINT_IR_OPCODE)
+	}
+
+#undef DEBUG_PRINT_IR_OPCODE
+
+	if (op->opcode == IR_OP_CALL) {
+		debug("  %.*s", (int)op->fun.sz, op->fun.data);
 	}
 
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
