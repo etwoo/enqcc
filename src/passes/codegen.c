@@ -18,6 +18,10 @@ enum {
 	CODEGEN_BYTES_ARG_FIRST = 16,
 };
 
+#define TO_ENUM(register_name, b8, b4, b1) ASM_REGISTER_##register_name,
+static const enum asm_register CALL_REG[] = {FOREACH_CALL_REGISTER(TO_ENUM)};
+#undef TO_ENUM
+
 static WARN_UNUSED result_t
 codegen_alloc_op(Arena *arena, struct asm_op **dst)
 {
@@ -123,28 +127,6 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 	dst->u.num = src->num;
 }
 
-static WARN_UNUSED enum asm_register
-codegen_map_argpos_to_reg(size_t pos)
-{
-	assert(pos < CODEGEN_REGISTER_ARGS);
-
-#define TO_CASE(register_name, pos, b8, b4, b1)                                \
-	case pos:                                                              \
-		result = ASM_REGISTER_##register_name;                         \
-		break;
-
-	enum asm_register result = ASM_REGISTER_AX;
-	switch (pos) {
-		FOREACH_ASM_REGISTER(TO_CASE)
-	default:
-		assert(0); /* logic error in caller */
-		break;
-	}
-	return result;
-
-#undef TO_CASE
-}
-
 static void
 codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 {
@@ -178,7 +160,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[i], &(**dst).args[0]);
 		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
-		(**dst).args[1].u.reg = codegen_map_argpos_to_reg(i);
+		(**dst).args[1].u.reg = CALL_REG[i];
 		dst = &(**dst).next;
 	}
 
@@ -436,7 +418,7 @@ codegen_copy_reg_to_pseudo(Arena *arena,
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
-	(**dst).args[0].u.reg = codegen_map_argpos_to_reg(pos);
+	(**dst).args[0].u.reg = CALL_REG[pos];
 	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 	(**dst).args[1].u.num = ir[pos].num;
 	return RESULT_OK;
@@ -854,7 +836,7 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 	return RESULT_OK;
 }
 
-#define TO_STR(register_name, pos, b8, b4, b1) #register_name,
+#define TO_STR(register_name, b8, b4, b1) #register_name,
 static const char *const REGISTER_NAMES[] = {FOREACH_ASM_REGISTER(TO_STR)};
 #undef TO_STR
 
