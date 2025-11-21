@@ -306,9 +306,10 @@ result_to_str(result_t r)
 		                "function declaration: %s",
 		                r.msg);
 		break;
-	case ERR_SEMA_FUNCTION_SHADOW_GLOBAL_WITH_STATIC:
-		s = my_asprintf("Static function declaration cannot shadow "
-		                "non-static function of the same name: %s",
+	case ERR_SEMA_FUNCTION_DECLARATION_LINKAGE_INCONSISTENT:
+		s = my_asprintf("Inconsistent linkage for function declaration "
+		                "%s; current declaration has static linkage, "
+				"while another declaration has global linkage",
 		                r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:

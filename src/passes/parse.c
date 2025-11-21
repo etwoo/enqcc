@@ -391,9 +391,10 @@ resolve_function(Arena *arena,
 
 	if (dup != NULL && dup->linkage == LINKAGE_EXTERNAL &&
 	    a->u.function.specifier == SPECIFIER_STATIC) {
-		return make_result(ERR_SEMA_FUNCTION_SHADOW_GLOBAL_WITH_STATIC,
-		                   a->u.function.identifier.name.data,
-		                   a->u.function.identifier.name.sz);
+		return make_result(
+			ERR_SEMA_FUNCTION_DECLARATION_LINKAGE_INCONSISTENT,
+			a->u.function.identifier.name.data,
+			a->u.function.identifier.name.sz);
 	}
 
 	struct symbol *before_params = *sym;
