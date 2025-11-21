@@ -332,12 +332,34 @@ sema_fn_signature(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
+sema_declare_finalize(struct sema_symbol_state *state,
+                      const struct string_view *varname,
+                      struct symbol *dup,
+                      bool is_global,
+                      unsigned initial,
+                      long long int as_constant)
+{
+	if (dup == NULL) {
+		check(symbols_prepend(state->arena,
+		                      &state->variable_symbols,
+		                      varname,
+		                      SYMBOL_VARIABLE,
+		                      0));
+		dup = state->variable_symbols;
+	}
+	dup->linkage.is_global = is_global;
+	dup->linkage.initial = initial;
+	dup->linkage.as_constant = as_constant;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
 	bool is_global = (a->u.declare.specifier != SPECIFIER_STATIC);
-	unsigned initial = 0;
+	unsigned initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 
 	if (a->u.declare.init != NULL) {
@@ -346,7 +368,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 			as_constant = a->u.declare.init->u.num;
 		} else {
 			return make_result(
-				ERR_SEMA_VARIABLE_DECLARATION_NON_CONST_INIT,
+				ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_INIT,
 				varname->data,
 				varname->sz);
 		}
@@ -396,18 +418,12 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 		initial = MAX(initial, LINKAGE_INITIAL_VALUE_TENTATIVE);
 	}
 
-	if (dup == NULL) {
-		check(symbols_prepend(state->arena,
-		                      &state->variable_symbols,
-		                      varname,
-		                      SYMBOL_VARIABLE,
-		                      0));
-		dup = state->variable_symbols;
-	}
-	dup->linkage.is_global = is_global;
-	dup->linkage.initial = initial;
-	dup->linkage.as_constant = as_constant;
-
+	check(sema_declare_finalize(state,
+	                            varname,
+	                            dup,
+	                            is_global,
+	                            initial,
+	                            as_constant));
 	return RESULT_OK;
 }
 
@@ -416,13 +432,16 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
+	bool is_global = false;
+	unsigned initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
+	long long int as_constant = 0;
 	struct symbol *function_symbol_collision = NULL;
 
 	switch (a->u.declare.specifier) {
 	case SPECIFIER_EXTERN:
 		if (a->u.declare.init != NULL) {
 			return make_result(
-				ERR_SEMA_VARIABLE_DECLARATION_NON_CONST_INIT,
+				ERR_SEMA_VARIABLE_DECLARATION_EXTERN_INIT,
 				varname->data,
 				varname->sz);
 		}
@@ -437,12 +456,45 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 				varname->data,
 				varname->sz);
 		}
+
+		is_global = true;
+		initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
 		break;
-	default:
-		// TODO
+	case SPECIFIER_STATIC:
+		if (a->u.declare.init != NULL &&
+		    a->u.declare.init->node_type != NODE_CONSTANT_INT) {
+			return make_result(
+				ERR_SEMA_VARIABLE_DECLARATION_STATIC_INIT,
+				varname->data,
+				varname->sz);
+		}
+
+		if (a->u.declare.init == NULL) {
+			initial = LINKAGE_INITIAL_VALUE_CONSTANT;
+			as_constant = 0;
+		} else if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
+			initial = LINKAGE_INITIAL_VALUE_CONSTANT;
+			as_constant = a->u.declare.init->u.num;
+		}
+
+		is_global = false;
+		assert(initial == LINKAGE_INITIAL_VALUE_CONSTANT);
 		break;
+	case SPECIFIER_NONE:
+		/*
+		 * Omit variables with no linkage from the symbol table. Future
+		 * IR and codegen passes only care about variables bound for
+		 * the data and BSS sections of the resulting binary.
+		 */
+		return RESULT_OK;
 	}
 
+	check(sema_declare_finalize(state,
+	                            varname,
+	                            NULL,
+	                            is_global,
+	                            initial,
+	                            as_constant));
 	return RESULT_OK;
 }
 
