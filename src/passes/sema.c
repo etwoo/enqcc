@@ -227,10 +227,12 @@ sema_fn_param_names(struct ast_symbol *params)
 static WARN_UNUSED bool
 ast_contains(const struct ast *haystack, const struct ast *needle)
 {
-	assert(haystack->node_type == NODE_FUNCTION);
-	assert(needle->node_type == NODE_FUNCTION);
+	assert(needle->node_type == NODE_FUNCTION ||
+	       needle->node_type == NODE_DECLARATION);
 
 	while (haystack != NULL) {
+		assert(haystack->node_type == NODE_FUNCTION ||
+		       haystack->node_type == NODE_DECLARATION);
 		if (needle == haystack) {
 			return true;
 		}
@@ -326,8 +328,14 @@ sema_declare(struct ast *a, void *userdata)
 		return RESULT_OK;
 	}
 
-	const struct string_view *varname = &a->u.declare.identifier.name;
 	struct sema_symbol_state *state = userdata;
+	const bool file_scope = ast_contains(state->ast_program_globals, a);
+	if (!file_scope) {
+		return RESULT_OK;
+	}
+	// TODO: below is for file-scope var; reuse/extend for block scope var?
+
+	const struct string_view *varname = &a->u.declare.identifier.name;
 
 	enum {
 		CONSTANT,
@@ -336,7 +344,6 @@ sema_declare(struct ast *a, void *userdata)
 	} initial_value = CONSTANT;
 	long long int as_constant = 0;
 
-	// TODO: below is for file-scope var; reuse/extend for block scope var?
 	if (a->u.declare.init != NULL) {
 		if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
 			initial_value = CONSTANT;
@@ -365,9 +372,9 @@ sema_declare(struct ast *a, void *userdata)
 			varname->sz);
 	}
 
-	(void)is_global; // TODO
+	(void)is_global;     // TODO
 	(void)initial_value; // TODO
-	(void)as_constant; // TODO
+	(void)as_constant;   // TODO
 
 	return RESULT_OK;
 }
