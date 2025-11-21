@@ -8,6 +8,11 @@ struct ast_symbol {
 	struct string_view name;
 	long long int unique;
 	enum symbol_type stype;
+	enum {
+		SPECIFIER_NONE,
+		SPECIFIER_STATIC,
+		SPECIFIER_EXTERN,
+	} specifier;
 };
 
 #define FOREACH_AST_NODETYPE(F)                                                \
@@ -68,6 +73,7 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			struct ast *init;
+			struct ast *next;
 		} declare;
 		struct {
 			struct ast *condition;

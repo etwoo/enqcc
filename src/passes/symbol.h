@@ -20,6 +20,11 @@ enum symbol_linkage {
 	LINKAGE_EXTERNAL,
 };
 
+enum symbol_storage_class {
+	STORAGE_AUTOMATIC,
+	STORAGE_STATIC,
+};
+
 // TODO: for typedef support, add tracking for types (like variables)
 struct symbol {
 	struct string_view name;

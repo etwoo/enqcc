@@ -673,10 +673,41 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_DECLARATION));
 
-	if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+	bool got_type = false;
+	bool got_specifier = false;
+	while (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+			if (got_type) {
+				return make_result(
+					ERR_PARSE_DECL_TYPE_DUPLICATE);
+			}
+			got_type = true;
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
+			if (got_specifier) {
+				return make_result(
+					ERR_PARSE_DECL_SPECIFIER_DUPLICATE);
+			}
+			got_specifier = true;
+			(**dst).u.declare.identifier.specifier =
+				SPECIFIER_STATIC;
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
+			if (got_specifier) {
+				return make_result(
+					ERR_PARSE_DECL_SPECIFIER_DUPLICATE);
+			}
+			got_specifier = true;
+			(**dst).u.declare.identifier.specifier =
+				SPECIFIER_EXTERN;
+		} else {
+			return make_result(
+				ERR_PARSE_DECL_EXPECT_TYPE_REASONABLE);
+		}
+		token_consume(tok);
+	}
+
+	if (!got_type) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TYPE_INT);
 	}
-	token_consume(tok);
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER);
@@ -1032,10 +1063,41 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
 
-	if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+	bool got_return_type = false;
+	bool got_specifier = false;
+	while (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+			if (got_return_type) {
+				return make_result(
+					ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
+			}
+			got_return_type = true;
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
+			if (got_specifier) {
+				return make_result(
+					ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
+			}
+			got_specifier = true;
+			(**dst).u.function.identifier.specifier =
+				SPECIFIER_STATIC;
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
+			if (got_specifier) {
+				return make_result(
+					ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
+			}
+			got_specifier = true;
+			(**dst).u.function.identifier.specifier =
+				SPECIFIER_EXTERN;
+		} else {
+			return make_result(
+				ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_REASONABLE);
+		}
+		token_consume(tok);
+	}
+
+	if (!got_return_type) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
 	}
-	token_consume(tok);
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
@@ -1078,9 +1140,14 @@ parse_init(Arena *arena,
 	struct ast *original = *a;
 
 	a = &original->u.program.globals;
-	for (; tok != NULL; a = &(**a).u.function.next) {
-		check(parse_function(arena, &tok, a));
-		assert((**a).node_type == NODE_FUNCTION);
+	while (tok != NULL) {
+		if (parse_peek_ahead_function_maybe(tok)) {
+			check(parse_function(arena, &tok, a));
+			a = &(**a).u.function.next;
+		} else {
+			check(parse_decl(arena, &tok, a));
+			a = &(**a).u.declare.next;
+		}
 	}
 
 	a = &original->u.program.globals;
@@ -1173,6 +1240,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
+		}
+		if (a->u.declare.next != NULL) {
+			parse_debug_print(a->u.declare.next, indent);
 		}
 		break;
 	case NODE_IF_ELSE:
