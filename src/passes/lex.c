@@ -133,7 +133,9 @@ lex_one_token_peek(struct string_view *pos, struct token *cur)
 	F("while", TOKEN_KEYWORD_WHILE)                                        \
 	F("for", TOKEN_KEYWORD_FOR)                                            \
 	F("break", TOKEN_KEYWORD_BREAK)                                        \
-	F("continue", TOKEN_KEYWORD_CONTINUE)
+	F("continue", TOKEN_KEYWORD_CONTINUE) \
+	F("static", TOKEN_KEYWORD_STATIC) \
+	F("extern", TOKEN_KEYWORD_EXTERN)
 
 static WARN_UNUSED unsigned
 lex_one_token_keyword_maybe(struct string_view *pos)
