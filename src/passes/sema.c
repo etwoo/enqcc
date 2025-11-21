@@ -445,6 +445,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	unsigned initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 	struct symbol *function_symbol_collision = NULL;
+	struct symbol *dup = NULL;
 
 	switch (a->u.declare.specifier) {
 	case SPECIFIER_EXTERN:
@@ -464,6 +465,17 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 				ERR_SEMA_VARIABLE_DECLARATION_EXTERN_MISMATCH,
 				varname->data,
 				varname->sz);
+		}
+
+		dup = symbols_get(state->variable_symbols, varname, false);
+		if (dup != NULL){
+			/*
+			 * In this case, extern causes this variable to take on
+			 * the same linkage as the matching identifier that is
+			 * already in scope. This may even be a variable with
+			 * static linkage!
+			 */
+			return RESULT_OK;
 		}
 
 		is_global = true;
