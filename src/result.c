@@ -200,7 +200,9 @@ result_to_str(result_t r)
 		           "return type position");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_REASONABLE:
-		s = my_asprintf("Parsing function return type; encountered unreasonable token: %d", r.num);
+		s = my_asprintf("Parsing function return type; encountered "
+		                "unreasonable token: %d",
+		                r.num);
 		break;
 	case ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE:
 		s = strdup("Duplicate function return type");
