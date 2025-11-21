@@ -1,11 +1,15 @@
 #include "passes.h"
 #include "result.h"
 
+#pragma GCC diagnostic push
+/* workaround -Wformat-truncation warning in arena_vsprintf() under GCC */
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
 #define ARENA_IMPLEMENTATION
-#define ARENA_NOSTDIO
 #include "arena.h"
 #undef ARENA_IMPLEMENTATION
-#undef ARENA_NOSTDIO
+#pragma GCC diagnostic pop
 
 #include <errno.h>
 #include <fcntl.h>
@@ -70,8 +74,9 @@ compile(Arena *arena,
 		action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA;
 
 	struct ast *a = NULL;
-	struct symbol *sym = NULL;
-	check(parse_init(arena, tok, &a, skip_sema ? NULL : &sym));
+	long long int id_generator = 0;
+
+	check(parse_init(arena, tok, &a, skip_sema ? NULL : &id_generator));
 	parse_debug_print(a, 0);
 
 	if (skip_sema) {
@@ -79,16 +84,21 @@ compile(Arena *arena,
 	}
 
 	long long int label_generator = 0;
+	struct symbol_table from_sema = {0};
+
 	check(sema_label_loops(a, &label_generator));
-	check(sema_typecheck(arena, a));
+	check(sema_typecheck(arena, a, &from_sema));
 	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA_IR) {
 		return RESULT_OK;
 	}
 
+	const long long int base_id = id_generator + 1;
+	const long long int base_label = label_generator + 1;
+
 	struct intermediate *ir = NULL;
-	check(ir_init(arena, a, sym, &label_generator, &ir));
+	check(ir_init(arena, a, base_id, base_label, &from_sema, &ir));
 	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES &&

@@ -114,21 +114,39 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		break;
 	case IR_VAL_CONSTANT_INT:
 		dst->operand_type = ASM_OPERAND_IMMEDIATE;
+		dst->u.num = src->num;
 		break;
 	case IR_VAL_TEMPORARY_VARIABLE:
 		dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
+		dst->u.num = src->num;
 		break;
 	case IR_VAL_JUMP_TARGET_LABEL:
 		dst->operand_type = ASM_OPERAND_JUMP_TARGET_LABEL;
+		dst->u.num = src->num;
+		break;
+	case IR_VAL_VARIABLE_DATA:
+		dst->operand_type = ASM_OPERAND_VARIABLE_DATA;
+		dst->u.variable = src->varname;
 		break;
 	}
-	dst->u.num = src->num;
 }
 
 static void
 codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 {
 	memcpy(dst, src, sizeof(*dst));
+}
+
+static WARN_UNUSED enum asm_linkage
+codegen_map_linkage(enum ir_linkage linkage)
+{
+	switch (linkage) {
+	case IR_LINKAGE_INTERNAL:
+		return ASM_LINKAGE_INTERNAL;
+	case IR_LINKAGE_EXTERNAL:
+		return ASM_LINKAGE_EXTERNAL;
+	}
+	assert(0); /* logic error in caller */
 }
 
 static WARN_UNUSED result_t
@@ -476,6 +494,7 @@ codegen_function(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
+	(**dst).linkage = codegen_map_linkage(ir->linkage);
 
 	struct asm_op **dst_ops = &(**dst).ops;
 	assert(*dst_ops == NULL);
@@ -487,18 +506,41 @@ codegen_function(Arena *arena,
 
 	assert(*dst_ops == NULL);
 	check(codegen_statement(arena, ir->ops, dst_ops));
+	return RESULT_OK;
+}
 
+static WARN_UNUSED result_t
+codegen_variable(Arena *arena,
+                 const struct ir_variable *ir,
+                 struct asm_variable **dst)
+{
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).identifier = ir->identifier;
+	(**dst).linkage = codegen_map_linkage(ir->linkage);
+	(**dst).u.initial_as_ll = ir->u.initial_as_ll;
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 codegen_program(Arena *arena,
                 const struct intermediate *ir,
-                struct asm_function **dst)
+                struct assembly **dst)
 {
+	struct asm_function **dst_fun = &(**dst).functions;
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
-		check(codegen_function(arena, f, dst));
-		dst = &(**dst).next;
+		check(codegen_function(arena, f, dst_fun));
+		assert(*dst_fun != NULL);
+		dst_fun = &(**dst_fun).next;
+	}
+	struct asm_variable **dst_var = &(**dst).variables;
+	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
+		check(codegen_variable(arena, v, dst_var));
+		assert(*dst_var != NULL);
+		dst_var = &(**dst_var).next;
 	}
 	return RESULT_OK;
 }
@@ -509,7 +551,7 @@ codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 	*cg = arena_alloc(arena, sizeof(**cg));
 	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);
 	memset(*cg, 0, sizeof(**cg));
-	check(codegen_program(arena, ir, &(**cg).functions));
+	check(codegen_program(arena, ir, cg));
 	return RESULT_OK;
 }
 
@@ -534,7 +576,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			arg->operand_type = ASM_OPERAND_STACK;
 			assert(arg->u.num >= range[0]);
 			assert(arg->u.num <= range[1]);
-			assert(range[0] > 0);
+			assert(range[0] >= 0);
 			const long long int adj = arg->u.num - (range[0] - 1);
 			arg->u.num = -1 * adj * CODEGEN_BYTES_PER_VALUE;
 		}
@@ -682,11 +724,17 @@ codegen_fixup_apply(Arena *arena,
 static WARN_UNUSED bool
 fix_s2s(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!((cur->opcode == ASM_OP_MOV || cur->opcode == ASM_OP_BINARY_ADD ||
-	       cur->opcode == ASM_OP_BINARY_SUBTRACT ||
-	       cur->opcode == ASM_OP_COMPARE) &&
-	      cur->args[0].operand_type == ASM_OPERAND_STACK &&
-	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
+	const bool candidate_opcode = cur->opcode == ASM_OP_MOV ||
+	                              cur->opcode == ASM_OP_BINARY_ADD ||
+	                              cur->opcode == ASM_OP_BINARY_SUBTRACT ||
+	                              cur->opcode == ASM_OP_COMPARE;
+	const bool candidate_operand_0 =
+		cur->args[0].operand_type == ASM_OPERAND_STACK ||
+		cur->args[0].operand_type == ASM_OPERAND_VARIABLE_DATA;
+	const bool candidate_operand_1 =
+		cur->args[1].operand_type == ASM_OPERAND_STACK ||
+		cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA;
+	if (!(candidate_opcode && candidate_operand_0 && candidate_operand_1)) {
 		return false;
 	}
 
@@ -864,6 +912,11 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		      (int)operand->u.function.sz,
 		      operand->u.function.data);
 		break;
+	case ASM_OPERAND_VARIABLE_DATA:
+		debug("  DATA %.*s",
+		      (int)operand->u.variable.sz,
+		      operand->u.variable.data);
+		break;
 	}
 }
 
@@ -884,9 +937,22 @@ void
 codegen_debug_print(const struct assembly *cg)
 {
 	debug("PROGRAM");
+
+	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
+		const struct string_view *vname = &v->identifier;
+		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
+		debug("  LINKAGE %s",
+		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
+		                                         : "INTERNAL");
+		debug("  INITIAL VALUE %lld", v->u.initial_as_ll);
+	}
+
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
+		debug("  LINKAGE %s",
+		      f->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
+		                                         : "INTERNAL");
 		debug("  STACK_USAGE %lld", f->stack_usage);
 		for (struct asm_op *op = f->ops; op != NULL; op = op->next) {
 			codegen_debug_print_op(op);

@@ -51,6 +51,49 @@ ir_val_copy(const struct ir_val *src, struct ir_val *dst)
 	memcpy(dst, src, sizeof(*dst));
 }
 
+static void
+ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
+{
+	assert(src->node_type == NODE_DECLARATION ||
+	       src->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
+	       src->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
+
+	const struct ast_symbol *sym = NULL;
+	switch (src->node_type) {
+	case NODE_DECLARATION:
+		sym = &src->u.declare.identifier;
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		sym = &src->u.op_binary.lhs->u.var;
+		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+		sym = &src->u.var;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	if (some_linkage(sym->ltype)) {
+		dst->subtype = IR_VAL_VARIABLE_DATA;
+		dst->varname = sym->name;
+	} else {
+		dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
+	}
+
+	dst->num = sym->unique;
+}
+
+static WARN_UNUSED enum ir_linkage
+ir_map_linkage(enum symbol_linkage linkage)
+{
+	assert(some_linkage(linkage));
+	if (is_external(linkage)) {
+		return IR_LINKAGE_EXTERNAL;
+	}
+	return IR_LINKAGE_INTERNAL;
+}
+
 static result_t ir_expr(Arena *arena,
                         const struct ast *a,
                         struct intermediate *ir,
@@ -140,8 +183,7 @@ ir_decl_init(Arena *arena,
 	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
 
 	ir_val_copy(&inner_return, &assigner->args[0]);
-	assigner->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	assigner->args[1].num = a->u.declare.identifier.unique;
+	ir_val_from_ast_variable_like(a, &assigner->args[1]);
 
 	*dst = ir_op_list_concat(inner, assigner);
 	return RESULT_OK;
@@ -413,7 +455,7 @@ ir_unary_op(Arena *arena,
 	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
 		assert(a->u.op_binary.lhs->node_type ==
 		       NODE_EXPRESSION_VARIABLE_USAGE);
-		unary->args[1].num = a->u.op_binary.lhs->u.var.unique;
+		ir_val_from_ast_variable_like(a, &unary->args[1]);
 	} else {
 		unary->args[1].num = ir->env.generator++;
 	}
@@ -709,8 +751,7 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
-		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
-		return_value->num = a->u.var.unique;
+		ir_val_from_ast_variable_like(a, return_value);
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
@@ -757,10 +798,10 @@ ir_expr(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_function(Arena *arena,
-            const struct ast *a,
-            struct intermediate *ir,
-            struct ir_function **dst)
+ir_func(Arena *arena,
+        const struct ast *a,
+        struct intermediate *ir,
+        struct ir_function **dst)
 {
 	assert(a->node_type == NODE_FUNCTION);
 
@@ -810,20 +851,89 @@ ir_function(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
+ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
+{
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_IR_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).identifier = s->name;
+	(**dst).linkage = ir_map_linkage(s->linkage.linkage);
+
+	switch (s->linkage.initial) {
+	case INITIAL_VALUE_NO_INITIALIZER:
+		assert(0); /* logic error in caller */
+		break;
+	case INITIAL_VALUE_TENTATIVE:
+		(**dst).u.initial_as_ll = 0;
+		break;
+	case INITIAL_VALUE_CONSTANT:
+		(**dst).u.initial_as_ll = s->linkage.as_constant;
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_program(Arena *arena,
+           const struct ast *a,
+           struct symbol_table *sym,
+           struct intermediate *ir)
 {
 	assert(a->node_type == NODE_PROGRAM);
 	assert(a->u.program.globals == NULL ||
-	       a->u.program.globals->node_type == NODE_FUNCTION);
+	       a->u.program.globals->node_type == NODE_FUNCTION ||
+	       a->u.program.globals->node_type == NODE_DECLARATION);
 
-	struct ast *cur = a->u.program.globals;
-	struct ir_function **dst = &ir->functions;
-	for (; cur != NULL; cur = cur->u.function.next) {
-		if (cur->u.function.block != NULL) {
-			check(ir_function(arena, cur, ir, dst));
-			assert(*dst != NULL); /* return_0 fallback guarantee */
-			dst = &(**dst).next;
+	struct ir_function **dst_fun = &ir->functions;
+	a = a->u.program.globals;
+	while (a != NULL) {
+		switch (a->node_type) {
+		case NODE_FUNCTION:
+			if (a->u.function.block != NULL) {
+				check(ir_func(arena, a, ir, dst_fun));
+				assert(*dst_fun != NULL);
+				dst_fun = &(**dst_fun).next;
+			}
+			a = a->u.function.next;
+			break;
+		case NODE_DECLARATION:
+			/* skip variables, and use symbol_table instead */
+			a = a->u.declare.next;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
 		}
+	}
+
+	/* O(n^2) caused by O(n) search of ir->functions for each symbol */
+	for (struct symbol *s = sym->functions; s != NULL; s = s->next) {
+		assert(s->stype == SYMBOL_FUNCTION_DECLARATION ||
+		       s->stype == SYMBOL_FUNCTION_DEFINITION);
+		struct ir_function *f = ir->functions;
+		for (; f != NULL; f = f->next) {
+			if (s->name.sz == f->identifier.sz &&
+			    0 == strncmp(s->name.data,
+			                 f->identifier.data,
+			                 s->name.sz)) {
+				f->linkage = ir_map_linkage(s->linkage.linkage);
+				break;
+			}
+		}
+	}
+
+	struct ir_variable **dst_var = &ir->variables;
+	for (struct symbol *s = sym->variables; s != NULL; s = s->next) {
+		assert(s->stype == SYMBOL_VARIABLE);
+		if (s->linkage.initial == INITIAL_VALUE_NO_INITIALIZER) {
+			continue;
+		}
+		check(ir_var(arena, s, dst_var));
+		assert(*dst_var != NULL);
+		dst_var = &(**dst_var).next;
 	}
 
 	return RESULT_OK;
@@ -832,16 +942,17 @@ ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 result_t
 ir_init(Arena *arena,
         const struct ast *a,
-        const struct symbol *sym,
-        const long long int *label_generator,
+        long long int base_id,
+        long long int base_label,
+        struct symbol_table *sym,
         struct intermediate **ir)
 {
 	*ir = arena_alloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
 	memset(*ir, 0, sizeof(**ir));
-	(**ir).env.generator = sym == NULL ? 1 : sym->cookie + 1;
-	(**ir).env.labels = *label_generator + 1;
-	check(ir_program(arena, a, *ir));
+	(**ir).env.generator = base_id;
+	(**ir).env.labels = base_label;
+	check(ir_program(arena, a, sym, *ir));
 	return RESULT_OK;
 }
 
@@ -876,6 +987,11 @@ ir_debug_print_one(const struct ir_op *op)
 		case IR_VAL_JUMP_TARGET_LABEL:
 			debug("  LABEL label_%lld", op->args[i].num);
 			break;
+		case IR_VAL_VARIABLE_DATA:
+			debug("  DATA %.*s",
+			      (int)op->args[i].varname.sz,
+			      op->args[i].varname.data);
+			break;
 		}
 	}
 }
@@ -893,9 +1009,32 @@ void
 ir_debug_print(const struct intermediate *ir)
 {
 	debug("PROGRAM");
+
+	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
+		const struct string_view *vname = &v->identifier;
+		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
+		switch (v->linkage) {
+		case IR_LINKAGE_INTERNAL:
+			debug("  VARIABLE LINKAGE INTERNAL");
+			break;
+		case IR_LINKAGE_EXTERNAL:
+			debug("  VARIABLE LINKAGE EXTERNAL");
+			break;
+		}
+		debug("  VARIABLE INIT %lld", v->u.initial_as_ll);
+	}
+
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
+		switch (f->linkage) {
+		case IR_LINKAGE_INTERNAL:
+			debug("  FUNCTION LINKAGE INTERNAL");
+			break;
+		case IR_LINKAGE_EXTERNAL:
+			debug("  FUNCTION LINKAGE EXTERNAL");
+			break;
+		}
 		ir_debug_print_list(f->ops);
 	}
 }

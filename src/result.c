@@ -164,6 +164,12 @@ result_to_str(result_t r)
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_KEYWORD_INT in type position");
 		break;
+	case ERR_PARSE_DECL_TYPE_DUPLICATE:
+		s = strdup("Duplicate variable type");
+		break;
+	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
+		s = strdup("Duplicate variable specifier");
+		break;
 	case ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER:
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_IDENTIFIER in variable name position");
@@ -188,6 +194,12 @@ result_to_str(result_t r)
 	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT:
 		s = strdup("Parsing function expects TOKEN_KEYWORD_INT in "
 		           "return type position");
+		break;
+	case ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE:
+		s = strdup("Duplicate function return type");
+		break;
+	case ERR_PARSE_FUNC_SPECIFIER_DUPLICATE:
+		s = strdup("Duplicate function specifier");
 		break;
 	case ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER:
 		s = strdup("Parsing function expects TOKEN_IDENTIFIER in "
@@ -280,11 +292,55 @@ result_to_str(result_t r)
 	case ERR_SEMA_FUNCTION_DEFINITION_PARAM_DUPLICATE:
 		s = my_asprintf("Duplicate function parameter: %s", r.msg);
 		break;
+	case ERR_SEMA_FUNCTION_LINKAGE_BLOCK_SCOPE:
+		s = my_asprintf("Block-scope declaration of function %s cannot "
+		                "have static storage class",
+		                r.msg);
+		break;
+	case ERR_SEMA_FUNCTION_LINKAGE_CONFLICT:
+		s = my_asprintf("static declaration of function %s follows "
+		                "non-static declaration",
+		                r.msg);
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE:
 		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_EXTERN_INIT:
+		s = my_asprintf("extern declaration of block-scope variable %s "
+		                "should not have an initializer",
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_EXTERN_MISMATCH:
+		s = my_asprintf(
+			"extern declaration of block-scope variable %s "
+			"redeclares function %s as a different kind of symbol",
+			r.msg,
+			r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_DUPLICATE:
+		s = my_asprintf("Duplicate file-scope variable definition: %s",
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_INIT:
+		s = my_asprintf("File-scope variable %s has non-constant "
+		                "initializer: %s",
+		                r.msg,
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE:
+		s = my_asprintf("Declaration of file-scope variable %s with "
+		                "conflicting linkage",
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_MISMATCH:
+		s = my_asprintf(
+			"Declaration of file-scope variable %s redeclares "
+			"function %s as a different kind of symbol",
+			r.msg,
+			r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_INVALID_FUNC:
 		s = my_asprintf("Invalid use of function '%s' as lvalue or "
@@ -294,6 +350,14 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION:
 		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_STATIC_INIT:
+		s = my_asprintf("Block-scope variable %s with static storage "
+		                "class has non-constant initializer",
+		                r.msg);
+		break;
+	case ERR_SYMBOL_ALLOC:
+		s = strdup("Cannot allocate symbol");
 		break;
 	}
 
