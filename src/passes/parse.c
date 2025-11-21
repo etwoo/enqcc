@@ -859,7 +859,9 @@ parse_loop_for_init(Arena *arena, const struct token **tok, struct ast **dst)
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		check(parse_alloc_if_unset(arena, item_dst));
 		token_consume(tok);
-	} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_INT) ||
+	           is_token_type(*tok, TOKEN_KEYWORD_STATIC) ||
+	           is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
 		check(parse_decl(arena, tok, item_dst));
 	} else {
 		check(parse_expr(arena, tok, item_dst, 0));
