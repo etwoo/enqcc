@@ -1154,9 +1154,20 @@ parse_init(Arena *arena,
 	}
 
 	a = &original->u.program.globals;
-	for (; sym != NULL && *a != NULL; a = &(**a).u.function.next) {
-		assert((**a).node_type == NODE_FUNCTION);
-		check(resolve_function(arena, *a, sym));
+	while (sym != NULL && *a != NULL) {
+		switch ((**a).node_type) {
+		case NODE_FUNCTION:
+			check(resolve_function(arena, *a, sym));
+			a = &(**a).u.function.next;
+			break;
+		case NODE_DECLARATION:
+			check(resolve_decl(arena, *a, sym));
+			a = &(**a).u.declare.next;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 	}
 
 	return RESULT_OK;
