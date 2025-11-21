@@ -172,7 +172,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
-resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
+resolve_decl(Arena *arena,
+             struct ast *a,
+             struct symbol **sym,
+             enum symbol_linkage default_linkage)
 {
 	assert(a->node_type == NODE_DECLARATION);
 
@@ -188,7 +191,7 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	                      sym,
 	                      &a->u.declare.identifier.name,
 	                      SYMBOL_VARIABLE,
-	                      LINKAGE_NONE,
+	                      default_linkage,
 	                      0));
 	map_symbol_members(*sym, &a->u.declare.identifier);
 
@@ -225,7 +228,7 @@ resolve_block_with_delimiter(Arena *arena,
 			check(resolve_function(arena, cur_item, sym));
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, cur_item, sym));
+			check(resolve_decl(arena, cur_item, sym, LINKAGE_NONE));
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
@@ -1170,8 +1173,17 @@ parse_init(Arena *arena,
 
 	a = &original->u.program.globals;
 	for (; sym != NULL && *a != NULL; a = &(**a).u.function.next) {
-		assert((**a).node_type == NODE_FUNCTION);
-		check(resolve_function(arena, *a, sym));
+		switch ((**a).node_type) {
+		case NODE_FUNCTION:
+			check(resolve_function(arena, *a, sym));
+			break;
+		case NODE_DECLARATION:
+			check(resolve_decl(arena, *a, sym, LINKAGE_EXTERNAL));
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 	}
 
 	return RESULT_OK;

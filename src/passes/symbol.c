@@ -2,8 +2,13 @@
 
 #include "sys/debug.h"
 
+#include <limits.h> /* for LLONG_MIN */
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
+
+enum {
+	UNIQUE_NOT_NEEDED = -1,
+};
 
 result_t
 symbols_prepend(Arena *arena,
@@ -16,19 +21,31 @@ symbols_prepend(Arena *arena,
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_PARSE_ALLOC);
 	memset(node, 0, sizeof(*node));
+
 	node->name = *name;
 	node->stype = stype;
 	node->linkage = linkage;
 	node->n_args = n_args;
+	node->unique = linkage == LINKAGE_NONE ? 0 : UNIQUE_NOT_NEEDED;
+
 	if (*head != NULL) {
-		node->unique = (**head).unique + 1;
+		struct symbol *previous_unique = *head;
+		while (node->unique == 0 && previous_unique != NULL) {
+			if (previous_unique->unique != UNIQUE_NOT_NEEDED) {
+				node->unique = previous_unique->unique + 1;
+			}
+		}
+
 		node->level = (**head).level;
 		if ((**head).level_delimiter) {
 			node->level++;
 		}
+
 		node->cookie = MAX(node->unique, (**head).cookie);
 	}
+
 	node->level_delimiter = false;
+
 	node->next = *head;
 	*head = node;
 	return RESULT_OK;
