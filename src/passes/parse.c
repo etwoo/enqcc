@@ -377,6 +377,14 @@ token_consume(const struct token **tok)
 	*tok = (**tok).next;
 }
 
+static WARN_UNUSED bool
+is_token_maybe_function_prefix(const struct token *tok)
+{
+	return is_token_type(tok, TOKEN_KEYWORD_INT) ||
+	       is_token_type(tok, TOKEN_KEYWORD_STATIC) ||
+	       is_token_type(tok, TOKEN_KEYWORD_EXTERN);
+}
+
 static WARN_UNUSED result_t
 parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 {
@@ -663,19 +671,16 @@ parse_expr(Arena *arena,
 static WARN_UNUSED bool
 parse_peek_ahead_function_maybe(const struct token *tok)
 {
-	bool got_type = false;
+	bool typed = false;
 	for (; tok != NULL; tok = tok->next) {
-		/* seek to the first TOKEN_IDENTIFIER */
-		if (is_token_type(tok, TOKEN_KEYWORD_INT)) {
-			/* seek past return type */
-			got_type = true;
-		} else if (is_token_type(tok, TOKEN_KEYWORD_STATIC) ||
-		           is_token_type(tok, TOKEN_KEYWORD_EXTERN)) {
-			/* seek past specifiers */
+		if (is_token_maybe_function_prefix(tok)) {
+			/* seek past return type and specifiers */
+			typed = typed || is_token_type(tok, TOKEN_KEYWORD_INT);
 		} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
-			/* check if token after candidate function name is ( */
-			return got_type &&
-			       is_token_type(tok->next, TOKEN_PAREN_OPEN);
+			/* ... until we reach the first TOKEN_IDENTIFIER  */
+			/* ... and then check if TOKEN_PAREN_OPEN follows */
+			const struct token *next = tok->next;
+			return typed && is_token_type(next, TOKEN_PAREN_OPEN);
 		} else {
 			/* don't try to peek past other token types */
 			break;
@@ -698,9 +703,8 @@ parse_specifiers(bool expect_var, /* or expect_function */
 {
 	size_t type_count = 0;
 	size_t specifier_count = 0;
-	size_t unreasonable_count = 0;
 
-	while (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+	while (is_token_maybe_function_prefix(*tok)) {
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
 			++type_count;
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
@@ -710,19 +714,9 @@ parse_specifiers(bool expect_var, /* or expect_function */
 			*dst = SPECIFIER_EXTERN;
 			++specifier_count;
 		} else {
-			++unreasonable_count;
-			break;
+			assert(0); /* logic error in caller */
 		}
 		token_consume(tok);
-	}
-
-	if (unreasonable_count > 0) {
-		assert(*tok != NULL);
-		return make_result(
-			expect_var
-				? ERR_PARSE_DECL_EXPECT_TYPE_REASONABLE
-				: ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_REASONABLE,
-			(int)(**tok).token_type);
 	}
 
 	if (specifier_count > 1) {
@@ -802,9 +796,7 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 		struct ast **item_dst = &(**dst).u.block.item;
 		if (parse_peek_ahead_function_maybe(*tok)) {
 			check(parse_function(arena, tok, item_dst));
-		} else if (is_token_type(*tok, TOKEN_KEYWORD_INT) ||
-		           is_token_type(*tok, TOKEN_KEYWORD_STATIC) ||
-		           is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
+		} else if (is_token_maybe_function_prefix(*tok)) {
 			check(parse_decl(arena, tok, item_dst));
 		} else {
 			check(parse_stmt(arena, tok, item_dst));
@@ -859,9 +851,7 @@ parse_loop_for_init(Arena *arena, const struct token **tok, struct ast **dst)
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		check(parse_alloc_if_unset(arena, item_dst));
 		token_consume(tok);
-	} else if (is_token_type(*tok, TOKEN_KEYWORD_INT) ||
-	           is_token_type(*tok, TOKEN_KEYWORD_STATIC) ||
-	           is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
+	} else if (is_token_maybe_function_prefix(*tok)) {
 		check(parse_decl(arena, tok, item_dst));
 	} else {
 		check(parse_expr(arena, tok, item_dst, 0));
