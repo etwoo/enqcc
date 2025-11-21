@@ -1159,29 +1159,12 @@ parse_init(Arena *arena,
 			a = &(**a).u.function.next;
 			break;
 		case NODE_DECLARATION:
-			/*
-			 * TODO: resolve_decl() on global variable declarations
-			 * is disabled for now; rules for file-scope variables
-			 * might be too different for easy reuse; for example,
-			 * this is invalid:
-			 *
-			 * int main(void)
-			 * {
-			 *     int x;
-			 *     int x;
-			 *     return 0;
-			 * }
-			 *
-			 * ... but this is valid:
-			 *
-			 * int x;
-			 * int x;
-			 * int main(void)
-			 * {
-			 *     return 0;
-			 * }
-			 */
-			// check(resolve_decl(arena, *a, sym)); // TODO
+			check(symbols_prepend(arena,
+					      sym,
+					      &(**a).u.declare.identifier.name,
+					      SYMBOL_VARIABLE,
+					      0));
+			map_symbol_members(*sym, &(**a).u.declare.identifier);
 			a = &(**a).u.declare.next;
 			break;
 		default:
