@@ -246,6 +246,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 	long long int n_args = 0;
 	bool is_def = false;
 	bool is_def_or_decl = false;
+	bool is_global = true;
+	bool is_static = false;
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
@@ -259,6 +261,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		check(sema_fn_param_names(a->u.function.params));
 		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
+		is_global = (a->u.function.specifier != SPECIFIER_STATIC);
+		is_static = (a->u.function.specifier == SPECIFIER_STATIC);
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		fname = &a->u.call.identifier.name;
@@ -291,9 +295,14 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      n_args));
+		                      n_args,
+		                      is_global));
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
+		                   dup->name.data,
+		                   dup->name.sz);
+	} else if (is_def_or_decl && dup->is_global && is_static) {
+		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
 	} else if (n_args != dup->n_args) {

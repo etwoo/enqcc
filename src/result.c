@@ -292,6 +292,11 @@ result_to_str(result_t r)
 	case ERR_SEMA_FUNCTION_DEFINITION_PARAM_DUPLICATE:
 		s = my_asprintf("Duplicate function parameter: %s", r.msg);
 		break;
+	case ERR_SEMA_FUNCTION_LINKAGE_CONFLICT:
+		s = my_asprintf("static declaration of function %s follows "
+		                "non-static declaration",
+		                r.msg);
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;

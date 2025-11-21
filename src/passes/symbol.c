@@ -10,7 +10,8 @@ symbols_prepend(Arena *arena,
                 struct symbol **head,
                 const struct string_view *name,
                 enum symbol_type stype,
-                long long int n_args)
+                long long int n_args,
+                bool is_global)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_PARSE_ALLOC);
@@ -18,6 +19,7 @@ symbols_prepend(Arena *arena,
 	node->name = *name;
 	node->stype = stype;
 	node->n_args = n_args;
+	node->is_global = is_global;
 	if (*head != NULL) {
 		node->unique = (**head).unique + 1;
 		node->cookie = MAX(node->unique, (**head).cookie);
