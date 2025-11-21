@@ -673,46 +673,46 @@ parse_specifiers(bool expect_var, /* or expect_function */
                  const struct token **tok,
                  enum ast_specifier *dst)
 {
-	bool got_type = false;
-	bool got_specifier = false;
+	size_t type_count = 0;
+	size_t specifier_count = 0;
+	size_t unreasonable_count = 0;
+
 	while (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
-			if (got_type) {
-				// TODO: reformat to fix w/in 80 columns
-				return make_result(
-					expect_var
-						? ERR_PARSE_DECL_TYPE_DUPLICATE
-						: ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
-			}
-			got_type = true;
+			++type_count;
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
-			if (got_specifier) {
-				return make_result(
-					expect_var
-						? ERR_PARSE_DECL_SPECIFIER_DUPLICATE
-						: ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
-			}
-			got_specifier = true;
 			*dst = SPECIFIER_STATIC;
+			++specifier_count;
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
-			if (got_specifier) {
-				return make_result(
-					expect_var
-						? ERR_PARSE_DECL_SPECIFIER_DUPLICATE
-						: ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
-			}
-			got_specifier = true;
 			*dst = SPECIFIER_EXTERN;
+			++specifier_count;
 		} else {
-			return make_result(
-				expect_var
-					? ERR_PARSE_DECL_EXPECT_TYPE_REASONABLE
-					: ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_REASONABLE);
+			++unreasonable_count;
+			break;
 		}
 		token_consume(tok);
 	}
 
-	if (!got_type) {
+	if (unreasonable_count > 0) {
+		return make_result(
+			expect_var
+				? ERR_PARSE_DECL_EXPECT_TYPE_REASONABLE
+				: ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_REASONABLE);
+	}
+
+	if (specifier_count > 1) {
+		return make_result(
+			expect_var ? ERR_PARSE_DECL_SPECIFIER_DUPLICATE
+				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
+	}
+
+	if (type_count > 1) {
+		return make_result(
+			expect_var ? ERR_PARSE_DECL_TYPE_DUPLICATE
+				   : ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
+	}
+
+	if (type_count == 0) {
 		return make_result(
 			expect_var ? ERR_PARSE_DECL_EXPECT_TYPE_INT
 				   : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
