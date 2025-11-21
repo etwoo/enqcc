@@ -412,6 +412,41 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 }
 
 static WARN_UNUSED result_t
+sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
+{
+	assert(a->node_type == NODE_DECLARATION);
+	const struct string_view *varname = &a->u.declare.identifier.name;
+	struct symbol *function_symbol_collision = NULL;
+
+	switch (a->u.declare.specifier) {
+	case SPECIFIER_EXTERN:
+		if (a->u.declare.init != NULL) {
+			return make_result(
+				ERR_SEMA_VARIABLE_DECLARATION_NON_CONST_INIT,
+				varname->data,
+				varname->sz);
+		}
+
+		function_symbol_collision =
+			symbols_get(state->function_symbols, varname, false);
+		if (function_symbol_collision != NULL) {
+			assert(function_symbol_collision->stype !=
+			       SYMBOL_VARIABLE);
+			return make_result(
+				ERR_SEMA_VARIABLE_DECLARATION_EXTERN_MISMATCH,
+				varname->data,
+				varname->sz);
+		}
+		break;
+	default:
+		// TODO
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_declare(struct ast *a, void *userdata)
 {
 	if (a->node_type != NODE_DECLARATION) {
@@ -424,9 +459,9 @@ sema_declare(struct ast *a, void *userdata)
 	const bool file_scope = ast_contains(state->ast_program_globals, a);
 	if (file_scope) {
 		check(sema_declare_file_scope(a, state));
-		return RESULT_OK;
+	} else {
+		check(sema_declare_block_scope(a, state));
 	}
-	// TODO: reuse/extend above for block scope var?
 
 	return RESULT_OK;
 }
