@@ -688,16 +688,14 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 					ERR_PARSE_DECL_SPECIFIER_DUPLICATE);
 			}
 			got_specifier = true;
-			(**dst).u.declare.identifier.specifier =
-				SPECIFIER_STATIC;
+			(**dst).u.declare.specifier = SPECIFIER_STATIC;
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
 			if (got_specifier) {
 				return make_result(
 					ERR_PARSE_DECL_SPECIFIER_DUPLICATE);
 			}
 			got_specifier = true;
-			(**dst).u.declare.identifier.specifier =
-				SPECIFIER_EXTERN;
+			(**dst).u.declare.specifier = SPECIFIER_EXTERN;
 		} else {
 			return make_result(
 				ERR_PARSE_DECL_EXPECT_TYPE_REASONABLE);
@@ -1078,16 +1076,14 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 					ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
 			}
 			got_specifier = true;
-			(**dst).u.function.identifier.specifier =
-				SPECIFIER_STATIC;
+			(**dst).u.function.specifier = SPECIFIER_STATIC;
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
 			if (got_specifier) {
 				return make_result(
 					ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
 			}
 			got_specifier = true;
-			(**dst).u.function.identifier.specifier =
-				SPECIFIER_EXTERN;
+			(**dst).u.function.specifier = SPECIFIER_EXTERN;
 		} else {
 			return make_result(
 				ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_REASONABLE);
