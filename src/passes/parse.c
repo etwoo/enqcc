@@ -1202,6 +1202,25 @@ parse_debug_print_ast_symbol(const char *description,
 	      symbol_type_as_str);
 }
 
+static void
+parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
+{
+	const char *spec_as_str = NULL;
+	switch (specifier) {
+	case SPECIFIER_NONE:
+		break;
+	case SPECIFIER_STATIC:
+		spec_as_str = "STATIC";
+		break;
+	case SPECIFIER_EXTERN:
+		spec_as_str = "EXTERN";
+		break;
+	}
+	if (spec_as_str != NULL) {
+		debug("%*sSPECIFIER: %s", (int)indent, "", spec_as_str);
+	}
+}
+
 #define TO_STR(node_type) #node_type,
 static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODETYPE(TO_STR)};
 #undef TO_STR
@@ -1220,6 +1239,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("NAME",
 		                             &a->u.function.identifier,
 		                             indent + 1);
+		parse_debug_print_ast_spec(a->u.function.specifier, indent + 1);
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             cur,
@@ -1245,6 +1265,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("DECLARATION",
 		                             &a->u.declare.identifier,
 		                             indent);
+		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
