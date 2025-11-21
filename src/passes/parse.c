@@ -667,8 +667,7 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 		/* seek to the first TOKEN_IDENTIFIER */
 		if (is_token_type(tok, TOKEN_IDENTIFIER)) {
 			/* check if the very next token is TOKEN_PAREN_OPEN */
-			return tok->next != NULL &&
-			       is_token_type(tok->next, TOKEN_PAREN_OPEN);
+			return is_token_type(tok->next, TOKEN_PAREN_OPEN);
 		}
 		// TODO: if we add typedefs, the heuristic above will need to
 		// change to ignore TOKEN_IDENTIFIER entries that refer to
