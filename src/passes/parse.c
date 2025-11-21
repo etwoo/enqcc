@@ -663,16 +663,30 @@ parse_expr(Arena *arena,
 static WARN_UNUSED bool
 parse_peek_ahead_function_maybe(const struct token *tok)
 {
+	bool got_type = false;
 	for (; tok != NULL; tok = tok->next) {
 		/* seek to the first TOKEN_IDENTIFIER */
-		if (is_token_type(tok, TOKEN_IDENTIFIER)) {
+		if (is_token_type(tok, TOKEN_KEYWORD_INT)) {
+			/* seek past return type */
+			got_type = true;
+		} else if (is_token_type(tok, TOKEN_KEYWORD_STATIC) ||
+		           is_token_type(tok, TOKEN_KEYWORD_EXTERN)) {
+			/* seek past specifiers */
+		} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
 			/* check if the very next token is TOKEN_PAREN_OPEN */
-			return is_token_type(tok->next, TOKEN_PAREN_OPEN);
+			return got_type &&
+			       is_token_type(tok->next, TOKEN_PAREN_OPEN);
+		} else {
+			/* don't try to peek past other token types */
+			break;
 		}
 		// TODO: if we add typedefs, the heuristic above will need to
-		// change to ignore TOKEN_IDENTIFIER entries that refer to
-		// custom types, as these can appear before the function name
-		// plus TOKEN_PAREN_OPEN tuple marking end of specifier list
+		// change to accept custom return types (not just int) *AND* to
+		// seek past those custom return types while looking for the
+		// variable/function name; the crux is that these custom return
+		// types -- created as typedefs earlier in the program -- will
+		// appear as TOKEN_IDENTIFIER from the lexer, i.e. the same
+		// type of token as the function name
 	}
 	return false;
 }
@@ -703,10 +717,12 @@ parse_specifiers(bool expect_var, /* or expect_function */
 	}
 
 	if (unreasonable_count > 0) {
+		assert(*tok != NULL);
 		return make_result(
 			expect_var
 				? ERR_PARSE_DECL_EXPECT_TYPE_REASONABLE
-				: ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_REASONABLE);
+				: ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_REASONABLE,
+			(int)(**tok).token_type);
 	}
 
 	if (specifier_count > 1) {
