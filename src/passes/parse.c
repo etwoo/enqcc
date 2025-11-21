@@ -184,6 +184,17 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 		                   dup->name.sz);
 	}
 
+	const struct symbol *variable_vs_function_mismatch =
+		symbols_get(*sym, &a->u.declare.identifier.name, false);
+	if (a->u.declare.specifier == SPECIFIER_EXTERN &&
+	    variable_vs_function_mismatch != NULL &&
+	    variable_vs_function_mismatch->stype != SYMBOL_VARIABLE) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_EXTERN_MISMATCH,
+			dup->name.data,
+			dup->name.sz);
+	}
+
 	check(symbols_prepend(arena,
 	                      sym,
 	                      &a->u.declare.identifier.name,
