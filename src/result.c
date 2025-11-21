@@ -169,10 +169,10 @@ result_to_str(result_t r)
 		           "token");
 		break;
 	case ERR_PARSE_DECL_TYPE_DUPLICATE:
-		s = my_asprintf("Duplicate variable type: %s", r.msg);
+		s = strdup("Duplicate variable type");
 		break;
 	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
-		s = my_asprintf("Duplicate variable specifier: %s", r.msg);
+		s = strdup("Duplicate variable specifier");
 		break;
 	case ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER:
 		s = strdup("Parsing variable declaration expects "
@@ -204,10 +204,10 @@ result_to_str(result_t r)
 		           "unreasonable token");
 		break;
 	case ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE:
-		s = my_asprintf("Duplicate function return type: %s", r.msg);
+		s = strdup("Duplicate function return type");
 		break;
 	case ERR_PARSE_FUNC_SPECIFIER_DUPLICATE:
-		s = my_asprintf("Duplicate function specifier: %s", r.msg);
+		s = strdup("Duplicate function specifier");
 		break;
 	case ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER:
 		s = strdup("Parsing function expects TOKEN_IDENTIFIER in "
