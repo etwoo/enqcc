@@ -19,10 +19,24 @@ struct symbol {
 	struct string_view name;
 	enum symbol_type stype;
 	long long int n_args; /* number of func params, if SYMBOL_FUNCTION_* */
-	bool is_global;       /* global variable with external linkage */
 	long long int unique; /* unique ID for this symbol */
 	bool level_delimiter; /* trigger new nesting level if prepending here */
 	long long int cookie; /* maximum unique ID observed in any node */
+
+	/*
+	 * http://en.cppreference.com/w/c/language/storage_class_specifiers.html
+	 * http://en.cppreference.com/w/c/language/extern.html
+	 */
+	struct {
+		bool is_global;
+		enum {
+			LINKAGE_INITIAL_VALUE_NO_INITIALIZER,
+			LINKAGE_INITIAL_VALUE_TENTATIVE,
+			LINKAGE_INITIAL_VALUE_CONSTANT,
+		} initial;
+		long long int as_constant;
+	} linkage;
+
 	struct symbol *next;
 };
 
@@ -30,8 +44,7 @@ result_t symbols_prepend(Arena *arena,
                          struct symbol **head,
                          const struct string_view *name,
                          enum symbol_type stype,
-                         long long int n_args,
-                         bool is_global) WARN_UNUSED;
+                         long long int n_args) WARN_UNUSED;
 struct symbol *symbols_get(struct symbol *head,
                            const struct string_view *name,
                            bool stop_at_delimiter) WARN_UNUSED;

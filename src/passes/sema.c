@@ -4,6 +4,8 @@
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
+#include <sys/param.h> /* for MAX() */
+
 static WARN_UNUSED result_t
 sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 {
@@ -299,13 +301,13 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      n_args,
-		                      is_global));
+		                      n_args));
+		(**s).linkage.is_global = is_global;
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
-	} else if (is_def_or_decl && dup->is_global && is_static) {
+	} else if (is_def_or_decl && dup->linkage.is_global && is_static) {
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
@@ -322,31 +324,17 @@ sema_fn_signature(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
-sema_declare(struct ast *a, void *userdata)
+sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 {
-	if (a->node_type != NODE_DECLARATION) {
-		return RESULT_OK;
-	}
-
-	struct sema_symbol_state *state = userdata;
-	const bool file_scope = ast_contains(state->ast_program_globals, a);
-	if (!file_scope) {
-		return RESULT_OK;
-	}
-	// TODO: below is for file-scope var; reuse/extend for block scope var?
-
+	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
-
-	enum {
-		CONSTANT,
-		NO_INITIALIZER,
-		TENTATIVE,
-	} initial_value = CONSTANT;
+	bool is_global = (a->u.declare.specifier != SPECIFIER_STATIC);
+	unsigned initial = 0;
 	long long int as_constant = 0;
 
 	if (a->u.declare.init != NULL) {
 		if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
-			initial_value = CONSTANT;
+			initial = LINKAGE_INITIAL_VALUE_CONSTANT;
 			as_constant = a->u.declare.init->u.num;
 		} else {
 			return make_result(
@@ -355,26 +343,84 @@ sema_declare(struct ast *a, void *userdata)
 				varname->sz);
 		}
 	} else if (a->u.declare.specifier == SPECIFIER_EXTERN) {
-		initial_value = NO_INITIALIZER;
+		initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
 	} else {
-		initial_value = TENTATIVE;
+		initial = LINKAGE_INITIAL_VALUE_TENTATIVE;
 	}
 
-	const bool is_global = (a->u.declare.specifier != SPECIFIER_STATIC);
-
-	struct symbol *variable_vs_function_mismatch =
+	struct symbol *function_symbol_collision =
 		symbols_get(state->function_symbols, varname, false);
-	if (variable_vs_function_mismatch != NULL) {
-		assert(variable_vs_function_mismatch->stype != SYMBOL_VARIABLE);
+
+	if (function_symbol_collision != NULL) {
+		assert(function_symbol_collision->stype != SYMBOL_VARIABLE);
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_MISMATCH,
 			varname->data,
 			varname->sz);
 	}
 
-	(void)is_global;     // TODO
-	(void)initial_value; // TODO
-	(void)as_constant;   // TODO
+	struct symbol *dup =
+		symbols_get(state->variable_symbols, varname, false);
+
+	if (dup == NULL) {
+		/* no earlier declaration to cross-reference linkage */
+	} else if (a->u.declare.specifier == SPECIFIER_EXTERN) {
+		is_global = dup->linkage.is_global;
+	} else if (is_global != dup->linkage.is_global) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE,
+			varname->data,
+			varname->sz);
+	}
+
+	if (dup == NULL) {
+		/* no earlier declaration to cross-reference initializer */
+	} else if (dup->linkage.initial == LINKAGE_INITIAL_VALUE_CONSTANT &&
+	           initial == LINKAGE_INITIAL_VALUE_CONSTANT) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_DUPLICATE,
+			varname->data,
+			varname->sz);
+	} else {
+		if (dup->linkage.initial == LINKAGE_INITIAL_VALUE_CONSTANT) {
+			as_constant = dup->linkage.as_constant;
+		}
+		initial = MAX(initial, LINKAGE_INITIAL_VALUE_TENTATIVE);
+	}
+
+	if (dup == NULL) {
+		check(symbols_prepend(state->arena,
+		                      &state->variable_symbols,
+		                      varname,
+		                      SYMBOL_VARIABLE,
+		                      0));
+		dup = state->variable_symbols;
+	}
+	dup->linkage.is_global = is_global;
+	dup->linkage.initial = initial;
+	dup->linkage.as_constant = as_constant;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_declare(struct ast *a, void *userdata)
+{
+	if (a->node_type != NODE_DECLARATION) {
+		return RESULT_OK;
+	}
+
+	struct sema_symbol_state *state = userdata;
+	assert(state->ast_program_globals); /* from
+	                                     * sema_fn_signature()
+	                                     */
+
+	const bool file_scope = ast_contains(state->ast_program_globals, a);
+	if (file_scope) {
+		check(sema_declare_file_scope(a, state));
+		return RESULT_OK;
+	}
+	// TODO: reuse/extend above for block scope var?
 
 	return RESULT_OK;
 }

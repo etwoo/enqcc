@@ -310,6 +310,15 @@ result_to_str(result_t r)
 			r.msg,
 			r.msg);
 		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_DUPLICATE:
+		s = my_asprintf("Duplicate file-scope variable definition: %s",
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE:
+		s = my_asprintf("Declaration of file-scope variable %s with "
+		                "conflicting linkage",
+		                r.msg);
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_MISMATCH:
 		s = my_asprintf(
 			"Declaration of file-scope variable %s redeclares "
