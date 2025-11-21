@@ -802,7 +802,9 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 		struct ast **item_dst = &(**dst).u.block.item;
 		if (parse_peek_ahead_function_maybe(*tok)) {
 			check(parse_function(arena, tok, item_dst));
-		} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_INT) ||
+		           is_token_type(*tok, TOKEN_KEYWORD_STATIC) ||
+		           is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
 			check(parse_decl(arena, tok, item_dst));
 		} else {
 			check(parse_stmt(arena, tok, item_dst));
