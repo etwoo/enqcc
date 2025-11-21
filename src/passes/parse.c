@@ -673,7 +673,7 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 		           is_token_type(tok, TOKEN_KEYWORD_EXTERN)) {
 			/* seek past specifiers */
 		} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
-			/* check if the very next token is TOKEN_PAREN_OPEN */
+			/* check if token after candidate function name is '(' */
 			return got_type &&
 			       is_token_type(tok->next, TOKEN_PAREN_OPEN);
 		} else {
