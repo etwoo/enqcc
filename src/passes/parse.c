@@ -1209,7 +1209,9 @@ parse_debug_print_ast_symbol(const char *description,
                              const struct ast_symbol *asym,
                              size_t indent)
 {
-	debug("%*s%s", (int)indent, "", description);
+	if (description != NULL) {
+		debug("%*s%s", (int)indent, "", description);
+	}
 	debug("%*sIDENTIFIER %.*s",
 	      (int)indent + 1,
 	      "",
@@ -1299,7 +1301,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_DECLARATION:
-		parse_debug_print_ast_symbol("DECLARATION",
+		parse_debug_print_ast_symbol(NULL,
 		                             &a->u.declare.identifier,
 		                             indent);
 		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);

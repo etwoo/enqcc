@@ -36,6 +36,9 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 		if (a->u.declare.init != NULL) {
 			check(sema_walk(a->u.declare.init, f, u));
 		}
+		if (a->u.declare.next != NULL) {
+			check(sema_walk(a->u.declare.next, f, u));
+		}
 		break;
 	case NODE_IF_ELSE:
 		check(sema_walk(a->u.if_.condition, f, u));
@@ -229,16 +232,21 @@ sema_fn_param_names(struct ast_symbol *params)
 static WARN_UNUSED bool
 ast_contains(const struct ast *haystack, const struct ast *needle)
 {
-	assert(needle->node_type == NODE_FUNCTION ||
-	       needle->node_type == NODE_DECLARATION);
-
 	while (haystack != NULL) {
-		assert(haystack->node_type == NODE_FUNCTION ||
-		       haystack->node_type == NODE_DECLARATION);
 		if (needle == haystack) {
 			return true;
 		}
-		haystack = haystack->u.function.next;
+		switch (haystack->node_type) {
+		case NODE_FUNCTION:
+			haystack = haystack->u.function.next;
+			break;
+		case NODE_DECLARATION:
+			haystack = haystack->u.declare.next;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 	}
 
 	return false;
@@ -411,9 +419,7 @@ sema_declare(struct ast *a, void *userdata)
 	}
 
 	struct sema_symbol_state *state = userdata;
-	assert(state->ast_program_globals); /* from
-	                                     * sema_fn_signature()
-	                                     */
+	assert(state->ast_program_globals); /* from sema_fn_signature() */
 
 	const bool file_scope = ast_contains(state->ast_program_globals, a);
 	if (file_scope) {
