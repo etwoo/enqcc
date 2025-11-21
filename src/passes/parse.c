@@ -389,6 +389,13 @@ resolve_function(Arena *arena,
 		map_symbol_members(dup, &a->u.function.identifier);
 	}
 
+	if (dup != NULL && dup->linkage == LINKAGE_EXTERNAL &&
+	    a->u.function.specifier == SPECIFIER_STATIC) {
+		return make_result(ERR_SEMA_FUNCTION_SHADOW_GLOBAL_WITH_STATIC,
+		                   a->u.function.identifier.name.data,
+		                   a->u.function.identifier.name.sz);
+	}
+
 	struct symbol *before_params = *sym;
 	if (*sym != NULL) {
 		assert(before_params != NULL);

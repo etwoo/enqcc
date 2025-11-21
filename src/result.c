@@ -306,6 +306,11 @@ result_to_str(result_t r)
 		                "function declaration: %s",
 		                r.msg);
 		break;
+	case ERR_SEMA_FUNCTION_SHADOW_GLOBAL_WITH_STATIC:
+		s = my_asprintf("Static function declaration cannot shadow "
+		                "non-static function of the same name: %s",
+		                r.msg);
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;
