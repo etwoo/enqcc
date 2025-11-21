@@ -663,9 +663,19 @@ parse_expr(Arena *arena,
 static WARN_UNUSED bool
 parse_peek_ahead_function_maybe(const struct token *tok)
 {
-	return is_token_type(tok, TOKEN_KEYWORD_INT) &&
-	       is_token_type(tok->next, TOKEN_IDENTIFIER) &&
-	       is_token_type(tok->next->next, TOKEN_PAREN_OPEN);
+	for (; tok != NULL; tok = tok->next) {
+		/* seek to the first TOKEN_IDENTIFIER */
+		if (is_token_type(tok, TOKEN_IDENTIFIER)) {
+			/* check if the very next token is TOKEN_PAREN_OPEN */
+			return tok->next != NULL &&
+			       is_token_type(tok->next, TOKEN_PAREN_OPEN);
+		}
+		// TODO: if we add typedefs, the heuristic above will need to
+		// change to ignore TOKEN_IDENTIFIER entries that refer to
+		// custom types, as these can appear before the function name
+		// plus TOKEN_PAREN_OPEN tuple marking end of specifier list
+	}
+	return false;
 }
 
 static WARN_UNUSED result_t
