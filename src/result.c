@@ -306,7 +306,14 @@ result_to_str(result_t r)
 	case ERR_SEMA_VARIABLE_DECLARATION_EXTERN_MISMATCH:
 		s = my_asprintf(
 			"extern declaration of block-scope variable %s "
-		        "redeclares function %s as a different kind of symbol",
+			"redeclares function %s as a different kind of symbol",
+			r.msg,
+			r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_MISMATCH:
+		s = my_asprintf(
+			"Declaration of file-scope variable %s redeclares "
+			"function %s as a different kind of symbol",
 			r.msg,
 			r.msg);
 		break;
@@ -319,6 +326,7 @@ result_to_str(result_t r)
 	case ERR_SEMA_VARIABLE_DECLARATION_NON_CONST_INIT:
 		s = my_asprintf("File-scope variable %s has non-constant "
 		                "initializer: %s",
+		                r.msg,
 		                r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION:

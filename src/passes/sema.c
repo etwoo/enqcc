@@ -30,6 +30,7 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 		}
 		break;
 	case NODE_DECLARATION:
+		check(f(a, u));
 		if (a->u.declare.init != NULL) {
 			check(sema_walk(a->u.declare.init, f, u));
 		}
@@ -187,10 +188,11 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
-struct sema_fn_signature_state {
+struct sema_symbol_state {
 	Arena *arena;
 	struct ast *ast_program_globals;
-	struct symbol *symbols;
+	struct symbol *function_symbols;
+	struct symbol *variable_symbols;
 };
 
 static WARN_UNUSED result_t
@@ -241,7 +243,7 @@ ast_contains(const struct ast *haystack, const struct ast *needle)
 static WARN_UNUSED result_t
 sema_fn_signature(struct ast *a, void *userdata)
 {
-	struct sema_fn_signature_state *state = userdata;
+	struct sema_symbol_state *state = userdata;
 	const struct string_view *fname = NULL;
 	long long int n_args = 0;
 	bool is_def = false;
@@ -286,7 +288,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		}
 	}
 
-	struct symbol **s = &state->symbols;
+	struct symbol **s = &state->function_symbols;
 	struct symbol *dup = symbols_get(*s, fname, false);
 	if (dup == NULL) {
 		assert(is_def_or_decl);
@@ -318,18 +320,21 @@ sema_fn_signature(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
-sema_declare(struct ast *a, void *userdata MAYBE_UNUSED)
+sema_declare(struct ast *a, void *userdata)
 {
 	if (a->node_type != NODE_DECLARATION) {
 		return RESULT_OK;
 	}
+
+	const struct string_view *varname = &a->u.declare.identifier.name;
+	struct sema_symbol_state *state = userdata;
 
 	enum {
 		CONSTANT,
 		NO_INITIALIZER,
 		TENTATIVE,
 	} initial_value = CONSTANT;
-	long long int as_constant;
+	long long int as_constant = 0;
 
 	// TODO: below is for file-scope var; reuse/extend for block scope var?
 	if (a->u.declare.init != NULL) {
@@ -339,8 +344,8 @@ sema_declare(struct ast *a, void *userdata MAYBE_UNUSED)
 		} else {
 			return make_result(
 				ERR_SEMA_VARIABLE_DECLARATION_NON_CONST_INIT,
-				a->u.declare.identifier.name.data,
-				a->u.declare.identifier.name.sz);
+				varname->data,
+				varname->sz);
 		}
 	} else if (a->u.declare.specifier == SPECIFIER_EXTERN) {
 		initial_value = NO_INITIALIZER;
@@ -349,8 +354,20 @@ sema_declare(struct ast *a, void *userdata MAYBE_UNUSED)
 	}
 
 	const bool is_global = (a->u.declare.specifier != SPECIFIER_STATIC);
-	// TODO: track symbol table, and then do a lookup here for earlier
-	// declarations, then check for linkage conflicts, inheritence, etc
+
+	struct symbol *variable_vs_function_mismatch =
+		symbols_get(state->function_symbols, varname, false);
+	if (variable_vs_function_mismatch != NULL) {
+		assert(variable_vs_function_mismatch->stype != SYMBOL_VARIABLE);
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_MISMATCH,
+			varname->data,
+			varname->sz);
+	}
+
+	(void)is_global; // TODO
+	(void)initial_value; // TODO
+	(void)as_constant; // TODO
 
 	return RESULT_OK;
 }
@@ -368,18 +385,12 @@ sema_typecheck(Arena *arena, struct ast *a)
 	check(sema_walk(a, sema_fn_call, NULL));
 
 	debug("Checking function signatures");
-	{
-		struct sema_fn_signature_state state = {0};
-		state.arena = arena;
-		check(sema_walk(a, sema_fn_signature, &state));
-	}
+	struct sema_symbol_state state = {0};
+	state.arena = arena;
+	check(sema_walk(a, sema_fn_signature, &state));
 
 	debug("Checking variable declarations");
-	{
-		struct sema_declare_state state = {0};
-		state.arena = arena;
-		check(sema_walk(a, sema_declare, NULL));
-	}
+	check(sema_walk(a, sema_declare, &state));
 
 	return RESULT_OK;
 }

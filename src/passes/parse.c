@@ -191,8 +191,8 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	    variable_vs_function_mismatch->stype != SYMBOL_VARIABLE) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_EXTERN_MISMATCH,
-			dup->name.data,
-			dup->name.sz);
+			variable_vs_function_mismatch->name.data,
+			variable_vs_function_mismatch->name.sz);
 	}
 
 	check(symbols_prepend(arena,
