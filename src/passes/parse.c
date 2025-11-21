@@ -175,6 +175,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
+// NOLINTNEXTLINE(readability-function-cognitive-complexity) // TODO rm
 resolve_decl(Arena *arena,
              struct ast *a,
              struct symbol **sym,
@@ -214,13 +215,61 @@ resolve_decl(Arena *arena,
 		break;
 	}
 
+	enum {
+		VALUE_CONSTANT,
+		VALUE_NO_INITIALIZER,
+		VALUE_TENTATIVE,
+	} initial_value = 0;
+
+	if (a->u.declare.init != NULL &&
+	    a->u.declare.init->node_type == NODE_CONSTANT_INT) {
+		initial_value = VALUE_CONSTANT;
+	} else if (a->u.declare.init == NULL) {
+		if (a->u.declare.specifier == SPECIFIER_EXTERN) {
+			initial_value = VALUE_NO_INITIALIZER;
+		} else {
+			initial_value = VALUE_TENTATIVE;
+		}
+	} else if (default_linkage == LINKAGE_EXTERNAL) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_NON_CONST,
+			a->u.declare.identifier.name.data,
+			a->u.declare.identifier.name.sz);
+	}
+
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
-	if ((dup != NULL) && (dup->linkage == LINKAGE_NONE ||
-	                      a->u.declare.specifier != SPECIFIER_EXTERN)) {
-		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
-		                   dup->name.data,
-		                   dup->name.sz);
+	if (dup != NULL) {
+		switch (default_linkage) {
+		case LINKAGE_NONE:
+			if (dup->linkage == LINKAGE_NONE ||
+			    a->u.declare.specifier != SPECIFIER_EXTERN) {
+				return make_result(
+					ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
+					dup->name.data,
+					dup->name.sz);
+			}
+			break;
+		case LINKAGE_EXTERNAL:
+			if (dup->stype != SYMBOL_VARIABLE) {
+				return make_result(
+					ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_CONFLICT,
+					dup->name.data,
+					dup->name.sz);
+			}
+			if (dup->linkage != LINKAGE_INTERNAL &&
+			    a->u.declare.specifier != SPECIFIER_EXTERN) {
+				return make_result(
+					ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE_INCONSISTENT,
+					dup->name.data,
+					dup->name.sz);
+			}
+			// TODO: `if old_decl.attrs.init is a constant`
+			break;
+		case LINKAGE_INTERNAL:
+			assert(0); /* logic error in caller */
+			break;
+		}
 	}
 
 	check(symbols_prepend(arena,

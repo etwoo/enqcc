@@ -309,7 +309,7 @@ result_to_str(result_t r)
 	case ERR_SEMA_FUNCTION_DECLARATION_LINKAGE_INCONSISTENT:
 		s = my_asprintf("Inconsistent linkage for function declaration "
 		                "%s; current declaration has static linkage, "
-				"while another declaration has global linkage",
+		                "while another declaration has global linkage",
 		                r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
@@ -328,6 +328,21 @@ result_to_str(result_t r)
 		                "rvalue; cannot assign value to function or "
 		                "use function as a value",
 		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_NON_CONST:
+		s = my_asprintf("File-scope variable has non-const init: %s",
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_CONFLICT:
+		s = my_asprintf("File-scope variable redeclares function: %s",
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE_INCONSISTENT:
+		s = my_asprintf(
+			"Inconsistent linkage for file-scope variable "
+		        "declaration %s; current declaration has global "
+		        "linkage, while another declaration has static linkage",
+			r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION:
 		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
