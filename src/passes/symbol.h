@@ -30,6 +30,7 @@ struct symbol {
 	struct string_view name;
 	enum symbol_type stype;
 	enum symbol_linkage linkage;
+	enum symbol_storage_class storage;
 	long long int n_args; /* number of func params, if SYMBOL_FUNCTION_* */
 	long long int unique; /* unique ID for this symbol */
 	long long int level;  /* nesting level of symbol declaration */
@@ -43,6 +44,7 @@ result_t symbols_prepend(Arena *arena,
                          const struct string_view *name,
                          enum symbol_type stype,
                          enum symbol_linkage linkage,
+                         enum symbol_storage_class storage,
                          long long int n_args) WARN_UNUSED;
 struct symbol *symbols_get(struct symbol *head,
                            const struct string_view *name,

@@ -301,11 +301,21 @@ result_to_str(result_t r)
 	case ERR_SEMA_FUNCTION_DEFINITION_PARAM_DUPLICATE:
 		s = my_asprintf("Duplicate function parameter: %s", r.msg);
 		break;
+	case ERR_SEMA_FUNCTION_DECLARATION_LINKAGE_CONFLICT:
+		s = my_asprintf("Invalid static specifier for block scope "
+		                "function declaration: %s",
+		                r.msg);
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE:
 		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_INVALID_INIT:
+		s = my_asprintf("Invalid initializer for block scope extern "
+		                "variable declaration: %s",
+		                r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_INVALID_FUNC:
 		s = my_asprintf("Invalid use of function '%s' as lvalue or "

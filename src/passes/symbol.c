@@ -16,6 +16,7 @@ symbols_prepend(Arena *arena,
                 const struct string_view *name,
                 enum symbol_type stype,
                 enum symbol_linkage linkage,
+                enum symbol_storage_class storage,
                 long long int n_args)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
@@ -25,6 +26,7 @@ symbols_prepend(Arena *arena,
 	node->name = *name;
 	node->stype = stype;
 	node->linkage = linkage;
+	node->storage = storage;
 	node->n_args = n_args;
 	node->unique = linkage == LINKAGE_NONE ? 0 : UNIQUE_NOT_NEEDED;
 

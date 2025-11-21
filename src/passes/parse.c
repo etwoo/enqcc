@@ -60,7 +60,10 @@ resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 static result_t
 resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 static result_t
-resolve_function(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
+resolve_function(Arena *arena,
+                 struct ast *a,
+                 struct symbol **sym,
+                 enum symbol_linkage default_linkage) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
@@ -178,6 +181,38 @@ resolve_decl(Arena *arena,
              enum symbol_linkage default_linkage)
 {
 	assert(a->node_type == NODE_DECLARATION);
+	enum symbol_linkage effective_linkage = default_linkage;
+	enum symbol_storage_class storage = STORAGE_STATIC;
+	bool allow_initializer = true;
+
+	switch (default_linkage) {
+	case LINKAGE_NONE:
+		switch (a->u.declare.specifier) {
+		case SPECIFIER_NONE:
+			storage = STORAGE_AUTOMATIC;
+			break;
+		case SPECIFIER_STATIC:
+			break;
+		case SPECIFIER_EXTERN:
+			allow_initializer = false;
+			effective_linkage = LINKAGE_EXTERNAL;
+			break;
+		}
+		break;
+	case LINKAGE_EXTERNAL:
+		switch (a->u.declare.specifier) {
+		case SPECIFIER_NONE:
+		case SPECIFIER_EXTERN:
+			break;
+		case SPECIFIER_STATIC:
+			effective_linkage = LINKAGE_INTERNAL;
+			break;
+		}
+		break;
+	case LINKAGE_INTERNAL:
+		assert(0); /* logic error in caller */
+		break;
+	}
 
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
@@ -191,11 +226,18 @@ resolve_decl(Arena *arena,
 	                      sym,
 	                      &a->u.declare.identifier.name,
 	                      SYMBOL_VARIABLE,
-	                      default_linkage,
+	                      effective_linkage,
+	                      storage,
 	                      0));
 	map_symbol_members(*sym, &a->u.declare.identifier);
 
 	if (a->u.declare.init != NULL) {
+		if (!allow_initializer) {
+			return make_result(
+				ERR_SEMA_VARIABLE_DECLARATION_INVALID_INIT,
+				a->u.declare.identifier.name.data,
+				a->u.declare.identifier.name.sz);
+		}
 		check(resolve_expr(arena, a->u.declare.init, sym));
 	}
 	return RESULT_OK;
@@ -223,12 +265,13 @@ resolve_block_with_delimiter(Arena *arena,
 		}
 
 		struct symbol *resetter = NULL;
+		const enum symbol_linkage linkage = LINKAGE_NONE;
 		switch (cur_item->node_type) {
 		case NODE_FUNCTION:
-			check(resolve_function(arena, cur_item, sym));
+			check(resolve_function(arena, cur_item, sym, linkage));
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, cur_item, sym, LINKAGE_NONE));
+			check(resolve_decl(arena, cur_item, sym, linkage));
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
@@ -267,6 +310,7 @@ resolve_function_params_one(Arena *arena,
 	                      &a->name,
 	                      SYMBOL_VARIABLE,
 	                      LINKAGE_NONE,
+	                      STORAGE_AUTOMATIC,
 	                      0));
 	map_symbol_members(*sym, a);
 	return RESULT_OK;
@@ -282,9 +326,41 @@ resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
-resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
+resolve_function(Arena *arena,
+                 struct ast *a,
+                 struct symbol **sym,
+                 enum symbol_linkage default_linkage)
 {
 	assert(a->node_type == NODE_FUNCTION);
+	enum symbol_linkage effective_linkage = default_linkage;
+
+	switch (default_linkage) {
+	case LINKAGE_NONE:
+		switch (a->u.declare.specifier) {
+		case SPECIFIER_NONE:
+		case SPECIFIER_EXTERN:
+			break;
+		case SPECIFIER_STATIC:
+			return make_result(
+				ERR_SEMA_FUNCTION_DECLARATION_LINKAGE_CONFLICT,
+				a->u.function.identifier.name.data,
+				a->u.function.identifier.name.sz);
+		}
+		break;
+	case LINKAGE_EXTERNAL:
+		switch (a->u.declare.specifier) {
+		case SPECIFIER_NONE:
+		case SPECIFIER_EXTERN:
+			break;
+		case SPECIFIER_STATIC:
+			effective_linkage = LINKAGE_INTERNAL;
+			break;
+		}
+		break;
+	case LINKAGE_INTERNAL:
+		assert(0); /* logic error in caller */
+		break;
+	}
 
 	const bool is_def = (a->u.function.block != NULL);
 	struct symbol *dup =
@@ -300,7 +376,8 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 		                      &a->u.function.identifier.name,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      LINKAGE_EXTERNAL,
+		                      effective_linkage,
+		                      STORAGE_STATIC,
 		                      n_args));
 		map_symbol_members(*sym, &a->u.function.identifier);
 	} else if (is_def) {
@@ -1171,14 +1248,15 @@ parse_init(Arena *arena,
 		}
 	}
 
+	const enum symbol_linkage linkage = LINKAGE_EXTERNAL;
 	a = &original->u.program.globals;
 	for (; sym != NULL && *a != NULL; a = &(**a).u.function.next) {
 		switch ((**a).node_type) {
 		case NODE_FUNCTION:
-			check(resolve_function(arena, *a, sym));
+			check(resolve_function(arena, *a, sym, linkage));
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, *a, sym, LINKAGE_EXTERNAL));
+			check(resolve_decl(arena, *a, sym, linkage));
 			break;
 		default:
 			assert(0); /* logic error in caller */
