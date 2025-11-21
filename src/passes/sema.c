@@ -298,6 +298,15 @@ sema_fn_signature(struct ast *a, void *userdata)
 			                   fname->data,
 			                   fname->sz);
 		}
+	} else if (is_def_or_decl && is_static) {
+		assert(state->ast_program_globals != NULL);
+		bool allow_decl = ast_contains(state->ast_program_globals, a);
+		if (!allow_decl) {
+			return make_result(
+				ERR_SEMA_FUNCTION_LINKAGE_BLOCK_SCOPE,
+				fname->data,
+				fname->sz);
+		}
 	}
 
 	struct symbol **s = &state->function_symbols;
