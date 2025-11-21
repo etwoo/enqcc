@@ -5,27 +5,38 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
+bool
+is_internal(enum symbol_linkage linkage)
+{
+	return linkage == SYMBOL_LINKAGE_INTERNAL;
+}
+
+bool
+is_external(enum symbol_linkage linkage)
+{
+	return linkage == SYMBOL_LINKAGE_EXTERNAL;
+}
+
+bool
+some_linkage(enum symbol_linkage linkage)
+{
+	return is_external(linkage) || is_internal(linkage);
+}
+
 result_t
 symbols_prepend(Arena *arena,
                 struct symbol **head,
                 const struct string_view *name,
-                enum symbol_type stype,
-                enum symbol_linkage linkage,
-                long long int n_args)
+                enum symbol_type stype)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
-	check_if(node == NULL, ERR_PARSE_ALLOC);
+	check_if(node == NULL, ERR_SYMBOL_ALLOC);
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
-	node->linkage = linkage;
-	node->n_args = n_args;
 	if (*head != NULL) {
-		node->unique = (**head).unique + 1;
-		node->level = (**head).level;
-		if ((**head).level_delimiter) {
-			node->level++;
-		}
+		long long int base = MAX((**head).unique, (**head).cookie);
+		node->unique = base + 1;
 		node->cookie = MAX(node->unique, (**head).cookie);
 	}
 	node->level_delimiter = false;
@@ -34,10 +45,10 @@ symbols_prepend(Arena *arena,
 	return RESULT_OK;
 }
 
-struct symbol *
-symbols_get(struct symbol *head,
-            const struct string_view *name,
-            bool stop_at_delimiter)
+static WARN_UNUSED struct symbol *
+symbols_get_impl(struct symbol *head,
+                 const struct string_view *name,
+                 bool stop_at_delimiter)
 {
 	while (head != NULL) {
 		if (stop_at_delimiter && head->level_delimiter) {
@@ -52,6 +63,30 @@ symbols_get(struct symbol *head,
 	return NULL;
 }
 
+struct symbol *
+symbols_get_limited(struct symbol *head, const struct string_view *name)
+{
+	return symbols_get_impl(head, name, true);
+}
+
+struct symbol *
+symbols_get_anywhere(struct symbol *head, const struct string_view *name)
+{
+	return symbols_get_impl(head, name, false);
+}
+
+struct symbol *
+symbols_get_unique(struct symbol *head, long long int unique)
+{
+	while (head != NULL) {
+		if (head->unique == unique) {
+			return head;
+		}
+		head = head->next;
+	}
+	return NULL;
+}
+
 void
 symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point)
 {
@@ -59,4 +94,27 @@ symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point)
 		reset_point->cookie = (**symbols).cookie;
 	}
 	*symbols = reset_point;
+}
+
+static const char MANGLE_DELIMITER = '.';
+
+bool
+is_mangled(struct symbol *s)
+{
+	return (memchr(s->name.data, MANGLE_DELIMITER, s->name.sz) != NULL);
+}
+
+result_t
+mangle_name(Arena *arena, struct symbol *s)
+{
+	char *mangled_str = arena_sprintf(arena,
+	                                  "%.*s%c%lld",
+	                                  (int)s->name.sz,
+	                                  s->name.data,
+	                                  MANGLE_DELIMITER,
+	                                  s->unique);
+	check_if(mangled_str == NULL, ERR_SYMBOL_ALLOC);
+	s->name.data = mangled_str;
+	s->name.sz = strlen(mangled_str);
+	return RESULT_OK;
 }

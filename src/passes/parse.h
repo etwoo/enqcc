@@ -4,10 +4,17 @@
 #include "passes/symbol.h"
 #include "sys/string_view.h"
 
+enum ast_specifier {
+	SPECIFIER_NONE,
+	SPECIFIER_STATIC,
+	SPECIFIER_EXTERN,
+};
+
 struct ast_symbol {
 	struct string_view name;
 	long long int unique;
 	enum symbol_type stype;
+	enum symbol_linkage ltype;
 };
 
 #define FOREACH_AST_NODETYPE(F)                                                \
@@ -57,6 +64,7 @@ struct ast {
 		} program;
 		struct {
 			struct ast_symbol identifier;
+			enum ast_specifier specifier;
 			struct ast_symbol *params;
 			struct ast *block;
 			struct ast *next;
@@ -67,7 +75,9 @@ struct ast {
 		} block;
 		struct {
 			struct ast_symbol identifier;
+			enum ast_specifier specifier;
 			struct ast *init;
+			struct ast *next;
 		} declare;
 		struct {
 			struct ast *condition;

@@ -11,49 +11,44 @@
 #include <stdbool.h>
 #include <stdlib.h> /* for strtoll() */
 #include <string.h>
-
-enum {
-	NOT_YET_UNIQUE = -1,
-};
+#include <sys/param.h> /* for MAX() */
 
 static void
 map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
 {
 	dst->unique = src->unique;
 	dst->stype = src->stype;
+	dst->ltype = src->linkage.linkage;
+}
+
+static WARN_UNUSED result_t
+resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
+{
+	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
+	assert(asym->unique == NOT_YET_UNIQUE);
+
+	const struct symbol *resolved = symbols_get_anywhere(head, &asym->name);
+	if (resolved == NULL) {
+		return make_result(errtype, asym->name.data, asym->name.sz);
+	}
+
+	map_symbol_members(resolved, asym);
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 {
-	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
-	assert(var->unique == NOT_YET_UNIQUE);
-
-	const struct symbol *resolved = symbols_get(head, &var->name, false);
-	if (resolved == NULL) {
-		return make_result(ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION,
-		                   var->name.data,
-		                   var->name.sz);
-	}
-
-	map_symbol_members(resolved, var);
+	check(resolve_symbol(head,
+	                     var,
+	                     ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 {
-	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
-	assert(callee->unique == NOT_YET_UNIQUE);
-
-	const struct symbol *resolved = symbols_get(head, &callee->name, false);
-	if (resolved == NULL) {
-		return make_result(ERR_SEMA_FUNCTION_CALL_UNDECLARED,
-		                   callee->name.data,
-		                   callee->name.sz);
-	}
-
-	map_symbol_members(resolved, callee);
+	check(resolve_symbol(head, callee, ERR_SEMA_FUNCTION_CALL_UNDECLARED));
 	return RESULT_OK;
 }
 
@@ -172,30 +167,94 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
-resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
+resolve_decl(Arena *arena,
+             struct ast *a,
+             struct symbol **sym,
+             enum symbol_linkage assume_linkage)
 {
 	assert(a->node_type == NODE_DECLARATION);
 
-	const struct symbol *dup =
-		symbols_get(*sym, &a->u.declare.identifier.name, true);
-	if (dup != NULL) {
-		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
-		                   dup->name.data,
-		                   dup->name.sz);
+	const struct string_view *varname = &a->u.declare.identifier.name;
+	const enum symbol_linkage linkage =
+		MAX(assume_linkage,
+	            a->u.declare.specifier == SPECIFIER_EXTERN
+	                    ? SYMBOL_LINKAGE_EXTERNAL
+	                    : SYMBOL_LINKAGE_NONE);
+
+	const struct symbol *in_scope = symbols_get_limited(*sym, varname);
+	if (in_scope != NULL) {
+		if (is_external(in_scope->linkage.linkage) &&
+		    is_external(linkage)) {
+			/*
+			 * Declaring the same variable multiple times in the
+			 * same scope is okay if both declarations are extern.
+			 */
+		} else {
+			/*
+			 * Otherwise, the declarations conflict.
+			 */
+			return make_result(
+				ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
+				in_scope->name.data,
+				in_scope->name.sz);
+		}
 	}
 
-	check(symbols_prepend(arena,
-	                      sym,
-	                      &a->u.declare.identifier.name,
-	                      SYMBOL_VARIABLE,
-	                      LINKAGE_NONE,
-	                      0));
-	map_symbol_members(*sym, &a->u.declare.identifier);
+	const struct symbol *resolved = NULL;
+	if (in_scope != NULL) {
+		resolved = in_scope;
+	} else {
+		const struct symbol *anywhere =
+			symbols_get_anywhere(*sym, varname);
+
+		check(symbols_prepend(arena,
+		                      sym,
+		                      &a->u.declare.identifier.name,
+		                      SYMBOL_VARIABLE));
+		(**sym).linkage.linkage = linkage;
+		resolved = *sym;
+
+		if (is_external(linkage) && /* This declaration is extern and */
+		    anywhere != NULL &&     /* resolves to an existing var... */
+		    some_linkage(anywhere->linkage.linkage)) { /* w/ linkage! */
+			/*
+			 * Make this re-declaration take on the unique ID and
+			 * linkage characteristics of the existing variable
+			 * pulled into scope, essentially creating a duplicate
+			 * stub in the symbol table.
+			 *
+			 * We expect the caller to discard this stub when
+			 * exiting this scope and proceeding to other scopes.
+			 */
+			(**sym).unique = anywhere->unique;
+			(**sym).linkage.linkage = anywhere->linkage.linkage;
+		}
+	}
+	map_symbol_members(resolved, &a->u.declare.identifier);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
 	}
 	return RESULT_OK;
+}
+
+static WARN_UNUSED bool
+level_delimiter_prepare(struct symbol *point)
+{
+	if (point == NULL) {
+		return false;
+	}
+
+	if (point->level_delimiter) {
+		/*
+		 * This node already acts as a level_delimiter for an outer
+		 * scope; do not clobber it!
+		 */
+		return false;
+	}
+
+	point->level_delimiter = true;
+	return true;
 }
 
 static WARN_UNUSED result_t
@@ -204,11 +263,9 @@ resolve_block_with_delimiter(Arena *arena,
                              struct symbol **sym,
                              struct symbol *level_delimiter_point)
 {
-	if (*sym != NULL) {
-		assert(level_delimiter_point != NULL);
-		level_delimiter_point->level_delimiter = true;
-	}
+	assert(*sym != NULL);
 
+	const bool cleanup = level_delimiter_prepare(level_delimiter_point);
 	struct symbol *outer_resetter = *sym;
 
 	for (; a != NULL; a = a->u.block.next) {
@@ -225,7 +282,10 @@ resolve_block_with_delimiter(Arena *arena,
 			check(resolve_function(arena, cur_item, sym));
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, cur_item, sym));
+			check(resolve_decl(arena,
+			                   cur_item,
+			                   sym,
+			                   SYMBOL_LINKAGE_NONE));
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
@@ -239,9 +299,7 @@ resolve_block_with_delimiter(Arena *arena,
 	}
 
 	symbols_reset_scope(sym, outer_resetter);
-
-	if (*sym != NULL) {
-		assert(level_delimiter_point != NULL);
+	if (cleanup) {
 		level_delimiter_point->level_delimiter = false;
 	}
 	return RESULT_OK;
@@ -259,12 +317,7 @@ resolve_function_params_one(Arena *arena,
                             struct ast_symbol *a,
                             struct symbol **sym)
 {
-	check(symbols_prepend(arena,
-	                      sym,
-	                      &a->name,
-	                      SYMBOL_VARIABLE,
-	                      LINKAGE_NONE,
-	                      0));
+	check(symbols_prepend(arena, sym, &a->name, SYMBOL_VARIABLE));
 	map_symbol_members(*sym, a);
 	return RESULT_OK;
 }
@@ -284,35 +337,15 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	assert(a->node_type == NODE_FUNCTION);
 
 	const bool is_def = (a->u.function.block != NULL);
-	struct symbol *dup =
-		symbols_get(*sym, &a->u.function.identifier.name, false);
-	if (dup == NULL ||                   /* new symbol in this scope */
-	    dup->stype == SYMBOL_VARIABLE) { /* ... or func shadows var  */
-		long long int n_args = 0;
-		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-			++n_args;
-		}
-		check(symbols_prepend(arena,
-		                      sym,
-		                      &a->u.function.identifier.name,
-		                      is_def ? SYMBOL_FUNCTION_DEFINITION
-		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      LINKAGE_EXTERNAL,
-		                      n_args));
-		map_symbol_members(*sym, &a->u.function.identifier);
-	} else if (is_def) {
-		map_symbol_members(dup, &a->u.function.identifier);
-		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
-		dup->stype = SYMBOL_FUNCTION_DEFINITION;
-	} else {
-		map_symbol_members(dup, &a->u.function.identifier);
-	}
+	check(symbols_prepend(arena,
+	                      sym,
+	                      &a->u.function.identifier.name,
+	                      is_def ? SYMBOL_FUNCTION_DEFINITION
+	                             : SYMBOL_FUNCTION_DECLARATION));
+	map_symbol_members(*sym, &a->u.function.identifier);
 
 	struct symbol *before_params = *sym;
-	if (*sym != NULL) {
-		assert(before_params != NULL);
-		before_params->level_delimiter = true;
-	}
+	const bool cleanup = level_delimiter_prepare(before_params);
 
 	check(resolve_function_params(arena, a->u.function.params, sym));
 
@@ -324,10 +357,9 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	}
 
 	symbols_reset_scope(sym, before_params);
-	if (before_params) {
+	if (cleanup) {
 		before_params->level_delimiter = false;
 	}
-
 	return RESULT_OK;
 }
 
@@ -375,6 +407,14 @@ token_consume(const struct token **tok)
 {
 	assert(*tok != NULL);
 	*tok = (**tok).next;
+}
+
+static WARN_UNUSED bool
+is_token_maybe_function_prefix(const struct token *tok)
+{
+	return is_token_type(tok, TOKEN_KEYWORD_INT) ||
+	       is_token_type(tok, TOKEN_KEYWORD_STATIC) ||
+	       is_token_type(tok, TOKEN_KEYWORD_EXTERN);
 }
 
 static WARN_UNUSED result_t
@@ -663,9 +703,73 @@ parse_expr(Arena *arena,
 static WARN_UNUSED bool
 parse_peek_ahead_function_maybe(const struct token *tok)
 {
-	return is_token_type(tok, TOKEN_KEYWORD_INT) &&
-	       is_token_type(tok->next, TOKEN_IDENTIFIER) &&
-	       is_token_type(tok->next->next, TOKEN_PAREN_OPEN);
+	bool typed = false;
+	for (; tok != NULL; tok = tok->next) {
+		if (is_token_maybe_function_prefix(tok)) {
+			/* seek past return type and specifiers */
+			typed = typed || is_token_type(tok, TOKEN_KEYWORD_INT);
+		} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
+			/* ... until we reach the first TOKEN_IDENTIFIER  */
+			/* ... and then check if TOKEN_PAREN_OPEN follows */
+			const struct token *next = tok->next;
+			return typed && is_token_type(next, TOKEN_PAREN_OPEN);
+		} else {
+			/* don't try to peek past other token types */
+			break;
+		}
+		// TODO: if we add typedefs, the heuristic above will need to
+		// change to accept custom return types (not just int) *AND* to
+		// seek past those custom return types while looking for the
+		// variable/function name; the crux is that these custom return
+		// types -- created as typedefs earlier in the program -- will
+		// appear as TOKEN_IDENTIFIER from the lexer, i.e. the same
+		// type of token as the function name
+	}
+	return false;
+}
+
+static WARN_UNUSED result_t
+parse_specifiers(bool expect_var, /* or expect_function */
+                 const struct token **tok,
+                 enum ast_specifier *dst)
+{
+	size_t type_count = 0;
+	size_t specifier_count = 0;
+
+	while (is_token_maybe_function_prefix(*tok)) {
+		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+			++type_count;
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
+			*dst = SPECIFIER_STATIC;
+			++specifier_count;
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
+			*dst = SPECIFIER_EXTERN;
+			++specifier_count;
+		} else {
+			assert(0); /* logic error in caller */
+		}
+		token_consume(tok);
+	}
+
+	if (specifier_count > 1) {
+		return make_result(
+			expect_var ? ERR_PARSE_DECL_SPECIFIER_DUPLICATE
+				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
+	}
+
+	if (type_count > 1) {
+		return make_result(
+			expect_var ? ERR_PARSE_DECL_TYPE_DUPLICATE
+				   : ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
+	}
+
+	if (type_count == 0) {
+		return make_result(
+			expect_var ? ERR_PARSE_DECL_EXPECT_TYPE_INT
+				   : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
+	}
+
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
@@ -673,10 +777,9 @@ parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_DECLARATION));
 
-	if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
-		return make_result(ERR_PARSE_DECL_EXPECT_TYPE_INT);
-	}
-	token_consume(tok);
+	enum ast_specifier specifier = SPECIFIER_NONE;
+	check(parse_specifiers(true, tok, &specifier));
+	(**dst).u.declare.specifier = specifier;
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER);
@@ -725,7 +828,7 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 		struct ast **item_dst = &(**dst).u.block.item;
 		if (parse_peek_ahead_function_maybe(*tok)) {
 			check(parse_function(arena, tok, item_dst));
-		} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+		} else if (is_token_maybe_function_prefix(*tok)) {
 			check(parse_decl(arena, tok, item_dst));
 		} else {
 			check(parse_stmt(arena, tok, item_dst));
@@ -1032,10 +1135,9 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
 
-	if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
-	}
-	token_consume(tok);
+	enum ast_specifier specifier = SPECIFIER_NONE;
+	check(parse_specifiers(false, tok, &specifier));
+	(**dst).u.function.specifier = specifier;
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
@@ -1072,23 +1174,47 @@ result_t
 parse_init(Arena *arena,
            const struct token *tok,
            struct ast **a,
-           struct symbol **sym)
+           long long int *generator)
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
 	struct ast *original = *a;
 
 	a = &original->u.program.globals;
-	for (; tok != NULL; a = &(**a).u.function.next) {
-		check(parse_function(arena, &tok, a));
-		assert((**a).node_type == NODE_FUNCTION);
+	while (tok != NULL) {
+		if (parse_peek_ahead_function_maybe(tok)) {
+			check(parse_function(arena, &tok, a));
+			a = &(**a).u.function.next;
+		} else {
+			check(parse_decl(arena, &tok, a));
+			a = &(**a).u.declare.next;
+		}
 	}
+
+	struct symbol *working_symbols = NULL;
 
 	a = &original->u.program.globals;
-	for (; sym != NULL && *a != NULL; a = &(**a).u.function.next) {
-		assert((**a).node_type == NODE_FUNCTION);
-		check(resolve_function(arena, *a, sym));
+	while (generator != NULL && *a != NULL) {
+		switch ((**a).node_type) {
+		case NODE_FUNCTION:
+			check(resolve_function(arena, *a, &working_symbols));
+			a = &(**a).u.function.next;
+			break;
+		case NODE_DECLARATION:
+			check(resolve_decl(arena,
+			                   *a,
+			                   &working_symbols,
+			                   SYMBOL_LINKAGE_EXTERNAL));
+			a = &(**a).u.declare.next;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 	}
 
+	if (generator != NULL && working_symbols != NULL) {
+		*generator = working_symbols->cookie;
+	}
 	return RESULT_OK;
 }
 
@@ -1097,7 +1223,9 @@ parse_debug_print_ast_symbol(const char *description,
                              const struct ast_symbol *asym,
                              size_t indent)
 {
-	debug("%*s%s", (int)indent, "", description);
+	if (description != NULL) {
+		debug("%*s%s", (int)indent, "", description);
+	}
 	debug("%*sIDENTIFIER %.*s",
 	      (int)indent + 1,
 	      "",
@@ -1125,6 +1253,40 @@ parse_debug_print_ast_symbol(const char *description,
 	      (int)indent + 1,
 	      "",
 	      symbol_type_as_str);
+
+	const char *linkage_as_str = NULL;
+	switch (asym->ltype) {
+	case SYMBOL_LINKAGE_NONE:
+		linkage_as_str = "NONE";
+		break;
+	case SYMBOL_LINKAGE_INTERNAL:
+		linkage_as_str = "INTERNAL";
+		break;
+	case SYMBOL_LINKAGE_EXTERNAL:
+		linkage_as_str = "EXTERNAL";
+		break;
+	}
+
+	debug("%*sIDENTIFIER.LINKAGE: %s", (int)indent + 1, "", linkage_as_str);
+}
+
+static void
+parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
+{
+	const char *spec_as_str = NULL;
+	switch (specifier) {
+	case SPECIFIER_NONE:
+		break;
+	case SPECIFIER_STATIC:
+		spec_as_str = "STATIC";
+		break;
+	case SPECIFIER_EXTERN:
+		spec_as_str = "EXTERN";
+		break;
+	}
+	if (spec_as_str != NULL) {
+		debug("%*sSPECIFIER: %s", (int)indent, "", spec_as_str);
+	}
 }
 
 #define TO_STR(node_type) #node_type,
@@ -1145,6 +1307,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("NAME",
 		                             &a->u.function.identifier,
 		                             indent + 1);
+		parse_debug_print_ast_spec(a->u.function.specifier, indent + 1);
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             cur,
@@ -1167,12 +1330,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_DECLARATION:
-		parse_debug_print_ast_symbol("DECLARATION",
+		parse_debug_print_ast_symbol(NULL,
 		                             &a->u.declare.identifier,
 		                             indent);
+		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
+		}
+		if (a->u.declare.next != NULL) {
+			parse_debug_print(a->u.declare.next, indent);
 		}
 		break;
 	case NODE_IF_ELSE:
@@ -1252,9 +1419,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		parse_debug_print_ast_symbol("EXPRESSION VARIABLE USAGE",
-		                             &a->u.var,
-		                             indent);
+		parse_debug_print_ast_symbol(NULL, &a->u.var, indent);
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		debug("%*sCONDITION", (int)indent + 1, "");
