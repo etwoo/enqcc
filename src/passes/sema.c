@@ -280,9 +280,6 @@ sema_fn_signature(struct ast *a, void *userdata)
 			                   fname->data,
 			                   fname->sz);
 		}
-		// TODO: apply similar global-or-not logic to set linkage to
-		// LINKAGE_EXTERNAL by default, for file-scope variables with
-		// no explicit linkage set
 	}
 
 	struct symbol **s = &state->symbols;
