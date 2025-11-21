@@ -182,7 +182,7 @@ resolve_decl(Arena *arena,
 {
 	assert(a->node_type == NODE_DECLARATION);
 	enum symbol_linkage effective_linkage = default_linkage;
-	enum symbol_storage_class storage = STORAGE_STATIC;
+	enum symbol_storage_class storage = STORAGE_GLOBAL;
 	bool allow_initializer = true;
 
 	switch (default_linkage) {
@@ -216,7 +216,8 @@ resolve_decl(Arena *arena,
 
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
-	if (dup != NULL) {
+	if ((dup != NULL) && (dup->linkage == LINKAGE_NONE ||
+	                      a->u.declare.specifier != SPECIFIER_EXTERN)) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
@@ -377,7 +378,7 @@ resolve_function(Arena *arena,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
 		                      effective_linkage,
-		                      STORAGE_STATIC,
+		                      STORAGE_GLOBAL,
 		                      n_args));
 		map_symbol_members(*sym, &a->u.function.identifier);
 	} else if (is_def) {

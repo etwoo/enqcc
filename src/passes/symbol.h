@@ -22,7 +22,7 @@ enum symbol_linkage {
 
 enum symbol_storage_class {
 	STORAGE_AUTOMATIC,
-	STORAGE_STATIC,
+	STORAGE_GLOBAL,
 };
 
 // TODO: for typedef support, add tracking for types (like variables)
