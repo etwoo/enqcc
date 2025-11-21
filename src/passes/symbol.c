@@ -10,7 +10,6 @@ symbols_prepend(Arena *arena,
                 struct symbol **head,
                 const struct string_view *name,
                 enum symbol_type stype,
-                enum symbol_linkage linkage,
                 long long int n_args)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
@@ -18,14 +17,9 @@ symbols_prepend(Arena *arena,
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
-	node->linkage = linkage;
 	node->n_args = n_args;
 	if (*head != NULL) {
 		node->unique = (**head).unique + 1;
-		node->level = (**head).level;
-		if ((**head).level_delimiter) {
-			node->level++;
-		}
 		node->cookie = MAX(node->unique, (**head).cookie);
 	}
 	node->level_delimiter = false;

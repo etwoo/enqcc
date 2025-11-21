@@ -294,7 +294,6 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      LINKAGE_EXTERNAL,
 		                      n_args));
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,

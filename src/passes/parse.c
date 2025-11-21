@@ -188,7 +188,6 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 	                      sym,
 	                      &a->u.declare.identifier.name,
 	                      SYMBOL_VARIABLE,
-	                      LINKAGE_NONE,
 	                      0));
 	map_symbol_members(*sym, &a->u.declare.identifier);
 
@@ -263,7 +262,6 @@ resolve_function_params_one(Arena *arena,
 	                      sym,
 	                      &a->name,
 	                      SYMBOL_VARIABLE,
-	                      LINKAGE_NONE,
 	                      0));
 	map_symbol_members(*sym, a);
 	return RESULT_OK;
@@ -297,7 +295,6 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 		                      &a->u.function.identifier.name,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      LINKAGE_EXTERNAL,
 		                      n_args));
 		map_symbol_members(*sym, &a->u.function.identifier);
 	} else if (is_def) {
