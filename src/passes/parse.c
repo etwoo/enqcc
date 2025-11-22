@@ -178,8 +178,18 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
-	const bool is_global = (a->u.declare.specifier == SPECIFIER_EXTERN ||
-	                        a->u.declare.specifier == SPECIFIER_STATIC);
+	const bool is_global = (a->u.declare.specifier == SPECIFIER_EXTERN);
+
+	info("%s() sym.level_delimiter=%s var=%.*s dup=%p dup->linkage.is_global=%s, is_global=%s",
+	     __func__,
+	     (*sym) && (**sym).level_delimiter ? "yes" : "no",
+	     (int)a->u.declare.identifier.name.sz,
+	     a->u.declare.identifier.name.data,
+	     (void *)dup,
+	     dup == NULL              ? ""
+	     : dup->linkage.is_global ? "yes"
+	                              : "no",
+	     is_global ? "yes" : "no");
 
 	if (dup != NULL && !(dup->linkage.is_global && is_global)) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
@@ -209,8 +219,11 @@ resolve_block_with_delimiter(Arena *arena,
                              struct symbol **sym,
                              struct symbol *level_delimiter_point)
 {
-	if (*sym != NULL) {
+	const bool level_delimiter_already_managed = // TODO refactor
+		level_delimiter_point && level_delimiter_point->level_delimiter;
+	if (*sym != NULL && !level_delimiter_already_managed) {
 		assert(level_delimiter_point != NULL);
+		info("%s() sets level_delimiter at %.*s", __func__, (int)level_delimiter_point->name.sz, level_delimiter_point->name.data);
 		level_delimiter_point->level_delimiter = true;
 	}
 
@@ -245,8 +258,9 @@ resolve_block_with_delimiter(Arena *arena,
 
 	symbols_reset_scope(sym, outer_resetter);
 
-	if (*sym != NULL) {
+	if (*sym != NULL && !level_delimiter_already_managed) {
 		assert(level_delimiter_point != NULL);
+		info("%s() unsets level_delimiter at %.*s", __func__, (int)level_delimiter_point->name.sz, level_delimiter_point->name.data);
 		level_delimiter_point->level_delimiter = false;
 	}
 	return RESULT_OK;
@@ -308,8 +322,12 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	}
 
 	struct symbol *before_params = *sym;
+	const bool level_delimiter_already_managed = // TODO refactor
+		before_params && before_params->level_delimiter;
 	if (*sym != NULL) {
+		// TODO: level_delimiter should prevent resolve_decl() from reaching bar entirely, such that is_global is never compared at all!
 		assert(before_params != NULL);
+		info("%s() sets level_delimiter at %.*s", __func__, (int)before_params->name.sz, before_params->name.data);
 		before_params->level_delimiter = true;
 	}
 
@@ -323,7 +341,8 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	}
 
 	symbols_reset_scope(sym, before_params);
-	if (before_params) {
+	if (before_params && !level_delimiter_already_managed) {
+		info("%s() unsets level_delimiter at %.*s", __func__, (int)before_params->name.sz, before_params->name.data);
 		before_params->level_delimiter = false;
 	}
 
