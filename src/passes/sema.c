@@ -345,7 +345,7 @@ sema_declare_finalize(struct sema_symbol_state *state,
                       const struct string_view *varname,
                       struct symbol *dup,
                       bool has_linkage,
-                      unsigned initial,
+                      enum initializer_state initial,
                       long long int as_constant)
 {
 	if (dup == NULL) {
@@ -368,12 +368,12 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
 	bool has_linkage = (a->u.declare.specifier != SPECIFIER_STATIC);
-	unsigned initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
+	enum initializer_state initial = INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 
 	if (a->u.declare.init != NULL) {
 		if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
-			initial = LINKAGE_INITIAL_VALUE_CONSTANT;
+			initial = INITIAL_VALUE_CONSTANT;
 			as_constant = a->u.declare.init->u.num;
 		} else {
 			return make_result(
@@ -382,9 +382,9 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 				varname->sz);
 		}
 	} else if (a->u.declare.specifier == SPECIFIER_EXTERN) {
-		initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
+		initial = INITIAL_VALUE_NO_INITIALIZER;
 	} else {
-		initial = LINKAGE_INITIAL_VALUE_TENTATIVE;
+		initial = INITIAL_VALUE_TENTATIVE;
 	}
 
 	struct symbol *function_symbol_collision =
@@ -414,16 +414,17 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 
 	if (dup == NULL) {
 		/* no earlier declaration to cross-reference initializer */
-	} else if (dup->linkage.initial == LINKAGE_INITIAL_VALUE_CONSTANT &&
-	           initial == LINKAGE_INITIAL_VALUE_CONSTANT) {
+	} else if (dup->linkage.initial == INITIAL_VALUE_CONSTANT &&
+	           initial == INITIAL_VALUE_CONSTANT) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_DUPLICATE,
 			varname->data,
 			varname->sz);
 	} else {
-		if (dup->linkage.initial == LINKAGE_INITIAL_VALUE_CONSTANT) {
+		if (dup->linkage.initial == INITIAL_VALUE_CONSTANT) {
 			as_constant = dup->linkage.as_constant;
 		}
+		// NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
 		initial = MAX(initial, dup->linkage.initial);
 	}
 
@@ -442,7 +443,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
 	bool has_linkage = false;
-	unsigned initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
+	unsigned initial = INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 	struct symbol *function_symbol_collision = NULL;
 	struct symbol *dup = NULL;
@@ -479,7 +480,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 		}
 
 		has_linkage = true;
-		initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
+		initial = INITIAL_VALUE_NO_INITIALIZER;
 		break;
 	case SPECIFIER_STATIC:
 		if (a->u.declare.init != NULL &&
@@ -491,15 +492,15 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 		}
 
 		if (a->u.declare.init == NULL) {
-			initial = LINKAGE_INITIAL_VALUE_CONSTANT;
+			initial = INITIAL_VALUE_CONSTANT;
 			as_constant = 0;
 		} else if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
-			initial = LINKAGE_INITIAL_VALUE_CONSTANT;
+			initial = INITIAL_VALUE_CONSTANT;
 			as_constant = a->u.declare.init->u.num;
 		}
 
 		has_linkage = false;
-		assert(initial == LINKAGE_INITIAL_VALUE_CONSTANT);
+		assert(initial == INITIAL_VALUE_CONSTANT);
 		break;
 	case SPECIFIER_NONE:
 		/*

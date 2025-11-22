@@ -14,6 +14,12 @@ enum symbol_type {
 	SYMBOL_FUNCTION_DEFINITION,
 };
 
+enum initializer_state {
+	INITIAL_VALUE_NO_INITIALIZER,
+	INITIAL_VALUE_TENTATIVE,
+	INITIAL_VALUE_CONSTANT,
+};
+
 // TODO: for typedef support, add tracking for types (like variables)
 struct symbol {
 	struct string_view name;
@@ -54,11 +60,7 @@ struct symbol {
 	 */
 	struct {
 		bool has_linkage;
-		enum {
-			LINKAGE_INITIAL_VALUE_NO_INITIALIZER,
-			LINKAGE_INITIAL_VALUE_TENTATIVE,
-			LINKAGE_INITIAL_VALUE_CONSTANT,
-		} initial;
+		enum initializer_state initial;
 		long long int as_constant;
 	} linkage;
 
