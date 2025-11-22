@@ -818,7 +818,7 @@ ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 
 	struct ast *cur = a->u.program.globals;
 	struct ir_function **dst = &ir->functions;
-	// TODO: handle NODE_DECLARATION intermingled within u.program.global
+	// TODO: handle NODE_DECLARATION intermingled within u.program.globals
 	for (; cur != NULL; cur = cur->u.function.next) {
 		if (cur->u.function.block != NULL) {
 			check(ir_function(arena, cur, ir, dst));
