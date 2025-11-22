@@ -188,10 +188,10 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 
 	if (dup == NULL) {
 		check(symbols_prepend(arena,
-				      sym,
-				      &a->u.declare.identifier.name,
-				      SYMBOL_VARIABLE,
-				      0));
+		                      sym,
+		                      &a->u.declare.identifier.name,
+		                      SYMBOL_VARIABLE,
+		                      0));
 		map_symbol_members(*sym, &a->u.declare.identifier);
 		(**sym).linkage.is_global = is_global;
 	}
@@ -1165,10 +1165,10 @@ parse_init(Arena *arena,
 			break;
 		case NODE_DECLARATION:
 			check(symbols_prepend(arena,
-					      sym,
-					      &(**a).u.declare.identifier.name,
-					      SYMBOL_VARIABLE,
-					      0));
+			                      sym,
+			                      &(**a).u.declare.identifier.name,
+			                      SYMBOL_VARIABLE,
+			                      0));
 			map_symbol_members(*sym, &(**a).u.declare.identifier);
 			a = &(**a).u.declare.next;
 			break;
