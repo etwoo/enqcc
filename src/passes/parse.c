@@ -178,7 +178,8 @@ resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
 
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
-	const bool is_global = (a->u.declare.specifier == SPECIFIER_EXTERN);
+	const bool is_global = (a->u.declare.specifier == SPECIFIER_EXTERN ||
+	                        a->u.declare.specifier == SPECIFIER_STATIC);
 
 	if (dup != NULL && !(dup->linkage.is_global && is_global)) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
@@ -1170,6 +1171,7 @@ parse_init(Arena *arena,
 			                      SYMBOL_VARIABLE,
 			                      0));
 			map_symbol_members(*sym, &(**a).u.declare.identifier);
+			(**sym).linkage.is_global = true;
 			a = &(**a).u.declare.next;
 			break;
 		default:
