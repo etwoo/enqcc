@@ -51,6 +51,42 @@ ir_val_copy(const struct ir_val *src, struct ir_val *dst)
 	memcpy(dst, src, sizeof(*dst));
 }
 
+static void
+ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
+{
+	assert(src->node_type == NODE_DECLARATION ||
+	       src->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
+	       src->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
+
+	const struct ast_symbol *sym = NULL;
+	switch (src->node_type) {
+	case NODE_DECLARATION:
+		sym = &src->u.declare.identifier;
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		sym = &src->u.op_binary.lhs->u.var;
+		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+		sym = &src->u.var;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	if (sym->has_linkage) {
+		dst->subtype = IR_VAL_VARIABLE_DATA;
+	} else {
+		dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
+	}
+
+	dst->num = sym->unique;
+
+	if (sym->has_linkage) {
+		dst->varname = sym->name;
+	}
+}
+
 static result_t ir_expr(Arena *arena,
                         const struct ast *a,
                         struct intermediate *ir,
@@ -140,8 +176,7 @@ ir_decl_init(Arena *arena,
 	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
 
 	ir_val_copy(&inner_return, &assigner->args[0]);
-	assigner->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	assigner->args[1].num = a->u.declare.identifier.unique;
+	ir_val_from_ast_variable_like(a, &assigner->args[1]);
 
 	*dst = ir_op_list_concat(inner, assigner);
 	return RESULT_OK;
@@ -413,7 +448,7 @@ ir_unary_op(Arena *arena,
 	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
 		assert(a->u.op_binary.lhs->node_type ==
 		       NODE_EXPRESSION_VARIABLE_USAGE);
-		unary->args[1].num = a->u.op_binary.lhs->u.var.unique;
+		ir_val_from_ast_variable_like(a, &unary->args[1]);
 	} else {
 		unary->args[1].num = ir->env.generator++;
 	}
@@ -709,8 +744,7 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
-		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
-		return_value->num = a->u.var.unique;
+		ir_val_from_ast_variable_like(a, return_value);
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
@@ -948,6 +982,12 @@ ir_debug_print_one(const struct ir_op *op)
 			break;
 		case IR_VAL_JUMP_TARGET_LABEL:
 			debug("  LABEL label_%lld", op->args[i].num);
+			break;
+		case IR_VAL_VARIABLE_DATA:
+			debug("  DATA %lld %.*s",
+			      op->args[i].num,
+			      (int)op->args[i].varname.sz,
+			      op->args[i].varname.data);
 			break;
 		}
 	}

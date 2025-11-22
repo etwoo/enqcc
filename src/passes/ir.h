@@ -11,8 +11,10 @@ struct ir_val {
 		IR_VAL_CONSTANT_INT,
 		IR_VAL_TEMPORARY_VARIABLE,
 		IR_VAL_JUMP_TARGET_LABEL,
+		IR_VAL_VARIABLE_DATA,
 	} subtype;
-	long long int num; /* numeric value, variable ID, etc */
+	long long int num;          /* numeric value, variable ID, etc */
+	struct string_view varname; /* symbol name, if linkage */
 };
 
 #define FOREACH_IR_OPCODE(F)                                                   \

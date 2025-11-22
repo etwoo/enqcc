@@ -31,11 +31,13 @@ struct asm_operand {
 		ASM_OPERAND_STACK,
 		ASM_OPERAND_JUMP_TARGET_LABEL,
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
+		ASM_OPERAND_VARIABLE_DATA,
 	} operand_type;
 	union {
 		long long int num;
 		enum asm_register reg;
-		struct string_view function;
+		struct string_view function; /* CALL_TARGET_FUNCTION */
+		struct string_view variable; /* VARIABLE_DATA */
 	} u;
 };
 

@@ -14,6 +14,7 @@ struct ast_symbol {
 	struct string_view name;
 	long long int unique;
 	enum symbol_type stype;
+	bool has_linkage;
 };
 
 #define FOREACH_AST_NODETYPE(F)                                                \

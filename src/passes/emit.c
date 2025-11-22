@@ -121,6 +121,9 @@ emit_asm_operand(const struct asm_operand *o,
 		 * determine which functions require the @PLT suffix.
 		 */
 		break;
+	case ASM_OPERAND_VARIABLE_DATA:
+		assert(0 && "TODO ASM write for global variable references");
+		break;
 	}
 }
 

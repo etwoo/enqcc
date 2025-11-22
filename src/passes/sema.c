@@ -434,6 +434,9 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            has_linkage,
 	                            initial,
 	                            as_constant));
+	if (has_linkage) {
+		a->u.declare.identifier.has_linkage = true;
+	}
 	return RESULT_OK;
 }
 
@@ -517,6 +520,9 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            has_linkage,
 	                            initial,
 	                            as_constant));
+	if (has_linkage) {
+		a->u.declare.identifier.has_linkage = true;
+	}
 	return RESULT_OK;
 }
 

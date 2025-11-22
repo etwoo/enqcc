@@ -114,15 +114,21 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		break;
 	case IR_VAL_CONSTANT_INT:
 		dst->operand_type = ASM_OPERAND_IMMEDIATE;
+		dst->u.num = src->num;
 		break;
 	case IR_VAL_TEMPORARY_VARIABLE:
 		dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
+		dst->u.num = src->num;
 		break;
 	case IR_VAL_JUMP_TARGET_LABEL:
 		dst->operand_type = ASM_OPERAND_JUMP_TARGET_LABEL;
+		dst->u.num = src->num;
+		break;
+	case IR_VAL_VARIABLE_DATA:
+		dst->operand_type = ASM_OPERAND_VARIABLE_DATA;
+		dst->u.variable = src->varname;
 		break;
 	}
-	dst->u.num = src->num;
 }
 
 static void
@@ -902,6 +908,11 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  FUNCTION %.*s",
 		      (int)operand->u.function.sz,
 		      operand->u.function.data);
+		break;
+	case ASM_OPERAND_VARIABLE_DATA:
+		debug("  DATA %.*s",
+		      (int)operand->u.variable.sz,
+		      operand->u.variable.data);
 		break;
 	}
 }
