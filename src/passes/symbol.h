@@ -26,6 +26,31 @@ struct symbol {
 	/*
 	 * http://en.cppreference.com/w/c/language/storage_class_specifiers.html
 	 * http://en.cppreference.com/w/c/language/extern.html
+	 *
+	 * We use linkage as an organizing concept and not extern/static/none
+	 * because the mapping between the two can be unintuitive and require
+	 * non-local reasoning about the code being compiled. For example,
+	 * consider keyword extern appearing on a *re*declaration of a
+	 * file-scope variable, declared earlier with internal linkage:
+	 *
+	 *   static int x = 0;
+	 *   extern int x;
+	 *   int main(void)
+	 *   {
+	 *       return x;
+	 *   }
+	 *
+	 * This results in linkage for `x` remaining internal. In other words,
+	 * in this particular case, use of keyword extern leads to a result
+	 * similar to use of keyword static alone!
+	 *
+	 * Note: the meaning of has_linkage currently depends on context. In
+	 * particular, sema.c uses has_linkage to mean external linkage
+	 * specifically, while parse.c overloads has_linkage to mean one of:
+	 *
+	 * - file scope declaration with internal linkage
+	 * - file scope declaration with external linkage
+	 * - block scope declaration with external linkage
 	 */
 	struct {
 		bool has_linkage;
