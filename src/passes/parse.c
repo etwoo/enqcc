@@ -1231,6 +1231,11 @@ parse_debug_print_ast_symbol(const char *description,
 	      (int)indent + 1,
 	      "",
 	      symbol_type_as_str);
+
+	debug("%*sIDENTIFIER.LINKAGE: %s",
+	      (int)indent + 1,
+	      "",
+	      asym->has_linkage ? "INTERNAL OR EXTERNAL" : "NONE");
 }
 
 static void
@@ -1382,9 +1387,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		parse_debug_print_ast_symbol("EXPRESSION VARIABLE USAGE",
-		                             &a->u.var,
-		                             indent);
+		parse_debug_print_ast_symbol(NULL, &a->u.var, indent);
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		debug("%*sCONDITION", (int)indent + 1, "");

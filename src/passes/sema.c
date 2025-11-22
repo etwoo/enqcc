@@ -546,6 +546,57 @@ sema_declare(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_linkage(struct ast *a, void *userdata)
+{
+	struct sema_symbol_state *state = userdata;
+
+	struct ast_symbol *sym = NULL;
+	switch (a->node_type) {
+	case NODE_DECLARATION:
+		sym = &a->u.declare.identifier;
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		sym = &a->u.op_binary.lhs->u.var;
+		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+		sym = &a->u.var;
+		break;
+	default:
+		return RESULT_OK;
+	}
+
+	/*
+	 * Lookup below causes overall O(n*m) runtime, where:
+	 *
+	 *   n = number of variables with linkage
+	 *   m = number of variable references spread across AST nodes
+	 */
+	for (struct symbol *cursor = state->variable_symbols; cursor != NULL;
+	     cursor = cursor->next) {
+		if (cursor->unique == sym->unique) {
+			assert(cursor->stype == SYMBOL_VARIABLE);
+			assert(cursor->name.sz == sym->name.sz &&
+			       0 == strncmp(cursor->name.data,
+			                    sym->name.data,
+			                    cursor->name.sz));
+			/*
+			 * Q: Why do we set has_linkage=true below, even if the
+			 * match at cursor has cursor->has_linkage == false?
+			 *
+			 * A: Consumers in ir.c want to know if this symbol has
+			 * any linkage, internal or external. This corresponds
+			 * to presence in state->variable_symbols overall, not
+			 * the matching node's has_linkage value in particular.
+			 */
+			sym->has_linkage = true;
+			break;
+		}
+	}
+
+	return RESULT_OK;
+}
+
 result_t
 sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 {
@@ -568,6 +619,9 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 
 	debug("Checking variable declarations");
 	check(sema_walk(a, sema_declare, &state));
+
+	debug("Updating variable references"); /* based on sema_declare() */
+	check(sema_walk(a, sema_linkage, &state));
 
 	s->functions = state.function_symbols;
 	s->variables = state.variable_symbols;
