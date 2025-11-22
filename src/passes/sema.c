@@ -473,7 +473,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			 * In this case, extern causes this variable to take on
 			 * the same linkage as the matching identifier that is
 			 * already in scope. This may even be a variable with
-			 * static linkage!
+			 * internal linkage via earlier use of keyword static!
 			 */
 			return RESULT_OK;
 		}
