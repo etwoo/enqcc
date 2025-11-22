@@ -172,13 +172,17 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 }
 
 static WARN_UNUSED result_t
-resolve_decl(Arena *arena, struct ast *a, struct symbol **sym)
+resolve_decl(Arena *arena,
+             struct ast *a,
+             struct symbol **sym,
+             bool always_global)
 {
 	assert(a->node_type == NODE_DECLARATION);
 
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
-	const bool is_global = (a->u.declare.specifier == SPECIFIER_EXTERN);
+	const bool is_global =
+		always_global || (a->u.declare.specifier == SPECIFIER_EXTERN);
 
 	if (dup != NULL && !(dup->linkage.is_global && is_global)) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
@@ -246,7 +250,7 @@ resolve_block_with_delimiter(Arena *arena,
 			check(resolve_function(arena, cur_item, sym));
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, cur_item, sym));
+			check(resolve_decl(arena, cur_item, sym, false));
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
@@ -1176,13 +1180,7 @@ parse_init(Arena *arena,
 			a = &(**a).u.function.next;
 			break;
 		case NODE_DECLARATION:
-			check(symbols_prepend(arena,
-			                      sym,
-			                      &(**a).u.declare.identifier.name,
-			                      SYMBOL_VARIABLE,
-			                      0));
-			map_symbol_members(*sym, &(**a).u.declare.identifier);
-			(**sym).linkage.is_global = true;
+			check(resolve_decl(arena, *a, sym, true));
 			a = &(**a).u.declare.next;
 			break;
 		default:
