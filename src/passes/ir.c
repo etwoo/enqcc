@@ -757,10 +757,10 @@ ir_expr(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_function(Arena *arena,
-            const struct ast *a,
-            struct intermediate *ir,
-            struct ir_function **dst)
+ir_func(Arena *arena,
+        const struct ast *a,
+        struct intermediate *ir,
+        struct ir_function **dst)
 {
 	assert(a->node_type == NODE_FUNCTION);
 
@@ -810,21 +810,91 @@ ir_function(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
+ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
+{
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_IR_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).identifier = s->name;
+
+	if (s->linkage.has_linkage) {
+		(**dst).linkage = IR_LINKAGE_EXTERNAL;
+	} else {
+		(**dst).linkage = IR_LINKAGE_INTERNAL;
+	}
+
+	switch (s->linkage.initial) {
+	case INITIAL_VALUE_NO_INITIALIZER:
+		break;
+	case INITIAL_VALUE_TENTATIVE:
+		(**dst).u.initial_as_ll = 0;
+		break;
+	case INITIAL_VALUE_CONSTANT:
+		(**dst).u.initial_as_ll = s->linkage.as_constant;
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_program(Arena *arena,
+           const struct ast *a,
+           struct symbol_table *sym,
+           struct intermediate *ir)
 {
 	assert(a->node_type == NODE_PROGRAM);
 	assert(a->u.program.globals == NULL ||
-	       a->u.program.globals->node_type == NODE_FUNCTION);
+	       a->u.program.globals->node_type == NODE_FUNCTION ||
+	       a->u.program.globals->node_type == NODE_DECLARATION);
 
-	struct ast *cur = a->u.program.globals;
-	struct ir_function **dst = &ir->functions;
-	// TODO: handle NODE_DECLARATION intermingled within u.program.globals
-	for (; cur != NULL; cur = cur->u.function.next) {
-		if (cur->u.function.block != NULL) {
-			check(ir_function(arena, cur, ir, dst));
-			assert(*dst != NULL); /* return_0 fallback guarantee */
-			dst = &(**dst).next;
+	struct ir_function **dst_fun = &ir->functions;
+	a = a->u.program.globals;
+	while (a != NULL) {
+		switch (a->node_type) {
+		case NODE_FUNCTION:
+			check(ir_func(arena, a, ir, dst_fun));
+			assert(*dst_fun != NULL); /* return_0 guarantee */
+			dst_fun = &(**dst_fun).next;
+			a = a->u.function.next;
+			break;
+		case NODE_DECLARATION:
+			/* skip variables, and use symbol_table instead */
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
 		}
+	}
+
+	/* O(n^2) caused by O(n) search of ir->functions for each symbol */
+	for (struct symbol *s = sym->functions; s != NULL; s = s->next) {
+		assert(s->stype == SYMBOL_FUNCTION_DECLARATION ||
+		       s->stype == SYMBOL_FUNCTION_DEFINITION);
+		struct ir_function *f = ir->functions;
+		for (; f != NULL; f = f->next) {
+			if (s->name.sz == f->identifier.sz &&
+			    0 == strncmp(s->name.data,
+			                 f->identifier.data,
+			                 s->name.sz)) {
+				if (s->linkage.has_linkage) {
+					f->linkage = IR_LINKAGE_EXTERNAL;
+				} else {
+					f->linkage = IR_LINKAGE_INTERNAL;
+				}
+				break;
+			}
+		}
+	}
+
+	struct ir_variable **dst_var = &ir->variables;
+	for (struct symbol *s = sym->variables; s != NULL; s = s->next) {
+		assert(s->stype == SYMBOL_VARIABLE);
+		check(ir_var(arena, s, dst_var));
+		assert(*dst_var != NULL);
+		dst_var = &(**dst_var).next;
 	}
 
 	return RESULT_OK;
@@ -833,16 +903,17 @@ ir_program(Arena *arena, const struct ast *a, struct intermediate *ir)
 result_t
 ir_init(Arena *arena,
         const struct ast *a,
-        const struct symbol *sym,
-        const long long int *label_generator,
+        long long int base_id,
+        long long int base_label,
+        struct symbol_table *sym,
         struct intermediate **ir)
 {
 	*ir = arena_alloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
 	memset(*ir, 0, sizeof(**ir));
-	(**ir).env.generator = sym == NULL ? 1 : sym->cookie + 1;
-	(**ir).env.labels = *label_generator + 1;
-	check(ir_program(arena, a, *ir));
+	(**ir).env.generator = base_id;
+	(**ir).env.labels = base_label;
+	check(ir_program(arena, a, sym, *ir));
 	return RESULT_OK;
 }
 

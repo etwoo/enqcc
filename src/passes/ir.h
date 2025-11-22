@@ -49,11 +49,26 @@ struct ir_op {
 	struct ir_op *next;
 };
 
+enum ir_linkage {
+	IR_LINKAGE_INTERNAL,
+	IR_LINKAGE_EXTERNAL,
+};
+
 struct ir_function {
 	struct string_view identifier;
+	enum ir_linkage linkage;
 	struct ir_val params[FUNCTION_PARAMETER_LIMIT];
 	struct ir_op *ops;
 	struct ir_function *next;
+};
+
+struct ir_variable {
+	struct string_view identifier;
+	enum ir_linkage linkage;
+	struct {
+		long long int initial_as_ll;
+	} u;
+	struct ir_variable *next;
 };
 
 struct ir_env {
@@ -63,6 +78,7 @@ struct ir_env {
 
 struct intermediate {
 	struct ir_function *functions;
+	struct ir_variable *variables;
 	struct ir_env env;
 };
 

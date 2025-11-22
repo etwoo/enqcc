@@ -1156,7 +1156,7 @@ result_t
 parse_init(Arena *arena,
            const struct token *tok,
            struct ast **a,
-           struct symbol **sym)
+           long long int *generator)
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
 	struct ast *original = *a;
@@ -1172,15 +1172,16 @@ parse_init(Arena *arena,
 		}
 	}
 
+	struct symbol *working_symbols = NULL;
 	a = &original->u.program.globals;
-	while (sym != NULL && *a != NULL) {
+	while (generator != NULL && *a != NULL) {
 		switch ((**a).node_type) {
 		case NODE_FUNCTION:
-			check(resolve_function(arena, *a, sym));
+			check(resolve_function(arena, *a, &working_symbols));
 			a = &(**a).u.function.next;
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, *a, sym, true));
+			check(resolve_decl(arena, *a, &working_symbols, true));
 			a = &(**a).u.declare.next;
 			break;
 		default:
@@ -1189,6 +1190,9 @@ parse_init(Arena *arena,
 		}
 	}
 
+	if (generator != NULL && working_symbols != NULL) {
+		*generator = working_symbols->cookie;
+	}
 	return RESULT_OK;
 }
 

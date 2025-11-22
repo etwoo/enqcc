@@ -541,7 +541,7 @@ sema_declare(struct ast *a, void *userdata)
 }
 
 result_t
-sema_typecheck(Arena *arena, struct ast *a)
+sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 {
 	debug("Checking lvalues");
 	check(sema_walk(a, sema_lvalue, NULL));
@@ -552,13 +552,18 @@ sema_typecheck(Arena *arena, struct ast *a)
 	debug("Checking function calls");
 	check(sema_walk(a, sema_fn_call, NULL));
 
-	debug("Checking function signatures");
 	struct sema_symbol_state state = {0};
 	state.arena = arena;
+	state.function_symbols = s->functions;
+	state.variable_symbols = s->variables;
+
+	debug("Checking function signatures");
 	check(sema_walk(a, sema_fn_signature, &state));
 
 	debug("Checking variable declarations");
 	check(sema_walk(a, sema_declare, &state));
 
+	s->functions = state.function_symbols;
+	s->variables = state.variable_symbols;
 	return RESULT_OK;
 }
