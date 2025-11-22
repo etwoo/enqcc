@@ -862,6 +862,7 @@ ir_program(Arena *arena,
 			break;
 		case NODE_DECLARATION:
 			/* skip variables, and use symbol_table instead */
+			a = a->u.declare.next;
 			break;
 		default:
 			assert(0); /* logic error in caller */
