@@ -476,6 +476,14 @@ codegen_function(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
+	switch (ir->linkage) {
+	case IR_LINKAGE_INTERNAL:
+		(**dst).linkage = ASM_LINKAGE_INTERNAL;
+		break;
+	case IR_LINKAGE_EXTERNAL:
+		(**dst).linkage = ASM_LINKAGE_EXTERNAL;
+		break;
+	}
 
 	struct asm_op **dst_ops = &(**dst).ops;
 	assert(*dst_ops == NULL);
@@ -487,18 +495,49 @@ codegen_function(Arena *arena,
 
 	assert(*dst_ops == NULL);
 	check(codegen_statement(arena, ir->ops, dst_ops));
+	return RESULT_OK;
+}
 
+static WARN_UNUSED result_t
+codegen_variable(Arena *arena,
+                 const struct ir_variable *ir,
+                 struct asm_variable **dst)
+{
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).identifier = ir->identifier;
+	switch (ir->linkage) {
+	case IR_LINKAGE_INTERNAL:
+		(**dst).linkage = ASM_LINKAGE_INTERNAL;
+		break;
+	case IR_LINKAGE_EXTERNAL:
+		(**dst).linkage = ASM_LINKAGE_EXTERNAL;
+		break;
+	}
+
+	(**dst).u.initial_as_ll = ir->u.initial_as_ll;
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 codegen_program(Arena *arena,
                 const struct intermediate *ir,
-                struct asm_function **dst)
+                struct assembly **dst)
 {
+	struct asm_function **dst_fun = &(**dst).functions;
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
-		check(codegen_function(arena, f, dst));
-		dst = &(**dst).next;
+		check(codegen_function(arena, f, dst_fun));
+		assert(*dst_fun != NULL);
+		dst_fun = &(**dst_fun).next;
+	}
+	struct asm_variable **dst_var = &(**dst).variables;
+	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
+		check(codegen_variable(arena, v, dst_var));
+		assert(*dst_var != NULL);
+		dst_var = &(**dst_var).next;
 	}
 	return RESULT_OK;
 }
@@ -509,7 +548,7 @@ codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 	*cg = arena_alloc(arena, sizeof(**cg));
 	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);
 	memset(*cg, 0, sizeof(**cg));
-	check(codegen_program(arena, ir, &(**cg).functions));
+	check(codegen_program(arena, ir, cg));
 	return RESULT_OK;
 }
 
@@ -534,7 +573,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			arg->operand_type = ASM_OPERAND_STACK;
 			assert(arg->u.num >= range[0]);
 			assert(arg->u.num <= range[1]);
-			assert(range[0] > 0);
+			assert(range[0] >= 0);
 			const long long int adj = arg->u.num - (range[0] - 1);
 			arg->u.num = -1 * adj * CODEGEN_BYTES_PER_VALUE;
 		}
@@ -884,9 +923,22 @@ void
 codegen_debug_print(const struct assembly *cg)
 {
 	debug("PROGRAM");
+
+	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
+		const struct string_view *vname = &v->identifier;
+		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
+		debug("  LINKAGE %s",
+		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
+		                                         : "INTERNAL");
+		debug("  INITIAL VALUE %lld", v->u.initial_as_ll);
+	}
+
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
+		debug("  LINKAGE %s",
+		      f->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
+		                                         : "INTERNAL");
 		debug("  STACK_USAGE %lld", f->stack_usage);
 		for (struct asm_op *op = f->ops; op != NULL; op = op->next) {
 			codegen_debug_print_op(op);

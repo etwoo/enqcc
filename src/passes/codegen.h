@@ -79,15 +79,31 @@ struct asm_op {
 	struct asm_op *next;
 };
 
+enum asm_linkage {
+	ASM_LINKAGE_INTERNAL,
+	ASM_LINKAGE_EXTERNAL,
+};
+
 struct asm_function {
 	struct string_view identifier;
+	enum asm_linkage linkage;
 	long long int stack_usage;
 	struct asm_op *ops;
 	struct asm_function *next;
 };
 
+struct asm_variable {
+	struct string_view identifier;
+	enum asm_linkage linkage;
+	struct {
+		long long int initial_as_ll;
+	} u;
+	struct asm_variable *next;
+};
+
 struct assembly {
 	struct asm_function *functions;
+	struct asm_variable *variables;
 };
 
 #endif
