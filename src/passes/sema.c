@@ -424,7 +424,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 		if (dup->linkage.initial == LINKAGE_INITIAL_VALUE_CONSTANT) {
 			as_constant = dup->linkage.as_constant;
 		}
-		initial = MAX(initial, LINKAGE_INITIAL_VALUE_TENTATIVE);
+		initial = MAX(initial, dup->linkage.initial);
 	}
 
 	check(sema_declare_finalize(state,
