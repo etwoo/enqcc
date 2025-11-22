@@ -727,11 +727,17 @@ codegen_fixup_apply(Arena *arena,
 static WARN_UNUSED bool
 fix_s2s(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!((cur->opcode == ASM_OP_MOV || cur->opcode == ASM_OP_BINARY_ADD ||
-	       cur->opcode == ASM_OP_BINARY_SUBTRACT ||
-	       cur->opcode == ASM_OP_COMPARE) &&
-	      cur->args[0].operand_type == ASM_OPERAND_STACK &&
-	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
+	const bool candidate_opcode = cur->opcode == ASM_OP_MOV ||
+	                              cur->opcode == ASM_OP_BINARY_ADD ||
+	                              cur->opcode == ASM_OP_BINARY_SUBTRACT ||
+	                              cur->opcode == ASM_OP_COMPARE;
+	const bool candidate_operand_0 =
+		cur->args[0].operand_type == ASM_OPERAND_STACK ||
+		cur->args[0].operand_type == ASM_OPERAND_VARIABLE_DATA;
+	const bool candidate_operand_1 =
+		cur->args[1].operand_type == ASM_OPERAND_STACK ||
+		cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA;
+	if (!(candidate_opcode && candidate_operand_0 && candidate_operand_1)) {
 		return false;
 	}
 
