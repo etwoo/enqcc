@@ -468,7 +468,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 		}
 
 		dup = symbols_get(state->variable_symbols, varname, false);
-		if (dup != NULL){
+		if (dup != NULL) {
 			/*
 			 * In this case, extern causes this variable to take on
 			 * the same linkage as the matching identifier that is
