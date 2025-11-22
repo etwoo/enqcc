@@ -966,9 +966,31 @@ void
 ir_debug_print(const struct intermediate *ir)
 {
 	debug("PROGRAM");
+
+	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
+		const struct string_view *vname = &v->identifier;
+		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
+		switch (v->linkage) {
+		case IR_LINKAGE_INTERNAL:
+			debug("  VARIABLE LINKAGE INTERNAL");
+			break;
+		case IR_LINKAGE_EXTERNAL:
+			debug("  VARIABLE LINKAGE EXTERNAL");
+			break;
+		}
+	}
+
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
+		switch (f->linkage) {
+		case IR_LINKAGE_INTERNAL:
+			debug("  FUNCTION LINKAGE INTERNAL");
+			break;
+		case IR_LINKAGE_EXTERNAL:
+			debug("  FUNCTION LINKAGE EXTERNAL");
+			break;
+		}
 		ir_debug_print_list(f->ops);
 	}
 }
