@@ -28,7 +28,7 @@ struct symbol {
 	 * http://en.cppreference.com/w/c/language/extern.html
 	 */
 	struct {
-		bool is_global;
+		bool has_linkage;
 		enum {
 			LINKAGE_INITIAL_VALUE_NO_INITIALIZER,
 			LINKAGE_INITIAL_VALUE_TENTATIVE,

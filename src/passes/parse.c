@@ -175,16 +175,16 @@ static WARN_UNUSED result_t
 resolve_decl(Arena *arena,
              struct ast *a,
              struct symbol **sym,
-             bool always_global)
+             bool assume_linkage)
 {
 	assert(a->node_type == NODE_DECLARATION);
 
 	const struct symbol *dup =
 		symbols_get(*sym, &a->u.declare.identifier.name, true);
-	const bool is_global =
-		always_global || (a->u.declare.specifier == SPECIFIER_EXTERN);
+	const bool has_linkage =
+		assume_linkage || (a->u.declare.specifier == SPECIFIER_EXTERN);
 
-	if (dup != NULL && !(dup->linkage.is_global && is_global)) {
+	if (dup != NULL && !(dup->linkage.has_linkage && has_linkage)) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
@@ -197,7 +197,7 @@ resolve_decl(Arena *arena,
 		                      SYMBOL_VARIABLE,
 		                      0));
 		map_symbol_members(*sym, &a->u.declare.identifier);
-		(**sym).linkage.is_global = is_global;
+		(**sym).linkage.has_linkage = has_linkage;
 	}
 
 	if (a->u.declare.init != NULL) {

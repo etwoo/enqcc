@@ -260,7 +260,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 	long long int n_args = 0;
 	bool is_def = false;
 	bool is_def_or_decl = false;
-	bool is_global = true;
+	bool has_linkage = true;
 	bool is_static = false;
 
 	switch (a->node_type) {
@@ -275,7 +275,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		check(sema_fn_param_names(a->u.function.params));
 		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
-		is_global = (a->u.function.specifier != SPECIFIER_STATIC);
+		has_linkage = (a->u.function.specifier != SPECIFIER_STATIC);
 		is_static = (a->u.function.specifier == SPECIFIER_STATIC);
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
@@ -319,12 +319,12 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
 		                      n_args));
-		(**s).linkage.is_global = is_global;
+		(**s).linkage.has_linkage = has_linkage;
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
-	} else if (is_def_or_decl && dup->linkage.is_global && is_static) {
+	} else if (is_def_or_decl && dup->linkage.has_linkage && is_static) {
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
@@ -344,7 +344,7 @@ static WARN_UNUSED result_t
 sema_declare_finalize(struct sema_symbol_state *state,
                       const struct string_view *varname,
                       struct symbol *dup,
-                      bool is_global,
+                      bool has_linkage,
                       unsigned initial,
                       long long int as_constant)
 {
@@ -356,7 +356,7 @@ sema_declare_finalize(struct sema_symbol_state *state,
 		                      0));
 		dup = state->variable_symbols;
 	}
-	dup->linkage.is_global = is_global;
+	dup->linkage.has_linkage = has_linkage;
 	dup->linkage.initial = initial;
 	dup->linkage.as_constant = as_constant;
 	return RESULT_OK;
@@ -367,7 +367,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
-	bool is_global = (a->u.declare.specifier != SPECIFIER_STATIC);
+	bool has_linkage = (a->u.declare.specifier != SPECIFIER_STATIC);
 	unsigned initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 
@@ -404,8 +404,8 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	if (dup == NULL) {
 		/* no earlier declaration to cross-reference linkage */
 	} else if (a->u.declare.specifier == SPECIFIER_EXTERN) {
-		is_global = dup->linkage.is_global;
-	} else if (is_global != dup->linkage.is_global) {
+		has_linkage = dup->linkage.has_linkage;
+	} else if (has_linkage != dup->linkage.has_linkage) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE,
 			varname->data,
@@ -430,7 +430,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	check(sema_declare_finalize(state,
 	                            varname,
 	                            dup,
-	                            is_global,
+	                            has_linkage,
 	                            initial,
 	                            as_constant));
 	return RESULT_OK;
@@ -441,7 +441,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
-	bool is_global = false;
+	bool has_linkage = false;
 	unsigned initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 	struct symbol *function_symbol_collision = NULL;
@@ -478,7 +478,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			return RESULT_OK;
 		}
 
-		is_global = true;
+		has_linkage = true;
 		initial = LINKAGE_INITIAL_VALUE_NO_INITIALIZER;
 		break;
 	case SPECIFIER_STATIC:
@@ -498,7 +498,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			as_constant = a->u.declare.init->u.num;
 		}
 
-		is_global = false;
+		has_linkage = false;
 		assert(initial == LINKAGE_INITIAL_VALUE_CONSTANT);
 		break;
 	case SPECIFIER_NONE:
@@ -513,7 +513,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	check(sema_declare_finalize(state,
 	                            varname,
 	                            NULL,
-	                            is_global,
+	                            has_linkage,
 	                            initial,
 	                            as_constant));
 	return RESULT_OK;
