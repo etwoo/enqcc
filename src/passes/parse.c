@@ -196,9 +196,10 @@ resolve_decl(Arena *arena,
 		                      &a->u.declare.identifier.name,
 		                      SYMBOL_VARIABLE,
 		                      0));
-		map_symbol_members(*sym, &a->u.declare.identifier);
 		(**sym).linkage.has_linkage = has_linkage;
 	}
+	assert(*sym != NULL);
+	map_symbol_members(*sym, &a->u.declare.identifier);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
