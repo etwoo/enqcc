@@ -551,7 +551,7 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 		if (v->unique == a->u.var.unique) {
 			/*
 			 * Q: Why do we set has_linkage=true below, even if the
-			 * match at cursor has cursor->has_linkage == false?
+			 * match at cursor has v->has_linkage == false?
 			 *
 			 * A: Consumers in ir.c want to know if this symbol has
 			 * any linkage, internal or external. This corresponds
