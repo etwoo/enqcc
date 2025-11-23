@@ -485,6 +485,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			 */
 			has_linkage = dup->linkage.has_linkage;
 			initial = dup->linkage.initial;
+			as_constant = dup->linkage.as_constant;
 		} else {
 			has_linkage = true;
 			initial = INITIAL_VALUE_NO_INITIALIZER;
