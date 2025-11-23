@@ -480,11 +480,12 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			 * already in scope. This may even be a variable with
 			 * internal linkage via earlier use of keyword static!
 			 */
-			return RESULT_OK;
+			has_linkage = dup->linkage.has_linkage;
+			initial = dup->linkage.initial;
+		} else {
+			has_linkage = true;
+			initial = INITIAL_VALUE_NO_INITIALIZER;
 		}
-
-		has_linkage = true;
-		initial = INITIAL_VALUE_NO_INITIALIZER;
 		break;
 	case SPECIFIER_STATIC:
 		if (a->u.declare.init != NULL &&
