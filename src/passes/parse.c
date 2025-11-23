@@ -1237,7 +1237,9 @@ parse_debug_print_ast_symbol(const char *description,
 	      (int)indent + 1,
 	      "",
 	      asym->unique,
-	      asym->unique < 0 ? " (not unique)" : "");
+	      asym->unique == UNIQUE_NOT_YET         ? " (not unique)"
+	      : asym->unique == UNIQUE_NOT_NECESSARY ? " (not necessary)"
+	                                             : "");
 
 	const char *symbol_type_as_str = NULL;
 	switch (asym->stype) {
