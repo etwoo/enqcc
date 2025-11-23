@@ -1159,11 +1159,6 @@ parse_init(Arena *arena,
 	check(parse_alloc(arena, a, NODE_PROGRAM));
 	struct ast *original = *a;
 
-	/*
-	 * Resolve variables with linkage before descending into function
-	 * definitions that may refer to these file-scope variables and
-	 * block-scope variables with specifiers.
-	 */
 	a = &original->u.program.globals;
 	while (tok != NULL) {
 		if (parse_peek_ahead_function_maybe(tok)) {
@@ -1178,7 +1173,9 @@ parse_init(Arena *arena,
 	struct symbol *working_symbols = NULL;
 
 	/*
-	 * Now resolve function definitions.
+	 * Resolve variables with linkage before descending into function
+	 * definitions that may refer to these file-scope variables and
+	 * block-scope variables with specifiers.
 	 */
 	a = &original->u.program.globals;
 	while (generator != NULL && *a != NULL) {
@@ -1197,6 +1194,9 @@ parse_init(Arena *arena,
 		}
 	}
 
+	/*
+	 * Now resolve function definitions.
+	 */
 	a = &original->u.program.globals;
 	while (generator != NULL && *a != NULL) {
 		switch ((**a).node_type) {
