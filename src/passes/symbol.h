@@ -14,6 +14,11 @@ enum symbol_type {
 	SYMBOL_FUNCTION_DEFINITION,
 };
 
+enum {
+	UNIQUE_NOT_YET = -1,
+	UNIQUE_NOT_NECESSARY = -2,
+};
+
 enum initializer_state {
 	INITIAL_VALUE_NO_INITIALIZER,
 	INITIAL_VALUE_TENTATIVE,

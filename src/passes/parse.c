@@ -12,10 +12,6 @@
 #include <stdlib.h> /* for strtoll() */
 #include <string.h>
 
-enum {
-	NOT_YET_UNIQUE = -1,
-};
-
 static void
 map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
 {
@@ -26,8 +22,8 @@ map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
 static WARN_UNUSED result_t
 resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 {
-	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
-	assert(var->unique == NOT_YET_UNIQUE);
+	static_assert(UNIQUE_NOT_YET < 0, "sentinel must be a negative number");
+	assert(var->unique == UNIQUE_NOT_YET);
 
 	const struct symbol *resolved = symbols_get(head, &var->name, false);
 	if (resolved == NULL) {
@@ -43,8 +39,8 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 static WARN_UNUSED result_t
 resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 {
-	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
-	assert(callee->unique == NOT_YET_UNIQUE);
+	static_assert(UNIQUE_NOT_YET < 0, "sentinel must be a negative number");
+	assert(callee->unique == UNIQUE_NOT_YET);
 
 	const struct symbol *resolved = symbols_get(head, &callee->name, false);
 	if (resolved == NULL) {
@@ -196,6 +192,7 @@ resolve_decl(Arena *arena,
 		                      &a->u.declare.identifier.name,
 		                      SYMBOL_VARIABLE,
 		                      0));
+		assert(*sym != NULL);
 		(**sym).linkage.has_linkage = has_linkage;
 	}
 	assert(*sym != NULL);
@@ -440,13 +437,13 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
 		(**dst).u.var.name = str;
-		(**dst).u.var.unique = NOT_YET_UNIQUE;
+		(**dst).u.var.unique = UNIQUE_NOT_YET;
 		return RESULT_OK;
 	}
 
 	check(parse_alloc(arena, dst, NODE_EXPRESSION_FUNCTION_CALL));
 	(**dst).u.call.identifier.name = str;
-	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
+	(**dst).u.call.identifier.unique = UNIQUE_NOT_YET;
 
 	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
 	token_consume(tok);
@@ -1079,7 +1076,7 @@ parse_function_params_impl(const struct token **tok,
 		if (dst != NULL) {
 			assert(*count <= count_in);
 			(*dst)[*count].name = (**tok).val;
-			(*dst)[*count].unique = NOT_YET_UNIQUE;
+			(*dst)[*count].unique = UNIQUE_NOT_YET;
 		}
 		token_consume(tok);
 	}
@@ -1162,6 +1159,11 @@ parse_init(Arena *arena,
 	check(parse_alloc(arena, a, NODE_PROGRAM));
 	struct ast *original = *a;
 
+	/*
+	 * Resolve variables with linkage before descending into function
+	 * definitions that may refer to these file-scope variables and
+	 * block-scope variables with specifiers.
+	 */
 	a = &original->u.program.globals;
 	while (tok != NULL) {
 		if (parse_peek_ahead_function_maybe(tok)) {
@@ -1174,6 +1176,27 @@ parse_init(Arena *arena,
 	}
 
 	struct symbol *working_symbols = NULL;
+
+	/*
+	 * Now resolve function definitions.
+	 */
+	a = &original->u.program.globals;
+	while (generator != NULL && *a != NULL) {
+		switch ((**a).node_type) {
+		case NODE_FUNCTION:
+			/* skip, will resolve later */
+			a = &(**a).u.function.next;
+			break;
+		case NODE_DECLARATION:
+			check(resolve_decl(arena, *a, &working_symbols, true));
+			a = &(**a).u.declare.next;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+	}
+
 	a = &original->u.program.globals;
 	while (generator != NULL && *a != NULL) {
 		switch ((**a).node_type) {
@@ -1182,7 +1205,7 @@ parse_init(Arena *arena,
 			a = &(**a).u.function.next;
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, *a, &working_symbols, true));
+			/* skip, already resolved earlier */
 			a = &(**a).u.declare.next;
 			break;
 		default:
@@ -1214,7 +1237,7 @@ parse_debug_print_ast_symbol(const char *description,
 	      (int)indent + 1,
 	      "",
 	      asym->unique,
-	      asym->unique == NOT_YET_UNIQUE ? " (not unique)" : "");
+	      asym->unique < 0 ? " (not unique)" : "");
 
 	const char *symbol_type_as_str = NULL;
 	switch (asym->stype) {
