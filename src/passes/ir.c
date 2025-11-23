@@ -929,6 +929,9 @@ ir_program(Arena *arena,
 	struct ir_variable **dst_var = &ir->variables;
 	for (struct symbol *s = sym->variables; s != NULL; s = s->next) {
 		assert(s->stype == SYMBOL_VARIABLE);
+		if (s->linkage.initial == INITIAL_VALUE_NO_INITIALIZER) {
+			continue;
+		}
 		check(ir_var(arena, s, dst_var));
 		assert(*dst_var != NULL);
 		dst_var = &(**dst_var).next;
