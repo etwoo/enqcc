@@ -579,7 +579,7 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 			 */
 			a->u.var.has_linkage = true;
 			a->u.var.unique = UNIQUE_NOT_NECESSARY;
-			if (!v->linkage.has_linkage) {
+			if (false && !v->linkage.has_linkage) { // TODO rm
 				/*
 				 * For symbols with internal linkage, redirect
 				 * any variable usage to a mangled name, unique
