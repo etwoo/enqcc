@@ -889,9 +889,11 @@ ir_program(Arena *arena,
 	while (a != NULL) {
 		switch (a->node_type) {
 		case NODE_FUNCTION:
-			check(ir_func(arena, a, ir, dst_fun));
-			assert(*dst_fun != NULL); /* return_0 guarantee */
-			dst_fun = &(**dst_fun).next;
+			if (a->u.function.block != NULL) {
+				check(ir_func(arena, a, ir, dst_fun));
+				assert(*dst_fun != NULL);
+				dst_fun = &(**dst_fun).next;
+			}
 			a = a->u.function.next;
 			break;
 		case NODE_DECLARATION:
