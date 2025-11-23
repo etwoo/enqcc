@@ -530,7 +530,9 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	if (has_linkage) {
 		a->u.declare.identifier.has_linkage = true;
 		a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
-	} else {
+	} else if (false) { // TODO: re-enable? see comment below
+		// TODO: mangling here seems to fix multiple_static_local.c but
+		// also regress internal_linkage_var.c, failures 4->5 overall
 		char *mangled =
 			arena_sprintf(state->arena,
 		                      "%.*s_%lld",
