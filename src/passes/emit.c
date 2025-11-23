@@ -9,7 +9,7 @@
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char LINUX_LABEL_PREFIX[] = ".L";
-static const char MACOS_FUNC_PREFIX[] = "_";
+static const char MACOS_SYMBOL_WITH_LINKAGE_PREFIX[] = "_";
 static const char MACOS_LABEL_PREFIX[] = "L";
 static const char CUSTOM_LABEL_ID[] = "boba_";
 static const char STR_OP_MOV_QUAD[] = "movq";
@@ -18,6 +18,7 @@ static const char *const STR_OP_PUSH_QUAD = "pushq";
 static const char STR_OP_RET[] = "ret";
 static const char STR_REG_RSP[] = "%rsp"; /* aka frame pointer */
 static const char STR_REG_RBP[] = "%rbp"; /* aka stack pointer */
+static const char STR_REG_RIP[] = "%rip";
 
 enum register_alias {
 	REGISTER_ALIAS_8BYTE,
@@ -45,12 +46,12 @@ get_label_prefix(enum platform plat)
 }
 
 static WARN_UNUSED const char *
-get_function_prefix(enum platform plat)
+get_symbol_with_linkage_prefix(enum platform plat)
 {
 	const char *result = NULL;
 	switch (plat) {
 	case PLATFORM_MACOS:
-		result = MACOS_FUNC_PREFIX;
+		result = MACOS_SYMBOL_WITH_LINKAGE_PREFIX;
 		break;
 	case PLATFORM_LINUX:
 		result = "";
@@ -73,7 +74,7 @@ emit_asm_operand(const struct asm_operand *o,
                  enum register_alias ralias,
                  int fd)
 {
-	const char *fprefix = get_function_prefix(plat);
+	const char *fprefix = get_symbol_with_linkage_prefix(plat);
 	const char *label_prefix = get_label_prefix(plat);
 
 	switch (o->operand_type) {
@@ -122,7 +123,12 @@ emit_asm_operand(const struct asm_operand *o,
 		 */
 		break;
 	case ASM_OPERAND_VARIABLE_DATA:
-		assert(0 && "TODO ASM write for global variable references");
+		dprintf(fd,
+		        "%s%.*s(%s)",
+		        fprefix,
+		        (int)o->u.variable.sz,
+		        o->u.variable.data,
+		        STR_REG_RIP);
 		break;
 	}
 }
@@ -267,14 +273,48 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 static void
 emit_asm_fn(const struct asm_function *fn, enum platform plat, int fd)
 {
-	const char *fprefix = get_function_prefix(plat);
+	const char *fprefix = get_symbol_with_linkage_prefix(plat);
 	const struct string_view *fname = &fn->identifier;
+
+	if (fn->linkage == ASM_LINKAGE_EXTERNAL) {
+		dprintf(fd,
+		        "\t.globl %s%.*s\n",
+		        fprefix,
+		        (int)fname->sz,
+		        fname->data);
+	}
+	dprintf(fd, "\t.text\n");
 	dprintf(fd, "%s%.*s:\n", fprefix, (int)fname->sz, fname->data);
 	dprintf(fd, "\t%s %s\n", STR_OP_PUSH_QUAD, STR_REG_RBP);
 	dprintf(fd, "\t%s %s, %s\n", STR_OP_MOV_QUAD, STR_REG_RSP, STR_REG_RBP);
 
 	for (struct asm_op *op = fn->ops; op != NULL; op = op->next) {
 		emit_asm_op(op, plat, fd);
+	}
+}
+
+static void
+emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
+{
+	const char *vprefix = get_symbol_with_linkage_prefix(plat);
+	const struct string_view *vname = &var->identifier;
+
+	if (var->linkage == ASM_LINKAGE_EXTERNAL) {
+		dprintf(fd,
+		        "\t.globl %s%.*s\n",
+		        vprefix,
+		        (int)vname->sz,
+		        vname->data);
+	}
+
+	if (var->u.initial_as_ll != 0) {
+		dprintf(fd, "\t.data\n\t.balign 4\n");
+		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
+		dprintf(fd, "\t.long %lld\n", var->u.initial_as_ll);
+	} else {
+		dprintf(fd, "\t.bss\n\t.balign 4\n");
+		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
+		dprintf(fd, "\t.zero 4\n");
 	}
 }
 
@@ -285,15 +325,11 @@ emit_asm(const struct assembly *cg, enum platform plat, int fd)
 		return;
 	}
 
-	const char *fprefix = get_function_prefix(plat);
-	assert(fprefix != NULL);
+	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
+		emit_asm_var(v, plat, fd);
+	}
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
-		dprintf(fd,
-		        "\t.globl %s%.*s\n",
-		        fprefix,
-		        (int)f->identifier.sz,
-		        f->identifier.data);
 		emit_asm_fn(f, plat, fd);
 	}
 
