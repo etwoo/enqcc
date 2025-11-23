@@ -530,6 +530,23 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	if (has_linkage) {
 		a->u.declare.identifier.has_linkage = true;
 		a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
+	} else {
+		char *mangled =
+			arena_sprintf(state->arena,
+		                      "%.*s_%lld",
+		                      (int)a->u.declare.identifier.name.sz,
+		                      a->u.declare.identifier.name.data,
+		                      a->u.declare.identifier.unique);
+		if (dup == NULL) {
+			dup = state->variable_symbols;
+		}
+		assert(dup->name.sz == a->u.declare.identifier.name.sz);
+		assert(0 == strncmp(dup->name.data,
+		                    a->u.declare.identifier.name.data,
+		                    dup->name.sz));
+		a->u.declare.identifier.name.sz = strlen(mangled);
+		a->u.declare.identifier.name.data = mangled;
+		dup->name = a->u.declare.identifier.name;
 	}
 	return RESULT_OK;
 }
@@ -560,6 +577,14 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 			 */
 			a->u.var.has_linkage = true;
 			a->u.var.unique = UNIQUE_NOT_NECESSARY;
+			if (!v->linkage.has_linkage) {
+				/*
+				 * For symbols with internal linkage, redirect
+				 * any variable usage to a mangled name, unique
+				 * within this translation unit.
+				 */
+				a->u.var.name = v->name;
+			}
 			break;
 		}
 	}
