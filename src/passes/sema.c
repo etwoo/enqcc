@@ -437,10 +437,22 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            has_linkage,
 	                            initial,
 	                            as_constant));
-	if (has_linkage) {
-		a->u.declare.identifier.has_linkage = true;
-		a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
-	}
+
+	/*
+	 * Q: Why do we set has_linkage=true below, even if the symbol table
+	 * entry created above specifies has_linkage == false?
+	 *
+	 * A: Later sema.c passes want to know if this symbol has any linkage,
+	 * internal or external. This corresponds to presence in the symbol
+	 * table overall, not whether the symbol table sets has_linkage==true
+	 * in particular.
+	 */
+	a->u.declare.identifier.has_linkage = true;
+	// if (has_linkage) {
+	// 	a->u.declare.identifier.has_linkage = true;
+	// 	// a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
+	// }
+
 	return RESULT_OK;
 }
 
@@ -527,29 +539,22 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            has_linkage,
 	                            initial,
 	                            as_constant));
-	if (has_linkage) {
-		a->u.declare.identifier.has_linkage = true;
-		a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
-	} else if (false) { // TODO: re-enable? see comment below
-		// TODO: mangling here seems to fix multiple_static_local.c but
-		// also regress internal_linkage_var.c, failures 4->5 overall
-		char *mangled =
-			arena_sprintf(state->arena,
-		                      "%.*s_%lld",
-		                      (int)a->u.declare.identifier.name.sz,
-		                      a->u.declare.identifier.name.data,
-		                      a->u.declare.identifier.unique);
-		if (dup == NULL) {
-			dup = state->variable_symbols;
-		}
-		assert(dup->name.sz == a->u.declare.identifier.name.sz);
-		assert(0 == strncmp(dup->name.data,
-		                    a->u.declare.identifier.name.data,
-		                    dup->name.sz));
-		a->u.declare.identifier.name.sz = strlen(mangled);
-		a->u.declare.identifier.name.data = mangled;
-		dup->name = a->u.declare.identifier.name;
-	}
+
+	/*
+	 * Q: Why do we set has_linkage=true below, even if the symbol table
+	 * entry created above specifies has_linkage == false?
+	 *
+	 * A: Later sema.c passes want to know if this symbol has any linkage,
+	 * internal or external. This corresponds to presence in the symbol
+	 * table overall, not whether the symbol table sets has_linkage==true
+	 * in particular.
+	 */
+	a->u.declare.identifier.has_linkage = true;
+	// if (has_linkage) {
+	// 	a->u.declare.identifier.has_linkage = true;
+	// 	// a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
+	// }
+
 	return RESULT_OK;
 }
 
@@ -578,15 +583,7 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 			 * the matching node's has_linkage value in particular.
 			 */
 			a->u.var.has_linkage = true;
-			a->u.var.unique = UNIQUE_NOT_NECESSARY;
-			if (false && !v->linkage.has_linkage) { // TODO rm
-				/*
-				 * For symbols with internal linkage, redirect
-				 * any variable usage to a mangled name, unique
-				 * within this translation unit.
-				 */
-				a->u.var.name = v->name;
-			}
+			// a->u.var.unique = UNIQUE_NOT_NECESSARY;
 			break;
 		}
 	}
@@ -617,6 +614,67 @@ sema_declare(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_internal_linkage(struct ast *a, void *userdata)
+{
+	struct sema_symbol_state *state = userdata;
+
+	if (a->node_type == NODE_DECLARATION &&
+	    a->u.declare.identifier.has_linkage) {
+		char *mangled_str =
+			arena_sprintf(state->arena,
+		                      "%.*s_%lld",
+		                      (int)a->u.declare.identifier.name.sz,
+		                      a->u.declare.identifier.name.data,
+		                      a->u.declare.identifier.unique);
+		info("mangling decl to %s", mangled_str);
+		const struct string_view mangled = {
+			.data = mangled_str,
+			.sz = strlen(mangled_str),
+		};
+		a->u.declare.identifier.name = mangled;
+		/*
+		 * Lookup below causes O(n^2) runtime, where:
+		 *
+		 *   n = number of variables with linkage
+		 */
+		struct symbol *v = state->variable_symbols;
+		for (; v != NULL; v = v->next) {
+			assert(v->stype == SYMBOL_VARIABLE);
+			if (v->unique == a->u.var.unique) {
+				assert(!v->linkage.has_linkage);
+				assert(a->u.var.has_linkage);
+				v->name = mangled;
+				break;
+			}
+		}
+	} else if (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE) {
+		/*
+		 * Lookup below causes overall O(n*m) runtime, where:
+		 *
+		 *   n = number of variable references spread across AST nodes
+		 *   m = number of variables with linkage
+		 */
+		struct symbol *v = state->variable_symbols;
+		for (; v != NULL; v = v->next) {
+			assert(v->stype == SYMBOL_VARIABLE);
+			if (v->unique == a->u.var.unique) {
+				assert(!v->linkage.has_linkage);
+				assert(a->u.var.has_linkage);
+				/*
+				 * For symbols with internal linkage, redirect
+				 * any variable usage to a mangled name, unique
+				 * within this translation unit.
+				 */
+				a->u.var.name = v->name;
+				break;
+			}
+		}
+	}
+
+	return RESULT_OK;
+}
+
 result_t
 sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 {
@@ -639,6 +697,9 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 
 	debug("Checking variable declarations");
 	check(sema_walk(a, sema_declare, &state));
+
+	debug("Unique-ifying variables with internal linkage");
+	check(sema_walk(a, sema_internal_linkage, &state));
 
 	s->functions = state.function_symbols;
 	s->variables = state.variable_symbols;
