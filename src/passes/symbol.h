@@ -25,6 +25,12 @@ enum initializer_state {
 	INITIAL_VALUE_CONSTANT,
 };
 
+enum symbol_scope {
+	SCOPE_UNSPECIFIED,
+	SCOPE_BLOCK,
+	SCOPE_FILE,
+};
+
 // TODO: for typedef support, add tracking for types (like variables)
 struct symbol {
 	struct string_view name;
@@ -69,6 +75,8 @@ struct symbol {
 		long long int as_constant;
 	} linkage;
 
+	enum symbol_scope scope_if_specified;
+
 	struct symbol *next;
 };
 
@@ -81,5 +89,13 @@ struct symbol *symbols_get(struct symbol *head,
                            const struct string_view *name,
                            bool stop_at_delimiter) WARN_UNUSED;
 void symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point);
+
+result_t symbols_prepend_scoped(Arena *arena,
+                                struct symbol **head,
+                                const struct string_view *name,
+                                enum symbol_scope scope) WARN_UNUSED;
+struct symbol *symbols_get_scoped(struct symbol *head,
+                                  const struct string_view *name,
+                                  enum symbol_scope scope) WARN_UNUSED;
 
 #endif

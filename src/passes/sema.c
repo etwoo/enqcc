@@ -344,17 +344,17 @@ static WARN_UNUSED result_t
 sema_declare_finalize(struct sema_symbol_state *state,
                       const struct string_view *varname,
                       long long int already_unique,
+                      enum symbol_scope scope,
                       struct symbol *dup,
                       bool has_linkage,
                       enum initializer_state initial,
                       long long int as_constant)
 {
 	if (dup == NULL) {
-		check(symbols_prepend(state->arena,
-		                      &state->variable_symbols,
-		                      varname,
-		                      SYMBOL_VARIABLE,
-		                      0));
+		check(symbols_prepend_scoped(state->arena,
+		                             &state->variable_symbols,
+		                             varname,
+		                             scope));
 		dup = state->variable_symbols;
 	}
 	dup->unique = already_unique; /* reuse unique IDs from earlier */
@@ -433,6 +433,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	check(sema_declare_finalize(state,
 	                            varname,
 	                            a->u.declare.identifier.unique,
+	                            SCOPE_FILE,
 	                            dup,
 	                            has_linkage,
 	                            initial,
@@ -475,7 +476,9 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 				varname->sz);
 		}
 
-		dup = symbols_get(state->variable_symbols, varname, false);
+		dup = symbols_get_scoped(state->variable_symbols,
+		                         varname,
+		                         SCOPE_FILE);
 		if (dup != NULL) {
 			/*
 			 * In this case, extern causes this variable to take on
@@ -523,6 +526,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	check(sema_declare_finalize(state,
 	                            varname,
 	                            a->u.declare.identifier.unique,
+	                            SCOPE_BLOCK,
 	                            dup,
 	                            has_linkage,
 	                            initial,
@@ -607,7 +611,6 @@ sema_internal_linkage(struct ast *a, void *userdata)
 			.data = mangled_str,
 			.sz = strlen(mangled_str),
 		};
-		a->u.declare.identifier.name = mangled;
 		/*
 		 * Lookup below causes O(n^2) runtime, where:
 		 *
@@ -620,6 +623,7 @@ sema_internal_linkage(struct ast *a, void *userdata)
 				if (v->linkage.has_linkage) {
 					break;
 				}
+				a->u.declare.identifier.name = mangled;
 				v->name = mangled;
 				break;
 			}

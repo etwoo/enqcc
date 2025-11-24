@@ -55,3 +55,30 @@ symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point)
 	}
 	*symbols = reset_point;
 }
+
+result_t
+symbols_prepend_scoped(Arena *arena,
+                       struct symbol **head,
+                       const struct string_view *name,
+                       enum symbol_scope scope)
+{
+	check(symbols_prepend(arena, head, name, SYMBOL_VARIABLE, 0));
+	(**head).scope_if_specified = scope;
+	return RESULT_OK;
+}
+
+struct symbol *
+symbols_get_scoped(struct symbol *head,
+                   const struct string_view *name,
+                   enum symbol_scope scope)
+{
+	while (head != NULL) {
+		if (head->name.sz == name->sz &&
+		    0 == strncmp(head->name.data, name->data, name->sz) &&
+		    head->scope_if_specified == scope) {
+			return head;
+		}
+		head = head->next;
+	}
+	return NULL;
+}
