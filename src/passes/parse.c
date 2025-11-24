@@ -194,9 +194,9 @@ resolve_decl(Arena *arena,
 		                      0));
 		assert(*sym != NULL);
 		(**sym).linkage.has_linkage = has_linkage;
+		dup = *sym;
 	}
-	assert(*sym != NULL);
-	map_symbol_members(*sym, &a->u.declare.identifier);
+	map_symbol_members(dup, &a->u.declare.identifier);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
