@@ -80,8 +80,6 @@ result_t symbols_prepend(Arena *arena,
 struct symbol *symbols_get(struct symbol *head,
                            const struct string_view *name,
                            bool stop_at_delimiter) WARN_UNUSED;
-struct symbol *symbols_get_by_id(struct symbol *head,
-                                 long long int target) WARN_UNUSED;
 void symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point);
 
 #endif

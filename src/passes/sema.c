@@ -1,7 +1,6 @@
 #include "passes.h"
 #include "passes/parse.h"
 #include "passes/symbol.h"
-#include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
@@ -197,9 +196,8 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 struct sema_symbol_state {
 	Arena *arena;
 	struct ast *ast_program_globals;
-	struct symbol *functions;
-	struct symbol *variables_file_scope;
-	struct symbol *variables_block_scope_static;
+	struct symbol *function_symbols;
+	struct symbol *variable_symbols;
 };
 
 static WARN_UNUSED result_t
@@ -311,7 +309,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		}
 	}
 
-	struct symbol **s = &state->functions;
+	struct symbol **s = &state->function_symbols;
 	struct symbol *dup = symbols_get(*s, fname, false);
 	if (dup == NULL) {
 		assert(is_def_or_decl);
@@ -343,22 +341,21 @@ sema_fn_signature(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
-sema_declare_finalize(Arena *arena,
-                      struct symbol **head,
+sema_declare_finalize(struct sema_symbol_state *state,
                       const struct string_view *varname,
                       long long int already_unique,
-                      struct symbol *dup, /* if caller already prepended */
+                      struct symbol *dup,
                       bool has_linkage,
                       enum initializer_state initial,
                       long long int as_constant)
 {
 	if (dup == NULL) {
-		check(symbols_prepend(arena,
-		                      head,
+		check(symbols_prepend(state->arena,
+		                      &state->variable_symbols,
 		                      varname,
 		                      SYMBOL_VARIABLE,
 		                      0));
-		dup = *head;
+		dup = state->variable_symbols;
 	}
 	dup->unique = already_unique; /* reuse unique IDs from earlier */
 	dup->linkage.has_linkage = has_linkage;
@@ -393,7 +390,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	}
 
 	struct symbol *function_symbol_collision =
-		symbols_get(state->functions, varname, false);
+		symbols_get(state->function_symbols, varname, false);
 
 	if (function_symbol_collision != NULL) {
 		assert(function_symbol_collision->stype != SYMBOL_VARIABLE);
@@ -404,7 +401,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	}
 
 	struct symbol *dup =
-		symbols_get(state->variables_file_scope, varname, false);
+		symbols_get(state->variable_symbols, varname, false);
 
 	if (dup == NULL) {
 		/* no earlier declaration to cross-reference linkage */
@@ -433,8 +430,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 		initial = MAX(initial, dup->linkage.initial);
 	}
 
-	check(sema_declare_finalize(state->arena,
-	                            &state->variables_file_scope,
+	check(sema_declare_finalize(state,
 	                            varname,
 	                            a->u.declare.identifier.unique,
 	                            dup,
@@ -469,7 +465,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 		}
 
 		function_symbol_collision =
-			symbols_get(state->functions, varname, false);
+			symbols_get(state->function_symbols, varname, false);
 		if (function_symbol_collision != NULL) {
 			assert(function_symbol_collision->stype !=
 			       SYMBOL_VARIABLE);
@@ -479,7 +475,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 				varname->sz);
 		}
 
-		dup = symbols_get(state->variables_file_scope, varname, false);
+		dup = symbols_get(state->variable_symbols, varname, false);
 		if (dup != NULL) {
 			/*
 			 * In this case, extern causes this variable to take on
@@ -524,8 +520,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 		return RESULT_OK;
 	}
 
-	check(sema_declare_finalize(state->arena,
-	                            &state->variables_block_scope_static,
+	check(sema_declare_finalize(state,
 	                            varname,
 	                            a->u.declare.identifier.unique,
 	                            dup,
@@ -550,22 +545,18 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 	 *   n = number of variable references spread across AST nodes
 	 *   m = number of variables with linkage
 	 */
-	struct symbol *candidates[2] = {
-		state->variables_file_scope,
-		state->variables_block_scope_static,
-	};
-	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
-		struct symbol *v =
-			symbols_get_by_id(candidates[i], a->u.var.unique);
-		if (v != NULL) {
+	struct symbol *v = state->variable_symbols;
+	for (; v != NULL; v = v->next) {
+		assert(v->stype == SYMBOL_VARIABLE);
+		if (v->unique == a->u.var.unique) {
 			/*
 			 * Q: Why do we set has_linkage=true below, even if the
-			 * match at cursor is !v->has_linkage?
+			 * match at cursor has v->has_linkage == false?
 			 *
 			 * A: Consumers in ir.c want to know if this symbol has
 			 * any linkage, internal or external. This corresponds
-			 * to presence in the symbol table overall, not the
-			 * matching node's has_linkage value in particular.
+			 * to presence in state->variable_symbols overall, not
+			 * the matching node's has_linkage value in particular.
 			 */
 			a->u.var.has_linkage = true;
 			// a->u.var.unique = UNIQUE_NOT_NECESSARY;
@@ -605,45 +596,33 @@ sema_internal_linkage(struct ast *a, void *userdata)
 	struct sema_symbol_state *state = userdata;
 
 	if (a->node_type == NODE_DECLARATION) {
-		// TODO; generate string only if internal symbol w/ matching
-		// unique ID is found in symbol table
+		// TODO; generate string only if internal symbol w/ matching unique ID is found in symbol table
 		char *mangled_str =
 			arena_sprintf(state->arena,
 		                      "%.*s_%lld",
 		                      (int)a->u.declare.identifier.name.sz,
 		                      a->u.declare.identifier.name.data,
 		                      a->u.declare.identifier.unique);
-
 		const struct string_view mangled = {
 			.data = mangled_str,
 			.sz = strlen(mangled_str),
 		};
 		a->u.declare.identifier.name = mangled;
-
 		/*
-		 * Lookup below causes O(n*m) runtime, where:
+		 * Lookup below causes O(n^2) runtime, where:
 		 *
-		 *   n = number of variable declarations spread across AST nodes
-		 *   m = number of variables with linkage
+		 *   n = number of variables with linkage
 		 */
-		struct symbol *v =
-			symbols_get_by_id(state->variables_block_scope_static,
-		                          a->u.declare.identifier.unique);
-		if (v == NULL) {
-			v = symbols_get_by_id(state->variables_file_scope,
-			                      a->u.declare.identifier.unique);
-			if (v != NULL && v->linkage.has_linkage) {
-				/*
-				 * Do not mangle file-scope variables with
-				 * extern linkage (note, this can due to
-				 * presence of extern keyword or complete lack
-				 * of specifiers whatsoever).
-				 */
-				v = NULL;
+		struct symbol *v = state->variable_symbols;
+		for (; v != NULL; v = v->next) {
+			assert(v->stype == SYMBOL_VARIABLE);
+			if (v->unique == a->u.declare.identifier.unique) {
+				if (v->linkage.has_linkage) {
+					break;
+				}
+				v->name = mangled;
+				break;
 			}
-		}
-		if (v != NULL) {
-			v->name = mangled;
 		}
 	} else if (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE) {
 		/*
@@ -652,26 +631,21 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		 *   n = number of variable references spread across AST nodes
 		 *   m = number of variables with linkage
 		 */
-		struct symbol *v =
-			symbols_get_by_id(state->variables_block_scope_static,
-		                          a->u.var.unique);
-		if (v == NULL) {
-			v = symbols_get_by_id(state->variables_file_scope,
-			                      a->u.var.unique);
-			if (v != NULL && v->linkage.has_linkage) {
+		struct symbol *v = state->variable_symbols;
+		for (; v != NULL; v = v->next) {
+			assert(v->stype == SYMBOL_VARIABLE);
+			if (v->unique == a->u.var.unique) {
+				if (v->linkage.has_linkage) {
+					break;
+				}
 				/*
-				 * Variables with external linkage will not
-				 * have mangled names; don't bother.
+				 * For symbols with internal linkage, redirect
+				 * any variable usage to a mangled name, unique
+				 * within this translation unit.
 				 */
-				v = NULL;
+				a->u.var.name = v->name;
+				break;
 			}
-		}
-		if (v != NULL) {
-			/*
-			 * For symbols with internal linkage, redirect usage to
-			 * a mangled name, unique within this translation unit.
-			 */
-			a->u.var.name = v->name;
 		}
 	}
 
@@ -692,9 +666,8 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 
 	struct sema_symbol_state state = {0};
 	state.arena = arena;
-	state.functions = s->functions;
-	state.variables_file_scope = s->variables_file_scope;
-	state.variables_block_scope_static = s->variables_block_scope_static;
+	state.function_symbols = s->functions;
+	state.variable_symbols = s->variables;
 
 	debug("Checking function signatures");
 	check(sema_walk(a, sema_fn_signature, &state));
@@ -705,8 +678,7 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	debug("Unique-ifying variables with internal linkage");
 	check(sema_walk(a, sema_internal_linkage, &state));
 
-	s->functions = state.functions;
-	s->variables_file_scope = state.variables_file_scope;
-	s->variables_block_scope_static = state.variables_block_scope_static;
+	s->functions = state.function_symbols;
+	s->variables = state.variable_symbols;
 	return RESULT_OK;
 }
