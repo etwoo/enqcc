@@ -1181,31 +1181,6 @@ parse_init(Arena *arena,
 
 	struct symbol *working_symbols = NULL;
 
-	/*
-	 * Resolve variables with linkage before descending into function
-	 * definitions that may refer to these file-scope variables and
-	 * block-scope variables with specifiers.
-	 */
-	a = &original->u.program.globals;
-	while (generator != NULL && *a != NULL) {
-		switch ((**a).node_type) {
-		case NODE_FUNCTION:
-			/* skip, will resolve later */
-			a = &(**a).u.function.next;
-			break;
-		case NODE_DECLARATION:
-			check(resolve_decl(arena, *a, &working_symbols, true));
-			a = &(**a).u.declare.next;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-	}
-
-	/*
-	 * Now resolve function definitions.
-	 */
 	a = &original->u.program.globals;
 	while (generator != NULL && *a != NULL) {
 		switch ((**a).node_type) {
@@ -1214,7 +1189,7 @@ parse_init(Arena *arena,
 			a = &(**a).u.function.next;
 			break;
 		case NODE_DECLARATION:
-			/* skip, already resolved earlier */
+			check(resolve_decl(arena, *a, &working_symbols, true));
 			a = &(**a).u.declare.next;
 			break;
 		default:
