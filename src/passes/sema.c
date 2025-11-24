@@ -603,7 +603,7 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		// TODO; generate string only if internal symbol w/ matching unique ID is found in symbol table
 		char *mangled_str =
 			arena_sprintf(state->arena,
-		                      "%.*s_%lld",
+		                      "%.*s.%lld",
 		                      (int)a->u.declare.identifier.name.sz,
 		                      a->u.declare.identifier.name.data,
 		                      a->u.declare.identifier.unique);
