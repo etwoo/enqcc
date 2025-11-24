@@ -25,7 +25,9 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 	static_assert(UNIQUE_NOT_YET < 0, "sentinel must be a negative number");
 	assert(var->unique == UNIQUE_NOT_YET);
 
-	const struct symbol *resolved = symbols_get(head, &var->name, false);
+	const struct symbol *in_scope = symbols_get(head, &var->name, true);
+	const struct symbol *anywhere = symbols_get(head, &var->name, false);
+	const struct symbol *resolved = in_scope != NULL ? in_scope : anywhere;
 	if (resolved == NULL) {
 		return make_result(ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION,
 		                   var->name.data,
@@ -33,6 +35,13 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 	}
 
 	map_symbol_members(resolved, var);
+	if (resolved->linkage.has_linkage) {
+		/*
+		 * Even before sema.c, we already know this variable must refer
+		 * to a variable with linkage (internal or external).
+		 */
+		var->has_linkage = true;
+	}
 	return RESULT_OK;
 }
 
