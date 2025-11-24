@@ -437,22 +437,10 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            has_linkage,
 	                            initial,
 	                            as_constant));
-
-	/*
-	 * Q: Why do we set has_linkage=true below, even if the symbol table
-	 * entry created above specifies has_linkage == false?
-	 *
-	 * A: Later sema.c passes want to know if this symbol has any linkage,
-	 * internal or external. This corresponds to presence in the symbol
-	 * table overall, not whether the symbol table sets has_linkage==true
-	 * in particular.
-	 */
-	a->u.declare.identifier.has_linkage = true;
-	// if (has_linkage) {
-	// 	a->u.declare.identifier.has_linkage = true;
-	// 	// a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
-	// }
-
+	if (has_linkage) {
+		a->u.declare.identifier.has_linkage = true;
+		// a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
+	}
 	return RESULT_OK;
 }
 
@@ -539,22 +527,10 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            has_linkage,
 	                            initial,
 	                            as_constant));
-
-	/*
-	 * Q: Why do we set has_linkage=true below, even if the symbol table
-	 * entry created above specifies has_linkage == false?
-	 *
-	 * A: Later sema.c passes want to know if this symbol has any linkage,
-	 * internal or external. This corresponds to presence in the symbol
-	 * table overall, not whether the symbol table sets has_linkage==true
-	 * in particular.
-	 */
-	a->u.declare.identifier.has_linkage = true;
-	// if (has_linkage) {
-	// 	a->u.declare.identifier.has_linkage = true;
-	// 	// a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
-	// }
-
+	if (has_linkage) {
+		a->u.declare.identifier.has_linkage = true;
+		// a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
+	}
 	return RESULT_OK;
 }
 
@@ -619,8 +595,8 @@ sema_internal_linkage(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
 
-	if (a->node_type == NODE_DECLARATION &&
-	    a->u.declare.identifier.has_linkage) {
+	if (a->node_type == NODE_DECLARATION) {
+		// TODO; generate string only if internal symbol w/ matching unique ID is found in symbol table
 		char *mangled_str =
 			arena_sprintf(state->arena,
 		                      "%.*s_%lld",
@@ -645,7 +621,6 @@ sema_internal_linkage(struct ast *a, void *userdata)
 				if (v->linkage.has_linkage) {
 					break;
 				}
-				assert(a->u.declare.identifier.has_linkage);
 				v->name = mangled;
 				break;
 			}
@@ -664,7 +639,6 @@ sema_internal_linkage(struct ast *a, void *userdata)
 				if (v->linkage.has_linkage) {
 					break;
 				}
-				assert(a->u.var.has_linkage);
 				/*
 				 * For symbols with internal linkage, redirect
 				 * any variable usage to a mangled name, unique
