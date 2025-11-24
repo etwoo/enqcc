@@ -563,7 +563,7 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 			 * the matching node's has_linkage value in particular.
 			 */
 			a->u.var.has_linkage = true;
-			// a->u.var.unique = UNIQUE_NOT_NECESSARY;
+			// a->u.var.unique = UNIQUE_NOT_NECESSARY; // TODO rm?
 			break;
 		}
 	}
