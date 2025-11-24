@@ -440,7 +440,6 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            as_constant));
 	if (has_linkage) {
 		a->u.declare.identifier.has_linkage = true;
-		// a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
 	}
 	return RESULT_OK;
 }
@@ -533,7 +532,6 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            as_constant));
 	if (has_linkage) {
 		a->u.declare.identifier.has_linkage = true;
-		// a->u.declare.identifier.unique = UNIQUE_NOT_NECESSARY;
 	}
 	return RESULT_OK;
 }
@@ -563,7 +561,6 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 			 * the matching node's has_linkage value in particular.
 			 */
 			a->u.var.has_linkage = true;
-			// a->u.var.unique = UNIQUE_NOT_NECESSARY; // TODO rm?
 			break;
 		}
 	}
