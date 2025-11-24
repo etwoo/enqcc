@@ -989,8 +989,7 @@ ir_debug_print_one(const struct ir_op *op)
 			debug("  LABEL label_%lld", op->args[i].num);
 			break;
 		case IR_VAL_VARIABLE_DATA:
-			debug("  DATA %lld %.*s",
-			      op->args[i].num,
+			debug("  DATA %.*s",
 			      (int)op->args[i].varname.sz,
 			      op->args[i].varname.data);
 			break;
