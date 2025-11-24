@@ -641,9 +641,9 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		struct symbol *v = state->variable_symbols;
 		for (; v != NULL; v = v->next) {
 			assert(v->stype == SYMBOL_VARIABLE);
-			if (v->unique == a->u.var.unique) {
+			if (v->unique == a->u.declare.identifier.unique) {
 				assert(!v->linkage.has_linkage);
-				assert(a->u.var.has_linkage);
+				assert(a->u.declare.identifier.has_linkage);
 				v->name = mangled;
 				break;
 			}
