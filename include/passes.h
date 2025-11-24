@@ -21,7 +21,8 @@ void parse_debug_print(const struct ast *a, size_t indent);
 struct symbol;
 struct symbol_table {
 	struct symbol *functions;
-	struct symbol *variables;
+	struct symbol *variables_file_scope;
+	struct symbol *variables_block_scope_static;
 };
 
 result_t sema_label_loops(struct ast *a, long long int *generator)

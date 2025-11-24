@@ -47,6 +47,19 @@ symbols_get(struct symbol *head,
 	return NULL;
 }
 
+struct symbol *
+symbols_get_by_id(struct symbol *head, long long int target)
+{
+	while (head != NULL) {
+		if (head->unique == target) {
+			return head;
+		}
+		head = head->next;
+	}
+	return NULL;
+
+}
+
 void
 symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point)
 {
