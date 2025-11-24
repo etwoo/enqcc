@@ -184,28 +184,47 @@ resolve_decl(Arena *arena,
 {
 	assert(a->node_type == NODE_DECLARATION);
 
-	const struct symbol *dup =
-		symbols_get(*sym, &a->u.declare.identifier.name, true);
+	const struct string_view *varname = &a->u.declare.identifier.name;
 	const bool has_linkage =
 		assume_linkage || (a->u.declare.specifier == SPECIFIER_EXTERN);
 
-	if (dup != NULL && !(dup->linkage.has_linkage && has_linkage)) {
+	const struct symbol *in_scope = symbols_get(*sym, varname, true);
+	if (in_scope && !(in_scope->linkage.has_linkage && has_linkage)) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
-		                   dup->name.data,
-		                   dup->name.sz);
+		                   in_scope->name.data,
+		                   in_scope->name.sz);
 	}
 
-	if (dup == NULL) {
+	const struct symbol *resolved = NULL;
+	if (in_scope != NULL) {
+		resolved = in_scope;
+	} else {
+		const struct symbol *anywhere =
+			symbols_get(*sym, varname, false);
+
 		check(symbols_prepend(arena,
 		                      sym,
 		                      &a->u.declare.identifier.name,
 		                      SYMBOL_VARIABLE,
 		                      0));
-		assert(*sym != NULL);
 		(**sym).linkage.has_linkage = has_linkage;
-		dup = *sym;
+		resolved = *sym;
+
+		if (anywhere != NULL && anywhere->linkage.has_linkage) {
+			/*
+			 * This new declaration resolves to a variable with
+			 * linkage (internal or external), outside of this
+			 * block's scope. Make this re-declaration take on the
+			 * unique ID of the existing variable pulled into
+			 * scope, essentially creating a duplicate-like "stub"
+			 * in the symbol table. We expect the caller to discard
+			 * this stub when exiting this scope and proceeding to
+			 * resolve other scopes.
+			 */
+			(**sym).unique = anywhere->unique;
+		}
 	}
-	map_symbol_members(dup, &a->u.declare.identifier);
+	map_symbol_members(resolved, &a->u.declare.identifier);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
