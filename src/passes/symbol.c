@@ -19,7 +19,8 @@ symbols_prepend(Arena *arena,
 	node->stype = stype;
 	node->n_args = n_args;
 	if (*head != NULL) {
-		node->unique = (**head).unique + 1;
+		long long int base = MAX((**head).unique, (**head).cookie);
+		node->unique = base + 1;
 		node->cookie = MAX(node->unique, (**head).cookie);
 	}
 	node->level_delimiter = false;

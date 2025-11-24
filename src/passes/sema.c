@@ -603,7 +603,6 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		                      (int)a->u.declare.identifier.name.sz,
 		                      a->u.declare.identifier.name.data,
 		                      a->u.declare.identifier.unique);
-		info("mangling decl to %s", mangled_str);
 		const struct string_view mangled = {
 			.data = mangled_str,
 			.sz = strlen(mangled_str),
