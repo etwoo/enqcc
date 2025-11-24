@@ -356,8 +356,8 @@ sema_declare_finalize(struct sema_symbol_state *state,
 		                             varname,
 		                             scope));
 		dup = state->variable_symbols;
+		dup->unique = already_unique; /* reuse unique IDs from earlier */
 	}
-	dup->unique = already_unique; /* reuse unique IDs from earlier */
 	dup->linkage.has_linkage = has_linkage;
 	dup->linkage.initial = initial;
 	dup->linkage.as_constant = as_constant;
