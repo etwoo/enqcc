@@ -18,6 +18,7 @@ map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
 {
 	dst->unique = src->unique;
 	dst->stype = src->stype;
+	dst->ltype = src->linkage.linkage;
 }
 
 static WARN_UNUSED result_t
@@ -32,7 +33,6 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 	}
 
 	map_symbol_members(resolved, asym);
-	asym->ltype = resolved->linkage.linkage;
 	return RESULT_OK;
 }
 
@@ -216,6 +216,7 @@ resolve_decl(Arena *arena,
 			 * resolve other scopes.
 			 */
 			(**sym).unique = anywhere->unique;
+			(**sym).linkage.linkage = anywhere->linkage.linkage;
 		}
 	}
 	map_symbol_members(resolved, &a->u.declare.identifier);
