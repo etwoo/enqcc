@@ -210,7 +210,7 @@ resolve_decl(Arena *arena,
 		(**sym).linkage.has_linkage = has_linkage;
 		resolved = *sym;
 
-		if (anywhere != NULL && anywhere->linkage.has_linkage) {
+		if (has_linkage && anywhere && anywhere->linkage.has_linkage) {
 			/*
 			 * This new declaration resolves to a variable with
 			 * linkage (internal or external), outside of this
