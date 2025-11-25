@@ -87,3 +87,38 @@ symbols_get_scoped(struct symbol *head,
 	}
 	return NULL;
 }
+
+struct symbol *
+symbols_get_unique(struct symbol *head, long long int unique)
+{
+	while (head != NULL) {
+		if (head->unique == unique) {
+			return head;
+		}
+		head = head->next;
+	}
+	return NULL;
+}
+
+static const char MANGLE_DELIMTER = '.';
+
+bool
+is_mangled(struct symbol *s)
+{
+	return (memchr(s->name.data, MANGLE_DELIMTER, s->name.sz) != NULL);
+}
+
+result_t
+mangle_name(Arena *arena, struct symbol *s)
+{
+	char *mangled_str = arena_sprintf(arena,
+	                                  "%.*s%c%lld",
+	                                  (int)s->name.sz,
+	                                  s->name.data,
+					  MANGLE_DELIMTER,
+	                                  s->unique);
+	check_if(mangled_str == NULL, ERR_SEMA_ALLOC);
+	s->name.data = mangled_str;
+	s->name.sz = strlen(mangled_str);
+	return RESULT_OK;
+}

@@ -556,13 +556,10 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 	 *   n = number of variable references spread across AST nodes
 	 *   m = number of variables with linkage
 	 */
-	struct symbol *v = state->variable_symbols;
-	for (; v != NULL; v = v->next) {
-		assert(v->stype == SYMBOL_VARIABLE);
-		if (v->unique == a->u.var.unique) {
-			a->u.var.ltype = v->linkage.linkage;
-			break;
-		}
+	struct symbol *v =
+		symbols_get_unique(state->variable_symbols, a->u.var.unique);
+	if (v != NULL) {
+		a->u.var.ltype = v->linkage.linkage;
 	}
 	return RESULT_OK;
 }
@@ -592,20 +589,6 @@ sema_declare(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
-sema_mangle(Arena *arena, struct ast_symbol *asym)
-{
-	char *mangled_str = arena_sprintf(arena,
-	                                  "%.*s.%lld",
-	                                  (int)asym->name.sz,
-	                                  asym->name.data,
-	                                  asym->unique);
-	check_if(mangled_str == NULL, ERR_SEMA_ALLOC);
-	asym->name.data = mangled_str;
-	asym->name.sz = strlen(mangled_str);
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 sema_internal_linkage(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
@@ -616,19 +599,23 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		 *
 		 *   n = number of variables with linkage
 		 */
-		struct symbol *v = state->variable_symbols;
-		// TODO: turn this and other unique lookups into a symbol.h API
-		for (; v != NULL; v = v->next) {
-			assert(v->stype == SYMBOL_VARIABLE);
-			if (v->unique == a->u.declare.identifier.unique) {
-				if (is_external(v->linkage.linkage)) {
-					break;
-				}
-				check(sema_mangle(state->arena,
-				                  &a->u.declare.identifier));
-				v->name = a->u.declare.identifier.name;
-				break;
+		struct symbol *v =
+			symbols_get_unique(state->variable_symbols,
+		                           a->u.declare.identifier.unique);
+		if (v != NULL && is_internal(v->linkage.linkage)) {
+			/*
+			 * For symbols with internal linkage, update the symbol
+			 * table entry with a mangled name, unique within this
+			 * translation unit.
+			 */
+			if (!is_mangled(v)) {
+				check(mangle_name(state->arena, v));
 			}
+			/*
+			 * Update this declaration in the AST to use the
+			 * newly-mangled symbol name.
+			 */
+			a->u.declare.identifier.name = v->name;
 		}
 	} else if (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE) {
 		/*
@@ -637,21 +624,14 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		 *   n = number of variable references spread across AST nodes
 		 *   m = number of variables with linkage
 		 */
-		struct symbol *v = state->variable_symbols;
-		for (; v != NULL; v = v->next) {
-			assert(v->stype == SYMBOL_VARIABLE);
-			if (v->unique == a->u.var.unique) {
-				if (is_external(v->linkage.linkage)) {
-					break;
-				}
-				/*
-				 * For symbols with internal linkage, redirect
-				 * any variable usage to a mangled name, unique
-				 * within this translation unit.
-				 */
-				a->u.var.name = v->name;
-				break;
-			}
+		struct symbol *v = symbols_get_unique(state->variable_symbols,
+		                                      a->u.var.unique);
+		if (v != NULL && is_internal(v->linkage.linkage)) {
+			/*
+			 * Update this variable usage in the AST to use the
+			 * newly-mangled symbol name.
+			 */
+			a->u.var.name = v->name;
 		}
 	}
 
