@@ -89,10 +89,6 @@ struct symbol *symbols_get(struct symbol *head,
                            bool stop_at_delimiter) WARN_UNUSED;
 void symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point);
 
-result_t symbols_prepend_scoped(Arena *arena,
-                                struct symbol **head,
-                                const struct string_view *name,
-                                enum symbol_scope scope) WARN_UNUSED;
 struct symbol *symbols_get_scoped(struct symbol *head,
                                   const struct string_view *name,
                                   enum symbol_scope scope) WARN_UNUSED;

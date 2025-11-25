@@ -530,10 +530,11 @@ sema_declare_apply(struct ast *a,
 	}
 
 	if (dup == NULL) {
-		check(symbols_prepend_scoped(state->arena,
-		                             &state->variable_symbols,
-		                             &a->u.declare.identifier.name,
-		                             scope));
+		check(symbols_prepend(state->arena,
+		                      &state->variable_symbols,
+		                      &a->u.declare.identifier.name,
+		                      SYMBOL_VARIABLE));
+		state->variable_symbols->scope_if_specified = scope;
 		dup = state->variable_symbols;
 	}
 	dup->unique = a->u.declare.identifier.unique; /* reuse unique ID */
@@ -616,6 +617,7 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		 *   n = number of variables with linkage
 		 */
 		struct symbol *v = state->variable_symbols;
+		// TODO: turn this and other unique lookups into a symbol.h API
 		for (; v != NULL; v = v->next) {
 			assert(v->stype == SYMBOL_VARIABLE);
 			if (v->unique == a->u.declare.identifier.unique) {
