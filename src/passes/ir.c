@@ -1022,6 +1022,7 @@ ir_debug_print(const struct intermediate *ir)
 			debug("  VARIABLE LINKAGE EXTERNAL");
 			break;
 		}
+		debug("  VARIABLE INIT %lld", v->u.initial_as_ll);
 	}
 
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {

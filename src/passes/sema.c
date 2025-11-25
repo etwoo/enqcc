@@ -383,6 +383,11 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 		if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
 			initial = INITIAL_VALUE_CONSTANT;
 			as_constant = a->u.declare.init->u.num;
+			/*
+			 * Remove init expression from AST. We will initialize
+			 * this value via symbol table processing, not AST.
+			 */
+			a->u.declare.init = NULL;
 		} else {
 			return make_result(
 				ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_INIT,
@@ -512,9 +517,14 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 		} else if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
 			initial = INITIAL_VALUE_CONSTANT;
 			as_constant = a->u.declare.init->u.num;
+			/*
+			 * Remove init expression from AST. We will initialize
+			 * this value via symbol table processing, not AST.
+			 */
+			a->u.declare.init = NULL;
 		}
 
-		linkage = SYMBOL_LINKAGE_NONE;
+		linkage = SYMBOL_LINKAGE_INTERNAL;
 		assert(initial == INITIAL_VALUE_CONSTANT);
 		break;
 	case SPECIFIER_NONE:
@@ -562,7 +572,7 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 			 * to presence in state->variable_symbols overall, not
 			 * the matching node's has_linkage value in particular.
 			 */
-			a->u.var.ltype = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
+			a->u.var.ltype = v->linkage.linkage;
 			break;
 		}
 	}
