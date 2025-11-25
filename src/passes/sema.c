@@ -343,48 +343,55 @@ sema_fn_signature(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
-// TODO simplify sema_declare_finalize() API, refactor callers, or both
 static WARN_UNUSED result_t
-sema_declare_finalize(struct sema_symbol_state *state,
-                      const struct string_view *varname,
-                      long long int already_unique,
-                      enum symbol_scope scope,
-                      struct symbol *dup,
-                      enum symbol_linkage linkage,
-                      enum initializer_state initial,
-                      long long int as_constant)
+sema_declare_apply(struct ast *a,
+                   struct sema_symbol_state *state,
+                   enum symbol_scope scope,
+                   result_t (*handler)(struct ast *a,
+                                       struct sema_symbol_state *state,
+                                       struct symbol **dup,
+                                       enum symbol_linkage *linkage,
+                                       enum initializer_state *initial,
+                                       long long int *as_constant))
 {
+	assert(a->node_type == NODE_DECLARATION);
+	struct symbol *dup = NULL;
+	enum symbol_linkage linkage = SYMBOL_LINKAGE_NONE;
+	enum initializer_state initial = INITIAL_VALUE_NO_INITIALIZER;
+	long long int as_constant = 0;
+
+	check(handler(a, state, &dup, &linkage, &initial, &as_constant));
+
 	if (dup == NULL) {
 		check(symbols_prepend_scoped(state->arena,
 		                             &state->variable_symbols,
-		                             varname,
+		                             &a->u.declare.identifier.name,
 		                             scope));
 		dup = state->variable_symbols;
 	}
-	// TODO: maybe wrap below four statments into a helper function, then call symbols_prepend_scoped() plus helper at callsites, avoid having to pass EIGHT arguments to a single function
-	dup->unique = already_unique; /* reuse unique IDs from earlier */
+	dup->unique = a->u.declare.identifier.unique; /* reuse unique ID */
 	dup->linkage.linkage = linkage;
 	dup->linkage.initial = initial;
 	dup->linkage.as_constant = as_constant;
+	a->u.declare.identifier.ltype = linkage;
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
+sema_declare_file_scope(struct ast *a,
+                        struct sema_symbol_state *state,
+                        struct symbol **dup,
+                        enum symbol_linkage *linkage,
+                        enum initializer_state *initial,
+                        long long int *as_constant)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
-	enum symbol_linkage linkage =
-		(a->u.declare.specifier != SPECIFIER_STATIC)
-			? SYMBOL_LINKAGE_EXTERNAL
-			: SYMBOL_LINKAGE_INTERNAL;
-	enum initializer_state initial = INITIAL_VALUE_NO_INITIALIZER;
-	long long int as_constant = 0;
 
 	if (a->u.declare.init != NULL) {
 		if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
-			initial = INITIAL_VALUE_CONSTANT;
-			as_constant = a->u.declare.init->u.num;
+			*initial = INITIAL_VALUE_CONSTANT;
+			*as_constant = a->u.declare.init->u.num;
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -397,9 +404,9 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 				varname->sz);
 		}
 	} else if (a->u.declare.specifier == SPECIFIER_EXTERN) {
-		initial = INITIAL_VALUE_NO_INITIALIZER;
+		*initial = INITIAL_VALUE_NO_INITIALIZER;
 	} else {
-		initial = INITIAL_VALUE_TENTATIVE;
+		*initial = INITIAL_VALUE_TENTATIVE;
 	}
 
 	struct symbol *function_symbol_collision =
@@ -413,58 +420,52 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 			varname->sz);
 	}
 
-	struct symbol *dup =
-		symbols_get(state->variable_symbols, varname, false);
+	*dup = symbols_get(state->variable_symbols, varname, false);
+	*linkage = (a->u.declare.specifier != SPECIFIER_STATIC)
+	                   ? SYMBOL_LINKAGE_EXTERNAL
+	                   : SYMBOL_LINKAGE_INTERNAL;
 
-	if (dup == NULL) {
+	if (*dup == NULL) {
 		/* no earlier declaration to cross-reference linkage */
 	} else if (a->u.declare.specifier == SPECIFIER_EXTERN) {
-		linkage = dup->linkage.linkage;
-	} else if (linkage != dup->linkage.linkage) {
+		*linkage = (**dup).linkage.linkage;
+	} else if (*linkage != (**dup).linkage.linkage) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE,
 			varname->data,
 			varname->sz);
 	}
 
-	if (dup == NULL) {
+	if (*dup == NULL) {
 		/* no earlier declaration to cross-reference initializer */
-	} else if (dup->linkage.initial == INITIAL_VALUE_CONSTANT &&
-	           initial == INITIAL_VALUE_CONSTANT) {
+	} else if ((**dup).linkage.initial == INITIAL_VALUE_CONSTANT &&
+	           *initial == INITIAL_VALUE_CONSTANT) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_DUPLICATE,
 			varname->data,
 			varname->sz);
 	} else {
-		if (dup->linkage.initial == INITIAL_VALUE_CONSTANT) {
-			as_constant = dup->linkage.as_constant;
+		if ((**dup).linkage.initial == INITIAL_VALUE_CONSTANT) {
+			*as_constant = (**dup).linkage.as_constant;
 		}
 		// NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
-		initial = MAX(initial, dup->linkage.initial);
+		*initial = MAX(*initial, (**dup).linkage.initial);
 	}
 
-	check(sema_declare_finalize(state,
-	                            varname,
-	                            a->u.declare.identifier.unique,
-	                            SCOPE_FILE,
-	                            dup,
-	                            linkage,
-	                            initial,
-	                            as_constant));
-	a->u.declare.identifier.ltype = linkage;
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
+sema_declare_block_scope(struct ast *a,
+                         struct sema_symbol_state *state,
+                         struct symbol **dup,
+                         enum symbol_linkage *linkage,
+                         enum initializer_state *initial,
+                         long long int *as_constant)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
-	enum symbol_linkage linkage = SYMBOL_LINKAGE_NONE;
-	unsigned initial = INITIAL_VALUE_NO_INITIALIZER;
-	long long int as_constant = 0;
 	struct symbol *function_symbol_collision = NULL;
-	struct symbol *dup = NULL;
 
 	switch (a->u.declare.specifier) {
 	case SPECIFIER_EXTERN:
@@ -486,22 +487,22 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 				varname->sz);
 		}
 
-		dup = symbols_get_scoped(state->variable_symbols,
-		                         varname,
-		                         SCOPE_FILE);
-		if (dup != NULL) {
+		*dup = symbols_get_scoped(state->variable_symbols,
+		                          varname,
+		                          SCOPE_FILE);
+		if (*dup != NULL) {
 			/*
 			 * In this case, extern causes this variable to take on
 			 * the same linkage as the matching identifier that is
 			 * already in scope. This may even be a variable with
 			 * internal linkage via earlier use of keyword static!
 			 */
-			linkage = dup->linkage.linkage;
-			initial = dup->linkage.initial;
-			as_constant = dup->linkage.as_constant;
+			*linkage = (**dup).linkage.linkage;
+			*initial = (**dup).linkage.initial;
+			*as_constant = (**dup).linkage.as_constant;
 		} else {
-			linkage = SYMBOL_LINKAGE_EXTERNAL;
-			initial = INITIAL_VALUE_NO_INITIALIZER;
+			*linkage = SYMBOL_LINKAGE_EXTERNAL;
+			*initial = INITIAL_VALUE_NO_INITIALIZER;
 		}
 		break;
 	case SPECIFIER_STATIC:
@@ -514,11 +515,11 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 		}
 
 		if (a->u.declare.init == NULL) {
-			initial = INITIAL_VALUE_CONSTANT;
-			as_constant = 0;
+			*initial = INITIAL_VALUE_CONSTANT;
+			*as_constant = 0;
 		} else if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
-			initial = INITIAL_VALUE_CONSTANT;
-			as_constant = a->u.declare.init->u.num;
+			*initial = INITIAL_VALUE_CONSTANT;
+			*as_constant = a->u.declare.init->u.num;
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -526,8 +527,8 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			a->u.declare.init = NULL; /* arena handles dealloc */
 		}
 
-		linkage = SYMBOL_LINKAGE_INTERNAL;
-		assert(initial == INITIAL_VALUE_CONSTANT);
+		*linkage = SYMBOL_LINKAGE_INTERNAL;
+		assert(*initial == INITIAL_VALUE_CONSTANT);
 		break;
 	case SPECIFIER_NONE:
 		/*
@@ -538,15 +539,6 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 		return RESULT_OK;
 	}
 
-	check(sema_declare_finalize(state,
-	                            varname,
-	                            a->u.declare.identifier.unique,
-	                            SCOPE_BLOCK,
-	                            dup,
-	                            linkage,
-	                            initial,
-	                            as_constant));
-	a->u.declare.identifier.ltype = linkage;
 	return RESULT_OK;
 }
 
@@ -586,9 +578,9 @@ sema_declare(struct ast *a, void *userdata)
 	const bool file_scope = ast_contains(state->ast_program_globals, a);
 	if (file_scope) {
 		assert(a->node_type == NODE_DECLARATION);
-		check(sema_declare_file_scope(a, state));
+		check(sema_declare_apply(a, state, SCOPE_FILE));
 	} else if (a->node_type == NODE_DECLARATION) {
-		check(sema_declare_block_scope(a, state));
+		check(sema_declare_apply(a, state, SCOPE_BLOCK));
 	} else {
 		check(sema_propagate_linkage_from_declare_to_usage(a, state));
 	}
