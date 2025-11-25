@@ -387,7 +387,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
 			 */
-			a->u.declare.init = NULL;
+			a->u.declare.init = NULL; /* arena handles dealloc */
 		} else {
 			return make_result(
 				ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_INIT,
@@ -521,7 +521,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
 			 */
-			a->u.declare.init = NULL;
+			a->u.declare.init = NULL; /* arena handles dealloc */
 		}
 
 		linkage = SYMBOL_LINKAGE_INTERNAL;
