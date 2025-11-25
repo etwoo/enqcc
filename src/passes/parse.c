@@ -1252,10 +1252,20 @@ parse_debug_print_ast_symbol(const char *description,
 	      "",
 	      symbol_type_as_str);
 
-	debug("%*sIDENTIFIER.LINKAGE: %s",
-	      (int)indent + 1,
-	      "",
-	      some_linkage(asym->ltype) ? "INTERNAL OR EXTERNAL" : "NONE");
+	const char *linkage_as_str = NULL;
+	switch (asym->ltype) {
+	case SYMBOL_LINKAGE_NONE:
+		linkage_as_str = "NONE";
+		break;
+	case SYMBOL_LINKAGE_INTERNAL:
+		linkage_as_str = "INTERNAL";
+		break;
+	case SYMBOL_LINKAGE_EXTERNAL:
+		linkage_as_str = "EXTERNAL";
+		break;
+	}
+
+	debug("%*sIDENTIFIER.LINKAGE: %s", (int)indent + 1, "", linkage_as_str);
 }
 
 static void
