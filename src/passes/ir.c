@@ -76,15 +76,12 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 
 	if (some_linkage(sym->ltype)) {
 		dst->subtype = IR_VAL_VARIABLE_DATA;
+		dst->varname = sym->name;
 	} else {
 		dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
 	}
 
 	dst->num = sym->unique;
-
-	if (some_linkage(sym->ltype)) {
-		dst->varname = sym->name;
-	}
 }
 
 static result_t ir_expr(Arena *arena,
