@@ -422,6 +422,24 @@ sema_declare_file_scope(struct ast *a,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED struct symbol *
+symbols_get_scoped(struct symbol *head, /* maybe NULL */
+                   const struct string_view *name,
+                   enum symbol_scope scope)
+{
+	while (true) {
+		struct symbol *candidate = symbols_get(head, name, false);
+		if (candidate == NULL) {
+			break;
+		}
+		if (candidate->scope_if_specified == scope) {
+			return candidate;
+		}
+		head = candidate->next;
+	}
+	return NULL;
+}
+
 static WARN_UNUSED result_t
 sema_declare_block_scope(struct ast *a,
                          struct sema_symbol_state *state,

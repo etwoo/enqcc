@@ -63,31 +63,6 @@ symbols_get(struct symbol *head,
 	return NULL;
 }
 
-void
-symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point)
-{
-	if (reset_point != NULL) {
-		reset_point->cookie = (**symbols).cookie;
-	}
-	*symbols = reset_point;
-}
-
-struct symbol *
-symbols_get_scoped(struct symbol *head,
-                   const struct string_view *name,
-                   enum symbol_scope scope)
-{
-	while (head != NULL) {
-		if (head->name.sz == name->sz &&
-		    0 == strncmp(head->name.data, name->data, name->sz) &&
-		    head->scope_if_specified == scope) {
-			return head;
-		}
-		head = head->next;
-	}
-	return NULL;
-}
-
 struct symbol *
 symbols_get_unique(struct symbol *head, long long int unique)
 {
@@ -98,6 +73,15 @@ symbols_get_unique(struct symbol *head, long long int unique)
 		head = head->next;
 	}
 	return NULL;
+}
+
+void
+symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point)
+{
+	if (reset_point != NULL) {
+		reset_point->cookie = (**symbols).cookie;
+	}
+	*symbols = reset_point;
 }
 
 static const char MANGLE_DELIMTER = '.';

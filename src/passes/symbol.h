@@ -87,13 +87,9 @@ result_t symbols_prepend(Arena *arena,
 struct symbol *symbols_get(struct symbol *head,
                            const struct string_view *name,
                            bool stop_at_delimiter) WARN_UNUSED;
-void symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point);
-
-struct symbol *symbols_get_scoped(struct symbol *head,
-                                  const struct string_view *name,
-                                  enum symbol_scope scope) WARN_UNUSED;
 struct symbol *symbols_get_unique(struct symbol *head,
                                   long long int unique) WARN_UNUSED;
+void symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point);
 
 bool is_mangled(struct symbol *sym) WARN_UNUSED;
 result_t mangle_name(Arena *arena, struct symbol *sym) WARN_UNUSED;
