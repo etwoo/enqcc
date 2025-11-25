@@ -14,20 +14,19 @@ enum symbol_type {
 	SYMBOL_FUNCTION_DEFINITION,
 };
 
-enum {
-	NOT_YET_UNIQUE = -1,
-};
-
 enum symbol_linkage {
 	SYMBOL_LINKAGE_NONE = 0,
 	SYMBOL_LINKAGE_INTERNAL = 1000, /* +1000, to discourage unintentional */
 	SYMBOL_LINKAGE_EXTERNAL = 2000, /* casts from other types, like bool  */
 };
 
-// TODO: convert macros to functions
-#define is_external(x) ((x) == SYMBOL_LINKAGE_EXTERNAL)
-#define is_internal(x) ((x) == SYMBOL_LINKAGE_INTERNAL)
-#define some_linkage(x) (is_external(x) || is_internal(x))
+bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
+bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
+bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
+
+enum {
+	NOT_YET_UNIQUE = -1,
+};
 
 enum initializer_state {
 	INITIAL_VALUE_NO_INITIALIZER,

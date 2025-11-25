@@ -5,6 +5,24 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
+bool
+is_internal(enum symbol_linkage linkage)
+{
+	return linkage == SYMBOL_LINKAGE_INTERNAL;
+}
+
+bool
+is_external(enum symbol_linkage linkage)
+{
+	return linkage == SYMBOL_LINKAGE_EXTERNAL;
+}
+
+bool
+some_linkage(enum symbol_linkage linkage)
+{
+	return is_external(linkage) || is_internal(linkage);
+}
+
 result_t
 symbols_prepend(Arena *arena,
                 struct symbol **head,
