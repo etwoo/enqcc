@@ -277,7 +277,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		is_def_or_decl = true;
 		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
 		                  ? SYMBOL_LINKAGE_EXTERNAL
-		                  : SYMBOL_LINKAGE_NONE; // TODO: internal
+		                  : SYMBOL_LINKAGE_INTERNAL;
 		is_static = (a->u.function.specifier == SPECIFIER_STATIC);
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
@@ -375,7 +375,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	enum symbol_linkage linkage =
 		(a->u.declare.specifier != SPECIFIER_STATIC)
 			? SYMBOL_LINKAGE_EXTERNAL
-			: SYMBOL_LINKAGE_NONE; // TODO: internal
+			: SYMBOL_LINKAGE_INTERNAL;
 	enum initializer_state initial = INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 
@@ -445,7 +445,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            initial,
 	                            as_constant));
 	if (some_linkage(linkage)) {
-		a->u.declare.identifier.ltype = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
+		a->u.declare.identifier.ltype = linkage;
 	}
 	return RESULT_OK;
 }
@@ -537,7 +537,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            initial,
 	                            as_constant));
 	if (some_linkage(linkage)) {
-		a->u.declare.identifier.ltype = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
+		a->u.declare.identifier.ltype = linkage;
 	}
 	return RESULT_OK;
 }

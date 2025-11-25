@@ -37,7 +37,7 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 		 * Even before sema.c, we already know this symbol must refer
 		 * to a variable with linkage (internal or external).
 		 */
-		asym->ltype = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
+		asym->ltype = resolved->linkage.linkage;
 	}
 
 	return RESULT_OK;
