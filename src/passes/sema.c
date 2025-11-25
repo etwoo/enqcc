@@ -592,22 +592,25 @@ sema_declare(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
+sema_mangle(Arena *arena, struct ast_symbol *asym)
+{
+	char *mangled_str = arena_sprintf(arena,
+	                                  "%.*s.%lld",
+	                                  (int)asym->name.sz,
+	                                  asym->name.data,
+	                                  asym->unique);
+	check_if(mangled_str == NULL, ERR_SEMA_ALLOC);
+	asym->name.data = mangled_str;
+	asym->name.sz = strlen(mangled_str);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_internal_linkage(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
 
 	if (a->node_type == NODE_DECLARATION) {
-		// TODO; generate string only if internal symbol w/ matching unique ID is found in symbol table
-		char *mangled_str =
-			arena_sprintf(state->arena,
-		                      "%.*s.%lld",
-		                      (int)a->u.declare.identifier.name.sz,
-		                      a->u.declare.identifier.name.data,
-		                      a->u.declare.identifier.unique);
-		const struct string_view mangled = {
-			.data = mangled_str,
-			.sz = strlen(mangled_str),
-		};
 		/*
 		 * Lookup below causes O(n^2) runtime, where:
 		 *
@@ -620,8 +623,9 @@ sema_internal_linkage(struct ast *a, void *userdata)
 				if (v->linkage.has_linkage) {
 					break;
 				}
-				a->u.declare.identifier.name = mangled;
-				v->name = mangled;
+				check(sema_mangle(state->arena,
+				                  &a->u.declare.identifier));
+				v->name = a->u.declare.identifier.name;
 				break;
 			}
 		}
