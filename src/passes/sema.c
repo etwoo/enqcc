@@ -344,40 +344,6 @@ sema_fn_signature(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
-sema_declare_apply(struct ast *a,
-                   struct sema_symbol_state *state,
-                   enum symbol_scope scope,
-                   result_t (*handler)(struct ast *a,
-                                       struct sema_symbol_state *state,
-                                       struct symbol **dup,
-                                       enum symbol_linkage *linkage,
-                                       enum initializer_state *initial,
-                                       long long int *as_constant))
-{
-	assert(a->node_type == NODE_DECLARATION);
-	struct symbol *dup = NULL;
-	enum symbol_linkage linkage = SYMBOL_LINKAGE_NONE;
-	enum initializer_state initial = INITIAL_VALUE_NO_INITIALIZER;
-	long long int as_constant = 0;
-
-	check(handler(a, state, &dup, &linkage, &initial, &as_constant));
-
-	if (dup == NULL) {
-		check(symbols_prepend_scoped(state->arena,
-		                             &state->variable_symbols,
-		                             &a->u.declare.identifier.name,
-		                             scope));
-		dup = state->variable_symbols;
-	}
-	dup->unique = a->u.declare.identifier.unique; /* reuse unique ID */
-	dup->linkage.linkage = linkage;
-	dup->linkage.initial = initial;
-	dup->linkage.as_constant = as_constant;
-	a->u.declare.identifier.ltype = linkage;
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 sema_declare_file_scope(struct ast *a,
                         struct sema_symbol_state *state,
                         struct symbol **dup,
@@ -539,6 +505,54 @@ sema_declare_block_scope(struct ast *a,
 		return RESULT_OK;
 	}
 
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_declare_apply(struct ast *a,
+                   struct sema_symbol_state *state,
+                   enum symbol_scope scope)
+{
+	assert(a->node_type == NODE_DECLARATION);
+	struct symbol *dup = NULL;
+	enum symbol_linkage linkage = SYMBOL_LINKAGE_NONE;
+	enum initializer_state initial = INITIAL_VALUE_NO_INITIALIZER;
+	long long int as_constant = 0;
+
+	switch (scope) {
+	case SCOPE_BLOCK:
+		check(sema_declare_file_scope(a,
+		                              state,
+		                              &dup,
+		                              &linkage,
+		                              &initial,
+		                              &as_constant));
+		break;
+	case SCOPE_FILE:
+		check(sema_declare_block_scope(a,
+		                               state,
+		                               &dup,
+		                               &linkage,
+		                               &initial,
+		                               &as_constant));
+		break;
+	case SCOPE_UNSPECIFIED:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	if (dup == NULL) {
+		check(symbols_prepend_scoped(state->arena,
+		                             &state->variable_symbols,
+		                             &a->u.declare.identifier.name,
+		                             scope));
+		dup = state->variable_symbols;
+	}
+	dup->unique = a->u.declare.identifier.unique; /* reuse unique ID */
+	dup->linkage.linkage = linkage;
+	dup->linkage.initial = initial;
+	dup->linkage.as_constant = as_constant;
+	a->u.declare.identifier.ltype = linkage;
 	return RESULT_OK;
 }
 
