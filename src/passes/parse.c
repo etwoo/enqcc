@@ -331,16 +331,12 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 		symbols_get(*sym, &a->u.function.identifier.name, false);
 	if (dup == NULL ||                   /* new symbol in this scope */
 	    dup->stype == SYMBOL_VARIABLE) { /* ... or func shadows var  */
-		long long int n_args = 0;
-		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-			++n_args;
-		}
 		check(symbols_prepend(arena,
 		                      sym,
 		                      &a->u.function.identifier.name,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      n_args));
+		                      0));
 		map_symbol_members(*sym, &a->u.function.identifier);
 	} else if (is_def) {
 		map_symbol_members(dup, &a->u.function.identifier);
