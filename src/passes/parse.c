@@ -326,21 +326,21 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	assert(a->node_type == NODE_FUNCTION);
 
 	const bool is_def = (a->u.function.block != NULL);
-	struct symbol *dup =
+	struct symbol *resolved =
 		symbols_get(*sym, &a->u.function.identifier.name, false);
-	if (dup == NULL ||                   /* new symbol in this scope */
-	    dup->stype == SYMBOL_VARIABLE) { /* ... or func shadows var  */
+	if (resolved == NULL ||                   /* new symbol in this scope */
+	    resolved->stype == SYMBOL_VARIABLE) { /* ... or func shadows var  */
 		check(symbols_prepend(arena,
 		                      sym,
 		                      &a->u.function.identifier.name,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION));
-		dup = *sym;
+		resolved = *sym;
 	} else if (is_def) {
-		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
-		dup->stype = SYMBOL_FUNCTION_DEFINITION;
+		assert(resolved->stype == SYMBOL_FUNCTION_DECLARATION);
+		resolved->stype = SYMBOL_FUNCTION_DEFINITION;
 	}
-	map_symbol_members(dup, &a->u.function.identifier);
+	map_symbol_members(resolved, &a->u.function.identifier);
 
 	assert(*sym != NULL);
 	struct symbol *before_params = *sym;
