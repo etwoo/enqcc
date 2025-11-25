@@ -27,7 +27,7 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(asym->unique == NOT_YET_UNIQUE);
 
-	const struct symbol *resolved = symbols_get(head, &asym->name, false);
+	const struct symbol *resolved = symbols_get_anywhere(head, &asym->name);
 	if (resolved == NULL) {
 		return make_result(errtype, asym->name.data, asym->name.sz);
 	}
@@ -181,7 +181,7 @@ resolve_decl(Arena *arena,
 	                    ? SYMBOL_LINKAGE_EXTERNAL
 	                    : SYMBOL_LINKAGE_NONE);
 
-	const struct symbol *in_scope = symbols_get(*sym, varname, true);
+	const struct symbol *in_scope = symbols_get_limited(*sym, varname);
 	if (in_scope != NULL &&
 	    !(is_external(in_scope->linkage.linkage) && is_external(linkage))) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
@@ -194,7 +194,7 @@ resolve_decl(Arena *arena,
 		resolved = in_scope;
 	} else {
 		const struct symbol *anywhere =
-			symbols_get(*sym, varname, false);
+			symbols_get_anywhere(*sym, varname);
 
 		check(symbols_prepend(arena,
 		                      sym,
@@ -327,7 +327,7 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 
 	const bool is_def = (a->u.function.block != NULL);
 	struct symbol *resolved =
-		symbols_get(*sym, &a->u.function.identifier.name, false);
+		symbols_get_anywhere(*sym, &a->u.function.identifier.name);
 	if (resolved == NULL ||                   /* new symbol in this scope */
 	    resolved->stype == SYMBOL_VARIABLE) { /* ... or func shadows var  */
 		check(symbols_prepend(arena,

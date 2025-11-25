@@ -312,7 +312,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 	}
 
 	struct symbol **s = &state->function_symbols;
-	struct symbol *dup = symbols_get(*s, fname, false);
+	struct symbol *dup = symbols_get_anywhere(*s, fname);
 	if (dup == NULL) {
 		assert(is_def_or_decl);
 		check(symbols_prepend(state->arena,
@@ -374,7 +374,7 @@ sema_declare_file_scope(struct ast *a,
 	}
 
 	struct symbol *function_symbol_collision =
-		symbols_get(state->function_symbols, varname, false);
+		symbols_get_anywhere(state->function_symbols, varname);
 
 	if (function_symbol_collision != NULL) {
 		assert(function_symbol_collision->stype != SYMBOL_VARIABLE);
@@ -384,7 +384,7 @@ sema_declare_file_scope(struct ast *a,
 			varname->sz);
 	}
 
-	*dup = symbols_get(state->variable_symbols, varname, false);
+	*dup = symbols_get_anywhere(state->variable_symbols, varname);
 	linkage_state->linkage = (a->u.declare.specifier != SPECIFIER_STATIC)
 	                                 ? SYMBOL_LINKAGE_EXTERNAL
 	                                 : SYMBOL_LINKAGE_INTERNAL;
@@ -428,7 +428,7 @@ symbols_get_scoped(struct symbol *head, /* maybe NULL */
                    enum symbol_scope scope)
 {
 	while (true) {
-		struct symbol *candidate = symbols_get(head, name, false);
+		struct symbol *candidate = symbols_get_anywhere(head, name);
 		if (candidate == NULL) {
 			break;
 		}
@@ -460,7 +460,7 @@ sema_declare_block_scope(struct ast *a,
 		}
 
 		function_symbol_collision =
-			symbols_get(state->function_symbols, varname, false);
+			symbols_get_anywhere(state->function_symbols, varname);
 		if (function_symbol_collision != NULL) {
 			assert(function_symbol_collision->stype !=
 			       SYMBOL_VARIABLE);

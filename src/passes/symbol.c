@@ -45,10 +45,10 @@ symbols_prepend(Arena *arena,
 	return RESULT_OK;
 }
 
-struct symbol *
-symbols_get(struct symbol *head,
-            const struct string_view *name,
-            bool stop_at_delimiter)
+static WARN_UNUSED struct symbol *
+symbols_get_impl(struct symbol *head,
+                 const struct string_view *name,
+                 bool stop_at_delimiter)
 {
 	while (head != NULL) {
 		if (stop_at_delimiter && head->level_delimiter) {
@@ -61,6 +61,18 @@ symbols_get(struct symbol *head,
 		head = head->next;
 	}
 	return NULL;
+}
+
+struct symbol *
+symbols_get_limited(struct symbol *head, const struct string_view *name)
+{
+	return symbols_get_impl(head, name, true);
+}
+
+struct symbol *
+symbols_get_anywhere(struct symbol *head, const struct string_view *name)
+{
+	return symbols_get_impl(head, name, false);
 }
 
 struct symbol *
@@ -99,7 +111,7 @@ mangle_name(Arena *arena, struct symbol *s)
 	                                  "%.*s%c%lld",
 	                                  (int)s->name.sz,
 	                                  s->name.data,
-					  MANGLE_DELIMTER,
+	                                  MANGLE_DELIMTER,
 	                                  s->unique);
 	check_if(mangled_str == NULL, ERR_SEMA_ALLOC);
 	s->name.data = mangled_str;
