@@ -336,8 +336,7 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION));
 		resolved = *sym;
-	} else if (is_def) {
-		assert(resolved->stype == SYMBOL_FUNCTION_DECLARATION);
+	} else if (is_def && resolved->stype == SYMBOL_FUNCTION_DECLARATION) {
 		resolved->stype = SYMBOL_FUNCTION_DEFINITION;
 	}
 	map_symbol_members(resolved, &a->u.function.identifier);
