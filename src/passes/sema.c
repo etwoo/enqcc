@@ -563,15 +563,6 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 	for (; v != NULL; v = v->next) {
 		assert(v->stype == SYMBOL_VARIABLE);
 		if (v->unique == a->u.var.unique) {
-			/*
-			 * Q: Why do we set has_linkage=true below, even if the
-			 * match at cursor has v->has_linkage == false?
-			 *
-			 * A: Consumers in ir.c want to know if this symbol has
-			 * any linkage, internal or external. This corresponds
-			 * to presence in state->variable_symbols overall, not
-			 * the matching node's has_linkage value in particular.
-			 */
 			a->u.var.ltype = v->linkage.linkage;
 			break;
 		}

@@ -69,14 +69,6 @@ struct symbol {
 	 * This results in linkage for `x` remaining internal. In other words,
 	 * in this particular case, use of keyword extern leads to a result
 	 * similar to use of keyword static alone!
-	 *
-	 * Note: the meaning of has_linkage currently depends on context. In
-	 * particular, sema.c uses has_linkage to mean external linkage
-	 * specifically, while parse.c overloads has_linkage to mean one of:
-	 *
-	 * - file scope declaration with internal linkage
-	 * - file scope declaration with external linkage
-	 * - block scope declaration with external linkage
 	 */
 	struct {
 		enum symbol_linkage linkage;
