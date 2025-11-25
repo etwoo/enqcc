@@ -40,6 +40,7 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 		 */
 		var->has_linkage = true;
 	}
+
 	return RESULT_OK;
 }
 
