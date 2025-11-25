@@ -19,12 +19,15 @@ enum {
 };
 
 enum symbol_linkage {
-	SYMBOL_LINKAGE_NONE,
-	SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL,
+	SYMBOL_LINKAGE_NONE = 0,
+	SYMBOL_LINKAGE_INTERNAL = 1000, /* +1000, to discourage unintentional */
+	SYMBOL_LINKAGE_EXTERNAL = 2000, /* casts from other types, like bool  */
 };
 
-#define is_external(x) ((x) == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL)
-#define some_linkage(x) ((x) == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL)
+// TODO: convert macros to functions
+#define is_external(x) ((x) == SYMBOL_LINKAGE_EXTERNAL)
+#define is_internal(x) ((x) == SYMBOL_LINKAGE_INTERNAL)
+#define some_linkage(x) (is_external(x) || is_internal(x))
 
 enum initializer_state {
 	INITIAL_VALUE_NO_INITIALIZER,

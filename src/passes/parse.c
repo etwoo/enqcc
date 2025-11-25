@@ -37,7 +37,7 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 		 * Even before sema.c, we already know this symbol must refer
 		 * to a variable with linkage (internal or external).
 		 */
-		asym->ltype = SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
+		asym->ltype = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
 	}
 
 	return RESULT_OK;
@@ -185,7 +185,7 @@ resolve_decl(Arena *arena,
 	const enum symbol_linkage linkage =
 		MAX(assume_linkage,
 	            a->u.declare.specifier == SPECIFIER_EXTERN
-	                    ? SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL
+	                    ? SYMBOL_LINKAGE_EXTERNAL
 	                    : SYMBOL_LINKAGE_NONE);
 
 	const struct symbol *in_scope = symbols_get(*sym, varname, true);
@@ -277,7 +277,10 @@ resolve_block_with_delimiter(Arena *arena,
 			check(resolve_function(arena, cur_item, sym));
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, cur_item, sym, false));
+			check(resolve_decl(arena,
+			                   cur_item,
+			                   sym,
+			                   SYMBOL_LINKAGE_NONE));
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
@@ -1201,7 +1204,10 @@ parse_init(Arena *arena,
 			a = &(**a).u.function.next;
 			break;
 		case NODE_DECLARATION:
-			check(resolve_decl(arena, *a, &working_symbols, true));
+			check(resolve_decl(arena,
+			                   *a,
+			                   &working_symbols,
+			                   SYMBOL_LINKAGE_EXTERNAL));
 			a = &(**a).u.declare.next;
 			break;
 		default:

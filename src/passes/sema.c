@@ -260,7 +260,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 	long long int n_args = 0;
 	bool is_def = false;
 	bool is_def_or_decl = false;
-	enum symbol_linkage linkage = SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
+	enum symbol_linkage linkage = SYMBOL_LINKAGE_EXTERNAL;
 	bool is_static = false;
 
 	switch (a->node_type) {
@@ -276,8 +276,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
 		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
-		                  ? SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL
-		                  : SYMBOL_LINKAGE_NONE;
+		                  ? SYMBOL_LINKAGE_EXTERNAL
+		                  : SYMBOL_LINKAGE_NONE; // TODO: internal
 		is_static = (a->u.function.specifier == SPECIFIER_STATIC);
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
@@ -326,8 +326,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
-	} else if (is_def_or_decl &&
-	           is_external(dup->linkage.linkage) &&
+	} else if (is_def_or_decl && is_external(dup->linkage.linkage) &&
 	           is_static) {
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
@@ -375,8 +374,8 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	const struct string_view *varname = &a->u.declare.identifier.name;
 	enum symbol_linkage linkage =
 		(a->u.declare.specifier != SPECIFIER_STATIC)
-			? SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL
-			: SYMBOL_LINKAGE_NONE;
+			? SYMBOL_LINKAGE_EXTERNAL
+			: SYMBOL_LINKAGE_NONE; // TODO: internal
 	enum initializer_state initial = INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 
@@ -446,8 +445,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            initial,
 	                            as_constant));
 	if (some_linkage(linkage)) {
-		a->u.declare.identifier.ltype =
-			SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
+		a->u.declare.identifier.ltype = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
 	}
 	return RESULT_OK;
 }
@@ -497,7 +495,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			initial = dup->linkage.initial;
 			as_constant = dup->linkage.as_constant;
 		} else {
-			linkage = SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
+			linkage = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
 			initial = INITIAL_VALUE_NO_INITIALIZER;
 		}
 		break;
@@ -539,8 +537,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            initial,
 	                            as_constant));
 	if (some_linkage(linkage)) {
-		a->u.declare.identifier.ltype =
-			SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
+		a->u.declare.identifier.ltype = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
 	}
 	return RESULT_OK;
 }
@@ -569,7 +566,7 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 			 * to presence in state->variable_symbols overall, not
 			 * the matching node's has_linkage value in particular.
 			 */
-			a->u.var.ltype = SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
+			a->u.var.ltype = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
 			break;
 		}
 	}
