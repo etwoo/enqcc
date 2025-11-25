@@ -565,7 +565,7 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 }
 
 static WARN_UNUSED result_t
-sema_declare(struct ast *a, void *userdata)
+sema_get_linkage_from_declarations(struct ast *a, void *userdata)
 {
 	if (a->node_type != NODE_DECLARATION &&
 	    a->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
@@ -589,7 +589,7 @@ sema_declare(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
-sema_internal_linkage(struct ast *a, void *userdata)
+sema_mangle_internal_linkage_names(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
 
@@ -658,11 +658,11 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	debug("Checking function signatures");
 	check(sema_walk(a, sema_fn_signature, &state));
 
-	debug("Checking variable declarations");
-	check(sema_walk(a, sema_declare, &state));
+	debug("Determining linkage from variable declarations");
+	check(sema_walk(a, sema_get_linkage_from_declarations, &state));
 
 	debug("Unique-ifying variables with internal linkage");
-	check(sema_walk(a, sema_internal_linkage, &state));
+	check(sema_walk(a, sema_mangle_internal_linkage_names, &state));
 
 	s->functions = state.function_symbols;
 	s->variables = state.variable_symbols;
