@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include <stdlib.h> /* for strtoll() */
 #include <string.h>
+#include <sys/param.h> /* for MAX() */
 
 static void
 map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
@@ -31,12 +32,12 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 	}
 
 	map_symbol_members(resolved, asym);
-	if (resolved->linkage.has_linkage) {
+	if (resolved->linkage.linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
 		/*
 		 * Even before sema.c, we already know this symbol must refer
 		 * to a variable with linkage (internal or external).
 		 */
-		asym->has_linkage = true;
+		asym->ltype = SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
 	}
 
 	return RESULT_OK;
@@ -176,16 +177,21 @@ static WARN_UNUSED result_t
 resolve_decl(Arena *arena,
              struct ast *a,
              struct symbol **sym,
-             bool assume_linkage)
+             enum symbol_linkage assume_linkage)
 {
 	assert(a->node_type == NODE_DECLARATION);
 
 	const struct string_view *varname = &a->u.declare.identifier.name;
-	const bool has_linkage =
-		assume_linkage || (a->u.declare.specifier == SPECIFIER_EXTERN);
+	const enum symbol_linkage linkage =
+		MAX(assume_linkage,
+	            a->u.declare.specifier == SPECIFIER_EXTERN
+	                    ? SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL
+	                    : SYMBOL_LINKAGE_NONE);
 
 	const struct symbol *in_scope = symbols_get(*sym, varname, true);
-	if (in_scope && !(in_scope->linkage.has_linkage && has_linkage)) {
+	if (in_scope && !(in_scope->linkage.linkage ==
+	                          SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL &&
+	                  linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL)) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
 		                   in_scope->name.data,
 		                   in_scope->name.sz);
@@ -202,10 +208,13 @@ resolve_decl(Arena *arena,
 		                      sym,
 		                      &a->u.declare.identifier.name,
 		                      SYMBOL_VARIABLE));
-		(**sym).linkage.has_linkage = has_linkage;
+		(**sym).linkage.linkage = linkage;
 		resolved = *sym;
 
-		if (has_linkage && anywhere && anywhere->linkage.has_linkage) {
+		if (linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL &&
+		    anywhere &&
+		    anywhere->linkage.linkage ==
+		            SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
 			/*
 			 * This new declaration resolves to a variable with
 			 * linkage (internal or external), outside of this
@@ -1249,7 +1258,9 @@ parse_debug_print_ast_symbol(const char *description,
 	debug("%*sIDENTIFIER.LINKAGE: %s",
 	      (int)indent + 1,
 	      "",
-	      asym->has_linkage ? "INTERNAL OR EXTERNAL" : "NONE");
+	      asym->ltype == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL
+	              ? "INTERNAL OR EXTERNAL"
+	              : "NONE");
 }
 
 static void

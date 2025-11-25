@@ -260,7 +260,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 	long long int n_args = 0;
 	bool is_def = false;
 	bool is_def_or_decl = false;
-	bool has_linkage = true;
+	enum symbol_linkage linkage = SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
 	bool is_static = false;
 
 	switch (a->node_type) {
@@ -275,7 +275,9 @@ sema_fn_signature(struct ast *a, void *userdata)
 		check(sema_fn_param_names(a->u.function.params));
 		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
-		has_linkage = (a->u.function.specifier != SPECIFIER_STATIC);
+		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
+		                  ? SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL
+		                  : SYMBOL_LINKAGE_NONE;
 		is_static = (a->u.function.specifier == SPECIFIER_STATIC);
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
@@ -319,12 +321,15 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION));
 		(**s).n_args = n_args;
-		(**s).linkage.has_linkage = has_linkage;
+		(**s).linkage.linkage = linkage;
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
-	} else if (is_def_or_decl && dup->linkage.has_linkage && is_static) {
+	} else if (is_def_or_decl &&
+	           dup->linkage.linkage ==
+	                   SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL &&
+	           is_static) {
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
@@ -346,7 +351,7 @@ sema_declare_finalize(struct sema_symbol_state *state,
                       long long int already_unique,
                       enum symbol_scope scope,
                       struct symbol *dup,
-                      bool has_linkage,
+                      enum symbol_linkage linkage,
                       enum initializer_state initial,
                       long long int as_constant)
 {
@@ -358,7 +363,7 @@ sema_declare_finalize(struct sema_symbol_state *state,
 		dup = state->variable_symbols;
 	}
 	dup->unique = already_unique; /* reuse unique IDs from earlier */
-	dup->linkage.has_linkage = has_linkage;
+	dup->linkage.linkage = linkage;
 	dup->linkage.initial = initial;
 	dup->linkage.as_constant = as_constant;
 	return RESULT_OK;
@@ -369,7 +374,10 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
-	bool has_linkage = (a->u.declare.specifier != SPECIFIER_STATIC);
+	enum symbol_linkage linkage =
+		(a->u.declare.specifier != SPECIFIER_STATIC)
+			? SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL
+			: SYMBOL_LINKAGE_NONE;
 	enum initializer_state initial = INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 
@@ -406,8 +414,8 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	if (dup == NULL) {
 		/* no earlier declaration to cross-reference linkage */
 	} else if (a->u.declare.specifier == SPECIFIER_EXTERN) {
-		has_linkage = dup->linkage.has_linkage;
-	} else if (has_linkage != dup->linkage.has_linkage) {
+		linkage = dup->linkage.linkage;
+	} else if (linkage != dup->linkage.linkage) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE,
 			varname->data,
@@ -435,11 +443,12 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            a->u.declare.identifier.unique,
 	                            SCOPE_FILE,
 	                            dup,
-	                            has_linkage,
+	                            linkage,
 	                            initial,
 	                            as_constant));
-	if (has_linkage) {
-		a->u.declare.identifier.has_linkage = true;
+	if (linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+		a->u.declare.identifier.ltype =
+			SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
 	}
 	return RESULT_OK;
 }
@@ -449,7 +458,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
-	bool has_linkage = false;
+	enum symbol_linkage linkage = SYMBOL_LINKAGE_NONE;
 	unsigned initial = INITIAL_VALUE_NO_INITIALIZER;
 	long long int as_constant = 0;
 	struct symbol *function_symbol_collision = NULL;
@@ -485,11 +494,11 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			 * already in scope. This may even be a variable with
 			 * internal linkage via earlier use of keyword static!
 			 */
-			has_linkage = dup->linkage.has_linkage;
+			linkage = dup->linkage.linkage;
 			initial = dup->linkage.initial;
 			as_constant = dup->linkage.as_constant;
 		} else {
-			has_linkage = true;
+			linkage = SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
 			initial = INITIAL_VALUE_NO_INITIALIZER;
 		}
 		break;
@@ -510,7 +519,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			as_constant = a->u.declare.init->u.num;
 		}
 
-		has_linkage = false;
+		linkage = SYMBOL_LINKAGE_NONE;
 		assert(initial == INITIAL_VALUE_CONSTANT);
 		break;
 	case SPECIFIER_NONE:
@@ -527,11 +536,12 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            a->u.declare.identifier.unique,
 	                            SCOPE_BLOCK,
 	                            dup,
-	                            has_linkage,
+	                            linkage,
 	                            initial,
 	                            as_constant));
-	if (has_linkage) {
-		a->u.declare.identifier.has_linkage = true;
+	if (linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+		a->u.declare.identifier.ltype =
+			SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
 	}
 	return RESULT_OK;
 }
@@ -560,7 +570,7 @@ sema_propagate_linkage_from_declare_to_usage(struct ast *a,
 			 * to presence in state->variable_symbols overall, not
 			 * the matching node's has_linkage value in particular.
 			 */
-			a->u.var.has_linkage = true;
+			a->u.var.ltype = SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
 			break;
 		}
 	}
@@ -620,7 +630,8 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		for (; v != NULL; v = v->next) {
 			assert(v->stype == SYMBOL_VARIABLE);
 			if (v->unique == a->u.declare.identifier.unique) {
-				if (v->linkage.has_linkage) {
+				if (v->linkage.linkage ==
+				    SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
 					break;
 				}
 				check(sema_mangle(state->arena,
@@ -640,7 +651,8 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		for (; v != NULL; v = v->next) {
 			assert(v->stype == SYMBOL_VARIABLE);
 			if (v->unique == a->u.var.unique) {
-				if (v->linkage.has_linkage) {
+				if (v->linkage.linkage ==
+				    SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
 					break;
 				}
 				/*

@@ -18,6 +18,11 @@ enum {
 	NOT_YET_UNIQUE = -1,
 };
 
+enum symbol_linkage {
+	SYMBOL_LINKAGE_NONE,
+	SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL,
+};
+
 enum initializer_state {
 	INITIAL_VALUE_NO_INITIALIZER,
 	INITIAL_VALUE_TENTATIVE,
@@ -69,7 +74,7 @@ struct symbol {
 	 * - block scope declaration with external linkage
 	 */
 	struct {
-		bool has_linkage;
+		enum symbol_linkage linkage;
 		enum initializer_state initial;
 		long long int as_constant;
 	} linkage;
