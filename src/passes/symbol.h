@@ -28,15 +28,13 @@ bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
 bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
 bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 
-enum initializer_state {
-	INITIAL_VALUE_NO_INITIALIZER,
-	INITIAL_VALUE_TENTATIVE,
-	INITIAL_VALUE_CONSTANT,
-};
-
 struct symbol_linkage_state {
 	enum symbol_linkage linkage;
-	enum initializer_state initial;
+	enum {
+		INITIAL_VALUE_NO_INITIALIZER,
+		INITIAL_VALUE_TENTATIVE,
+		INITIAL_VALUE_CONSTANT,
+	} initial;
 	long long int as_constant;
 };
 
