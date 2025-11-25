@@ -343,6 +343,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
+// TODO simplify sema_declare_finalize() API, refactor callers, or both
 static WARN_UNUSED result_t
 sema_declare_finalize(struct sema_symbol_state *state,
                       const struct string_view *varname,
@@ -360,6 +361,7 @@ sema_declare_finalize(struct sema_symbol_state *state,
 		                             scope));
 		dup = state->variable_symbols;
 	}
+	// TODO: maybe wrap below four statments into a helper function, then call symbols_prepend_scoped() plus helper at callsites, avoid having to pass EIGHT arguments to a single function
 	dup->unique = already_unique; /* reuse unique IDs from earlier */
 	dup->linkage.linkage = linkage;
 	dup->linkage.initial = initial;
