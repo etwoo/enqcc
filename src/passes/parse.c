@@ -204,8 +204,7 @@ resolve_decl(Arena *arena,
 		check(symbols_prepend(arena,
 		                      sym,
 		                      &a->u.declare.identifier.name,
-		                      SYMBOL_VARIABLE,
-		                      0));
+		                      SYMBOL_VARIABLE));
 		(**sym).linkage.has_linkage = has_linkage;
 		resolved = *sym;
 
@@ -307,7 +306,7 @@ resolve_function_params_one(Arena *arena,
                             struct ast_symbol *a,
                             struct symbol **sym)
 {
-	check(symbols_prepend(arena, sym, &a->name, SYMBOL_VARIABLE, 0));
+	check(symbols_prepend(arena, sym, &a->name, SYMBOL_VARIABLE));
 	map_symbol_members(*sym, a);
 	return RESULT_OK;
 }
@@ -335,8 +334,7 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 		                      sym,
 		                      &a->u.function.identifier.name,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
-		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      0));
+		                             : SYMBOL_FUNCTION_DECLARATION));
 		map_symbol_members(*sym, &a->u.function.identifier);
 	} else if (is_def) {
 		map_symbol_members(dup, &a->u.function.identifier);

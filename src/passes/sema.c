@@ -317,8 +317,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      s,
 		                      fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
-		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      n_args));
+		                             : SYMBOL_FUNCTION_DECLARATION));
+		(**s).n_args = n_args;
 		(**s).linkage.has_linkage = has_linkage;
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,

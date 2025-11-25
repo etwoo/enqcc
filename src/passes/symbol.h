@@ -82,8 +82,7 @@ struct symbol {
 result_t symbols_prepend(Arena *arena,
                          struct symbol **head,
                          const struct string_view *name,
-                         enum symbol_type stype,
-                         long long int n_args) WARN_UNUSED;
+                         enum symbol_type stype) WARN_UNUSED;
 struct symbol *symbols_get(struct symbol *head,
                            const struct string_view *name,
                            bool stop_at_delimiter) WARN_UNUSED;

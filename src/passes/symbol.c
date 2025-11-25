@@ -9,15 +9,13 @@ result_t
 symbols_prepend(Arena *arena,
                 struct symbol **head,
                 const struct string_view *name,
-                enum symbol_type stype,
-                long long int n_args)
+                enum symbol_type stype)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_PARSE_ALLOC);
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
-	node->n_args = n_args;
 	if (*head != NULL) {
 		long long int base = MAX((**head).unique, (**head).cookie);
 		node->unique = base + 1;
@@ -62,7 +60,7 @@ symbols_prepend_scoped(Arena *arena,
                        const struct string_view *name,
                        enum symbol_scope scope)
 {
-	check(symbols_prepend(arena, head, name, SYMBOL_VARIABLE, 0));
+	check(symbols_prepend(arena, head, name, SYMBOL_VARIABLE));
 	(**head).scope_if_specified = scope;
 	return RESULT_OK;
 }
