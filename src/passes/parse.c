@@ -25,9 +25,7 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 	static_assert(UNIQUE_NOT_YET < 0, "sentinel must be a negative number");
 	assert(var->unique == UNIQUE_NOT_YET);
 
-	const struct symbol *in_scope = symbols_get(head, &var->name, true);
-	const struct symbol *anywhere = symbols_get(head, &var->name, false);
-	const struct symbol *resolved = in_scope != NULL ? in_scope : anywhere;
+	const struct symbol *resolved = symbols_get(head, &var->name, false);
 	if (resolved == NULL) {
 		return make_result(ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION,
 		                   var->name.data,
