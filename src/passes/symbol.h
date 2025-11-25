@@ -8,6 +8,10 @@
 
 #include <stdbool.h>
 
+enum {
+	NOT_YET_UNIQUE = -1,
+};
+
 enum symbol_type {
 	SYMBOL_VARIABLE,
 	SYMBOL_FUNCTION_DECLARATION,
@@ -24,14 +28,14 @@ bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
 bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
 bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 
-enum {
-	NOT_YET_UNIQUE = -1,
-};
-
-enum initializer_state {
-	INITIAL_VALUE_NO_INITIALIZER,
-	INITIAL_VALUE_TENTATIVE,
-	INITIAL_VALUE_CONSTANT,
+struct symbol_linkage_state {
+	enum symbol_linkage linkage;
+	enum {
+		INITIAL_VALUE_NO_INITIALIZER,
+		INITIAL_VALUE_TENTATIVE,
+		INITIAL_VALUE_CONSTANT,
+	} initial; /* initialization for variables with linkage */
+	long long int as_constant;
 };
 
 enum symbol_scope {
@@ -48,7 +52,6 @@ struct symbol {
 	long long int unique; /* unique ID for this symbol */
 	bool level_delimiter; /* trigger new nesting level if prepending here */
 	long long int cookie; /* maximum unique ID observed in any node */
-
 	/*
 	 * http://en.cppreference.com/w/c/language/storage_class_specifiers.html
 	 * http://en.cppreference.com/w/c/language/extern.html
@@ -70,14 +73,8 @@ struct symbol {
 	 * in this particular case, use of keyword extern leads to a result
 	 * similar to use of keyword static alone!
 	 */
-	struct {
-		enum symbol_linkage linkage;
-		enum initializer_state initial;
-		long long int as_constant;
-	} linkage;
-
+	struct symbol_linkage_state linkage;
 	enum symbol_scope scope_if_specified;
-
 	struct symbol *next;
 };
 
