@@ -335,14 +335,12 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 		                      &a->u.function.identifier.name,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION));
-		map_symbol_members(*sym, &a->u.function.identifier);
+		dup = *sym;
 	} else if (is_def) {
-		map_symbol_members(dup, &a->u.function.identifier);
 		assert(dup->stype == SYMBOL_FUNCTION_DECLARATION);
 		dup->stype = SYMBOL_FUNCTION_DEFINITION;
-	} else {
-		map_symbol_members(dup, &a->u.function.identifier);
 	}
+	map_symbol_members(dup, &a->u.function.identifier);
 
 	assert(*sym != NULL);
 	struct symbol *before_params = *sym;
