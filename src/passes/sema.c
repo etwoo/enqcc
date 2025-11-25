@@ -521,20 +521,20 @@ sema_declare_apply(struct ast *a,
 
 	switch (scope) {
 	case SCOPE_BLOCK:
-		check(sema_declare_file_scope(a,
-		                              state,
-		                              &dup,
-		                              &linkage,
-		                              &initial,
-		                              &as_constant));
-		break;
-	case SCOPE_FILE:
 		check(sema_declare_block_scope(a,
 		                               state,
 		                               &dup,
 		                               &linkage,
 		                               &initial,
 		                               &as_constant));
+		break;
+	case SCOPE_FILE:
+		check(sema_declare_file_scope(a,
+		                              state,
+		                              &dup,
+		                              &linkage,
+		                              &initial,
+		                              &as_constant));
 		break;
 	case SCOPE_UNSPECIFIED:
 		assert(0); /* logic error in caller */
