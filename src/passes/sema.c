@@ -444,9 +444,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            linkage,
 	                            initial,
 	                            as_constant));
-	if (some_linkage(linkage)) {
-		a->u.declare.identifier.ltype = linkage;
-	}
+	a->u.declare.identifier.ltype = linkage;
 	return RESULT_OK;
 }
 
@@ -536,9 +534,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            linkage,
 	                            initial,
 	                            as_constant));
-	if (some_linkage(linkage)) {
-		a->u.declare.identifier.ltype = linkage;
-	}
+	a->u.declare.identifier.ltype = linkage;
 	return RESULT_OK;
 }
 

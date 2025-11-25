@@ -32,14 +32,7 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 	}
 
 	map_symbol_members(resolved, asym);
-	if (some_linkage(resolved->linkage.linkage)) {
-		/*
-		 * Even before sema.c, we already know this symbol must refer
-		 * to a variable with linkage (internal or external).
-		 */
-		asym->ltype = resolved->linkage.linkage;
-	}
-
+	asym->ltype = resolved->linkage.linkage;
 	return RESULT_OK;
 }
 
