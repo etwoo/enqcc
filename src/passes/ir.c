@@ -853,7 +853,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 
 	(**dst).identifier = s->name;
 
-	if (some_linkage(s->linkage.linkage)) {
+	if (is_external(s->linkage.linkage)) {
 		(**dst).linkage = IR_LINKAGE_EXTERNAL;
 	} else {
 		(**dst).linkage = IR_LINKAGE_INTERNAL;
