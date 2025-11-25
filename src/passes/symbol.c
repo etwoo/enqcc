@@ -96,12 +96,12 @@ symbols_reset_scope(struct symbol **symbols, struct symbol *reset_point)
 	*symbols = reset_point;
 }
 
-static const char MANGLE_DELIMTER = '.';
+static const char MANGLE_DELIMITER = '.';
 
 bool
 is_mangled(struct symbol *s)
 {
-	return (memchr(s->name.data, MANGLE_DELIMTER, s->name.sz) != NULL);
+	return (memchr(s->name.data, MANGLE_DELIMITER, s->name.sz) != NULL);
 }
 
 result_t
@@ -111,7 +111,7 @@ mangle_name(Arena *arena, struct symbol *s)
 	                                  "%.*s%c%lld",
 	                                  (int)s->name.sz,
 	                                  s->name.data,
-	                                  MANGLE_DELIMTER,
+	                                  MANGLE_DELIMITER,
 	                                  s->unique);
 	check_if(mangled_str == NULL, ERR_SEMA_ALLOC);
 	s->name.data = mangled_str;
