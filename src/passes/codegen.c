@@ -137,6 +137,17 @@ codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 	memcpy(dst, src, sizeof(*dst));
 }
 
+static WARN_UNUSED enum asm_linkage
+codegen_map_linkage(enum ir_linkage linkage)
+{
+	switch (linkage) {
+	case IR_LINKAGE_INTERNAL:
+		return ASM_LINKAGE_INTERNAL;
+	case IR_LINKAGE_EXTERNAL:
+		return ASM_LINKAGE_EXTERNAL;
+	}
+}
+
 static WARN_UNUSED result_t
 codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 {
@@ -482,14 +493,7 @@ codegen_function(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
-	switch (ir->linkage) {
-	case IR_LINKAGE_INTERNAL:
-		(**dst).linkage = ASM_LINKAGE_INTERNAL;
-		break;
-	case IR_LINKAGE_EXTERNAL:
-		(**dst).linkage = ASM_LINKAGE_EXTERNAL;
-		break;
-	}
+	(**dst).linkage = codegen_map_linkage(ir->linkage);
 
 	struct asm_op **dst_ops = &(**dst).ops;
 	assert(*dst_ops == NULL);
@@ -515,15 +519,7 @@ codegen_variable(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
-	switch (ir->linkage) {
-	case IR_LINKAGE_INTERNAL:
-		(**dst).linkage = ASM_LINKAGE_INTERNAL;
-		break;
-	case IR_LINKAGE_EXTERNAL:
-		(**dst).linkage = ASM_LINKAGE_EXTERNAL;
-		break;
-	}
-
+	(**dst).linkage = codegen_map_linkage(ir->linkage);
 	(**dst).u.initial_as_ll = ir->u.initial_as_ll;
 	return RESULT_OK;
 }
