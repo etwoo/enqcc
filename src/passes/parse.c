@@ -22,8 +22,8 @@ map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
 static WARN_UNUSED result_t
 resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 {
-	static_assert(UNIQUE_NOT_YET < 0, "sentinel must be a negative number");
-	assert(var->unique == UNIQUE_NOT_YET);
+	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
+	assert(var->unique == NOT_YET_UNIQUE);
 
 	const struct symbol *resolved = symbols_get(head, &var->name, false);
 	if (resolved == NULL) {
@@ -47,8 +47,8 @@ resolve_var_usage(struct symbol *head, struct ast_symbol *var)
 static WARN_UNUSED result_t
 resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 {
-	static_assert(UNIQUE_NOT_YET < 0, "sentinel must be a negative number");
-	assert(callee->unique == UNIQUE_NOT_YET);
+	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
+	assert(callee->unique == NOT_YET_UNIQUE);
 
 	const struct symbol *resolved = symbols_get(head, &callee->name, false);
 	if (resolved == NULL) {
@@ -464,13 +464,13 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
 		(**dst).u.var.name = str;
-		(**dst).u.var.unique = UNIQUE_NOT_YET;
+		(**dst).u.var.unique = NOT_YET_UNIQUE;
 		return RESULT_OK;
 	}
 
 	check(parse_alloc(arena, dst, NODE_EXPRESSION_FUNCTION_CALL));
 	(**dst).u.call.identifier.name = str;
-	(**dst).u.call.identifier.unique = UNIQUE_NOT_YET;
+	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
 
 	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
 	token_consume(tok);
@@ -1103,7 +1103,7 @@ parse_function_params_impl(const struct token **tok,
 		if (dst != NULL) {
 			assert(*count <= count_in);
 			(*dst)[*count].name = (**tok).val;
-			(*dst)[*count].unique = UNIQUE_NOT_YET;
+			(*dst)[*count].unique = NOT_YET_UNIQUE;
 		}
 		token_consume(tok);
 	}
@@ -1239,9 +1239,7 @@ parse_debug_print_ast_symbol(const char *description,
 	      (int)indent + 1,
 	      "",
 	      asym->unique,
-	      asym->unique == UNIQUE_NOT_YET         ? " (not unique)"
-	      : asym->unique == UNIQUE_NOT_NECESSARY ? " (not necessary)"
-	                                             : "");
+	      asym->unique == NOT_YET_UNIQUE ? " (not unique)" : "");
 
 	const char *symbol_type_as_str = NULL;
 	switch (asym->stype) {

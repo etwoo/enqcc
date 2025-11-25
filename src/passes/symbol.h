@@ -15,8 +15,7 @@ enum symbol_type {
 };
 
 enum {
-	UNIQUE_NOT_YET = -1,
-	UNIQUE_NOT_NECESSARY = -2,
+	NOT_YET_UNIQUE = -1,
 };
 
 enum initializer_state {
