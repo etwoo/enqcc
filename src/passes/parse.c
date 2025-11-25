@@ -20,44 +20,41 @@ map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
 }
 
 static WARN_UNUSED result_t
-resolve_var_usage(struct symbol *head, struct ast_symbol *var)
+resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
-	assert(var->unique == NOT_YET_UNIQUE);
+	assert(asym->unique == NOT_YET_UNIQUE);
 
-	const struct symbol *resolved = symbols_get(head, &var->name, false);
+	const struct symbol *resolved = symbols_get(head, &asym->name, false);
 	if (resolved == NULL) {
-		return make_result(ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION,
-		                   var->name.data,
-		                   var->name.sz);
+		return make_result(errtype, asym->name.data, asym->name.sz);
 	}
 
-	map_symbol_members(resolved, var);
+	map_symbol_members(resolved, asym);
 	if (resolved->linkage.has_linkage) {
 		/*
-		 * Even before sema.c, we already know this variable must refer
+		 * Even before sema.c, we already know this symbol must refer
 		 * to a variable with linkage (internal or external).
 		 */
-		var->has_linkage = true;
+		asym->has_linkage = true;
 	}
 
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
+resolve_var_usage(struct symbol *head, struct ast_symbol *var)
+{
+	check(resolve_symbol(head,
+	                     var,
+	                     ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 {
-	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
-	assert(callee->unique == NOT_YET_UNIQUE);
-
-	const struct symbol *resolved = symbols_get(head, &callee->name, false);
-	if (resolved == NULL) {
-		return make_result(ERR_SEMA_FUNCTION_CALL_UNDECLARED,
-		                   callee->name.data,
-		                   callee->name.sz);
-	}
-
-	map_symbol_members(resolved, callee);
+	check(resolve_symbol(head, callee, ERR_SEMA_FUNCTION_CALL_UNDECLARED));
 	return RESULT_OK;
 }
 
