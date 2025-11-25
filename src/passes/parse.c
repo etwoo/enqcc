@@ -32,7 +32,7 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 	}
 
 	map_symbol_members(resolved, asym);
-	if (resolved->linkage.linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+	if (some_linkage(resolved->linkage.linkage)) {
 		/*
 		 * Even before sema.c, we already know this symbol must refer
 		 * to a variable with linkage (internal or external).
@@ -189,9 +189,8 @@ resolve_decl(Arena *arena,
 	                    : SYMBOL_LINKAGE_NONE);
 
 	const struct symbol *in_scope = symbols_get(*sym, varname, true);
-	if (in_scope && !(in_scope->linkage.linkage ==
-	                          SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL &&
-	                  linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL)) {
+	if (in_scope != NULL &&
+	    !(is_external(in_scope->linkage.linkage) && is_external(linkage))) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
 		                   in_scope->name.data,
 		                   in_scope->name.sz);
@@ -211,10 +210,8 @@ resolve_decl(Arena *arena,
 		(**sym).linkage.linkage = linkage;
 		resolved = *sym;
 
-		if (linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL &&
-		    anywhere &&
-		    anywhere->linkage.linkage ==
-		            SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+		if (is_external(linkage) && anywhere != NULL &&
+		    some_linkage(anywhere->linkage.linkage)) {
 			/*
 			 * This new declaration resolves to a variable with
 			 * linkage (internal or external), outside of this
@@ -1258,9 +1255,7 @@ parse_debug_print_ast_symbol(const char *description,
 	debug("%*sIDENTIFIER.LINKAGE: %s",
 	      (int)indent + 1,
 	      "",
-	      asym->ltype == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL
-	              ? "INTERNAL OR EXTERNAL"
-	              : "NONE");
+	      some_linkage(asym->ltype) ? "INTERNAL OR EXTERNAL" : "NONE");
 }
 
 static void

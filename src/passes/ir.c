@@ -74,7 +74,7 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 		break;
 	}
 
-	if (sym->ltype == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+	if (some_linkage(sym->ltype)) {
 		dst->subtype = IR_VAL_VARIABLE_DATA;
 	} else {
 		dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
@@ -82,7 +82,7 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 
 	dst->num = sym->unique;
 
-	if (sym->ltype == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+	if (some_linkage(sym->ltype)) {
 		dst->varname = sym->name;
 	}
 }
@@ -853,7 +853,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 
 	(**dst).identifier = s->name;
 
-	if (s->linkage.linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+	if (some_linkage(s->linkage.linkage)) {
 		(**dst).linkage = IR_LINKAGE_EXTERNAL;
 	} else {
 		(**dst).linkage = IR_LINKAGE_INTERNAL;
@@ -916,8 +916,7 @@ ir_program(Arena *arena,
 			    0 == strncmp(s->name.data,
 			                 f->identifier.data,
 			                 s->name.sz)) {
-				if (s->linkage.linkage ==
-				    SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+				if (is_external(s->linkage.linkage)) {
 					f->linkage = IR_LINKAGE_EXTERNAL;
 				} else {
 					f->linkage = IR_LINKAGE_INTERNAL;

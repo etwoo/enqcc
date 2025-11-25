@@ -327,8 +327,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                   dup->name.data,
 		                   dup->name.sz);
 	} else if (is_def_or_decl &&
-	           dup->linkage.linkage ==
-	                   SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL &&
+	           is_external(dup->linkage.linkage) &&
 	           is_static) {
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
@@ -446,7 +445,7 @@ sema_declare_file_scope(struct ast *a, struct sema_symbol_state *state)
 	                            linkage,
 	                            initial,
 	                            as_constant));
-	if (linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+	if (some_linkage(linkage)) {
 		a->u.declare.identifier.ltype =
 			SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
 	}
@@ -539,7 +538,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 	                            linkage,
 	                            initial,
 	                            as_constant));
-	if (linkage == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+	if (some_linkage(linkage)) {
 		a->u.declare.identifier.ltype =
 			SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL;
 	}
@@ -630,8 +629,7 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		for (; v != NULL; v = v->next) {
 			assert(v->stype == SYMBOL_VARIABLE);
 			if (v->unique == a->u.declare.identifier.unique) {
-				if (v->linkage.linkage ==
-				    SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+				if (is_external(v->linkage.linkage)) {
 					break;
 				}
 				check(sema_mangle(state->arena,
@@ -651,8 +649,7 @@ sema_internal_linkage(struct ast *a, void *userdata)
 		for (; v != NULL; v = v->next) {
 			assert(v->stype == SYMBOL_VARIABLE);
 			if (v->unique == a->u.var.unique) {
-				if (v->linkage.linkage ==
-				    SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL) {
+				if (is_external(v->linkage.linkage)) {
 					break;
 				}
 				/*

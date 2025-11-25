@@ -23,6 +23,9 @@ enum symbol_linkage {
 	SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL,
 };
 
+#define is_external(x) ((x) == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL)
+#define some_linkage(x) ((x) == SYMBOL_LINKAGE_EXTERNAL_OR_INTERNAL)
+
 enum initializer_state {
 	INITIAL_VALUE_NO_INITIALIZER,
 	INITIAL_VALUE_TENTATIVE,
