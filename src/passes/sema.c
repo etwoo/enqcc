@@ -493,7 +493,7 @@ sema_declare_block_scope(struct ast *a, struct sema_symbol_state *state)
 			initial = dup->linkage.initial;
 			as_constant = dup->linkage.as_constant;
 		} else {
-			linkage = SYMBOL_LINKAGE_EXTERNAL; // TODO: or internal?
+			linkage = SYMBOL_LINKAGE_EXTERNAL;
 			initial = INITIAL_VALUE_NO_INITIALIZER;
 		}
 		break;
