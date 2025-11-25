@@ -84,6 +84,16 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 	dst->num = sym->unique;
 }
 
+static WARN_UNUSED enum ir_linkage
+ir_map_linkage(enum symbol_linkage linkage)
+{
+	assert(some_linkage(linkage));
+	if (is_external(linkage)) {
+		return IR_LINKAGE_EXTERNAL;
+	}
+	return IR_LINKAGE_INTERNAL;
+}
+
 static result_t ir_expr(Arena *arena,
                         const struct ast *a,
                         struct intermediate *ir,
@@ -849,12 +859,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = s->name;
-
-	if (is_external(s->linkage.linkage)) {
-		(**dst).linkage = IR_LINKAGE_EXTERNAL;
-	} else {
-		(**dst).linkage = IR_LINKAGE_INTERNAL;
-	}
+	(**dst).linkage = ir_map_linkage(s->linkage.linkage);
 
 	switch (s->linkage.initial) {
 	case INITIAL_VALUE_NO_INITIALIZER:
@@ -913,11 +918,7 @@ ir_program(Arena *arena,
 			    0 == strncmp(s->name.data,
 			                 f->identifier.data,
 			                 s->name.sz)) {
-				if (is_external(s->linkage.linkage)) {
-					f->linkage = IR_LINKAGE_EXTERNAL;
-				} else {
-					f->linkage = IR_LINKAGE_INTERNAL;
-				}
+				f->linkage = ir_map_linkage(s->linkage.linkage);
 				break;
 			}
 		}
