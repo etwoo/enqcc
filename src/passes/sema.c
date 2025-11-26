@@ -353,6 +353,10 @@ sema_declare_file_scope(struct ast *a,
 	assert(a->node_type == NODE_DECLARATION);
 	const struct string_view *varname = &a->u.declare.identifier.name;
 
+	linkage_state->linkage = (a->u.declare.specifier != SPECIFIER_STATIC)
+	                                 ? SYMBOL_LINKAGE_EXTERNAL
+	                                 : SYMBOL_LINKAGE_INTERNAL;
+
 	if (a->u.declare.init != NULL) {
 		if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
@@ -386,9 +390,6 @@ sema_declare_file_scope(struct ast *a,
 	}
 
 	*dup = symbols_get_anywhere(state->variable_symbols, varname);
-	linkage_state->linkage = (a->u.declare.specifier != SPECIFIER_STATIC)
-	                                 ? SYMBOL_LINKAGE_EXTERNAL
-	                                 : SYMBOL_LINKAGE_INTERNAL;
 
 	if (*dup == NULL) {
 		/* no earlier declaration to cross-reference linkage */
