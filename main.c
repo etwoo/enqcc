@@ -1,9 +1,15 @@
 #include "passes.h"
 #include "result.h"
 
+#pragma GCC diagnostic push
+/* workaround -Wformat-truncation warning in arena_vsprintf() under GCC */
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
 #define ARENA_IMPLEMENTATION
 #include "arena.h"
 #undef ARENA_IMPLEMENTATION
+#pragma GCC diagnostic pop
 
 #include <errno.h>
 #include <fcntl.h>
