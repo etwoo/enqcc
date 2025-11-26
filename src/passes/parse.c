@@ -327,10 +327,10 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 
 	const bool is_def = (a->u.function.block != NULL);
 	check(symbols_prepend(arena,
-		              sym,
-		              &a->u.function.identifier.name,
-		              is_def ? SYMBOL_FUNCTION_DEFINITION
-		                     : SYMBOL_FUNCTION_DECLARATION));
+	                      sym,
+	                      &a->u.function.identifier.name,
+	                      is_def ? SYMBOL_FUNCTION_DEFINITION
+	                             : SYMBOL_FUNCTION_DECLARATION));
 	map_symbol_members(*sym, &a->u.function.identifier);
 
 	struct symbol *before_params = *sym;

@@ -265,9 +265,6 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
-	case ERR_SEMA_ALLOC:
-		s = strdup("Cannot allocate sema element");
-		break;
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");
 		break;
@@ -358,6 +355,9 @@ result_to_str(result_t r)
 		s = my_asprintf("Block-scope variable %s with static storage "
 		                "class has non-constant initializer",
 		                r.msg);
+		break;
+	case ERR_SYMBOL_ALLOC:
+		s = strdup("Cannot allocate symbol");
 		break;
 	}
 

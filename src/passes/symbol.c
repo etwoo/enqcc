@@ -30,7 +30,7 @@ symbols_prepend(Arena *arena,
                 enum symbol_type stype)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
-	check_if(node == NULL, ERR_PARSE_ALLOC);
+	check_if(node == NULL, ERR_SYMBOL_ALLOC);
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
@@ -113,7 +113,7 @@ mangle_name(Arena *arena, struct symbol *s)
 	                                  s->name.data,
 	                                  MANGLE_DELIMITER,
 	                                  s->unique);
-	check_if(mangled_str == NULL, ERR_SEMA_ALLOC);
+	check_if(mangled_str == NULL, ERR_SYMBOL_ALLOC);
 	s->name.data = mangled_str;
 	s->name.sz = strlen(mangled_str);
 	return RESULT_OK;

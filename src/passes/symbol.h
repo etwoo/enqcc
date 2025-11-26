@@ -38,20 +38,13 @@ struct symbol_linkage_state {
 	long long int as_constant;
 };
 
-enum symbol_scope {
-	SCOPE_UNSPECIFIED,
-	SCOPE_BLOCK,
-	SCOPE_FILE,
-};
-
 // TODO: for typedef support, add tracking for types (like variables)
 struct symbol {
 	struct string_view name;
 	enum symbol_type stype;
-	long long int n_args; /* number of func params, if SYMBOL_FUNCTION_* */
 	long long int unique; /* unique ID for this symbol */
-	bool level_delimiter; /* trigger new nesting level if prepending here */
 	long long int cookie; /* maximum unique ID observed in any node */
+	bool level_delimiter; /* limit between symbols_get_*() contexts */
 
 	/*
 	 * http://en.cppreference.com/w/c/language/storage_class_specifiers.html
@@ -75,7 +68,11 @@ struct symbol {
 	 * similar to use of keyword static alone!
 	 */
 	struct symbol_linkage_state linkage;
-	enum symbol_scope scope_if_specified;
+
+	/*
+	 * Pointer to generic arena-allocated data, specific to a given caller.
+	 */
+	void *auxiliary;
 
 	struct symbol *next;
 };

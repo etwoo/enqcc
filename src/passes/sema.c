@@ -200,6 +200,35 @@ struct sema_symbol_state {
 	struct symbol *variable_symbols;
 };
 
+enum symbol_declaration_scope {
+	SCOPE_BLOCK,
+	SCOPE_FILE,
+};
+
+struct sema_symbol_auxiliary {
+	long long int n_args;
+	enum symbol_declaration_scope dscope;
+};
+
+static WARN_UNUSED result_t
+sema_alloc_auxiliary(Arena *arena, void **out_as_void_pp)
+{
+	struct sema_symbol_auxiliary **out =
+		(struct sema_symbol_auxiliary **)out_as_void_pp;
+	assert(*out == NULL);
+	*out = arena_alloc(arena, sizeof(**out));
+	check_if(*out == NULL, ERR_SYMBOL_ALLOC);
+	memset(*out, 0, sizeof(**out));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED struct sema_symbol_auxiliary *
+sema_get_auxiliary(struct symbol *s)
+{
+	assert(s != NULL && s->auxiliary != NULL);
+	return s->auxiliary;
+}
+
 static WARN_UNUSED result_t
 sema_fn_param_names(struct ast_symbol *params)
 {
@@ -321,7 +350,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION));
-		(**s).n_args = n_args;
+		check(sema_alloc_auxiliary(state->arena, &(**s).auxiliary));
+		sema_get_auxiliary(*s)->n_args = n_args;
 		(**s).linkage.linkage = linkage;
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
@@ -332,7 +362,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
-	} else if (n_args != dup->n_args) {
+	} else if (n_args != sema_get_auxiliary(dup)->n_args) {
 		return make_result(
 			is_def_or_decl
 				? ERR_SEMA_FUNCTION_DEFINITION_CONFLICT
@@ -427,14 +457,14 @@ sema_declare_file_scope(struct ast *a,
 static WARN_UNUSED struct symbol *
 symbols_get_scoped(struct symbol *head, /* maybe NULL */
                    const struct string_view *name,
-                   enum symbol_scope scope)
+                   enum symbol_declaration_scope dscope)
 {
 	while (true) {
 		struct symbol *candidate = symbols_get_anywhere(head, name);
 		if (candidate == NULL) {
 			break;
 		}
-		if (candidate->scope_if_specified == scope) {
+		if (sema_get_auxiliary(candidate)->dscope == dscope) {
 			return candidate;
 		}
 		head = candidate->next;
@@ -531,21 +561,18 @@ sema_declare_block_scope(struct ast *a,
 static WARN_UNUSED result_t
 sema_declare_apply(struct ast *a,
                    struct sema_symbol_state *state,
-                   enum symbol_scope scope)
+                   enum symbol_declaration_scope dscope)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	struct symbol *dup = NULL;
 	struct symbol_linkage_state linkage_state = {0};
 
-	switch (scope) {
+	switch (dscope) {
 	case SCOPE_BLOCK:
 		check(sema_declare_block_scope(a, state, &dup, &linkage_state));
 		break;
 	case SCOPE_FILE:
 		check(sema_declare_file_scope(a, state, &dup, &linkage_state));
-		break;
-	case SCOPE_UNSPECIFIED:
-		assert(0); /* logic error in caller */
 		break;
 	}
 
@@ -554,8 +581,9 @@ sema_declare_apply(struct ast *a,
 		                      &state->variable_symbols,
 		                      &a->u.declare.identifier.name,
 		                      SYMBOL_VARIABLE));
-		state->variable_symbols->scope_if_specified = scope;
 		dup = state->variable_symbols;
+		check(sema_alloc_auxiliary(state->arena, &dup->auxiliary));
+		sema_get_auxiliary(dup)->dscope = dscope;
 	}
 	dup->unique = a->u.declare.identifier.unique; /* reuse unique ID */
 	dup->linkage.linkage = linkage_state.linkage;
