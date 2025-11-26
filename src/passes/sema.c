@@ -625,7 +625,6 @@ sema_get_linkage_from_declarations(struct ast *a, void *userdata)
 
 	const bool file_scope = ast_contains(state->ast_program_globals, a);
 	if (file_scope) {
-		assert(a->node_type == NODE_DECLARATION);
 		check(sema_declare_apply(a, state, SCOPE_FILE));
 	} else if (a->node_type == NODE_DECLARATION) {
 		check(sema_declare_apply(a, state, SCOPE_BLOCK));
