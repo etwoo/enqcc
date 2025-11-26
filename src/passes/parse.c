@@ -326,22 +326,13 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	assert(a->node_type == NODE_FUNCTION);
 
 	const bool is_def = (a->u.function.block != NULL);
-	struct symbol *resolved =
-		symbols_get_anywhere(*sym, &a->u.function.identifier.name);
-	if (resolved == NULL ||                   /* new symbol in this scope */
-	    resolved->stype == SYMBOL_VARIABLE) { /* ... or func shadows var  */
-		check(symbols_prepend(arena,
-		                      sym,
-		                      &a->u.function.identifier.name,
-		                      is_def ? SYMBOL_FUNCTION_DEFINITION
-		                             : SYMBOL_FUNCTION_DECLARATION));
-		resolved = *sym;
-	} else if (is_def && resolved->stype == SYMBOL_FUNCTION_DECLARATION) {
-		resolved->stype = SYMBOL_FUNCTION_DEFINITION;
-	}
-	map_symbol_members(resolved, &a->u.function.identifier);
+	check(symbols_prepend(arena,
+		              sym,
+		              &a->u.function.identifier.name,
+		              is_def ? SYMBOL_FUNCTION_DEFINITION
+		                     : SYMBOL_FUNCTION_DECLARATION));
+	map_symbol_members(*sym, &a->u.function.identifier);
 
-	assert(*sym != NULL);
 	struct symbol *before_params = *sym;
 	const bool cleanup = level_delimiter_prepare(before_params);
 
