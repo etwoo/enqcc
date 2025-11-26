@@ -169,6 +169,21 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_BINARY_MULTIPLY:
 		print_opcode = "imull";
 		break;
+	case ASM_OP_BITWISE_AND:
+		print_opcode = "andl";
+		break;
+	case ASM_OP_BITWISE_OR:
+		print_opcode = "orl";
+		break;
+	case ASM_OP_BITWISE_XOR:
+		print_opcode = "xorl";
+		break;
+	case ASM_OP_BITWISE_SHIFT_LEFT:
+		print_opcode = "sall";
+		break;
+	case ASM_OP_BITWISE_SHIFT_RIGHT:
+		print_opcode = "sarl";
+		break;
 	case ASM_OP_COMPARE:
 		print_opcode = "cmpl";
 		break;

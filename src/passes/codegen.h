@@ -50,6 +50,11 @@ struct asm_operand {
 	F(BINARY_SUBTRACT)                                                     \
 	F(BINARY_SUBTRACT_QUAD)                                                \
 	F(BINARY_MULTIPLY)                                                     \
+	F(BITWISE_AND)                                                         \
+	F(BITWISE_OR)                                                          \
+	F(BITWISE_XOR)                                                         \
+	F(BITWISE_SHIFT_LEFT)                                                  \
+	F(BITWISE_SHIFT_RIGHT)                                                 \
 	F(COMPARE)                                                             \
 	F(IDIV)                                                                \
 	F(CDQ)                                                                 \

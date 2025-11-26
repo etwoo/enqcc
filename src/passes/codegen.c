@@ -261,6 +261,11 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BINARY_ADD:
 	case IR_OP_BINARY_SUBTRACT:
 	case IR_OP_BINARY_MULTIPLY:
+	case IR_OP_BITWISE_AND:
+	case IR_OP_BITWISE_OR:
+	case IR_OP_BITWISE_XOR:
+	case IR_OP_BITWISE_SHIFT_LEFT:
+	case IR_OP_BITWISE_SHIFT_RIGHT:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
@@ -275,6 +280,21 @@ codegen_statement_one(Arena *arena,
 			break;
 		case IR_OP_BINARY_MULTIPLY:
 			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+			break;
+		case IR_OP_BITWISE_AND:
+			(**dst).opcode = ASM_OP_BITWISE_AND;
+			break;
+		case IR_OP_BITWISE_OR:
+			(**dst).opcode = ASM_OP_BITWISE_OR;
+			break;
+		case IR_OP_BITWISE_XOR:
+			(**dst).opcode = ASM_OP_BITWISE_XOR;
+			break;
+		case IR_OP_BITWISE_SHIFT_LEFT:
+			(**dst).opcode = ASM_OP_BITWISE_SHIFT_LEFT;
+			break;
+		case IR_OP_BITWISE_SHIFT_RIGHT:
+			(**dst).opcode = ASM_OP_BITWISE_SHIFT_RIGHT;
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -724,10 +744,16 @@ codegen_fixup_apply(Arena *arena,
 static WARN_UNUSED bool
 fix_s2s(struct asm_op *cur, struct fix *trampoline)
 {
-	const bool candidate_opcode = cur->opcode == ASM_OP_MOV ||
-	                              cur->opcode == ASM_OP_BINARY_ADD ||
-	                              cur->opcode == ASM_OP_BINARY_SUBTRACT ||
-	                              cur->opcode == ASM_OP_COMPARE;
+	const bool candidate_opcode =
+		cur->opcode == ASM_OP_MOV || /* see block comment above */
+		cur->opcode == ASM_OP_BINARY_ADD ||
+		cur->opcode == ASM_OP_BINARY_SUBTRACT ||
+		cur->opcode == ASM_OP_BITWISE_AND ||
+		cur->opcode == ASM_OP_BITWISE_OR ||
+		cur->opcode == ASM_OP_BITWISE_XOR ||
+		cur->opcode == ASM_OP_BITWISE_SHIFT_LEFT ||  // TODO: bug
+		cur->opcode == ASM_OP_BITWISE_SHIFT_RIGHT || // TODO: bug
+		cur->opcode == ASM_OP_COMPARE;
 	const bool candidate_operand_0 =
 		cur->args[0].operand_type == ASM_OPERAND_STACK ||
 		cur->args[0].operand_type == ASM_OPERAND_VARIABLE_DATA;

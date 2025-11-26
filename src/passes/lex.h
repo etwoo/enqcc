@@ -50,6 +50,7 @@ struct token {
 		TOKEN_QUESTION,
 		TOKEN_COLON,
 		TOKEN_COMMA,
+		TOKEN_CARET,
 	} token_type;
 	struct string_view val;
 	struct token *next;
