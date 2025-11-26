@@ -261,7 +261,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 	bool is_def = false;
 	bool is_def_or_decl = false;
 	enum symbol_linkage linkage = SYMBOL_LINKAGE_EXTERNAL;
-	bool is_static = false;
+	bool has_specifier_static = false;
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
@@ -278,7 +278,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
 		                  ? SYMBOL_LINKAGE_EXTERNAL
 		                  : SYMBOL_LINKAGE_INTERNAL;
-		is_static = (a->u.function.specifier == SPECIFIER_STATIC);
+		has_specifier_static =
+			(a->u.function.specifier == SPECIFIER_STATIC);
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		fname = &a->u.call.identifier.name;
@@ -300,7 +301,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 			                   fname->data,
 			                   fname->sz);
 		}
-	} else if (is_def_or_decl && is_static) {
+	} else if (is_def_or_decl && has_specifier_static) {
 		assert(state->ast_program_globals != NULL);
 		bool allow_decl = ast_contains(state->ast_program_globals, a);
 		if (!allow_decl) {
@@ -326,8 +327,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
 		                   dup->name.data,
 		                   dup->name.sz);
-	} else if (is_def_or_decl && is_external(dup->linkage.linkage) &&
-	           is_static) {
+	} else if (is_def_or_decl && has_specifier_static &&
+	           is_external(dup->linkage.linkage)) {
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
