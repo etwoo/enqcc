@@ -3,6 +3,7 @@
 #include "passes.h"
 #include "passes/lex.h"
 #include "passes/symbol.h"
+#include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
@@ -119,6 +120,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -139,6 +144,16 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
@@ -503,25 +518,30 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
-	if (is_token_type(*tok, TOKEN_CONSTANT)) {
+	assert(*dst == NULL);
+	size_t got_match = SIZE_MAX;
+
+#define TO_CANDIDATE(nodet, tokent) {tokent, NODE_##nodet},
+	struct {
+		enum lex_tokentype token_type;
+		enum ast_nodetype node_type;
+	} prefix_ops[] = {FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(TO_CANDIDATE)};
+#undef TO_CANDIDATE
+	for (size_t i = 0; i < ARRAY_SIZE(prefix_ops); ++i) {
+		if (is_token_type(*tok, prefix_ops[i].token_type)) {
+			got_match = i;
+			break;
+		}
+	}
+
+	if (got_match < SIZE_MAX) {
+		check(parse_alloc(arena, dst, prefix_ops[got_match].node_type));
+		token_consume(tok);
+		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
+	} else if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_symbol(arena, tok, dst));
-	} else if (is_token_type(*tok, TOKEN_TILDE)) {
-		check(parse_alloc(arena,
-		                  dst,
-		                  NODE_EXPRESSION_UNARY_COMPLEMENT));
-		token_consume(tok);
-		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_NEGATE));
-		token_consume(tok);
-		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_EXCLAMATION)) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_NOT));
-		token_consume(tok);
-		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
@@ -534,6 +554,25 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	} else {
 		return make_result(ERR_PARSE_EXPR_EXPECT_REASONABLE);
 	}
+
+	assert(*dst != NULL);
+
+	struct ast *post = NULL;
+	if (is_token_type(*tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTINCREMENT));
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT));
+		token_consume(tok);
+	} else {
+		return RESULT_OK;
+	}
+	/*
+	 * Wrap the inner expr in postincrement/postdecrement.
+	 */
+	post->u.op_unary.operand = *dst;
+	*dst = post;
+
 	return RESULT_OK;
 }
 
@@ -542,49 +581,19 @@ parse_expr_check_next_token(Arena *arena,
                             const struct token *tok,
                             struct ast **a)
 {
-	result_t r = RESULT_OK;
-	if (is_token_type(tok, TOKEN_PLUS_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_ADD);
-	} else if (is_token_type(tok, TOKEN_HYPHEN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_SUBTRACT);
-	} else if (is_token_type(tok, TOKEN_ASTERISK)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_MULTIPLY);
-	} else if (is_token_type(tok, TOKEN_FORWARD_SLASH)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_DIVIDE);
-	} else if (is_token_type(tok, TOKEN_PERCENT_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_REMAINDER);
-	} else if (is_token_type(tok, TOKEN_AMPERSAND)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_AND);
-	} else if (is_token_type(tok, TOKEN_VERT_BAR)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_OR);
-	} else if (is_token_type(tok, TOKEN_CARET)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_XOR);
-	} else if (is_token_type(tok, TOKEN_LESS_THAN_LESS_THAN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_SHIFT_LEFT);
-	} else if (is_token_type(tok, TOKEN_MORE_THAN_MORE_THAN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_SHIFT_RIGHT);
-	} else if (is_token_type(tok, TOKEN_AMPERSAND_AMPERSAND)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_AND);
-	} else if (is_token_type(tok, TOKEN_VERT_BAR_VERT_BAR)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_OR);
-	} else if (is_token_type(tok, TOKEN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_VARIABLE_ASSIGNMENT);
-	} else if (is_token_type(tok, TOKEN_EQUAL_SIGN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_EQUAL);
-	} else if (is_token_type(tok, TOKEN_EXCLAMATION_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_NOT_EQUAL);
-	} else if (is_token_type(tok, TOKEN_LESS_THAN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_LESS_THAN);
-	} else if (is_token_type(tok, TOKEN_LESS_THAN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_LESS_THAN_EQ);
-	} else if (is_token_type(tok, TOKEN_MORE_THAN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN);
-	} else if (is_token_type(tok, TOKEN_MORE_THAN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN_EQ);
-	} else if (is_token_type(tok, TOKEN_QUESTION)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_TERNARY_CONDITIONAL);
+#define TO_CANDIDATE(nodet, tokent) {tokent, NODE_##nodet},
+	struct {
+		enum lex_tokentype token_type;
+		enum ast_nodetype node_type;
+	} infix_ops[] = {FOREACH_AST_NODE_EXPRESSION_INFIX_OP(TO_CANDIDATE)};
+#undef TO_CANDIDATE
+	for (size_t i = 0; i < ARRAY_SIZE(infix_ops); ++i) {
+		if (is_token_type(tok, infix_ops[i].token_type)) {
+			check(parse_alloc(arena, a, infix_ops[i].node_type));
+			break;
+		}
 	}
-	return r;
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
@@ -646,6 +655,16 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		precedence += PRECEDENCE_INCREMENT;
 		__attribute__((fallthrough));
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		precedence += PRECEDENCE_INCREMENT;
 		break;
@@ -663,6 +682,10 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
@@ -697,6 +720,16 @@ parse_expr(Arena *arena,
 		}
 
 		const bool is_right_associative =
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_ADD ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SUB ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_MUL ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_DIV ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_REM ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_AND ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_OR ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_XOR ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SL ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SR ||
 			bop->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
 			bop->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL;
 		const unsigned inc = is_right_associative ? 0 : 1;
@@ -1317,8 +1350,8 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 	}
 }
 
-#define TO_STR(node_type) #node_type,
-static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODETYPE(TO_STR)};
+#define TO_STR(node_type, ...) #node_type,
+static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODE(TO_STR)};
 #undef TO_STR
 
 void
@@ -1427,6 +1460,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -1448,6 +1485,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;

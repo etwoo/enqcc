@@ -51,19 +51,47 @@ ir_val_copy(const struct ir_val *src, struct ir_val *dst)
 	memcpy(dst, src, sizeof(*dst));
 }
 
+/*
+ * Related: sema_lvalue() in src/passes/sema.c
+ */
+static WARN_UNUSED const struct ast *
+ir_unpack_parens(const struct ast *a)
+{
+	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
+		a = a->u.op_unary.operand;
+	}
+	return a;
+}
+
 static void
 ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 {
-	assert(src->node_type == NODE_DECLARATION ||
-	       src->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
-	       src->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
-
 	const struct ast_symbol *sym = NULL;
 	switch (src->node_type) {
 	case NODE_DECLARATION:
 		sym = &src->u.declare.identifier;
 		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		assert(ir_unpack_parens(src->u.op_unary.operand)->node_type ==
+		       NODE_EXPRESSION_VARIABLE_USAGE);
+		sym = &ir_unpack_parens(src->u.op_unary.operand)->u.var;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		assert(src->u.op_binary.lhs->node_type ==
+		       NODE_EXPRESSION_VARIABLE_USAGE);
 		sym = &src->u.op_binary.lhs->u.var;
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
@@ -436,6 +464,16 @@ ir_unary_op(Arena *arena,
 		unary->opcode = IR_OP_UNARY_NOT;
 		ast_inner = a->u.op_unary.operand;
 		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+		unary->opcode = IR_OP_UNARY_DECREMENT;
+		ast_inner = a->u.op_unary.operand;
+		break;
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		unary->opcode = IR_OP_UNARY_INCREMENT;
+		ast_inner = a->u.op_unary.operand;
+		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		unary->opcode = IR_OP_COPY;
 		ast_inner = a->u.op_binary.rhs;
@@ -451,16 +489,39 @@ ir_unary_op(Arena *arena,
 	assert(inner_return.subtype != IR_VAL_NONE);
 
 	ir_val_copy(&inner_return, &unary->args[0]);
-	unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
-		assert(a->u.op_binary.lhs->node_type ==
-		       NODE_EXPRESSION_VARIABLE_USAGE);
-		ir_val_from_ast_variable_like(a, &unary->args[1]);
-	} else {
+
+	switch (a->node_type) {
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+	case NODE_EXPRESSION_UNARY_NEGATE:
+	case NODE_EXPRESSION_UNARY_NOT:
+		unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		unary->args[1].num = ir->env.generator++;
+		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		ir_val_from_ast_variable_like(a, &unary->args[1]);
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
 	}
-	assert(return_value->subtype == IR_VAL_NONE);
-	ir_val_copy(&unary->args[1], return_value);
+
+	struct ir_op *header = NULL;
+	if (a->node_type == NODE_EXPRESSION_POSTDECREMENT ||
+	    a->node_type == NODE_EXPRESSION_POSTINCREMENT) {
+		check(ir_alloc_op(arena, &header));
+		header->opcode = IR_OP_COPY;
+		ir_val_from_ast_variable_like(a, &header->args[0]);
+		header->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		header->args[1].num = ir->env.generator++;
+		ir_val_copy(&header->args[1], return_value);
+	} else {
+		assert(return_value->subtype == IR_VAL_NONE);
+		ir_val_copy(&unary->args[1], return_value);
+	}
 
 	/*
 	 * Emit IR in this order:
@@ -469,7 +530,7 @@ ir_unary_op(Arena *arena,
 	 * 2) results of recursive invocation of ir_expr()
 	 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
 	 */
-	*dst = ir_op_list_concat(inner, unary);
+	*dst = ir_op_list_concat(header, ir_op_list_concat(inner, unary));
 	return RESULT_OK;
 }
 
@@ -485,33 +546,43 @@ ir_binary_op(Arena *arena,
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
 		binary->opcode = IR_OP_BINARY_ADD;
 		break;
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
 		binary->opcode = IR_OP_BINARY_SUBTRACT;
 		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
 		binary->opcode = IR_OP_BINARY_MULTIPLY;
 		break;
 	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
 		binary->opcode = IR_OP_BINARY_DIVIDE;
 		break;
 	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
 		binary->opcode = IR_OP_BINARY_REMAINDER;
 		break;
 	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
 		binary->opcode = IR_OP_BITWISE_AND;
 		break;
 	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 		binary->opcode = IR_OP_BITWISE_OR;
 		break;
 	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 		binary->opcode = IR_OP_BITWISE_XOR;
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 		binary->opcode = IR_OP_BITWISE_SHIFT_LEFT;
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		binary->opcode = IR_OP_BITWISE_SHIFT_RIGHT;
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
@@ -549,8 +620,26 @@ ir_binary_op(Arena *arena,
 
 	ir_val_copy(&left_return, &binary->args[0]);
 	ir_val_copy(&right_return, &binary->args[1]);
-	binary->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	binary->args[2].num = ir->env.generator++;
+
+	switch (a->node_type) {
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+		ir_val_from_ast_variable_like(a, &binary->args[2]);
+		break;
+	default:
+		binary->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		binary->args[2].num = ir->env.generator++;
+		break;
+	}
+
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&binary->args[2], return_value);
 
@@ -770,10 +859,14 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(ir_unary_op(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
@@ -799,6 +892,16 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		check(ir_binary_op(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
