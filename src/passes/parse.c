@@ -182,11 +182,22 @@ resolve_decl(Arena *arena,
 	                    : SYMBOL_LINKAGE_NONE);
 
 	const struct symbol *in_scope = symbols_get_limited(*sym, varname);
-	if (in_scope != NULL &&
-	    !(is_external(in_scope->linkage.linkage) && is_external(linkage))) {
-		return make_result(ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
-		                   in_scope->name.data,
-		                   in_scope->name.sz);
+	if (in_scope != NULL) {
+		if (is_external(in_scope->linkage.linkage) &&
+		    is_external(linkage)) {
+			/*
+			 * Declaring the same variable multiple times in the
+			 * same scope is okay if both declarations are extern.
+			 */
+		} else {
+			/*
+			 * Otherwise, the declarations conflict.
+			 */
+			return make_result(
+				ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE,
+				in_scope->name.data,
+				in_scope->name.sz);
+		}
 	}
 
 	const struct symbol *resolved = NULL;
@@ -203,17 +214,17 @@ resolve_decl(Arena *arena,
 		(**sym).linkage.linkage = linkage;
 		resolved = *sym;
 
-		if (is_external(linkage) && anywhere != NULL &&
-		    some_linkage(anywhere->linkage.linkage)) {
+		if (is_external(linkage) && /* This declaration is extern and */
+		    anywhere != NULL &&     /* resolves to an existing var... */
+		    some_linkage(anywhere->linkage.linkage)) { /* w/ linkage! */
 			/*
-			 * This new declaration resolves to a variable with
-			 * linkage (internal or external), outside of this
-			 * block's scope. Make this re-declaration take on the
-			 * unique ID of the existing variable pulled into
-			 * scope, essentially creating a duplicate-like "stub"
-			 * in the symbol table. We expect the caller to discard
-			 * this stub when exiting this scope and proceeding to
-			 * resolve other scopes.
+			 * Make this re-declaration take on the unique ID and
+			 * linkage characteristics of the existing variable
+			 * pulled into scope, essentially creating a duplicate
+			 * stub in the symbol table.
+			 *
+			 * We expect the caller to discard this stub when
+			 * exiting this scope and proceeding to other scopes.
 			 */
 			(**sym).unique = anywhere->unique;
 			(**sym).linkage.linkage = anywhere->linkage.linkage;
