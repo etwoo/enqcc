@@ -51,15 +51,15 @@ struct ast_symbol {
 	F(EXPRESSION_COMPARE_MORE_THAN)                                        \
 	F(EXPRESSION_COMPARE_MORE_THAN_EQ)                                     \
 	F(EXPRESSION_COMPOUND_ASSIGN_ADD)                                      \
-	F(EXPRESSION_COMPOUND_ASSIGN_SUBTRACT)                                 \
-	F(EXPRESSION_COMPOUND_ASSIGN_MULTIPLY)                                 \
-	F(EXPRESSION_COMPOUND_ASSIGN_DIVIDE)                                   \
-	F(EXPRESSION_COMPOUND_ASSIGN_REMAINDER)                                \
-	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_AND)                              \
-	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_OR)                               \
-	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_XOR)                              \
-	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_SHIFT_LEFT)                       \
-	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_SHIFT_RIGHT)                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_SUB)                                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_MUL)                                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_DIV)                                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_REM)                                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_AND)                                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_OR)                                       \
+	F(EXPRESSION_COMPOUND_ASSIGN_XOR)                                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_SHL)                                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_SHR)                                      \
 	F(EXPRESSION_PREDECREMENT)                                             \
 	F(EXPRESSION_PREINCREMENT)                                             \
 	F(EXPRESSION_POSTDECREMENT)                                            \
