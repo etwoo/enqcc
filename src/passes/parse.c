@@ -119,6 +119,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -139,6 +143,16 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
@@ -547,14 +561,14 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	assert(*dst != NULL);
 
 	struct ast *post = NULL;
-	if (is_token_type(tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
+	if (is_token_type(*tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
 		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTINCREMENT));
 		token_consume(tok);
-	} else if (is_token_type(tok, TOKEN_HYPHEN_HYPHEN)) {
+	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
 		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT));
 		token_consume(tok);
 	} else {
-		return RESULT_OK
+		return RESULT_OK;
 	}
 	/*
 	 * Wrap the inner expr in postincrement/postdecrement.
@@ -566,7 +580,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_expr_check_next_token(Arena *arena,
+parse_expr_check_next_token(Arena *arena, // NOLINT(*cognitive-complexity) TODO
                             const struct token *tok,
                             struct ast **a)
 {
@@ -721,6 +735,10 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
@@ -1510,16 +1528,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-	case EXPRESSION_COMPOUND_ASSIGN_ADD:
-	case EXPRESSION_COMPOUND_ASSIGN_SUBTRACT:
-	case EXPRESSION_COMPOUND_ASSIGN_MULTIPLY:
-	case EXPRESSION_COMPOUND_ASSIGN_DIVIDE:
-	case EXPRESSION_COMPOUND_ASSIGN_REMAINDER:
-	case EXPRESSION_COMPOUND_ASSIGN_BITWISE_AND:
-	case EXPRESSION_COMPOUND_ASSIGN_BITWISE_OR:
-	case EXPRESSION_COMPOUND_ASSIGN_BITWISE_XOR:
-	case EXPRESSION_COMPOUND_ASSIGN_BITWISE_SHIFT_LEFT:
-	case EXPRESSION_COMPOUND_ASSIGN_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
