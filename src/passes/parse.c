@@ -503,11 +503,11 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_symbol(arena, tok, dst));
+		// TODO: special-case postincrement, postdecrement?
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
 		check(parse_alloc(arena,
 		                  dst,
