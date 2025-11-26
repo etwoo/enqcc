@@ -45,6 +45,8 @@ struct asm_operand {
 	F(MOV)                                                                 \
 	F(UNARY_NEG)                                                           \
 	F(UNARY_NOT)                                                           \
+	F(UNARY_DECREMENT)                                                     \
+	F(UNARY_INCREMENT)                                                     \
 	F(BINARY_ADD)                                                          \
 	F(BINARY_ADD_QUAD)                                                     \
 	F(BINARY_SUBTRACT)                                                     \
