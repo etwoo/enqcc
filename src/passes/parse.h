@@ -37,6 +37,11 @@ struct ast_symbol {
 	F(EXPRESSION_BINARY_MULTIPLY)                                          \
 	F(EXPRESSION_BINARY_DIVIDE)                                            \
 	F(EXPRESSION_BINARY_REMAINDER)                                         \
+	F(EXPRESSION_BITWISE_AND)                                              \
+	F(EXPRESSION_BITWISE_OR)                                               \
+	F(EXPRESSION_BITWISE_XOR)                                              \
+	F(EXPRESSION_BITWISE_SHIFT_LEFT)                                       \
+	F(EXPRESSION_BITWISE_SHIFT_RIGHT)                                      \
 	F(EXPRESSION_LOGICAL_AND)                                              \
 	F(EXPRESSION_LOGICAL_OR)                                               \
 	F(EXPRESSION_COMPARE_EQUAL)                                            \
