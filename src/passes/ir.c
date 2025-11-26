@@ -863,6 +863,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 
 	switch (s->linkage.initial) {
 	case INITIAL_VALUE_NO_INITIALIZER:
+		assert(0); /* logic error in caller */
 		break;
 	case INITIAL_VALUE_TENTATIVE:
 		(**dst).u.initial_as_ll = 0;
