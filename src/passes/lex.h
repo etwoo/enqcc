@@ -62,12 +62,12 @@
 	F(TOKEN_MORE_THAN, TOKEN_MORE_THAN_EQUAL_SIGN)                         \
 	F(TOKEN_CARET, TOKEN_CARET_EQUAL_SIGN)
 
-#define FOREACH_LEX_COMBINED(F)                                                \
+#define FOREACH_LEX_ENUM_VALUE(F)                                              \
 	FOREACH_LEX_KEYWORD(F)                                                 \
 	FOREACH_LEX_CHAR(F)                                                    \
 	FOREACH_LEX_CHAR_REPEAT(F)                                             \
 	FOREACH_LEX_COMPOUND_ASSIGNMENT(F)
-#define TO_ENUM(x, enum_value) enum_value,
+#define TO_ENUM_ENTRY(x, enum_value) enum_value,
 
 struct token {
 	enum {
@@ -75,13 +75,13 @@ struct token {
 		TOKEN_CONSTANT,
 		TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN,
 		TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN,
-		FOREACH_LEX_COMBINED(TO_ENUM)
+		FOREACH_LEX_ENUM_VALUE(TO_ENUM_ENTRY)
 	} token_type;
 	struct string_view val;
 	struct token *next;
 };
 
-#undef FOREACH_LEX_COMBINED
-#undef TO_ENUM
+#undef FOREACH_LEX_ENUM_VALUE
+#undef TO_ENUM_ENTRY
 
 #endif
