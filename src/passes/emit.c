@@ -138,7 +138,11 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
 	const char *label_prefix = get_label_prefix(plat);
 	const char *print_opcode = NULL;
-	enum register_alias ralias = REGISTER_ALIAS_4BYTE;
+
+	enum register_alias ralias[ARRAY_SIZE(op->args)] = {0};
+	for (size_t i = 0; i < ARRAY_SIZE(ralias); ++i) {
+		ralias[i] = REGISTER_ALIAS_4BYTE;
+	}
 
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
@@ -180,11 +184,13 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_BITWISE_SHIFT_LEFT:
 		print_opcode = "sall";
-		ralias = REGISTER_ALIAS_1BYTE;
+		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
+		assert(ralias[1] == REGISTER_ALIAS_4BYTE);
 		break;
 	case ASM_OP_BITWISE_SHIFT_RIGHT:
 		print_opcode = "sarl";
-		ralias = REGISTER_ALIAS_1BYTE;
+		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
+		assert(ralias[1] == REGISTER_ALIAS_4BYTE);
 		break;
 	case ASM_OP_COMPARE:
 		print_opcode = "cmpl";
@@ -218,27 +224,27 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_SET_IF_EQ:
 		print_opcode = "sete";
-		ralias = REGISTER_ALIAS_1BYTE;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_NEQ:
 		print_opcode = "setne";
-		ralias = REGISTER_ALIAS_1BYTE;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_GT:
 		print_opcode = "setg";
-		ralias = REGISTER_ALIAS_1BYTE;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_GTE:
 		print_opcode = "setge";
-		ralias = REGISTER_ALIAS_1BYTE;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_LT:
 		print_opcode = "setl";
-		ralias = REGISTER_ALIAS_1BYTE;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_LTE:
 		print_opcode = "setle";
-		ralias = REGISTER_ALIAS_1BYTE;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_LABEL:
 		assert(op->args[0].operand_type ==
@@ -251,7 +257,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_PUSH:
 		print_opcode = STR_OP_PUSH_QUAD;
-		ralias = REGISTER_ALIAS_8BYTE;
+		ralias[0] = REGISTER_ALIAS_8BYTE;
 		break;
 	case ASM_OP_CALL:
 		print_opcode = "call";
@@ -281,7 +287,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		} else {
 			dprintf(fd, ", ");
 		}
-		emit_asm_operand(&op->args[i], plat, ralias, fd);
+		emit_asm_operand(&op->args[i], plat, ralias[i], fd);
 	}
 
 	dprintf(fd, "\n");
