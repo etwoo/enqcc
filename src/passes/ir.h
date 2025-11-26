@@ -27,6 +27,11 @@ struct ir_val {
 	F(BINARY_MULTIPLY, 2)                                                  \
 	F(BINARY_DIVIDE, 2)                                                    \
 	F(BINARY_REMAINDER, 2)                                                 \
+	F(BITWISE_AND, 2)                                                      \
+	F(BITWISE_OR, 2)                                                       \
+	F(BITWISE_XOR, 2)                                                      \
+	F(BITWISE_SHIFT_LEFT, 2)                                               \
+	F(BITWISE_SHIFT_RIGHT, 2)                                              \
 	F(COMPARE_EQUAL, 2)                                                    \
 	F(COMPARE_NOT_EQUAL, 2)                                                \
 	F(COMPARE_LESS_THAN, 2)                                                \

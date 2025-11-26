@@ -126,6 +126,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
 	case NODE_EXPRESSION_LOGICAL_AND:
 	case NODE_EXPRESSION_LOGICAL_OR:
 	case NODE_EXPRESSION_COMPARE_EQUAL:
@@ -548,6 +553,16 @@ parse_expr_check_next_token(Arena *arena,
 		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_DIVIDE);
 	} else if (is_token_type(tok, TOKEN_PERCENT_SIGN)) {
 		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_REMAINDER);
+	} else if (is_token_type(tok, TOKEN_AMPERSAND)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_AND);
+	} else if (is_token_type(tok, TOKEN_VERT_BAR)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_OR);
+	} else if (is_token_type(tok, TOKEN_CARET)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_XOR);
+	} else if (is_token_type(tok, TOKEN_LESS_THAN_LESS_THAN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_SHIFT_LEFT);
+	} else if (is_token_type(tok, TOKEN_MORE_THAN_MORE_THAN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_SHIFT_RIGHT);
 	} else if (is_token_type(tok, TOKEN_AMPERSAND_AMPERSAND)) {
 		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_AND);
 	} else if (is_token_type(tok, TOKEN_VERT_BAR_VERT_BAR)) {
@@ -599,6 +614,10 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 		precedence += PRECEDENCE_INCREMENT;
 		__attribute__((fallthrough));
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_COMPARE_LESS_THAN:
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
@@ -607,6 +626,15 @@ get_precedence(const struct ast *a)
 		__attribute__((fallthrough));
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
+	case NODE_EXPRESSION_BITWISE_AND:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
+	case NODE_EXPRESSION_BITWISE_XOR:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
+	case NODE_EXPRESSION_BITWISE_OR:
 		precedence += PRECEDENCE_INCREMENT;
 		__attribute__((fallthrough));
 	case NODE_EXPRESSION_LOGICAL_AND:
@@ -1406,6 +1434,11 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
 	case NODE_EXPRESSION_LOGICAL_AND:
 	case NODE_EXPRESSION_LOGICAL_OR:
 	case NODE_EXPRESSION_COMPARE_EQUAL:
