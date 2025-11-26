@@ -49,7 +49,7 @@
 	F(TOKEN_LESS_THAN, TOKEN_LESS_THAN_LESS_THAN)                          \
 	F(TOKEN_MORE_THAN, TOKEN_MORE_THAN_MORE_THAN)
 
-#define FOREACH_LEX_COMPOUND_ASSIGNMENT(F)                                     \
+#define FOREACH_LEX_CHAR_EQUALS_SIGN(F)                                        \
 	F(TOKEN_HYPHEN, TOKEN_HYPHEN_EQUAL_SIGN)                               \
 	F(TOKEN_PLUS_SIGN, TOKEN_PLUS_SIGN_EQUAL_SIGN)                         \
 	F(TOKEN_ASTERISK, TOKEN_ASTERISK_EQUAL_SIGN)                           \
@@ -66,7 +66,7 @@
 	FOREACH_LEX_KEYWORD(F)                                                 \
 	FOREACH_LEX_CHAR(F)                                                    \
 	FOREACH_LEX_CHAR_REPEAT(F)                                             \
-	FOREACH_LEX_COMPOUND_ASSIGNMENT(F)
+	FOREACH_LEX_CHAR_EQUALS_SIGN(F)
 #define TO_ENUM_ENTRY(x, enum_value) enum_value,
 
 struct token {

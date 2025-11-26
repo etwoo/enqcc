@@ -50,6 +50,20 @@ struct ast_symbol {
 	F(EXPRESSION_COMPARE_LESS_THAN_EQ)                                     \
 	F(EXPRESSION_COMPARE_MORE_THAN)                                        \
 	F(EXPRESSION_COMPARE_MORE_THAN_EQ)                                     \
+	F(EXPRESSION_COMPOUND_ASSIGN_ADD)                                      \
+	F(EXPRESSION_COMPOUND_ASSIGN_SUBTRACT)                                 \
+	F(EXPRESSION_COMPOUND_ASSIGN_MULTIPLY)                                 \
+	F(EXPRESSION_COMPOUND_ASSIGN_DIVIDE)                                   \
+	F(EXPRESSION_COMPOUND_ASSIGN_REMAINDER)                                \
+	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_AND)                              \
+	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_OR)                               \
+	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_XOR)                              \
+	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_SHIFT_LEFT)                       \
+	F(EXPRESSION_COMPOUND_ASSIGN_BITWISE_SHIFT_RIGHT)                      \
+	F(EXPRESSION_PREDECREMENT)                                             \
+	F(EXPRESSION_PREINCREMENT)                                             \
+	F(EXPRESSION_POSTDECREMENT)                                            \
+	F(EXPRESSION_POSTINCREMENT)                                            \
 	F(EXPRESSION_VARIABLE_ASSIGNMENT)                                      \
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_TERNARY_CONDITIONAL)                                      \

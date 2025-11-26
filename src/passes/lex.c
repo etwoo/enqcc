@@ -84,7 +84,7 @@ lex_readahead_one_or_two_chars(struct string_view *pos, struct token *cur)
 		}
 	} else if (pos->data[1] == '=') {
 		switch (cur->token_type) {
-			FOREACH_LEX_COMPOUND_ASSIGNMENT(TRY_READAHEAD)
+			FOREACH_LEX_CHAR_EQUALS_SIGN(TRY_READAHEAD)
 		default:
 			break;
 		}
@@ -206,7 +206,7 @@ lex_debug_one(const struct token *tok)
 		FOREACH_LEX_KEYWORD(TRY_DEBUG_PRINT_TOKEN)
 		FOREACH_LEX_CHAR(TRY_DEBUG_PRINT_TOKEN)
 		FOREACH_LEX_CHAR_REPEAT(TRY_DEBUG_PRINT_TOKEN)
-		FOREACH_LEX_COMPOUND_ASSIGNMENT(TRY_DEBUG_PRINT_TOKEN)
+		FOREACH_LEX_CHAR_EQUALS_SIGN(TRY_DEBUG_PRINT_TOKEN)
 	case TOKEN_IDENTIFIER:
 		debug("IDENTIFIER %.*s", (int)tok->val.sz, tok->val.data);
 		break;
