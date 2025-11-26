@@ -16,7 +16,7 @@
 	F(AX, "rax", "eax", "al")                                              \
 	F(R10, "r10", "r10d", "r10b")                                          \
 	F(R11, "r11", "r11d", "r11b")                                          \
-	F(RSP, "rsp", "rsp", "r11d")
+	F(RSP, "rsp", "rsp", "rsp")
 
 #define TO_ENUM(register_name, b8, b4, b1) ASM_REGISTER_##register_name,
 enum asm_register { FOREACH_ASM_REGISTER(TO_ENUM) };

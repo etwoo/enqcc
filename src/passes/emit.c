@@ -180,9 +180,11 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_BITWISE_SHIFT_LEFT:
 		print_opcode = "sall";
+		ralias = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_BITWISE_SHIFT_RIGHT:
 		print_opcode = "sarl";
+		ralias = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_COMPARE:
 		print_opcode = "cmpl";

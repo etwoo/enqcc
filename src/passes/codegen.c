@@ -92,6 +92,13 @@ codegen_set_operand_eax(struct asm_operand *dst)
 }
 
 static void
+codegen_set_operand_ecx(struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->u.reg = ASM_REGISTER_CX;
+}
+
+static void
 codegen_set_operand_r10(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
@@ -751,8 +758,6 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 		cur->opcode == ASM_OP_BITWISE_AND ||
 		cur->opcode == ASM_OP_BITWISE_OR ||
 		cur->opcode == ASM_OP_BITWISE_XOR ||
-		cur->opcode == ASM_OP_BITWISE_SHIFT_LEFT ||  // TODO: bug
-		cur->opcode == ASM_OP_BITWISE_SHIFT_RIGHT || // TODO: bug
 		cur->opcode == ASM_OP_COMPARE;
 	const bool candidate_operand_0 =
 		cur->args[0].operand_type == ASM_OPERAND_STACK ||
@@ -840,7 +845,6 @@ fix_div(struct asm_op *cur, struct fix *trampoline)
 }
 
 /*
- *
  * Translate:
  *
  *     imull $3, -4(%rbp)
@@ -875,6 +879,38 @@ fix_mul(struct asm_op *cur, struct fix *trampoline)
 	return true;
 }
 
+/*
+ * Translate:
+ *
+ *     sall -4(%rbp), %eax
+ *
+ * ... into:
+ *
+ *     movl -4(%rbp), %cl
+ *     sall %cl, %eax
+ */
+static WARN_UNUSED bool
+fix_shift(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!((cur->opcode == ASM_OP_BITWISE_SHIFT_LEFT ||
+	       cur->opcode == ASM_OP_BITWISE_SHIFT_RIGHT) &&
+	      cur->args[0].operand_type != ASM_OPERAND_IMMEDIATE)) {
+		return false;
+	}
+
+	trampoline->sz = 2;
+
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
+	codegen_set_operand_ecx(&trampoline->ops[0]->args[1]);
+
+	trampoline->ops[1]->opcode = cur->opcode;
+	codegen_set_operand_ecx(&trampoline->ops[1]->args[0]);
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[1]->args[1]);
+
+	return true;
+}
+
 static WARN_UNUSED result_t
 codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
 {
@@ -888,6 +924,7 @@ codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
 		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_cmp));
 		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_div));
 		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_mul));
+		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_shift));
 		if (cur == orig[1]) {
 			assert(prev == orig[0]);
 			prev = cur;
