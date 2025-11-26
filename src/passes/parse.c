@@ -503,11 +503,12 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
+	assert(*dst == NULL);
+
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_symbol(arena, tok, dst));
-		// TODO: special-case postincrement, postdecrement?
 	} else if (is_token_type(*tok, TOKEN_TILDE)) {
 		check(parse_alloc(arena,
 		                  dst,
@@ -542,6 +543,25 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	} else {
 		return make_result(ERR_PARSE_EXPR_EXPECT_REASONABLE);
 	}
+
+	assert(*dst != NULL);
+
+	struct ast *post = NULL;
+	if (is_token_type(tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTINCREMENT));
+		token_consume(tok);
+	} else if (is_token_type(tok, TOKEN_HYPHEN_HYPHEN)) {
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT));
+		token_consume(tok);
+	} else {
+		return RESULT_OK
+	}
+	/*
+	 * Wrap the inner expr in postincrement/postdecrement.
+	 */
+	post->u.op_unary.operand = *dst;
+	*dst = post;
+
 	return RESULT_OK;
 }
 
