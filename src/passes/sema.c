@@ -67,6 +67,7 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(sema_walk(a->u.op_unary.operand, f, u));
 		break;
+	// TODO: compound assignment, increment, decrement
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(f(a, u));
 		__attribute__((fallthrough));

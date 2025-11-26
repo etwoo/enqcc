@@ -54,6 +54,7 @@ ir_val_copy(const struct ir_val *src, struct ir_val *dst)
 static void
 ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 {
+	// TODO: compound assignment, increment, decrement
 	assert(src->node_type == NODE_DECLARATION ||
 	       src->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
 	       src->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
@@ -452,6 +453,7 @@ ir_unary_op(Arena *arena,
 
 	ir_val_copy(&inner_return, &unary->args[0]);
 	unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
+	// TODO: compound assignment, increment, decrement
 	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
 		assert(a->u.op_binary.lhs->node_type ==
 		       NODE_EXPRESSION_VARIABLE_USAGE);
@@ -770,6 +772,7 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
+	// TODO: compound assignment, increment, decrement
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
