@@ -119,6 +119,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -139,6 +143,16 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
@@ -503,7 +517,8 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	assert(!is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)); // unimplemented
+	assert(*dst == NULL);
+
 	if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
@@ -522,6 +537,14 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_NOT));
 		token_consume(tok);
 		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
+	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_PREDECREMENT));
+		token_consume(tok);
+		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
+	} else if (is_token_type(*tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_PREINCREMENT));
+		token_consume(tok);
+		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
@@ -534,11 +557,30 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	} else {
 		return make_result(ERR_PARSE_EXPR_EXPECT_REASONABLE);
 	}
+
+	assert(*dst != NULL);
+
+	struct ast *post = NULL;
+	if (is_token_type(*tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTINCREMENT));
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT));
+		token_consume(tok);
+	} else {
+		return RESULT_OK;
+	}
+	/*
+	 * Wrap the inner expr in postincrement/postdecrement.
+	 */
+	post->u.op_unary.operand = *dst;
+	*dst = post;
+
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-parse_expr_check_next_token(Arena *arena,
+parse_expr_check_next_token(Arena *arena, // NOLINT(*cognitive-complexity) TODO
                             const struct token *tok,
                             struct ast **a)
 {
@@ -581,6 +623,26 @@ parse_expr_check_next_token(Arena *arena,
 		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN);
 	} else if (is_token_type(tok, TOKEN_MORE_THAN_EQUAL_SIGN)) {
 		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN_EQ);
+	} else if (is_token_type(tok, TOKEN_PLUS_SIGN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_ADD);
+	} else if (is_token_type(tok, TOKEN_HYPHEN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_SUB);
+	} else if (is_token_type(tok, TOKEN_ASTERISK_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_MUL);
+	} else if (is_token_type(tok, TOKEN_FORWARD_SLASH_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_DIV);
+	} else if (is_token_type(tok, TOKEN_PERCENT_SIGN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_REM);
+	} else if (is_token_type(tok, TOKEN_AMPERSAND_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_AND);
+	} else if (is_token_type(tok, TOKEN_VERT_BAR_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_OR);
+	} else if (is_token_type(tok, TOKEN_CARET_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_XOR);
+	} else if (is_token_type(tok, TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_SHL);
+	} else if (is_token_type(tok, TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN)) {
+		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_SHR);
 	} else if (is_token_type(tok, TOKEN_QUESTION)) {
 		r = parse_alloc(arena, a, NODE_EXPRESSION_TERNARY_CONDITIONAL);
 	}
@@ -646,6 +708,16 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		precedence += PRECEDENCE_INCREMENT;
 		__attribute__((fallthrough));
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		precedence += PRECEDENCE_INCREMENT;
 		break;
@@ -663,6 +735,10 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
@@ -697,6 +773,16 @@ parse_expr(Arena *arena,
 		}
 
 		const bool is_right_associative =
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_ADD ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SUB ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_MUL ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_DIV ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_REM ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_AND ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_OR ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_XOR ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SHL ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SHR ||
 			bop->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
 			bop->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL;
 		const unsigned inc = is_right_associative ? 0 : 1;
@@ -1427,6 +1513,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
 		parse_debug_print(a->u.op_unary.operand, indent + 1);
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -1448,6 +1538,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;

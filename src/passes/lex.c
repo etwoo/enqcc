@@ -21,29 +21,6 @@ lex_alloc(Arena *arena, struct token **tok)
 	return RESULT_OK;
 }
 
-#define FOREACH_LEX_CHAR(F)                                                    \
-	F('(', TOKEN_PAREN_OPEN)                                               \
-	F(')', TOKEN_PAREN_CLOSE)                                              \
-	F('{', TOKEN_BRACE_OPEN)                                               \
-	F('}', TOKEN_BRACE_CLOSE)                                              \
-	F(';', TOKEN_SEMICOLON)                                                \
-	F('~', TOKEN_TILDE)                                                    \
-	F('-', TOKEN_HYPHEN)                                                   \
-	F('+', TOKEN_PLUS_SIGN)                                                \
-	F('*', TOKEN_ASTERISK)                                                 \
-	F('/', TOKEN_FORWARD_SLASH)                                            \
-	F('%', TOKEN_PERCENT_SIGN)                                             \
-	F('!', TOKEN_EXCLAMATION)                                              \
-	F('&', TOKEN_AMPERSAND)                                                \
-	F('|', TOKEN_VERT_BAR)                                                 \
-	F('=', TOKEN_EQUAL_SIGN)                                               \
-	F('<', TOKEN_LESS_THAN)                                                \
-	F('>', TOKEN_MORE_THAN)                                                \
-	F('?', TOKEN_QUESTION)                                                 \
-	F(':', TOKEN_COLON)                                                    \
-	F(',', TOKEN_COMMA)                                                    \
-	F('^', TOKEN_CARET)
-
 static WARN_UNUSED result_t
 lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
 {
@@ -67,76 +44,55 @@ lex_peek_ok(struct string_view *pos, const struct string_view *prefix)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED bool
-lex_one_token_peek(struct string_view *pos, struct token *cur)
+static WARN_UNUSED size_t
+lex_readahead_one_or_two_chars(struct string_view *pos, struct token *cur)
 {
-	assert(pos->sz > 1);
-	bool matched = true;
+	if (pos->sz <= 1) {
+		return 0;
+	}
+
+	size_t readahead = 0;
+
+#define TRY_READAHEAD(to_match, result)                                        \
+	case to_match:                                                         \
+		cur->token_type = result;                                      \
+		readahead = 1;                                                 \
+		break;
 
 	if (pos->data[0] == pos->data[1]) {
 		switch (cur->token_type) {
-		case TOKEN_HYPHEN:
-			cur->token_type = TOKEN_HYPHEN_HYPHEN;
-			break;
-		case TOKEN_AMPERSAND:
-			cur->token_type = TOKEN_AMPERSAND_AMPERSAND;
-			break;
-		case TOKEN_VERT_BAR:
-			cur->token_type = TOKEN_VERT_BAR_VERT_BAR;
-			break;
-		case TOKEN_EQUAL_SIGN:
-			cur->token_type = TOKEN_EQUAL_SIGN_EQUAL_SIGN;
-			break;
-		case TOKEN_LESS_THAN:
-			cur->token_type = TOKEN_LESS_THAN_LESS_THAN;
-			break;
-		case TOKEN_MORE_THAN:
-			cur->token_type = TOKEN_MORE_THAN_MORE_THAN;
-			break;
+			FOREACH_LEX_CHAR_REPEAT(TRY_READAHEAD)
 		default:
-			matched = false;
 			break;
+		}
+		if (readahead == 1 && pos->sz > 2 && pos->data[2] == '=') {
+			switch (cur->token_type) {
+			case TOKEN_LESS_THAN_LESS_THAN:
+				cur->token_type =
+					TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN;
+				readahead = 2;
+				break;
+			case TOKEN_MORE_THAN_MORE_THAN:
+				cur->token_type =
+					TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN;
+				readahead = 2;
+				break;
+			default:
+				break;
+			}
 		}
 	} else if (pos->data[1] == '=') {
 		switch (cur->token_type) {
-		case TOKEN_EXCLAMATION:
-			cur->token_type = TOKEN_EXCLAMATION_EQUAL_SIGN;
-			break;
-		case TOKEN_AMPERSAND:
-			cur->token_type = TOKEN_AMPERSAND_EQUAL_SIGN;
-			break;
-		case TOKEN_VERT_BAR:
-			cur->token_type = TOKEN_VERT_BAR_EQUAL_SIGN;
-			break;
-		case TOKEN_LESS_THAN:
-			cur->token_type = TOKEN_LESS_THAN_EQUAL_SIGN;
-			break;
-		case TOKEN_MORE_THAN:
-			cur->token_type = TOKEN_MORE_THAN_EQUAL_SIGN;
-			break;
+			FOREACH_LEX_CHAR_EQUALS_SIGN(TRY_READAHEAD)
 		default:
-			matched = false;
+			break;
 		}
-	} else {
-		matched = false;
 	}
 
-	return matched;
-}
+	return readahead;
 
-#define FOREACH_LEX_KEYWORD(F)                                                 \
-	F("return", TOKEN_KEYWORD_RETURN)                                      \
-	F("void", TOKEN_KEYWORD_VOID)                                          \
-	F("int", TOKEN_KEYWORD_INT)                                            \
-	F("if", TOKEN_KEYWORD_IF)                                              \
-	F("else", TOKEN_KEYWORD_ELSE)                                          \
-	F("do", TOKEN_KEYWORD_DO)                                              \
-	F("while", TOKEN_KEYWORD_WHILE)                                        \
-	F("for", TOKEN_KEYWORD_FOR)                                            \
-	F("break", TOKEN_KEYWORD_BREAK)                                        \
-	F("continue", TOKEN_KEYWORD_CONTINUE)                                  \
-	F("static", TOKEN_KEYWORD_STATIC)                                      \
-	F("extern", TOKEN_KEYWORD_EXTERN)
+#undef TRY_READAHEAD
+}
 
 static WARN_UNUSED unsigned
 lex_one_token_keyword_maybe(struct string_view *pos)
@@ -176,12 +132,9 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 #undef TRY_EARLY_MATCH
 
 	if (early_match) {
-		const bool peek_match =
-			(pos->sz > 1) && lex_one_token_peek(pos, cur);
-		if (peek_match) {
-			pos->data++;
-			pos->sz--;
-		}
+		const size_t ahead = lex_readahead_one_or_two_chars(pos, cur);
+		pos->data += ahead;
+		pos->sz -= ahead;
 	} else if (isdigit(c)) {
 		cur->val.data = pos->data;
 		do {
@@ -249,46 +202,21 @@ lex_debug_one(const struct token *tok)
 		break;
 
 	switch (tok->token_type) {
-		FOREACH_LEX_CHAR(TRY_DEBUG_PRINT_TOKEN)
 		FOREACH_LEX_KEYWORD(TRY_DEBUG_PRINT_TOKEN)
+		FOREACH_LEX_CHAR(TRY_DEBUG_PRINT_TOKEN)
+		FOREACH_LEX_CHAR_REPEAT(TRY_DEBUG_PRINT_TOKEN)
+		FOREACH_LEX_CHAR_EQUALS_SIGN(TRY_DEBUG_PRINT_TOKEN)
 	case TOKEN_IDENTIFIER:
 		debug("IDENTIFIER %.*s", (int)tok->val.sz, tok->val.data);
 		break;
 	case TOKEN_CONSTANT:
 		debug("CONSTANT %.*s", (int)tok->val.sz, tok->val.data);
 		break;
-	case TOKEN_HYPHEN_HYPHEN:
-		debug("TOKEN_HYPHEN_HYPHEN");
+	case TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN:
+		debug("TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN");
 		break;
-	case TOKEN_EXCLAMATION_EQUAL_SIGN:
-		debug("TOKEN_EXCLAMATION_EQUAL_SIGN");
-		break;
-	case TOKEN_AMPERSAND_AMPERSAND:
-		debug("TOKEN_AMPERSAND_AMPERSAND");
-		break;
-	case TOKEN_AMPERSAND_EQUAL_SIGN:
-		debug("TOKEN_AMPERSAND_EQUAL_SIGN");
-		break;
-	case TOKEN_VERT_BAR_VERT_BAR:
-		debug("TOKEN_VERT_BAR_VERT_BAR");
-		break;
-	case TOKEN_VERT_BAR_EQUAL_SIGN:
-		debug("TOKEN_VERT_BAR_EQUAL_SIGN");
-		break;
-	case TOKEN_EQUAL_SIGN_EQUAL_SIGN:
-		debug("TOKEN_EQUAL_SIGN_EQUAL_SIGN");
-		break;
-	case TOKEN_LESS_THAN_LESS_THAN:
-		debug("TOKEN_LESS_THAN_LESS_THAN");
-		break;
-	case TOKEN_LESS_THAN_EQUAL_SIGN:
-		debug("TOKEN_LESS_THAN_EQUAL_SIGN");
-		break;
-	case TOKEN_MORE_THAN_MORE_THAN:
-		debug("TOKEN_MORE_THAN_MORE_THAN");
-		break;
-	case TOKEN_MORE_THAN_EQUAL_SIGN:
-		debug("TOKEN_MORE_THAN_EQUAL_SIGN");
+	case TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN:
+		debug("TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN");
 		break;
 	}
 
@@ -303,6 +231,3 @@ lex_debug_print(const struct token *tok)
 		tok = tok->next;
 	}
 }
-
-#undef FOREACH_LEX_CHAR
-#undef FOREACH_LEX_KEYWORD

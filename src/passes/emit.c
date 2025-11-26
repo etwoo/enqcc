@@ -158,6 +158,12 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_UNARY_NOT:
 		print_opcode = "notl";
 		break;
+	case ASM_OP_UNARY_DECREMENT:
+		print_opcode = "decl";
+		break;
+	case ASM_OP_UNARY_INCREMENT:
+		print_opcode = "incl";
+		break;
 	case ASM_OP_BINARY_ADD:
 		print_opcode = "addl";
 		break;

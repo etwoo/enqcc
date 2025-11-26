@@ -9,13 +9,12 @@
 static WARN_UNUSED result_t
 sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 {
+	check(f(a, u));
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		check(f(a, u));
 		check(sema_walk(a->u.program.globals, f, u));
 		break;
 	case NODE_FUNCTION:
-		check(f(a, u));
 		if (a->u.function.block != NULL) {
 			check(sema_walk(a->u.function.block, f, u));
 		}
@@ -32,7 +31,6 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 		}
 		break;
 	case NODE_DECLARATION:
-		check(f(a, u));
 		if (a->u.declare.init != NULL) {
 			check(sema_walk(a->u.declare.init, f, u));
 		}
@@ -48,28 +46,26 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 		}
 		break;
 	case NODE_LOOP:
-		check(f(a, u));
 		check(sema_walk(a->u.loop.precond, f, u));
 		check(sema_walk(a->u.loop.body, f, u));
 		check(sema_walk(a->u.loop.incr, f, u));
 		check(sema_walk(a->u.loop.postcond, f, u));
 		break;
 	case NODE_BREAK:
-		check(f(a, u));
-		break;
 	case NODE_CONTINUE:
-		check(f(a, u));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
 		check(sema_walk(a->u.op_unary.operand, f, u));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		check(f(a, u));
-		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -88,11 +84,18 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
 		check(sema_walk(a->u.op_binary.lhs, f, u));
 		check(sema_walk(a->u.op_binary.rhs, f, u));
-		break;
-	case NODE_EXPRESSION_VARIABLE_USAGE:
-		check(f(a, u));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		check(sema_walk(a->u.op_binary.lhs, f, u));
@@ -103,7 +106,6 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		check(f(a, u));
 		if (a->u.call.arguments != NULL) {
 			check(sema_walk(a->u.call.arguments, f, u));
 		}
@@ -114,6 +116,7 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 			check(sema_walk(a->u.call_args.next, f, u));
 		}
 		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
 		break;
@@ -162,14 +165,33 @@ sema_label_loops(struct ast *a, long long int *generator)
 static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
-	if (a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT &&
-	    a->u.op_binary.lhs->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
+	struct ast *to_check = NULL;
+	switch (a->node_type) {
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		to_check = a->u.op_binary.lhs;
+		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		to_check = a->u.op_unary.operand;
+		break;
+	default:
+		return RESULT_OK;
+	}
+
+	while (to_check->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
+		to_check = to_check->u.op_unary.operand;
+	}
+
+	if (to_check->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
 		/*
 		 * See related assertions in src/passes/ir.c on u.op_binary.lhs
 		 * and NODE_EXPRESSION_VARIABLE_USAGE.
 		 */
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE);
 	}
+
 	return RESULT_OK;
 }
 
