@@ -773,6 +773,16 @@ parse_expr(Arena *arena,
 		}
 
 		const bool is_right_associative =
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_ADD ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SUB ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_MUL ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_DIV ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_REM ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_AND ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_OR ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_XOR ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SHL ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SHR ||
 			bop->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
 			bop->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL;
 		const unsigned inc = is_right_associative ? 0 : 1;
