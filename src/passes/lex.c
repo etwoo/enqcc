@@ -65,8 +65,7 @@ lex_readahead_one_or_two_chars(struct string_view *pos, struct token *cur)
 		default:
 			break;
 		}
-		if (readahead == 1 && pos->sz > 2 &&
-		    pos->data[2] == TOKEN_EQUAL_SIGN) {
+		if (readahead == 1 && pos->sz > 2 && pos->data[2] == '=') {
 			switch (cur->token_type) {
 			case TOKEN_LESS_THAN_LESS_THAN:
 				cur->token_type =
