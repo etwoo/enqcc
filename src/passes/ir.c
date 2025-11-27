@@ -51,6 +51,18 @@ ir_val_copy(const struct ir_val *src, struct ir_val *dst)
 	memcpy(dst, src, sizeof(*dst));
 }
 
+/*
+ * Related: sema_lvalue() in src/passes/sema.c
+ */
+static WARN_UNUSED const struct ast *
+ir_unpack_parens(const struct ast *a)
+{
+	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
+		a = a->u.op_unary.operand;
+	}
+	return a;
+}
+
 static void
 ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 {
@@ -63,9 +75,9 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		assert(src->u.op_unary.operand->node_type ==
+		assert(ir_unpack_parens(src->u.op_unary.operand)->node_type ==
 		       NODE_EXPRESSION_VARIABLE_USAGE);
-		sym = &src->u.op_unary.operand->u.var;
+		sym = &ir_unpack_parens(src->u.op_unary.operand)->u.var;
 		break;
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
