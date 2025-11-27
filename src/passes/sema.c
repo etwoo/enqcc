@@ -6,50 +6,67 @@
 
 #include <sys/param.h> /* for MAX() */
 
+// TODO: move *f into struct of function pointers
+// rename f -> enter_callback()
+// add optional second callback, exit_callback()
+// use exit_callback() to reset containing loop context to previous value
+// ^^^ this should fix dangling break/continue outside of first/last loop
+// same structure can then be used to catch goto label_does_not_exist at end of
+//   function, once there are no more chances for label to appear
+// maybe treat goto/label like variable decl/usage, and then:
+//   use level_delimiter_prepare() in exit_callback()
+struct sema_ops {
+	result_t (*node_enter)(struct ast *a, void *userdata);
+	result_t (*node_exit)(struct ast *a, void *userdata);
+};
+
 static WARN_UNUSED result_t
-sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
+sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 {
-	check(f(a, u));
+	if (ops->node_enter != NULL) {
+		check(ops->node_enter(a, u));
+	}
+
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		check(sema_walk(a->u.program.globals, f, u));
+		check(sema_walk(a->u.program.globals, ops, u));
 		break;
 	case NODE_FUNCTION:
 		if (a->u.function.block != NULL) {
-			check(sema_walk(a->u.function.block, f, u));
+			check(sema_walk(a->u.function.block, ops, u));
 		}
 		if (a->u.function.next != NULL) {
-			check(sema_walk(a->u.function.next, f, u));
+			check(sema_walk(a->u.function.next, ops, u));
 		}
 		break;
 	case NODE_BLOCK:
 		if (a->u.block.item != NULL) {
-			check(sema_walk(a->u.block.item, f, u));
+			check(sema_walk(a->u.block.item, ops, u));
 			if (a->u.block.next != NULL) {
-				check(sema_walk(a->u.block.next, f, u));
+				check(sema_walk(a->u.block.next, ops, u));
 			}
 		}
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			check(sema_walk(a->u.declare.init, f, u));
+			check(sema_walk(a->u.declare.init, ops, u));
 		}
 		if (a->u.declare.next != NULL) {
-			check(sema_walk(a->u.declare.next, f, u));
+			check(sema_walk(a->u.declare.next, ops, u));
 		}
 		break;
 	case NODE_IF_ELSE:
-		check(sema_walk(a->u.if_.condition, f, u));
-		check(sema_walk(a->u.if_.then_clause, f, u));
+		check(sema_walk(a->u.if_.condition, ops, u));
+		check(sema_walk(a->u.if_.then_clause, ops, u));
 		if (a->u.if_.else_clause != NULL) {
-			check(sema_walk(a->u.if_.else_clause, f, u));
+			check(sema_walk(a->u.if_.else_clause, ops, u));
 		}
 		break;
 	case NODE_LOOP:
-		check(sema_walk(a->u.loop.precond, f, u));
-		check(sema_walk(a->u.loop.body, f, u));
-		check(sema_walk(a->u.loop.incr, f, u));
-		check(sema_walk(a->u.loop.postcond, f, u));
+		check(sema_walk(a->u.loop.precond, ops, u));
+		check(sema_walk(a->u.loop.body, ops, u));
+		check(sema_walk(a->u.loop.incr, ops, u));
+		check(sema_walk(a->u.loop.postcond, ops, u));
 		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
@@ -63,7 +80,7 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		check(sema_walk(a->u.op_unary.operand, f, u));
+		check(sema_walk(a->u.op_unary.operand, ops, u));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -94,26 +111,26 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
-		check(sema_walk(a->u.op_binary.lhs, f, u));
-		check(sema_walk(a->u.op_binary.rhs, f, u));
+		check(sema_walk(a->u.op_binary.lhs, ops, u));
+		check(sema_walk(a->u.op_binary.rhs, ops, u));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-		check(sema_walk(a->u.op_binary.lhs, f, u));
-		check(sema_walk(a->u.op_ternary.condition, f, u));
-		check(sema_walk(a->u.op_ternary.then_expr, f, u));
+		check(sema_walk(a->u.op_binary.lhs, ops, u));
+		check(sema_walk(a->u.op_ternary.condition, ops, u));
+		check(sema_walk(a->u.op_ternary.then_expr, ops, u));
 		if (a->u.op_ternary.else_expr != NULL) {
-			check(sema_walk(a->u.op_ternary.else_expr, f, u));
+			check(sema_walk(a->u.op_ternary.else_expr, ops, u));
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		if (a->u.call.arguments != NULL) {
-			check(sema_walk(a->u.call.arguments, f, u));
+			check(sema_walk(a->u.call.arguments, ops, u));
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-		check(sema_walk(a->u.call_args.expr, f, u));
+		check(sema_walk(a->u.call_args.expr, ops, u));
 		if (a->u.call_args.next != NULL) {
-			check(sema_walk(a->u.call_args.next, f, u));
+			check(sema_walk(a->u.call_args.next, ops, u));
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
@@ -121,11 +138,15 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_CONSTANT_INT:
 		break;
 	}
+
+	if (ops->node_exit != NULL) {
+		check(ops->node_exit(a, u));
+	}
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-sema_loop_id(struct ast *a, void *userdata)
+sema_enter_loop_id(struct ast *a, void *userdata)
 {
 	long long int *id = userdata;
 	switch (a->node_type) {
@@ -153,12 +174,24 @@ sema_loop_id(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_exit_loop_id(struct ast *a, void *userdata)
+{
+	// TODO
+	(void)a; (void)userdata;
+	return RESULT_OK;
+}
+
 result_t
 sema_label_loops(struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
+	struct sema_ops ops = {
+		.node_enter = sema_enter_loop_id,
+		.node_exit = sema_exit_loop_id,
+	};
 	*generator = 0;
-	check(sema_walk(a, sema_loop_id, generator));
+	check(sema_walk(a, &ops, generator));
 	return RESULT_OK;
 }
 
@@ -715,14 +748,19 @@ sema_mangle_internal_linkage_names(struct ast *a, void *userdata)
 result_t
 sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 {
+	struct sema_ops ops = {0};
+
 	debug("Checking lvalues");
-	check(sema_walk(a, sema_lvalue, NULL));
+	ops.node_enter = sema_lvalue;
+	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking variable usage");
-	check(sema_walk(a, sema_var_usage, NULL));
+	ops.node_enter = sema_var_usage;
+	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking function calls");
-	check(sema_walk(a, sema_fn_call, NULL));
+	ops.node_enter = sema_fn_call;
+	check(sema_walk(a, &ops, NULL));
 
 	struct sema_symbol_state state = {0};
 	state.arena = arena;
@@ -730,13 +768,16 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	state.variable_symbols = s->variables;
 
 	debug("Checking function signatures");
-	check(sema_walk(a, sema_fn_signature, &state));
+	ops.node_enter = sema_fn_signature;
+	check(sema_walk(a, &ops, &state));
 
 	debug("Determining linkage from variable declarations");
-	check(sema_walk(a, sema_get_linkage_from_declarations, &state));
+	ops.node_enter = sema_get_linkage_from_declarations;
+	check(sema_walk(a, &ops, &state));
 
 	debug("Unique-ifying variables with internal linkage");
-	check(sema_walk(a, sema_mangle_internal_linkage_names, &state));
+	ops.node_enter = sema_mangle_internal_linkage_names;
+	check(sema_walk(a, &ops, &state));
 
 	s->functions = state.function_symbols;
 	s->variables = state.variable_symbols;
