@@ -441,6 +441,34 @@ ir_loop_control_op(Arena *arena, const struct ast *a, struct ir_op **dst)
 }
 
 static WARN_UNUSED result_t
+ir_goto(Arena *arena, const struct ast *a, struct ir_op **dst)
+{
+	assert(a->node_type == NODE_GOTO);
+
+	check(ir_alloc_op(arena, dst));
+	assert(*dst != NULL);
+	(**dst).opcode = IR_OP_JUMP;
+	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	(**dst).args[0].num = a->u.goto_.target_unique;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_label(Arena *arena, const struct ast *a, struct ir_op **dst)
+{
+	assert(a->node_type == NODE_LABEL);
+
+	check(ir_alloc_op(arena, dst));
+	assert(*dst != NULL);
+	(**dst).opcode = IR_OP_LABEL;
+	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	(**dst).args[0].num = a->u.label.unique;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_unary_op(Arena *arena,
             const struct ast *a,
             struct intermediate *ir,
@@ -852,6 +880,12 @@ ir_expr(Arena *arena,
 	case NODE_BREAK:
 	case NODE_CONTINUE:
 		check(ir_loop_control_op(arena, a, dst));
+		break;
+	case NODE_GOTO:
+		check(ir_goto(arena, a, dst));
+		break;
+	case NODE_LABEL:
+		check(ir_label(arena, a, dst));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);

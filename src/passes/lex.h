@@ -15,7 +15,8 @@
 	F("break", TOKEN_KEYWORD_BREAK)                                        \
 	F("continue", TOKEN_KEYWORD_CONTINUE)                                  \
 	F("static", TOKEN_KEYWORD_STATIC)                                      \
-	F("extern", TOKEN_KEYWORD_EXTERN)
+	F("extern", TOKEN_KEYWORD_EXTERN)                                      \
+	F("goto", TOKEN_KEYWORD_GOTO)
 
 #define FOREACH_LEX_CHAR(F)                                                    \
 	F('(', TOKEN_PAREN_OPEN)                                               \
