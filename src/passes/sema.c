@@ -6,53 +6,64 @@
 
 #include <sys/param.h> /* for MAX() */
 
+struct sema_ops {
+	result_t (*node_enter)(struct ast *a, void *userdata);
+	result_t (*node_exit)(struct ast *a, void *userdata);
+};
+
 static WARN_UNUSED result_t
-sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
+sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 {
-	check(f(a, u));
+	struct ast *recurse_into_sibling_node = NULL;
+	if (ops->node_enter != NULL) {
+		check(ops->node_enter(a, u));
+	}
+
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		check(sema_walk(a->u.program.globals, f, u));
+		check(sema_walk(a->u.program.globals, ops, u));
 		break;
 	case NODE_FUNCTION:
 		if (a->u.function.block != NULL) {
-			check(sema_walk(a->u.function.block, f, u));
+			check(sema_walk(a->u.function.block, ops, u));
 		}
 		if (a->u.function.next != NULL) {
-			check(sema_walk(a->u.function.next, f, u));
+			recurse_into_sibling_node = a->u.function.next;
 		}
 		break;
 	case NODE_BLOCK:
 		if (a->u.block.item != NULL) {
-			check(sema_walk(a->u.block.item, f, u));
+			check(sema_walk(a->u.block.item, ops, u));
 			if (a->u.block.next != NULL) {
-				check(sema_walk(a->u.block.next, f, u));
+				recurse_into_sibling_node = a->u.block.next;
 			}
 		}
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			check(sema_walk(a->u.declare.init, f, u));
+			check(sema_walk(a->u.declare.init, ops, u));
 		}
 		if (a->u.declare.next != NULL) {
-			check(sema_walk(a->u.declare.next, f, u));
+			recurse_into_sibling_node = a->u.declare.next;
 		}
 		break;
 	case NODE_IF_ELSE:
-		check(sema_walk(a->u.if_.condition, f, u));
-		check(sema_walk(a->u.if_.then_clause, f, u));
+		check(sema_walk(a->u.if_.condition, ops, u));
+		check(sema_walk(a->u.if_.then_clause, ops, u));
 		if (a->u.if_.else_clause != NULL) {
-			check(sema_walk(a->u.if_.else_clause, f, u));
+			check(sema_walk(a->u.if_.else_clause, ops, u));
 		}
 		break;
 	case NODE_LOOP:
-		check(sema_walk(a->u.loop.precond, f, u));
-		check(sema_walk(a->u.loop.body, f, u));
-		check(sema_walk(a->u.loop.incr, f, u));
-		check(sema_walk(a->u.loop.postcond, f, u));
+		check(sema_walk(a->u.loop.precond, ops, u));
+		check(sema_walk(a->u.loop.body, ops, u));
+		check(sema_walk(a->u.loop.incr, ops, u));
+		check(sema_walk(a->u.loop.postcond, ops, u));
 		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
+	case NODE_GOTO:
+	case NODE_LABEL:
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -63,7 +74,7 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		check(sema_walk(a->u.op_unary.operand, f, u));
+		check(sema_walk(a->u.op_unary.operand, ops, u));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -94,26 +105,26 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
-		check(sema_walk(a->u.op_binary.lhs, f, u));
-		check(sema_walk(a->u.op_binary.rhs, f, u));
+		check(sema_walk(a->u.op_binary.lhs, ops, u));
+		check(sema_walk(a->u.op_binary.rhs, ops, u));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-		check(sema_walk(a->u.op_binary.lhs, f, u));
-		check(sema_walk(a->u.op_ternary.condition, f, u));
-		check(sema_walk(a->u.op_ternary.then_expr, f, u));
+		check(sema_walk(a->u.op_binary.lhs, ops, u));
+		check(sema_walk(a->u.op_ternary.condition, ops, u));
+		check(sema_walk(a->u.op_ternary.then_expr, ops, u));
 		if (a->u.op_ternary.else_expr != NULL) {
-			check(sema_walk(a->u.op_ternary.else_expr, f, u));
+			check(sema_walk(a->u.op_ternary.else_expr, ops, u));
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		if (a->u.call.arguments != NULL) {
-			check(sema_walk(a->u.call.arguments, f, u));
+			check(sema_walk(a->u.call.arguments, ops, u));
 		}
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-		check(sema_walk(a->u.call_args.expr, f, u));
+		check(sema_walk(a->u.call_args.expr, ops, u));
 		if (a->u.call_args.next != NULL) {
-			check(sema_walk(a->u.call_args.next, f, u));
+			recurse_into_sibling_node = a->u.call_args.next;
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
@@ -121,30 +132,68 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_CONSTANT_INT:
 		break;
 	}
+
+	if (ops->node_exit != NULL) {
+		check(ops->node_exit(a, u));
+	}
+	if (recurse_into_sibling_node != NULL) {
+		check(sema_walk(recurse_into_sibling_node, ops, u));
+	}
+
+	return RESULT_OK;
+}
+
+struct sema_label_loops_state {
+	long long int id;
+	size_t loop_depth;
+};
+
+static WARN_UNUSED result_t
+sema_enter_loop_id(struct ast *a, void *userdata)
+{
+	struct sema_label_loops_state *state = userdata;
+
+	switch (a->node_type) {
+	case NODE_FUNCTION:
+		assert(state->loop_depth == 0);
+		break;
+	case NODE_LOOP:
+		state->loop_depth++;
+		a->u.loop.label_start = ++state->id;
+		a->u.loop.label_continue = ++state->id; /* see NODE_CONTINUE */
+		a->u.loop.label_end = ++state->id;      /* see NODE_BREAK */
+		break;
+	case NODE_BREAK:
+		if (state->loop_depth == 0) {
+			return make_result(ERR_SEMA_BREAK_OUTSIDE);
+		}
+		a->u.num = state->id; /* most recent label_end */
+		break;
+	case NODE_CONTINUE:
+		if (state->loop_depth == 0) {
+			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
+		}
+		a->u.num = state->id - 1; /* most recent label_continue */
+		break;
+	default:
+		break;
+	}
+
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-sema_loop_id(struct ast *a, void *userdata)
+sema_exit_loop_id(struct ast *a, void *userdata)
 {
-	long long int *id = userdata;
+	struct sema_label_loops_state *state = userdata;
+
 	switch (a->node_type) {
 	case NODE_LOOP:
-		a->u.loop.label_start = ++*id;
-		a->u.loop.label_continue = ++*id; /* see NODE_CONTINUE case */
-		a->u.loop.label_end = ++*id;      /* see NODE_BREAK case */
+		assert(state->loop_depth > 0);
+		state->loop_depth--;
 		break;
-	case NODE_BREAK:
-		if (*id <= 0) {
-			return make_result(ERR_SEMA_BREAK_OUTSIDE);
-		}
-		a->u.num = *id; /* most recent label_end */
-		break;
-	case NODE_CONTINUE:
-		if (*id <= 0) {
-			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
-		}
-		a->u.num = *id - 1; /* most recent label_continue */
+	case NODE_FUNCTION:
+		assert(state->loop_depth == 0);
 		break;
 	default:
 		break;
@@ -157,8 +206,140 @@ result_t
 sema_label_loops(struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
-	*generator = 0;
-	check(sema_walk(a, sema_loop_id, generator));
+	struct sema_ops ops = {
+		.node_enter = sema_enter_loop_id,
+		.node_exit = sema_exit_loop_id,
+	};
+	struct sema_label_loops_state state = {
+		.id = *generator,
+		.loop_depth = 0,
+	};
+	check(sema_walk(a, &ops, &state));
+	*generator = state.id;
+	return RESULT_OK;
+}
+
+static const unsigned FLAG_USED_AS_LABEL = 0x1;
+static const unsigned FLAG_USED_AS_GOTO_TARGET = 0x2;
+
+struct label {
+	struct string_view name;
+	long long int id;
+	unsigned flags;
+	struct label *next;
+};
+
+static WARN_UNUSED struct label *
+labels_get(struct label *head, const struct string_view *name)
+{
+	for (struct label *i = head; i != NULL; i = i->next) {
+		if (name->sz == i->name.sz &&
+		    0 == strncmp(name->data, i->name.data, name->sz)) {
+			return i;
+		}
+	}
+	return NULL;
+}
+
+struct sema_label_gotos_state {
+	Arena *arena;
+	long long int generator;
+	struct label *labels;
+};
+
+static WARN_UNUSED result_t
+labels_prepend(struct sema_label_gotos_state *state,
+               const struct string_view *name,
+               struct label **match)
+{
+	assert(name->sz > 0 && name->data != NULL);
+
+	*match = labels_get(state->labels, name);
+	if (*match != NULL) {
+		return RESULT_OK;
+	}
+
+	struct label *node = arena_alloc(state->arena, sizeof(*node));
+	check_if(node == NULL, ERR_SEMA_ALLOC);
+	memset(node, 0, sizeof(*node));
+
+	node->name = *name;
+	node->id = ++state->generator;
+	node->next = state->labels;
+	state->labels = node;
+	*match = node;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_enter_goto_id(struct ast *a, void *userdata)
+{
+	struct sema_label_gotos_state *state = userdata;
+	struct label *match = NULL;
+
+	switch (a->node_type) {
+	case NODE_FUNCTION:
+		assert(state->labels == NULL);
+		break;
+	case NODE_GOTO:
+		check(labels_prepend(state, &a->u.goto_.target_label, &match));
+		match->flags |= FLAG_USED_AS_GOTO_TARGET;
+		a->u.goto_.target_unique = match->id;
+		break;
+	case NODE_LABEL:
+		check(labels_prepend(state, &a->u.label.name, &match));
+		if (0 != (match->flags & FLAG_USED_AS_LABEL)) {
+			return make_result(ERR_SEMA_LABEL_DUPLICATE,
+			                   match->name.data,
+			                   match->name.sz);
+		}
+		match->flags |= FLAG_USED_AS_LABEL;
+		a->u.label.unique = match->id;
+		break;
+	default:
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_exit_goto_id(struct ast *a, void *userdata)
+{
+	if (a->node_type != NODE_FUNCTION) {
+		return RESULT_OK;
+	}
+
+	struct sema_label_gotos_state *state = userdata;
+
+	for (struct label *i = state->labels; i != NULL; i = i->next) {
+		if (0 != (i->flags & FLAG_USED_AS_GOTO_TARGET) &&
+		    0 == (i->flags & FLAG_USED_AS_LABEL)) {
+			return make_result(ERR_SEMA_GOTO_NONEXISTENT_LABEL,
+			                   i->name.data,
+			                   i->name.sz);
+		}
+	}
+
+	state->labels = NULL;
+	return RESULT_OK;
+}
+
+result_t
+sema_label_gotos(Arena *arena, struct ast *a, long long int *generator)
+{
+	debug("Labeling goto statements and labels");
+	struct sema_ops ops = {
+		.node_enter = sema_enter_goto_id,
+		.node_exit = sema_exit_goto_id,
+	};
+	struct sema_label_gotos_state state = {
+		.arena = arena,
+		.generator = *generator,
+		.labels = NULL,
+	};
+	check(sema_walk(a, &ops, &state));
+	*generator = state.generator;
 	return RESULT_OK;
 }
 
@@ -204,6 +385,38 @@ sema_var_usage(struct ast *a, void *userdata MAYBE_UNUSED)
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_INVALID_FUNC,
 		                   a->u.var.name.data,
 		                   a->u.var.name.sz);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	/* We're in block scope ... */
+	if (a->node_type == NODE_BLOCK &&
+	    /* ... with a label as the current item */
+	    a->u.block.item != NULL &&
+	    a->u.block.item->node_type == NODE_LABEL) {
+		/*
+		 * Check for C23 extensions that the testsuite requires us to
+		 * reject with an error, rather than merely warning.
+		 */
+		if (a->u.block.next == NULL) {
+			/* Reject label at the very end of a block! */
+			return make_result(ERR_SEMA_LABEL_AT_BLOCK_END,
+			                   a->u.block.item->u.label.name.data,
+			                   a->u.block.item->u.label.name.sz);
+		}
+		if (a->u.block.next->node_type == NODE_BLOCK &&
+		    a->u.block.next->u.block.item != NULL &&
+		    a->u.block.next->u.block.item->node_type ==
+		            NODE_DECLARATION) {
+			/* Reject label followed by a var declaration! */
+			return make_result(
+				ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,
+				a->u.block.item->u.label.name.data,
+				a->u.block.item->u.label.name.sz);
+		}
 	}
 	return RESULT_OK;
 }
@@ -715,14 +928,23 @@ sema_mangle_internal_linkage_names(struct ast *a, void *userdata)
 result_t
 sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 {
+	struct sema_ops ops = {0};
+
 	debug("Checking lvalues");
-	check(sema_walk(a, sema_lvalue, NULL));
+	ops.node_enter = sema_lvalue;
+	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking variable usage");
-	check(sema_walk(a, sema_var_usage, NULL));
+	ops.node_enter = sema_var_usage;
+	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking label locations");
+	ops.node_enter = sema_label_locations;
+	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking function calls");
-	check(sema_walk(a, sema_fn_call, NULL));
+	ops.node_enter = sema_fn_call;
+	check(sema_walk(a, &ops, NULL));
 
 	struct sema_symbol_state state = {0};
 	state.arena = arena;
@@ -730,13 +952,16 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	state.variable_symbols = s->variables;
 
 	debug("Checking function signatures");
-	check(sema_walk(a, sema_fn_signature, &state));
+	ops.node_enter = sema_fn_signature;
+	check(sema_walk(a, &ops, &state));
 
 	debug("Determining linkage from variable declarations");
-	check(sema_walk(a, sema_get_linkage_from_declarations, &state));
+	ops.node_enter = sema_get_linkage_from_declarations;
+	check(sema_walk(a, &ops, &state));
 
 	debug("Unique-ifying variables with internal linkage");
-	check(sema_walk(a, sema_mangle_internal_linkage_names, &state));
+	ops.node_enter = sema_mangle_internal_linkage_names;
+	check(sema_walk(a, &ops, &state));
 
 	s->functions = state.function_symbols;
 	s->variables = state.variable_symbols;
