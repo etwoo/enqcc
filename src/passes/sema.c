@@ -70,6 +70,8 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
+	case NODE_GOTO:
+	case NODE_LABEL:
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:

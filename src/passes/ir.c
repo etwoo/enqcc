@@ -853,6 +853,10 @@ ir_expr(Arena *arena,
 	case NODE_CONTINUE:
 		check(ir_loop_control_op(arena, a, dst));
 		break;
+	case NODE_GOTO:
+	case NODE_LABEL:
+		// TODO: generate jump/label for GOTO/LABEL
+		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
 		ir_val_from_ast_variable_like(a, return_value);
