@@ -519,33 +519,30 @@ static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(*dst == NULL);
+	bool candidate_matched = false;
 
-	if (is_token_type(*tok, TOKEN_CONSTANT)) {
+#define TO_STRUCT(node_enum, token_enum) {token_enum, NODE_##node_enum},
+	struct {
+		enum lex_tokentype token_type;
+		enum ast_nodetype node_type;
+	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(TO_STRUCT)};
+#undef TO_STRUCT
+	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
+		if (is_token_type(tok, candidates[i].token_type)) {
+			candidate_matched = true;
+			check(parse_alloc(arena, dst, candidates[i].node_type));
+			token_consume(tok);
+			check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
+			break;
+		}
+	}
+
+	if (candidate_matched) {
+		/* handled prefix operator */
+	} else if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_symbol(arena, tok, dst));
-	} else if (is_token_type(*tok, TOKEN_TILDE)) {
-		check(parse_alloc(arena,
-		                  dst,
-		                  NODE_EXPRESSION_UNARY_COMPLEMENT));
-		token_consume(tok);
-		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_HYPHEN)) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_NEGATE));
-		token_consume(tok);
-		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_EXCLAMATION)) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_NOT));
-		token_consume(tok);
-		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_PREDECREMENT));
-		token_consume(tok);
-		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_PREINCREMENT));
-		token_consume(tok);
-		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
@@ -589,7 +586,7 @@ parse_expr_check_next_token(Arena *arena,
 	struct {
 		enum lex_tokentype token_type;
 		enum ast_nodetype node_type;
-	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_INFIX(TO_STRUCT)};
+	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_INFIX_OP(TO_STRUCT)};
 #undef TO_STRUCT
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
 		if (is_token_type(tok, candidates[i].token_type)) {

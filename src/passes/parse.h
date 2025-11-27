@@ -17,7 +17,7 @@ struct ast_symbol {
 	enum symbol_linkage ltype;
 };
 
-#define FOREACH_AST_NODE_EXPRESSION_INFIX(F)                                   \
+#define FOREACH_AST_NODE_EXPRESSION_INFIX_OP(F)                                \
 	F(EXPRESSION_BINARY_ADD, TOKEN_PLUS_SIGN)                              \
 	F(EXPRESSION_BINARY_SUBTRACT, TOKEN_HYPHEN)                            \
 	F(EXPRESSION_BINARY_MULTIPLY, TOKEN_ASTERISK)                          \
@@ -49,20 +49,22 @@ struct ast_symbol {
 	F(EXPRESSION_COMPOUND_ASSIGN_SR, TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN) \
 	F(EXPRESSION_TERNARY_CONDITIONAL, TOKEN_QUESTION)
 
-#define FOREACH_AST_NODE_EXPRESSION(F, G)                                      \
-	F(EXPRESSION_NULL)                                                     \
+#define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	F(EXPRESSION_UNARY_COMPLEMENT)                                         \
 	F(EXPRESSION_UNARY_NEGATE)                                             \
 	F(EXPRESSION_UNARY_NOT)                                                \
-	F(EXPRESSION_PAREN_ENCLOSED)                                           \
 	F(EXPRESSION_PREDECREMENT)                                             \
-	F(EXPRESSION_POSTDECREMENT)                                            \
 	F(EXPRESSION_PREINCREMENT)                                             \
+
+#define FOREACH_AST_NODE_EXPRESSION(F, G)                                      \
+	F(EXPRESSION_NULL)                                                     \
+	F(EXPRESSION_PAREN_ENCLOSED)                                           \
+	F(EXPRESSION_POSTDECREMENT)                                            \
 	F(EXPRESSION_POSTINCREMENT)                                            \
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_FUNCTION_CALL)                                            \
 	F(EXPRESSION_FUNCTION_CALL_ARGUMENTS)                                  \
-	FOREACH_AST_NODE_EXPRESSION_INFIX(G)
+	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(G)
 
 #define FOREACH_AST_NODE(F, G)                                                 \
 	F(PROGRAM)                                                             \
