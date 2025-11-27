@@ -145,27 +145,35 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	return RESULT_OK;
 }
 
+struct sema_label_loops_state {
+	long long int id;
+	size_t loop_depth;
+};
+
 static WARN_UNUSED result_t
 sema_enter_loop_id(struct ast *a, void *userdata)
 {
-	long long int *id = userdata;
+	struct sema_label_loops_state *state = userdata;
+
 	switch (a->node_type) {
 	case NODE_LOOP:
-		a->u.loop.label_start = ++*id;
-		a->u.loop.label_continue = ++*id; /* see NODE_CONTINUE case */
-		a->u.loop.label_end = ++*id;      /* see NODE_BREAK case */
+		state->loop_depth++;
+		a->u.loop.label_start = ++state->id;
+		a->u.loop.label_continue = ++state->id; /* see NODE_CONTINUE */
+		a->u.loop.label_end = ++state->id;      /* see NODE_BREAK */
 		break;
 	case NODE_BREAK:
-		if (*id <= 0) {
+		if (state->loop_depth == 0) {
 			return make_result(ERR_SEMA_BREAK_OUTSIDE);
 		}
-		a->u.num = *id; /* most recent label_end */
+		a->u.num = state->id; /* most recent label_end */
 		break;
 	case NODE_CONTINUE:
-		if (*id <= 0) {
+		info("loop_depth=%zu at continue", state->loop_depth);
+		if (state->loop_depth == 0) {
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
-		a->u.num = *id - 1; /* most recent label_continue */
+		a->u.num = state->id - 1; /* most recent label_continue */
 		break;
 	default:
 		break;
@@ -175,10 +183,15 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
-sema_exit_loop_id(struct ast *a, void *userdata)
+sema_exit_loop_id(struct ast *a MAYBE_UNUSED, void *userdata)
 {
-	// TODO
-	(void)a; (void)userdata;
+	if (a->node_type != NODE_LOOP) {
+		return RESULT_OK;
+	}
+
+	struct sema_label_loops_state *state = userdata;
+	assert(state->loop_depth > 0);
+	state->loop_depth--;
 	return RESULT_OK;
 }
 
@@ -190,8 +203,12 @@ sema_label_loops(struct ast *a, long long int *generator)
 		.node_enter = sema_enter_loop_id,
 		.node_exit = sema_exit_loop_id,
 	};
-	*generator = 0;
-	check(sema_walk(a, &ops, generator));
+	struct sema_label_loops_state state = {
+		.id = *generator,
+		.loop_depth = 0,
+	};
+	check(sema_walk(a, &ops, &state));
+	*generator = state.id;
 	return RESULT_OK;
 }
 
