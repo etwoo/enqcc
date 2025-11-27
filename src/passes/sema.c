@@ -183,7 +183,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
-sema_exit_loop_id(struct ast *a MAYBE_UNUSED, void *userdata)
+sema_exit_loop_id(struct ast *a, void *userdata)
 {
 	if (a->node_type != NODE_LOOP) {
 		return RESULT_OK;
