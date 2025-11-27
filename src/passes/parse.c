@@ -519,28 +519,25 @@ static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(*dst == NULL);
-	bool candidate_matched = false;
+	size_t got_match = SIZE_MAX;
 
 #define TO_CANDIDATE(nodet, tokent) {tokent, NODE_##nodet},
 	struct {
 		enum lex_tokentype token_type;
 		enum ast_nodetype node_type;
-	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(TO_CANDIDATE)};
+	} prefix_ops[] = {FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(TO_CANDIDATE)};
 #undef TO_CANDIDATE
-	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
-		if (is_token_type(*tok, candidates[i].token_type)) {
-			candidate_matched = true;
-			check(parse_alloc(arena, dst, candidates[i].node_type));
-			token_consume(tok);
-			check(parse_factor(arena,
-			                   tok,
-			                   &(**dst).u.op_unary.operand));
+	for (size_t i = 0; i < ARRAY_SIZE(prefix_ops); ++i) {
+		if (is_token_type(*tok, prefix_ops[i].token_type)) {
+			got_match = i;
 			break;
 		}
 	}
 
-	if (candidate_matched) {
-		/* handled prefix operator */
+	if (got_match < SIZE_MAX) {
+		check(parse_alloc(arena, dst, prefix_ops[got_match].node_type));
+		token_consume(tok);
+		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_CONSTANT)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
@@ -588,11 +585,11 @@ parse_expr_check_next_token(Arena *arena,
 	struct {
 		enum lex_tokentype token_type;
 		enum ast_nodetype node_type;
-	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_INFIX_OP(TO_CANDIDATE)};
+	} infix_ops[] = {FOREACH_AST_NODE_EXPRESSION_INFIX_OP(TO_CANDIDATE)};
 #undef TO_CANDIDATE
-	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
-		if (is_token_type(tok, candidates[i].token_type)) {
-			check(parse_alloc(arena, a, candidates[i].node_type));
+	for (size_t i = 0; i < ARRAY_SIZE(infix_ops); ++i) {
+		if (is_token_type(tok, infix_ops[i].token_type)) {
+			check(parse_alloc(arena, a, infix_ops[i].node_type));
 			break;
 		}
 	}
