@@ -50,11 +50,11 @@ struct ast_symbol {
 	F(EXPRESSION_TERNARY_CONDITIONAL, TOKEN_QUESTION)
 
 #define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
-	F(EXPRESSION_UNARY_COMPLEMENT)                                         \
-	F(EXPRESSION_UNARY_NEGATE)                                             \
-	F(EXPRESSION_UNARY_NOT)                                                \
-	F(EXPRESSION_PREDECREMENT)                                             \
-	F(EXPRESSION_PREINCREMENT)                                             \
+	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
+	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
+	F(EXPRESSION_UNARY_NOT, TOKEN_EXCLAMATION)                             \
+	F(EXPRESSION_PREDECREMENT, TOKEN_HYPHEN_HYPHEN)                        \
+	F(EXPRESSION_PREINCREMENT, TOKEN_PLUS_SIGN_PLUS_SIGN)
 
 #define FOREACH_AST_NODE_EXPRESSION(F, G)                                      \
 	F(EXPRESSION_NULL)                                                     \
@@ -64,6 +64,7 @@ struct ast_symbol {
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_FUNCTION_CALL)                                            \
 	F(EXPRESSION_FUNCTION_CALL_ARGUMENTS)                                  \
+	FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(G)                               \
 	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(G)
 
 #define FOREACH_AST_NODE(F, G)                                                 \
@@ -79,8 +80,8 @@ struct ast_symbol {
 	F(CONSTANT_INT)                                                        \
 	FOREACH_AST_NODE_EXPRESSION(F, G)
 
-#define TO_ENUM(node_type) NODE_##node_type,
-#define TO_ENUM_ALT(node_type, token_type) NODE_##node_type,
+#define TO_ENUM(nodet) NODE_##nodet,
+#define TO_ENUM_ALT(nodet, tokent) NODE_##nodet,
 enum ast_nodetype { FOREACH_AST_NODE(TO_ENUM, TO_ENUM_ALT) };
 #undef TO_ENUM
 #undef TO_ENUM_ALT

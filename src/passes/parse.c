@@ -521,14 +521,14 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	assert(*dst == NULL);
 	bool candidate_matched = false;
 
-#define TO_STRUCT(node_enum, token_enum) {token_enum, NODE_##node_enum},
+#define TO_STRUCT(nodet, tokent) {tokent, NODE_##nodet},
 	struct {
 		enum lex_tokentype token_type;
 		enum ast_nodetype node_type;
 	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(TO_STRUCT)};
 #undef TO_STRUCT
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
-		if (is_token_type(tok, candidates[i].token_type)) {
+		if (is_token_type(*tok, candidates[i].token_type)) {
 			candidate_matched = true;
 			check(parse_alloc(arena, dst, candidates[i].node_type));
 			token_consume(tok);
@@ -582,7 +582,7 @@ parse_expr_check_next_token(Arena *arena,
                             const struct token *tok,
                             struct ast **a)
 {
-#define TO_STRUCT(node_enum, token_enum) {token_enum, NODE_##node_enum},
+#define TO_STRUCT(nodet, tokent) {tokent, NODE_##nodet},
 	struct {
 		enum lex_tokentype token_type;
 		enum ast_nodetype node_type;
