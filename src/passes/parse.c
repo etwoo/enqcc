@@ -521,18 +521,20 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	assert(*dst == NULL);
 	bool candidate_matched = false;
 
-#define TO_STRUCT(nodet, tokent) {tokent, NODE_##nodet},
+#define TO_CANDIDATE(nodet, tokent) {tokent, NODE_##nodet},
 	struct {
 		enum lex_tokentype token_type;
 		enum ast_nodetype node_type;
-	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(TO_STRUCT)};
-#undef TO_STRUCT
+	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(TO_CANDIDATE)};
+#undef TO_CANDIDATE
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
 		if (is_token_type(*tok, candidates[i].token_type)) {
 			candidate_matched = true;
 			check(parse_alloc(arena, dst, candidates[i].node_type));
 			token_consume(tok);
-			check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
+			check(parse_factor(arena,
+			                   tok,
+			                   &(**dst).u.op_unary.operand));
 			break;
 		}
 	}
@@ -582,12 +584,12 @@ parse_expr_check_next_token(Arena *arena,
                             const struct token *tok,
                             struct ast **a)
 {
-#define TO_STRUCT(nodet, tokent) {tokent, NODE_##nodet},
+#define TO_CANDIDATE(nodet, tokent) {tokent, NODE_##nodet},
 	struct {
 		enum lex_tokentype token_type;
 		enum ast_nodetype node_type;
-	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_INFIX_OP(TO_STRUCT)};
-#undef TO_STRUCT
+	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_INFIX_OP(TO_CANDIDATE)};
+#undef TO_CANDIDATE
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
 		if (is_token_type(tok, candidates[i].token_type)) {
 			check(parse_alloc(arena, a, candidates[i].node_type));
@@ -1351,11 +1353,9 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 	}
 }
 
-#define TO_STR(node_type) #node_type,
-#define TO_STR2(node_type, token_type) #node_type,
-static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODE(TO_STR, TO_STR2)};
+#define TO_STR(node_type, ...) #node_type,
+static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODE(TO_STR)};
 #undef TO_STR
-#undef TO_STR2
 
 void
 parse_debug_print(const struct ast *a, size_t indent)

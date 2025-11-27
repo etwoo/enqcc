@@ -17,6 +17,13 @@ struct ast_symbol {
 	enum symbol_linkage ltype;
 };
 
+#define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
+	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
+	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
+	F(EXPRESSION_UNARY_NOT, TOKEN_EXCLAMATION)                             \
+	F(EXPRESSION_PREDECREMENT, TOKEN_HYPHEN_HYPHEN)                        \
+	F(EXPRESSION_PREINCREMENT, TOKEN_PLUS_SIGN_PLUS_SIGN)
+
 #define FOREACH_AST_NODE_EXPRESSION_INFIX_OP(F)                                \
 	F(EXPRESSION_BINARY_ADD, TOKEN_PLUS_SIGN)                              \
 	F(EXPRESSION_BINARY_SUBTRACT, TOKEN_HYPHEN)                            \
@@ -49,14 +56,7 @@ struct ast_symbol {
 	F(EXPRESSION_COMPOUND_ASSIGN_SR, TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN) \
 	F(EXPRESSION_TERNARY_CONDITIONAL, TOKEN_QUESTION)
 
-#define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
-	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
-	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
-	F(EXPRESSION_UNARY_NOT, TOKEN_EXCLAMATION)                             \
-	F(EXPRESSION_PREDECREMENT, TOKEN_HYPHEN_HYPHEN)                        \
-	F(EXPRESSION_PREINCREMENT, TOKEN_PLUS_SIGN_PLUS_SIGN)
-
-#define FOREACH_AST_NODE_EXPRESSION(F, G)                                      \
+#define FOREACH_AST_NODE_EXPRESSION(F)                                         \
 	F(EXPRESSION_NULL)                                                     \
 	F(EXPRESSION_PAREN_ENCLOSED)                                           \
 	F(EXPRESSION_POSTDECREMENT)                                            \
@@ -64,10 +64,10 @@ struct ast_symbol {
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_FUNCTION_CALL)                                            \
 	F(EXPRESSION_FUNCTION_CALL_ARGUMENTS)                                  \
-	FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(G)                               \
-	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(G)
+	FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
+	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(F)
 
-#define FOREACH_AST_NODE(F, G)                                                 \
+#define FOREACH_AST_NODE(F)                                                    \
 	F(PROGRAM)                                                             \
 	F(FUNCTION)                                                            \
 	F(FUNCTION_RETURN_STATEMENT)                                           \
@@ -78,13 +78,11 @@ struct ast_symbol {
 	F(BREAK)                                                               \
 	F(CONTINUE)                                                            \
 	F(CONSTANT_INT)                                                        \
-	FOREACH_AST_NODE_EXPRESSION(F, G)
+	FOREACH_AST_NODE_EXPRESSION(F)
 
-#define TO_ENUM(nodet) NODE_##nodet,
-#define TO_ENUM_ALT(nodet, tokent) NODE_##nodet,
-enum ast_nodetype { FOREACH_AST_NODE(TO_ENUM, TO_ENUM_ALT) };
+#define TO_ENUM(nodet, ...) NODE_##nodet,
+enum ast_nodetype { FOREACH_AST_NODE(TO_ENUM) };
 #undef TO_ENUM
-#undef TO_ENUM_ALT
 
 struct ast {
 	enum ast_nodetype node_type;
