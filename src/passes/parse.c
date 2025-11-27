@@ -112,6 +112,8 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
+	case NODE_GOTO:
+	case NODE_LABEL:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
 		break; /* no resolution work to do */
@@ -678,6 +680,8 @@ get_precedence(const struct ast *a)
 	case NODE_LOOP:
 	case NODE_BREAK:
 	case NODE_CONTINUE:
+	case NODE_GOTO:
+	case NODE_LABEL:
 	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -991,6 +995,7 @@ parse_loop_do_while_suffix(Arena *arena,
 
 enum {
 	UNSET_LOOP_ID = -1,
+	UNSET_LABEL_ID = -2,
 };
 
 static WARN_UNUSED result_t
@@ -1111,6 +1116,21 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_alloc(arena, dst, NODE_CONTINUE));
 		(**dst).u.num = UNSET_LOOP_ID;
 		expect_semicolon_after = true;
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_GOTO) &&
+	           is_token_type((**tok).next, TOKEN_IDENTIFIER)) {
+		check(parse_alloc(arena, dst, NODE_GOTO));
+		(**dst).u.goto_.target_label = (**tok).next->val;
+		(**dst).u.goto_.target_unique = UNSET_LABEL_ID;
+		token_consume(tok);
+		token_consume(tok);
+		expect_semicolon_after = true;
+	} else if (is_token_type(*tok, TOKEN_IDENTIFIER) &&
+	           is_token_type((**tok).next, TOKEN_COLON)) {
+		check(parse_alloc(arena, dst, NODE_LABEL));
+		(**dst).u.label.name = (**tok).val;
+		(**dst).u.label.unique = UNSET_LABEL_ID;
+		token_consume(tok);
+		token_consume(tok);
 	} else {
 		check(parse_expr(arena, tok, dst, 0));
 		expect_semicolon_after = true;
@@ -1453,6 +1473,31 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      "",
 		      a->u.num,
 		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
+		break;
+	case NODE_GOTO:
+		debug("%*sTARGET LABEL %.*s",
+		      (int)indent + 1,
+		      "",
+		      (int)a->u.goto_.target_label.sz,
+		      a->u.goto_.target_label.data);
+		debug("%*sTARGET ID %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.goto_.target_unique,
+		      a->u.goto_.target_unique == UNSET_LABEL_ID ? " (unset)"
+		                                                 : "");
+		break;
+	case NODE_LABEL:
+		debug("%*sNAME %.*s",
+		      (int)indent + 1,
+		      "",
+		      (int)a->u.label.name.sz,
+		      a->u.label.name.data);
+		debug("%*sID %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.label.unique,
+		      a->u.label.unique == UNSET_LABEL_ID ? " (unset)" : "");
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;

@@ -77,6 +77,8 @@ struct ast_symbol {
 	F(LOOP)                                                                \
 	F(BREAK)                                                               \
 	F(CONTINUE)                                                            \
+	F(GOTO)                                                                \
+	F(LABEL)                                                               \
 	F(CONSTANT_INT)                                                        \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
@@ -141,6 +143,14 @@ struct ast {
 			struct ast *expr;
 			struct ast *next;
 		} call_args;
+		struct {
+			struct string_view target_label;
+			long long int target_unique;
+		} goto_;
+		struct {
+			struct string_view name;
+			long long int unique;
+		} label;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
