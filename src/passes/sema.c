@@ -92,8 +92,8 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		check(sema_walk(a->u.op_binary.lhs, f, u));
 		check(sema_walk(a->u.op_binary.rhs, f, u));
 		break;

@@ -17,52 +17,52 @@ struct ast_symbol {
 	enum symbol_linkage ltype;
 };
 
-#define FOREACH_AST_NODE_INFIX(F, P)                                           \
-	F(P##BINARY_ADD, TOKEN_PLUS_SIGN)                                      \
-	F(P##BINARY_SUBTRACT, TOKEN_HYPHEN)                                    \
-	F(P##BINARY_MULTIPLY, TOKEN_ASTERISK)                                  \
-	F(P##BINARY_DIVIDE, TOKEN_FORWARD_SLASH)                               \
-	F(P##BINARY_REMAINDER, TOKEN_PERCENT_SIGN)                             \
-	F(P##BITWISE_AND, TOKEN_AMPERSAND)                                     \
-	F(P##BITWISE_OR, TOKEN_VERT_BAR)                                       \
-	F(P##BITWISE_XOR, TOKEN_CARET)                                         \
-	F(P##BITWISE_SHIFT_LEFT, TOKEN_LESS_THAN_LESS_THAN)                    \
-	F(P##BITWISE_SHIFT_RIGHT, TOKEN_MORE_THAN_MORE_THAN)                   \
-	F(P##LOGICAL_AND, TOKEN_AMPERSAND_AMPERSAND)                           \
-	F(P##LOGICAL_OR, TOKEN_VERT_BAR_VERT_BAR)                              \
-	F(P##VARIABLE_ASSIGNMENT, TOKEN_EQUAL_SIGN)                            \
-	F(P##COMPARE_EQUAL, TOKEN_EQUAL_SIGN_EQUAL_SIGN)                       \
-	F(P##COMPARE_NOT_EQUAL, TOKEN_EXCLAMATION_EQUAL_SIGN)                  \
-	F(P##COMPARE_LESS_THAN, TOKEN_LESS_THAN)                               \
-	F(P##COMPARE_LESS_THAN_EQ, TOKEN_LESS_THAN_EQUAL_SIGN)                 \
-	F(P##COMPARE_MORE_THAN, TOKEN_MORE_THAN)                               \
-	F(P##COMPARE_MORE_THAN_EQ, TOKEN_MORE_THAN_EQUAL_SIGN)                 \
-	F(P##COMPOUND_ASSIGN_ADD, TOKEN_PLUS_SIGN_EQUAL_SIGN)                  \
-	F(P##COMPOUND_ASSIGN_SUB, TOKEN_HYPHEN_EQUAL_SIGN)                     \
-	F(P##COMPOUND_ASSIGN_MUL, TOKEN_ASTERISK_EQUAL_SIGN)                   \
-	F(P##COMPOUND_ASSIGN_DIV, TOKEN_FORWARD_SLASH_EQUAL_SIGN)              \
-	F(P##COMPOUND_ASSIGN_REM, TOKEN_PERCENT_SIGN_EQUAL_SIGN)               \
-	F(P##COMPOUND_ASSIGN_AND, TOKEN_AMPERSAND_EQUAL_SIGN)                  \
-	F(P##COMPOUND_ASSIGN_OR, TOKEN_VERT_BAR_EQUAL_SIGN)                    \
-	F(P##COMPOUND_ASSIGN_XOR, TOKEN_CARET_EQUAL_SIGN)                      \
-	F(P##COMPOUND_ASSIGN_SHL, TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN)        \
-	F(P##COMPOUND_ASSIGN_SHR, TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN)        \
-	F(P##TERNARY_CONDITIONAL, TOKEN_QUESTION)
+#define FOREACH_AST_NODE_EXPRESSION_INFIX(F)                                   \
+	F(EXPRESSION_BINARY_ADD, TOKEN_PLUS_SIGN)                              \
+	F(EXPRESSION_BINARY_SUBTRACT, TOKEN_HYPHEN)                            \
+	F(EXPRESSION_BINARY_MULTIPLY, TOKEN_ASTERISK)                          \
+	F(EXPRESSION_BINARY_DIVIDE, TOKEN_FORWARD_SLASH)                       \
+	F(EXPRESSION_BINARY_REMAINDER, TOKEN_PERCENT_SIGN)                     \
+	F(EXPRESSION_BITWISE_AND, TOKEN_AMPERSAND)                             \
+	F(EXPRESSION_BITWISE_OR, TOKEN_VERT_BAR)                               \
+	F(EXPRESSION_BITWISE_XOR, TOKEN_CARET)                                 \
+	F(EXPRESSION_BITWISE_SHIFT_LEFT, TOKEN_LESS_THAN_LESS_THAN)            \
+	F(EXPRESSION_BITWISE_SHIFT_RIGHT, TOKEN_MORE_THAN_MORE_THAN)           \
+	F(EXPRESSION_LOGICAL_AND, TOKEN_AMPERSAND_AMPERSAND)                   \
+	F(EXPRESSION_LOGICAL_OR, TOKEN_VERT_BAR_VERT_BAR)                      \
+	F(EXPRESSION_VARIABLE_ASSIGNMENT, TOKEN_EQUAL_SIGN)                    \
+	F(EXPRESSION_COMPARE_EQUAL, TOKEN_EQUAL_SIGN_EQUAL_SIGN)               \
+	F(EXPRESSION_COMPARE_NOT_EQUAL, TOKEN_EXCLAMATION_EQUAL_SIGN)          \
+	F(EXPRESSION_COMPARE_LESS_THAN, TOKEN_LESS_THAN)                       \
+	F(EXPRESSION_COMPARE_LESS_THAN_EQ, TOKEN_LESS_THAN_EQUAL_SIGN)         \
+	F(EXPRESSION_COMPARE_MORE_THAN, TOKEN_MORE_THAN)                       \
+	F(EXPRESSION_COMPARE_MORE_THAN_EQ, TOKEN_MORE_THAN_EQUAL_SIGN)         \
+	F(EXPRESSION_COMPOUND_ASSIGN_ADD, TOKEN_PLUS_SIGN_EQUAL_SIGN)          \
+	F(EXPRESSION_COMPOUND_ASSIGN_SUB, TOKEN_HYPHEN_EQUAL_SIGN)             \
+	F(EXPRESSION_COMPOUND_ASSIGN_MUL, TOKEN_ASTERISK_EQUAL_SIGN)           \
+	F(EXPRESSION_COMPOUND_ASSIGN_DIV, TOKEN_FORWARD_SLASH_EQUAL_SIGN)      \
+	F(EXPRESSION_COMPOUND_ASSIGN_REM, TOKEN_PERCENT_SIGN_EQUAL_SIGN)       \
+	F(EXPRESSION_COMPOUND_ASSIGN_AND, TOKEN_AMPERSAND_EQUAL_SIGN)          \
+	F(EXPRESSION_COMPOUND_ASSIGN_OR, TOKEN_VERT_BAR_EQUAL_SIGN)            \
+	F(EXPRESSION_COMPOUND_ASSIGN_XOR, TOKEN_CARET_EQUAL_SIGN)              \
+	F(EXPRESSION_COMPOUND_ASSIGN_SL, TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN) \
+	F(EXPRESSION_COMPOUND_ASSIGN_SR, TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN) \
+	F(EXPRESSION_TERNARY_CONDITIONAL, TOKEN_QUESTION)
 
-#define FOREACH_AST_NODE_EXPRESSION(F, G, P)                                   \
-	F(P##NULL)                                                             \
-	F(P##UNARY_COMPLEMENT)                                                 \
-	F(P##UNARY_NEGATE)                                                     \
-	F(P##UNARY_NOT)                                                        \
-	F(P##PAREN_ENCLOSED)                                                   \
-	F(P##PREDECREMENT)                                                     \
-	F(P##POSTDECREMENT)                                                    \
-	F(P##PREINCREMENT)                                                     \
-	F(P##POSTINCREMENT)                                                    \
-	F(P##VARIABLE_USAGE)                                                   \
-	F(P##FUNCTION_CALL)                                                    \
-	F(P##FUNCTION_CALL_ARGUMENTS)                                          \
-	FOREACH_AST_NODE_INFIX(G, P)
+#define FOREACH_AST_NODE_EXPRESSION(F, G)                                      \
+	F(EXPRESSION_NULL)                                                     \
+	F(EXPRESSION_UNARY_COMPLEMENT)                                         \
+	F(EXPRESSION_UNARY_NEGATE)                                             \
+	F(EXPRESSION_UNARY_NOT)                                                \
+	F(EXPRESSION_PAREN_ENCLOSED)                                           \
+	F(EXPRESSION_PREDECREMENT)                                             \
+	F(EXPRESSION_POSTDECREMENT)                                            \
+	F(EXPRESSION_PREINCREMENT)                                             \
+	F(EXPRESSION_POSTINCREMENT)                                            \
+	F(EXPRESSION_VARIABLE_USAGE)                                           \
+	F(EXPRESSION_FUNCTION_CALL)                                            \
+	F(EXPRESSION_FUNCTION_CALL_ARGUMENTS)                                  \
+	FOREACH_AST_NODE_EXPRESSION_INFIX(G)
 
 #define FOREACH_AST_NODE(F, G)                                                 \
 	F(PROGRAM)                                                             \
@@ -75,7 +75,7 @@ struct ast_symbol {
 	F(BREAK)                                                               \
 	F(CONTINUE)                                                            \
 	F(CONSTANT_INT)                                                        \
-	FOREACH_AST_NODE_EXPRESSION(F, G, EXPRESSION_)
+	FOREACH_AST_NODE_EXPRESSION(F, G)
 
 #define TO_ENUM(node_type) NODE_##node_type,
 #define TO_ENUM_ALT(node_type, token_type) NODE_##node_type,

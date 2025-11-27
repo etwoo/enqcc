@@ -152,8 +152,8 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
@@ -585,11 +585,11 @@ parse_expr_check_next_token(Arena *arena,
                             const struct token *tok,
                             struct ast **a)
 {
-#define TO_STRUCT(node_enum, token_enum) {token_enum, node_enum},
+#define TO_STRUCT(node_enum, token_enum) {token_enum, NODE_##node_enum},
 	struct {
 		enum lex_tokentype token_type;
 		enum ast_nodetype node_type;
-	} candidates[] = {FOREACH_AST_NODE_INFIX(TO_STRUCT, NODE_EXPRESSION_)};
+	} candidates[] = {FOREACH_AST_NODE_EXPRESSION_INFIX(TO_STRUCT)};
 #undef TO_STRUCT
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
 		if (is_token_type(tok, candidates[i].token_type)) {
@@ -667,8 +667,8 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		precedence += PRECEDENCE_INCREMENT;
 		break;
@@ -732,8 +732,8 @@ parse_expr(Arena *arena,
 			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_AND ||
 			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_OR ||
 			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_XOR ||
-			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SHL ||
-			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SHR ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SL ||
+			bop->node_type == NODE_EXPRESSION_COMPOUND_ASSIGN_SR ||
 			bop->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT ||
 			bop->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL;
 		const unsigned inc = is_right_associative ? 0 : 1;
@@ -1358,7 +1358,7 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 #define TO_STR2(node_type, token_type) #node_type,
 static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODE(TO_STR, TO_STR2)};
 #undef TO_STR
-#undef NOOP
+#undef TO_STR2
 
 void
 parse_debug_print(const struct ast *a, size_t indent)
@@ -1499,8 +1499,8 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SHR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
