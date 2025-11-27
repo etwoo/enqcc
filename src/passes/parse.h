@@ -61,8 +61,8 @@ struct ast_symbol {
 	F(EXPRESSION_COMPOUND_ASSIGN_SHL)                                      \
 	F(EXPRESSION_COMPOUND_ASSIGN_SHR)                                      \
 	F(EXPRESSION_PREDECREMENT)                                             \
-	F(EXPRESSION_PREINCREMENT)                                             \
 	F(EXPRESSION_POSTDECREMENT)                                            \
+	F(EXPRESSION_PREINCREMENT)                                             \
 	F(EXPRESSION_POSTINCREMENT)                                            \
 	F(EXPRESSION_VARIABLE_ASSIGNMENT)                                      \
 	F(EXPRESSION_VARIABLE_USAGE)                                           \

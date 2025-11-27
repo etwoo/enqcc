@@ -235,7 +235,7 @@ codegen_statement_one(Arena *arena,
 	assert(*dst == NULL);
 	check(codegen_alloc_op(arena, dst));
 
-	switch (src->opcode) {
+	switch (src->opcode) { // NOLINT // TODO rm
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);

@@ -66,9 +66,9 @@ sema_walk(struct ast *a, result_t (*f)(struct ast *a, void *userdata), void *u)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-	case NODE_EXPRESSION_POSTDECREMENT:
 		check(sema_walk(a->u.op_unary.operand, f, u));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:

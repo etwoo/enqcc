@@ -22,6 +22,8 @@ struct ir_val {
 	F(UNARY_COMPLEMENT, 1)                                                 \
 	F(UNARY_NEGATE, 1)                                                     \
 	F(UNARY_NOT, 1)                                                        \
+	F(UNARY_DECREMENT, 1)                                                  \
+	F(UNARY_INCREMENT, 1)                                                  \
 	F(BINARY_ADD, 2)                                                       \
 	F(BINARY_SUBTRACT, 2)                                                  \
 	F(BINARY_MULTIPLY, 2)                                                  \
