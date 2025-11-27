@@ -3,6 +3,7 @@
 #include "passes.h"
 #include "passes/lex.h"
 #include "passes/symbol.h"
+#include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
@@ -580,73 +581,23 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_expr_check_next_token(Arena *arena, // NOLINT(*cognitive-complexity) TODO
+parse_expr_check_next_token(Arena *arena,
                             const struct token *tok,
                             struct ast **a)
 {
-	result_t r = RESULT_OK;
-	if (is_token_type(tok, TOKEN_PLUS_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_ADD);
-	} else if (is_token_type(tok, TOKEN_HYPHEN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_SUBTRACT);
-	} else if (is_token_type(tok, TOKEN_ASTERISK)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_MULTIPLY);
-	} else if (is_token_type(tok, TOKEN_FORWARD_SLASH)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_DIVIDE);
-	} else if (is_token_type(tok, TOKEN_PERCENT_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BINARY_REMAINDER);
-	} else if (is_token_type(tok, TOKEN_AMPERSAND)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_AND);
-	} else if (is_token_type(tok, TOKEN_VERT_BAR)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_OR);
-	} else if (is_token_type(tok, TOKEN_CARET)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_XOR);
-	} else if (is_token_type(tok, TOKEN_LESS_THAN_LESS_THAN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_SHIFT_LEFT);
-	} else if (is_token_type(tok, TOKEN_MORE_THAN_MORE_THAN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_BITWISE_SHIFT_RIGHT);
-	} else if (is_token_type(tok, TOKEN_AMPERSAND_AMPERSAND)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_AND);
-	} else if (is_token_type(tok, TOKEN_VERT_BAR_VERT_BAR)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_LOGICAL_OR);
-	} else if (is_token_type(tok, TOKEN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_VARIABLE_ASSIGNMENT);
-	} else if (is_token_type(tok, TOKEN_EQUAL_SIGN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_EQUAL);
-	} else if (is_token_type(tok, TOKEN_EXCLAMATION_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_NOT_EQUAL);
-	} else if (is_token_type(tok, TOKEN_LESS_THAN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_LESS_THAN);
-	} else if (is_token_type(tok, TOKEN_LESS_THAN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_LESS_THAN_EQ);
-	} else if (is_token_type(tok, TOKEN_MORE_THAN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN);
-	} else if (is_token_type(tok, TOKEN_MORE_THAN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPARE_MORE_THAN_EQ);
-	} else if (is_token_type(tok, TOKEN_PLUS_SIGN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_ADD);
-	} else if (is_token_type(tok, TOKEN_HYPHEN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_SUB);
-	} else if (is_token_type(tok, TOKEN_ASTERISK_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_MUL);
-	} else if (is_token_type(tok, TOKEN_FORWARD_SLASH_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_DIV);
-	} else if (is_token_type(tok, TOKEN_PERCENT_SIGN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_REM);
-	} else if (is_token_type(tok, TOKEN_AMPERSAND_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_AND);
-	} else if (is_token_type(tok, TOKEN_VERT_BAR_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_OR);
-	} else if (is_token_type(tok, TOKEN_CARET_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_XOR);
-	} else if (is_token_type(tok, TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_SHL);
-	} else if (is_token_type(tok, TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_COMPOUND_ASSIGN_SHR);
-	} else if (is_token_type(tok, TOKEN_QUESTION)) {
-		r = parse_alloc(arena, a, NODE_EXPRESSION_TERNARY_CONDITIONAL);
+#define TO_STRUCT(node_enum, token_enum) {token_enum, node_enum},
+	struct {
+		enum lex_tokentype token_type;
+		enum ast_nodetype node_type;
+	} candidates[] = {FOREACH_AST_NODE_INFIX(TO_STRUCT, NODE_EXPRESSION_)};
+#undef TO_STRUCT
+	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {
+		if (is_token_type(tok, candidates[i].token_type)) {
+			check(parse_alloc(arena, a, candidates[i].node_type));
+			break;
+		}
 	}
-	return r;
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
@@ -1404,8 +1355,10 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 }
 
 #define TO_STR(node_type) #node_type,
-static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODETYPE(TO_STR)};
+#define TO_STR2(node_type, token_type) #node_type,
+static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODE(TO_STR, TO_STR2)};
 #undef TO_STR
+#undef NOOP
 
 void
 parse_debug_print(const struct ast *a, size_t indent)

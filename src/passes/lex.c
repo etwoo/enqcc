@@ -94,14 +94,14 @@ lex_readahead_one_or_two_chars(struct string_view *pos, struct token *cur)
 #undef TRY_READAHEAD
 }
 
-static WARN_UNUSED unsigned
+static WARN_UNUSED enum lex_tokentype
 lex_one_token_keyword_maybe(struct string_view *pos)
 {
 #define INIT_STRUCT(str, enum_value) {str, sizeof(str) - 1, enum_value},
 	struct {
 		const char *keyword;
 		size_t keyword_strlen;
-		unsigned value;
+		enum lex_tokentype value;
 	} candidates[] = {FOREACH_LEX_KEYWORD(INIT_STRUCT)};
 #undef INIT_STRUCT
 	for (size_t i = 0; i < ARRAY_SIZE(candidates); ++i) {

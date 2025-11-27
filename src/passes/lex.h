@@ -68,20 +68,20 @@
 	FOREACH_LEX_CHAR_REPEAT(F)                                             \
 	FOREACH_LEX_CHAR_EQUALS_SIGN(F)
 #define TO_ENUM_ENTRY(x, enum_value) enum_value,
+enum lex_tokentype {
+	TOKEN_IDENTIFIER,
+	TOKEN_CONSTANT,
+	TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN,
+	TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN,
+	FOREACH_LEX_ENUM_VALUE(TO_ENUM_ENTRY)
+};
+#undef FOREACH_LEX_ENUM_VALUE
+#undef TO_ENUM_ENTRY
 
 struct token {
-	enum {
-		TOKEN_IDENTIFIER,
-		TOKEN_CONSTANT,
-		TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN,
-		TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN,
-		FOREACH_LEX_ENUM_VALUE(TO_ENUM_ENTRY)
-	} token_type;
+	enum lex_tokentype token_type;
 	struct string_view val;
 	struct token *next;
 };
-
-#undef FOREACH_LEX_ENUM_VALUE
-#undef TO_ENUM_ENTRY
 
 #endif
