@@ -227,6 +227,27 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+in_place_update(const struct ir_op *src)
+{
+	if (src->args[0].subtype != src->args[1].subtype ||
+	    src->args[0].num != src->args[1].num ||
+	    src->args[0].varname.sz != src->args[1].varname.sz) {
+		return false;
+	}
+	if ((src->args[0].varname.data == NULL) !=
+	    (src->args[1].varname.data == NULL)) {
+		return false;
+	}
+	if (src->args[0].varname.data == NULL) {
+		assert(src->args[1].varname.data == NULL);
+		return true;
+	}
+	return (0 == strncmp(src->args[0].varname.data,
+	                     src->args[1].varname.data,
+	                     src->args[0].varname.sz));
+}
+
 static WARN_UNUSED result_t
 codegen_statement_one(Arena *arena,
                       const struct ir_op *src,
@@ -248,12 +269,15 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_UNARY_COMPLEMENT:
 	case IR_OP_UNARY_DECREMENT:
 	case IR_OP_UNARY_INCREMENT:
-		(**dst).opcode = ASM_OP_MOV;
-		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
-			codegen_map_operand(&src->args[i], &(**dst).args[i]);
+		if (!in_place_update(src)) {
+			(**dst).opcode = ASM_OP_MOV;
+			for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
+				codegen_map_operand(&src->args[i],
+				                    &(**dst).args[i]);
+			}
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
 		}
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
 		switch (src->opcode) {
 		case IR_OP_UNARY_NEGATE:
 			(**dst).opcode = ASM_OP_UNARY_NEG;
@@ -281,11 +305,13 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BITWISE_XOR:
 	case IR_OP_BITWISE_SHIFT_LEFT:
 	case IR_OP_BITWISE_SHIFT_RIGHT:
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_map_operand(&src->args[2], &(**dst).args[1]);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
+		if (!in_place_update(src)) {
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			codegen_map_operand(&src->args[2], &(**dst).args[1]);
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+		}
 		switch (src->opcode) {
 		case IR_OP_BINARY_ADD:
 			(**dst).opcode = ASM_OP_BINARY_ADD;
