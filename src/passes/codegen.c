@@ -235,7 +235,7 @@ codegen_statement_one(Arena *arena,
 	assert(*dst == NULL);
 	check(codegen_alloc_op(arena, dst));
 
-	switch (src->opcode) { // NOLINT // TODO rm
+	switch (src->opcode) {
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
@@ -246,6 +246,8 @@ codegen_statement_one(Arena *arena,
 		break;
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:
+	case IR_OP_UNARY_DECREMENT:
+	case IR_OP_UNARY_INCREMENT:
 		(**dst).opcode = ASM_OP_MOV;
 		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
@@ -258,6 +260,12 @@ codegen_statement_one(Arena *arena,
 			break;
 		case IR_OP_UNARY_COMPLEMENT:
 			(**dst).opcode = ASM_OP_UNARY_NOT;
+			break;
+		case IR_OP_UNARY_DECREMENT:
+			(**dst).opcode = ASM_OP_UNARY_DECREMENT;
+			break;
+		case IR_OP_UNARY_INCREMENT:
+			(**dst).opcode = ASM_OP_UNARY_INCREMENT;
 			break;
 		default:
 			assert(0); /* logic error in caller */
