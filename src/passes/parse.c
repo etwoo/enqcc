@@ -535,6 +535,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	if (got_match < SIZE_MAX) {
+		assert(got_match < ARRAY_SIZE(prefix_ops));
 		check(parse_alloc(arena, dst, prefix_ops[got_match].node_type));
 		token_consume(tok);
 		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
