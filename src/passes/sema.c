@@ -124,7 +124,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 		check(sema_walk(a->u.call_args.expr, ops, u));
 		if (a->u.call_args.next != NULL) {
-			check(sema_walk(a->u.call_args.next, ops, u));
+			recurse_into_sibling_node = a->u.call_args.next;
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
