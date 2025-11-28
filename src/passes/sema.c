@@ -4,6 +4,7 @@
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
+#include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
 struct sema_ops {
@@ -60,10 +61,16 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(a->u.loop.incr, ops, u));
 		check(sema_walk(a->u.loop.postcond, ops, u));
 		break;
+	case NODE_SWITCH:
+		check(sema_walk(a->u.switch_.control, ops, u));
+		check(sema_walk(a->u.switch_.body, ops, u));
+		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
+	case NODE_CASE:
+	case NODE_CASE_DEFAULT:
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -144,47 +151,180 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 }
 
 enum {
-	LOOP_NESTING_LIMIT = 128,
+	BLOCK_NESTING_LIMIT = 128,
+};
+
+enum containing_statement_type {
+	CONTAINING_LOOP,
+	CONTAINING_SWITCH,
+};
+
+struct containing_statement {
+	struct ast *origin;
+	enum containing_statement_type statement;
 };
 
 struct sema_label_loops_state {
+	Arena *arena;
 	long long int generator;
-	long long int containing_loop[LOOP_NESTING_LIMIT];
-	size_t loop_depth;
+	struct containing_statement container[BLOCK_NESTING_LIMIT];
+	size_t depth;
+};
+
+static WARN_UNUSED struct containing_statement *
+has_container(struct sema_label_loops_state *state,
+              enum containing_statement_type target)
+{
+	for (size_t idx = state->depth; idx > 0; --idx) {
+		if (state->container[idx - 1].statement == target) {
+			return &state->container[idx - 1];
+		}
+	}
+	return NULL;
+}
+
+static WARN_UNUSED result_t
+case_parse_constant(const struct string_view *str, long long int *dst)
+{
+	assert(str->sz > 0);
+
+	/* strtoll() requires a NUL-terminated C string */
+	char *nul_terminated = strndup(str->data, str->sz);
+	check_if(nul_terminated == NULL, ERR_SEMA_ALLOC);
+
+	char *end = NULL;
+	*dst = strtoll(nul_terminated, &end, 0);
+	/*
+	 * From `man strtoll`:
+	 *
+	 * If endptr is not NULL, strtol() stores the address of the first
+	 * invalid character in *endptr. If there were no digits at all,
+	 * however, strtol() stores the original value of str in *endptr.
+	 * (Thus, if *str is not '\0' but **endptr is '\0' on return, the
+	 * entire string was valid.)
+	 */
+	bool valid = (*nul_terminated != '\0' && end != NULL && *end == '\0');
+
+	free(nul_terminated);
+	nul_terminated = NULL;
+
+	if (!valid) {
+		return make_result(ERR_SEMA_CASE_PARSE_CONSTANT,
+		                   str->data,
+		                   str->sz);
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+case_prepend(Arena *arena,
+             struct ast_case **head,
+             long long int constant,
+             long long int unique)
+{
+	for (struct ast_case *i = *head; i != NULL; i = i->next) {
+		if (constant == i->constant) {
+			return make_result(ERR_SEMA_CASE_DUPLICATE,
+			                   (int)constant);
+		}
+	}
+
+	struct ast_case *node = arena_alloc(arena, sizeof(*node));
+	check_if(node == NULL, ERR_SEMA_ALLOC);
+	memset(node, 0, sizeof(*node));
+
+	node->constant = constant;
+	node->unique = unique;
+	node->next = *head;
+	*head = node;
+	return RESULT_OK;
+}
+
+enum {
+	UNSET_DEFAULT_CASE_SENTINEL = -100,
 };
 
 static WARN_UNUSED result_t
 sema_enter_loop_id(struct ast *a, void *userdata)
 {
 	struct sema_label_loops_state *state = userdata;
+	struct containing_statement *containing = NULL;
+	struct ast *origin = NULL;
+	long long int constant = 0;
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
-		assert(state->loop_depth == 0);
+		assert(state->depth == 0);
 		break;
 	case NODE_LOOP:
-		assert(state->loop_depth < LOOP_NESTING_LIMIT);
-		state->containing_loop[state->loop_depth] = state->generator;
-		state->loop_depth++;
+		assert(state->depth < BLOCK_NESTING_LIMIT);
+		containing = &state->container[state->depth];
+		containing->origin = a;
+		containing->statement = CONTAINING_LOOP;
+		state->depth++;
 		a->u.loop.label_start = state->generator++;
 		a->u.loop.label_continue = state->generator++;
 		a->u.loop.label_end = state->generator++;
-		/* invariant required by NODE_CONTINUE case below */
-		assert(a->u.loop.label_start + 1 == a->u.loop.label_continue);
-		/* invariant required by NODE_BREAK case below */
-		assert(a->u.loop.label_start + 2 == a->u.loop.label_end);
 		break;
 	case NODE_BREAK:
-		if (state->loop_depth == 0) {
+		if (state->depth == 0) {
 			return make_result(ERR_SEMA_BREAK_OUTSIDE);
 		}
-		a->u.num = state->containing_loop[state->loop_depth - 1] + 2;
+		origin = state->container[state->depth - 1].origin;
+		switch (state->container[state->depth - 1].statement) {
+		case CONTAINING_LOOP:
+			assert(origin->node_type == NODE_LOOP);
+			a->u.num = origin->u.loop.label_end;
+			break;
+		case CONTAINING_SWITCH:
+			assert(origin->node_type == NODE_SWITCH);
+			a->u.num = origin->u.switch_.label_end;
+			break;
+		}
 		break;
 	case NODE_CONTINUE:
-		if (state->loop_depth == 0) {
+		containing = has_container(state, CONTAINING_LOOP);
+		if (containing == NULL) {
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
-		a->u.num = state->containing_loop[state->loop_depth - 1] + 1;
+		assert(containing->origin->node_type == NODE_LOOP);
+		a->u.num = containing->origin->u.loop.label_continue;
+		break;
+	case NODE_SWITCH:
+		assert(state->depth < BLOCK_NESTING_LIMIT);
+		containing = &state->container[state->depth];
+		containing->origin = a;
+		containing->statement = CONTAINING_SWITCH;
+		state->depth++;
+		a->u.switch_.label_default = UNSET_DEFAULT_CASE_SENTINEL;
+		a->u.switch_.label_end = state->generator++;
+		break;
+	case NODE_CASE:
+		containing = has_container(state, CONTAINING_SWITCH);
+		if (containing == NULL) {
+			return make_result(ERR_SEMA_CASE_OUTSIDE);
+		}
+		check(case_parse_constant(&a->u.case_.constant, &constant));
+		a->u.case_.unique = state->generator++;
+		assert(containing->origin->node_type == NODE_SWITCH);
+		check(case_prepend(state->arena,
+		                   &containing->origin->u.switch_.label_cases,
+		                   constant,
+		                   a->u.case_.unique));
+		break;
+	case NODE_CASE_DEFAULT:
+		containing = has_container(state, CONTAINING_SWITCH);
+		if (containing == NULL) {
+			return make_result(ERR_SEMA_CASE_DEFAULT_OUTSIDE);
+		}
+		a->u.case_.unique = state->generator++;
+		assert(containing->origin->node_type == NODE_SWITCH);
+		if (containing->origin->u.switch_.label_default !=
+		    UNSET_DEFAULT_CASE_SENTINEL) {
+			return make_result(ERR_SEMA_CASE_DEFAULT_DUPLICATE);
+		}
+		containing->origin->u.switch_.label_default = a->u.case_.unique;
 		break;
 	default:
 		break;
@@ -200,11 +340,12 @@ sema_exit_loop_id(struct ast *a, void *userdata)
 
 	switch (a->node_type) {
 	case NODE_LOOP:
-		assert(state->loop_depth > 0);
-		state->loop_depth--;
+	case NODE_SWITCH:
+		assert(state->depth > 0);
+		state->depth--;
 		break;
 	case NODE_FUNCTION:
-		assert(state->loop_depth == 0);
+		assert(state->depth == 0);
 		break;
 	default:
 		break;
@@ -214,15 +355,18 @@ sema_exit_loop_id(struct ast *a, void *userdata)
 }
 
 result_t
-sema_label_loops(struct ast *a, long long int *generator)
+sema_label_loops(Arena *arena, struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
 	struct sema_ops ops = {
 		.node_enter = sema_enter_loop_id,
 		.node_exit = sema_exit_loop_id,
 	};
-	struct sema_label_loops_state state = {0};
-	state.generator = *generator;
+	struct sema_label_loops_state state = {
+		.arena = arena,
+		.generator = *generator,
+		.depth = 0,
+	};
 	check(sema_walk(a, &ops, &state));
 	*generator = state.generator;
 	return RESULT_OK;
@@ -403,9 +547,24 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	/* We're in block scope ... */
 	if (a->node_type == NODE_BLOCK &&
-	    /* ... with a label as the current item */
+	    /* ... with a label or switch-case as the current item */
 	    a->u.block.item != NULL &&
-	    a->u.block.item->node_type == NODE_LABEL) {
+	    (a->u.block.item->node_type == NODE_LABEL ||
+	     a->u.block.item->node_type == NODE_CASE ||
+	     a->u.block.item->node_type == NODE_CASE_DEFAULT)) {
+		const struct string_view *name = NULL;
+		switch (a->u.block.item->node_type) {
+		case NODE_LABEL:
+			name = &a->u.block.item->u.label.name;
+			break;
+		case NODE_CASE:
+		case NODE_CASE_DEFAULT:
+			name = &a->u.block.item->u.case_.constant;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		/*
 		 * Check for C23 extensions that the testsuite requires us to
 		 * reject with an error, rather than merely warning.
@@ -413,8 +572,8 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 		if (a->u.block.next == NULL) {
 			/* Reject label at the very end of a block! */
 			return make_result(ERR_SEMA_LABEL_AT_BLOCK_END,
-			                   a->u.block.item->u.label.name.data,
-			                   a->u.block.item->u.label.name.sz);
+			                   name->data,
+			                   name->sz);
 		}
 		if (a->u.block.next->node_type == NODE_BLOCK &&
 		    a->u.block.next->u.block.item != NULL &&
@@ -423,8 +582,8 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 			/* Reject label followed by a var declaration! */
 			return make_result(
 				ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,
-				a->u.block.item->u.label.name.data,
-				a->u.block.item->u.label.name.sz);
+				name->data,
+				name->sz);
 		}
 	}
 	return RESULT_OK;

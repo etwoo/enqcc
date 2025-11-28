@@ -237,6 +237,12 @@ result_to_str(result_t r)
 		s = strdup("Parsing function call expects TOKEN_PAREN_CLOSE "
 		           "after function argument list");
 		break;
+	case ERR_PARSE_CASE_EXPECT_CONSTANT:
+		s = strdup("Parsing case expects integer constant");
+		break;
+	case ERR_PARSE_CASE_EXPECT_COLON:
+		s = strdup("Parsing case expects colon after constant");
+		break;
 	case ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing if statement expects TOKEN_PAREN_OPEN "
 		           "before controlling condition expression");
@@ -265,11 +271,34 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
+	case ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_OPEN:
+		s = strdup("Parsing switch statement expects TOKEN_PAREN_OPEN "
+		           "before controlling expression");
+		break;
+	case ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing switch statement expects TOKEN_PAREN_CLOSE "
+		           "after controlling expression");
+		break;
 	case ERR_SEMA_ALLOC:
 		s = strdup("Cannot allocate sema data");
 		break;
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");
+		break;
+	case ERR_SEMA_CASE_DEFAULT_DUPLICATE:
+		s = strdup("Duplicate default label in switch");
+		break;
+	case ERR_SEMA_CASE_DEFAULT_OUTSIDE:
+		s = strdup("Invalid default case with no enclosing switch");
+		break;
+	case ERR_SEMA_CASE_DUPLICATE:
+		s = my_asprintf("Duplicate case value: %d", r.num);
+		break;
+	case ERR_SEMA_CASE_OUTSIDE:
+		s = strdup("Invalid case with no enclosing switch");
+		break;
+	case ERR_SEMA_CASE_PARSE_CONSTANT:
+		s = my_asprintf("Cannot parse case value as int: %s", r.msg);
 		break;
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);

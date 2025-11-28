@@ -14,6 +14,8 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
+static const char LITERAL_DEFAULT[] = "default";
+
 static void
 map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
 {
@@ -110,10 +112,20 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 			check(resolve_expr(arena, a->u.loop.body, sym));
 		}
 		break;
+	case NODE_SWITCH:
+		check(resolve_expr(arena, a->u.switch_.control, sym));
+		if (a->u.switch_.body->node_type == NODE_BLOCK) {
+			check(resolve_block(arena, a->u.switch_.body, sym));
+		} else {
+			check(resolve_expr(arena, a->u.switch_.body, sym));
+		}
+		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
+	case NODE_CASE:
+	case NODE_CASE_DEFAULT:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
 		break; /* no resolution work to do */
@@ -682,6 +694,9 @@ get_precedence(const struct ast *a)
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
+	case NODE_SWITCH:
+	case NODE_CASE:
+	case NODE_CASE_DEFAULT:
 	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -996,6 +1011,7 @@ parse_loop_do_while_suffix(Arena *arena,
 enum {
 	UNSET_LOOP_ID = -1,
 	UNSET_LABEL_ID = -2,
+	UNSET_SWITCH_ID = -3,
 };
 
 static WARN_UNUSED result_t
@@ -1086,6 +1102,54 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
+parse_switch(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_KEYWORD_SWITCH));
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		return make_result(ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_OPEN);
+	}
+	token_consume(tok);
+
+	check(parse_alloc(arena, dst, NODE_SWITCH));
+	(**dst).u.switch_.label_default = UNSET_SWITCH_ID;
+	(**dst).u.switch_.label_end = UNSET_SWITCH_ID;
+	check(parse_expr(arena, tok, &(**dst).u.switch_.control, 0));
+
+	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		return make_result(ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_CLOSE);
+	}
+	token_consume(tok);
+
+	check(parse_stmt(arena, tok, &(**dst).u.switch_.body));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_case(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_KEYWORD_CASE));
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_CONSTANT)) {
+		return make_result(ERR_PARSE_CASE_EXPECT_CONSTANT);
+	}
+
+	check(parse_alloc(arena, dst, NODE_CASE));
+	(**dst).u.case_.constant = (**tok).val;
+	(**dst).u.case_.unique = UNSET_SWITCH_ID;
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_COLON)) {
+		return make_result(ERR_PARSE_CASE_EXPECT_COLON);
+	}
+	token_consume(tok);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	bool expect_semicolon_after = false;
@@ -1129,6 +1193,18 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_alloc(arena, dst, NODE_LABEL));
 		(**dst).u.label.name = (**tok).val;
 		(**dst).u.label.unique = UNSET_LABEL_ID;
+		token_consume(tok);
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_SWITCH)) {
+		check(parse_switch(arena, tok, dst));
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_CASE)) {
+		check(parse_case(arena, tok, dst));
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_DEFAULT) &&
+	           is_token_type((**tok).next, TOKEN_COLON)) {
+		check(parse_alloc(arena, dst, NODE_CASE_DEFAULT));
+		(**dst).u.case_.constant.data = LITERAL_DEFAULT;
+		(**dst).u.case_.constant.sz = sizeof(LITERAL_DEFAULT) - 1;
+		(**dst).u.case_.unique = UNSET_SWITCH_ID;
 		token_consume(tok);
 		token_consume(tok);
 	} else {
@@ -1461,7 +1537,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.loop.label_end == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_BREAK:
-		debug("%*sLOOP ID %lld%s",
+		debug("%*sLOOP/SWITCH ID %lld%s",
 		      (int)indent + 1,
 		      "",
 		      a->u.num,
@@ -1498,6 +1574,52 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      "",
 		      a->u.label.unique,
 		      a->u.label.unique == UNSET_LABEL_ID ? " (unset)" : "");
+		break;
+	case NODE_SWITCH:
+		debug("%*sCONTROL", (int)indent + 1, "");
+		parse_debug_print(a->u.switch_.control, indent + 2);
+		debug("%*sBODY", (int)indent + 1, "");
+		parse_debug_print(a->u.switch_.body, indent + 2);
+		debug("%*sSWITCH DEFAULT LABEL %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.switch_.label_default,
+		      a->u.switch_.label_default == UNSET_SWITCH_ID ? " (unset)"
+		                                                    : "");
+		debug("%*sSWITCH END LABEL %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.switch_.label_end,
+		      a->u.switch_.label_end == UNSET_SWITCH_ID ? " (unset)"
+		                                                : "");
+		debug("%*sSEMANTIC CASE INFORMATION", (int)indent + 1, "");
+		for (const struct ast_case *cur = a->u.switch_.label_cases;
+		     cur != NULL;
+		     cur = cur->next) {
+			debug("%*sCASE.VALUE %lld",
+			      (int)indent + 2,
+			      "",
+			      cur->constant);
+			debug("%*sCASE.UNIQUE %lld",
+			      (int)indent + 2,
+			      "",
+			      cur->unique);
+		}
+		break;
+	case NODE_CASE:
+		debug("%*sCASE VALUE %.*s",
+		      (int)indent + 1,
+		      "",
+		      (int)a->u.case_.constant.sz,
+		      a->u.case_.constant.data);
+		__attribute__((fallthrough));
+	case NODE_CASE_DEFAULT:
+		debug("%*sCASE LABEL: %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.case_.unique,
+		      a->u.case_.unique == NOT_YET_UNIQUE ? " (not unique)"
+		                                          : "");
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
