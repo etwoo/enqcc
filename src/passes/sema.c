@@ -392,7 +392,7 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 		 * reject with an error, rather than merely warning.
 		 */
 		if (a->u.block.next == NULL) {
-			/* Reject label at the very end of the block! */
+			/* Reject label at the very end of a block! */
 			return make_result(ERR_SEMA_LABEL_AT_BLOCK_END,
 			                   a->u.block.item->u.label.name.data,
 			                   a->u.block.item->u.label.name.sz);
