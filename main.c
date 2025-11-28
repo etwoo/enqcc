@@ -86,7 +86,7 @@ compile(Arena *arena,
 	long long int label_generator = 0;
 	struct symbol_table from_sema = {0};
 
-	check(sema_label_loops(a, &label_generator));
+	check(sema_label_loops(arena, a, &label_generator));
 	check(sema_label_gotos(arena, a, &label_generator));
 	check(sema_typecheck(arena, a, &from_sema));
 	parse_debug_print(a, 0);
