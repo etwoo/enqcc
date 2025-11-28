@@ -144,7 +144,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 }
 
 enum {
-	LOOP_NESTING_LIMIT = 128,
+	BLOCK_NESTING_LIMIT = 128,
 };
 
 struct sema_label_loops_state {
@@ -155,7 +155,7 @@ struct sema_label_loops_state {
 			CONTAINING_LOOP,
 			CONTAINING_SWITCH,
 		} statement;
-	} container[LOOP_NESTING_LIMIT];
+	} container[BLOCK_NESTING_LIMIT];
 	size_t depth;
 };
 
@@ -169,7 +169,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		assert(state->depth == 0);
 		break;
 	case NODE_LOOP:
-		assert(state->depth < LOOP_NESTING_LIMIT);
+		assert(state->depth < BLOCK_NESTING_LIMIT);
 		state->container[state->depth].label = state->generator;
 		state->container[state->depth].statement = CONTAINING_LOOP;
 		state->depth++;
