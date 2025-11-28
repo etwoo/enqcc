@@ -887,6 +887,10 @@ ir_expr(Arena *arena,
 	case NODE_LABEL:
 		check(ir_label(arena, a, dst));
 		break;
+	case NODE_SWITCH:
+	case NODE_CASE:
+		assert(0 && "implement IR for switch/case statements");
+		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
 		ir_val_from_ast_variable_like(a, return_value);
