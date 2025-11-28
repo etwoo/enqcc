@@ -266,6 +266,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		assert(containing->origin->node_type == NODE_SWITCH);
 		node->next = containing->origin->u.switch_.label_cases;
 		containing->origin->u.switch_.label_cases = node;
+		// TODO: reject duplicate cases? refactor into prepend() fn
 		break;
 	default:
 		break;
