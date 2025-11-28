@@ -457,7 +457,7 @@ ir_goto(Arena *arena, const struct ast *a, struct ir_op **dst)
 static WARN_UNUSED result_t
 ir_label(Arena *arena, const struct ast *a, struct ir_op **dst)
 {
-	assert(a->node_type == NODE_LOOP);
+	assert(a->node_type == NODE_LABEL);
 
 	check(ir_alloc_op(arena, dst));
 	assert(*dst != NULL);
