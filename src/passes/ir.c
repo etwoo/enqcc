@@ -889,7 +889,7 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_SWITCH:
 	case NODE_CASE:
-		assert(0 && "implement IR for switch/case statements");
+		assert(0 && "implement IR for switch/case statements"); // TODO
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
