@@ -152,36 +152,56 @@ enum {
 	BLOCK_NESTING_LIMIT = 128,
 };
 
-enum containing_statement {
+enum containing_statement_type {
 	CONTAINING_LOOP,
 	CONTAINING_SWITCH,
 };
 
+struct containing_statement {
+	struct ast *origin;
+	long long int label;
+	enum containing_statement_type statement;
+};
+
 struct sema_label_loops_state {
+	Arena *arena;
 	long long int generator;
-	struct {
-		long long int label;
-		enum containing_statement statement;
-	} container[BLOCK_NESTING_LIMIT];
+	struct containing_statement container[BLOCK_NESTING_LIMIT];
 	size_t depth;
 };
 
-static WARN_UNUSED bool
-has_container(const struct sema_label_loops_state *state,
-              enum containing_statement target)
+static WARN_UNUSED struct containing_statement *
+has_container(struct sema_label_loops_state *state,
+              enum containing_statement_type target)
 {
 	for (size_t idx = state->depth; idx > 0; --idx) {
 		if (state->container[idx - 1].statement == target) {
-			return true;
+			return &state->container[idx - 1];
 		}
 	}
-	return false;
+	return NULL;
+}
+
+static WARN_UNUSED result_t
+parse_num(const struct string_view *str, long long int *dst)
+{
+	// TODO: verify a->u.case_.constant coerces to integer
+	// maybe use strtoll() plus check no dangling extra chars
+	// from manpage for strtoll
+	//
+	// If endptr is not NULL, strtol() stores the address of the
+	// first invalid character in *endptr ... if *str is not '\0'
+	// but **endptr is '\0' on return, the entire string was valid
+	(void)str; *dst = 0;
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 sema_enter_loop_id(struct ast *a, void *userdata)
 {
 	struct sema_label_loops_state *state = userdata;
+	struct containing_statement *containing = NULL;
+	struct ast_case *node = NULL;
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
@@ -189,8 +209,10 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		break;
 	case NODE_LOOP:
 		assert(state->depth < BLOCK_NESTING_LIMIT);
-		state->container[state->depth].label = state->generator;
-		state->container[state->depth].statement = CONTAINING_LOOP;
+		containing = &state->container[state->depth];
+		containing->origin = a;
+		containing->label = state->generator;
+		containing->statement = CONTAINING_LOOP;
 		state->depth++;
 		a->u.loop.label_start = state->generator++;
 		a->u.loop.label_continue = state->generator++;
@@ -214,23 +236,36 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		}
 		break;
 	case NODE_CONTINUE:
-		if (!has_container(state, CONTAINING_LOOP)) {
+		if (has_container(state, CONTAINING_LOOP) == NULL) {
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
 		a->u.num = state->container[state->depth - 1].label + 1;
 		break;
 	case NODE_SWITCH:
 		assert(state->depth < BLOCK_NESTING_LIMIT);
-		state->container[state->depth].label = state->generator;
-		state->container[state->depth].statement = CONTAINING_SWITCH;
+		containing = &state->container[state->depth];
+		containing->origin = a;
+		containing->label = state->generator;
+		containing->statement = CONTAINING_SWITCH;
 		state->depth++;
 		a->u.switch_.label_end = state->generator++;
 		break;
 	case NODE_CASE:
-		if (!has_container(state, CONTAINING_SWITCH)) {
+		containing = has_container(state, CONTAINING_SWITCH);
+		if (containing == NULL) {
 			return make_result(ERR_SEMA_CASE_OUTSIDE);
 		}
-		// TODO: add info to NODE_SWITCH for ir.c to create jumps
+		a->u.case_.unique = state->generator++;
+		{
+			node = arena_alloc(state->arena, sizeof(*node));
+			check_if(node == NULL, ERR_SEMA_ALLOC);
+			memset(node, 0, sizeof(*node));
+		}
+		check(parse_num(&a->u.case_.constant, &node->constant));
+		node->unique = a->u.case_.unique;
+		assert(containing->origin->node_type == NODE_SWITCH);
+		node->next = containing->origin->u.switch_.label_cases;
+		containing->origin->u.switch_.label_cases = node;
 		break;
 	default:
 		break;
@@ -261,15 +296,18 @@ sema_exit_loop_id(struct ast *a, void *userdata)
 }
 
 result_t
-sema_label_loops(struct ast *a, long long int *generator)
+sema_label_loops(Arena *arena, struct ast *a, long long int *generator)
 {
 	debug("Labeling loops, loop breaks, and continues");
 	struct sema_ops ops = {
 		.node_enter = sema_enter_loop_id,
 		.node_exit = sema_exit_loop_id,
 	};
-	struct sema_label_loops_state state = {0};
-	state.generator = *generator;
+	struct sema_label_loops_state state = {
+		.arena = arena,
+		.generator = *generator,
+		.depth = 0,
+	};
 	check(sema_walk(a, &ops, &state));
 	*generator = state.generator;
 	return RESULT_OK;

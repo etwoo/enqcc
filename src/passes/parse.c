@@ -1566,13 +1566,20 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.switch_.control, indent + 2);
 		debug("%*sBODY", (int)indent + 1, "");
 		parse_debug_print(a->u.switch_.body, indent + 2);
+		// TODO: debug-print label_end, label_cases
 		break;
 	case NODE_CASE:
-		debug("%*sCONSTANT VALUE %.*s",
+		debug("%*sCASE VALUE %.*s",
 		      (int)indent + 1,
 		      "",
 		      (int)a->u.case_.constant.sz,
 		      a->u.case_.constant.data);
+		debug("%*sCASE LABEL: %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.case_.unique,
+		      a->u.case_.unique == NOT_YET_UNIQUE ? " (not unique)"
+		                                          : "");
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;

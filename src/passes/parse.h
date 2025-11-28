@@ -17,6 +17,12 @@ struct ast_symbol {
 	enum symbol_linkage ltype;
 };
 
+struct ast_case {
+	long long int constant;
+	long long int unique;
+	struct ast_case *next;
+};
+
 #define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
 	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
@@ -157,9 +163,11 @@ struct ast {
 			struct ast *control;
 			struct ast *body;
 			long long int label_end;
+			struct ast_case *label_cases; /* computed by sema.c */
 		} switch_;
 		struct {
 			struct string_view constant;
+			long long int unique;
 		} case_;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
