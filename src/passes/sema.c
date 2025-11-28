@@ -154,6 +154,9 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 	struct sema_label_loops_state *state = userdata;
 
 	switch (a->node_type) {
+	case NODE_FUNCTION:
+		assert(state->loop_depth == 0);
+		break;
 	case NODE_LOOP:
 		state->loop_depth++;
 		a->u.loop.label_start = ++state->id;
@@ -182,13 +185,20 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 static WARN_UNUSED result_t
 sema_exit_loop_id(struct ast *a, void *userdata)
 {
-	if (a->node_type != NODE_LOOP) {
-		return RESULT_OK;
+	struct sema_label_loops_state *state = userdata;
+
+	switch (a->node_type) {
+	case NODE_LOOP:
+		assert(state->loop_depth > 0);
+		state->loop_depth--;
+		break;
+	case NODE_FUNCTION:
+		assert(state->loop_depth == 0);
+		break;
+	default:
+		break;
 	}
 
-	struct sema_label_loops_state *state = userdata;
-	assert(state->loop_depth > 0);
-	state->loop_depth--;
 	return RESULT_OK;
 }
 
