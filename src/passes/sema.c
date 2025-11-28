@@ -156,7 +156,7 @@ struct sema_label_loops_state {
 			CONTAINING_SWITCH,
 		} statement;
 	} container[LOOP_NESTING_LIMIT];
-	size_t loop_depth;
+	size_t depth;
 };
 
 static WARN_UNUSED result_t
@@ -166,12 +166,12 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
-		assert(state->loop_depth == 0);
+		assert(state->depth == 0);
 		break;
 	case NODE_LOOP:
-		assert(state->loop_depth < LOOP_NESTING_LIMIT);
-		state->container[state->loop_depth].label = state->generator;
-		state->loop_depth++;
+		assert(state->depth < LOOP_NESTING_LIMIT);
+		state->container[state->depth].label = state->generator;
+		state->depth++;
 		a->u.loop.label_start = state->generator++;
 		a->u.loop.label_continue = state->generator++;
 		a->u.loop.label_end = state->generator++;
@@ -181,16 +181,16 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		assert(a->u.loop.label_start + 2 == a->u.loop.label_end);
 		break;
 	case NODE_BREAK:
-		if (state->loop_depth == 0) {
+		if (state->depth == 0) {
 			return make_result(ERR_SEMA_BREAK_OUTSIDE);
 		}
-		a->u.num = state->container[state->loop_depth - 1].label + 2;
+		a->u.num = state->container[state->depth - 1].label + 2;
 		break;
 	case NODE_CONTINUE:
-		if (state->loop_depth == 0) {
+		if (state->depth == 0) {
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
-		a->u.num = state->container[state->loop_depth - 1].label + 1;
+		a->u.num = state->container[state->depth - 1].label + 1;
 		break;
 	default:
 		break;
@@ -206,11 +206,11 @@ sema_exit_loop_id(struct ast *a, void *userdata)
 
 	switch (a->node_type) {
 	case NODE_LOOP:
-		assert(state->loop_depth > 0);
-		state->loop_depth--;
+		assert(state->depth > 0);
+		state->depth--;
 		break;
 	case NODE_FUNCTION:
-		assert(state->loop_depth == 0);
+		assert(state->depth == 0);
 		break;
 	default:
 		break;
