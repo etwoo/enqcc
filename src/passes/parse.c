@@ -110,10 +110,19 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 			check(resolve_expr(arena, a->u.loop.body, sym));
 		}
 		break;
+	case NODE_SWITCH:
+		check(resolve_expr(arena, a->u.switch_.control, sym));
+		if (a->u.switch_.body->node_type == NODE_BLOCK) {
+			check(resolve_block(arena, a->u.switch_.body, sym));
+		} else {
+			check(resolve_expr(arena, a->u.switch_.body, sym));
+		}
+		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
+	case NODE_CASE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
 		break; /* no resolution work to do */
@@ -682,6 +691,8 @@ get_precedence(const struct ast *a)
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
+	case NODE_SWITCH:
+	case NODE_CASE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -1086,6 +1097,51 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
+parse_switch(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_KEYWORD_SWITCH));
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		return make_result(ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_OPEN);
+	}
+	token_consume(tok);
+
+	check(parse_alloc(arena, dst, NODE_SWITCH));
+	check(parse_expr(arena, tok, &(**dst).u.switch_.control, 0));
+
+	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		return make_result(ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_CLOSE);
+	}
+	token_consume(tok);
+
+	check(parse_stmt(arena, tok, &(**dst).u.switch_.body));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_case(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_KEYWORD_CASE));
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_CONSTANT)) {
+		return make_result(ERR_PARSE_CASE_EXPECT_CONSTANT);
+	}
+
+	check(parse_alloc(arena, dst, NODE_CASE));
+	(**dst).u.case_.constant = (**tok).val;
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_COLON)) {
+		return make_result(ERR_PARSE_CASE_EXPECT_COLON);
+	}
+	token_consume(tok);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	bool expect_semicolon_after = false;
@@ -1131,6 +1187,10 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		(**dst).u.label.unique = UNSET_LABEL_ID;
 		token_consume(tok);
 		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_SWITCH)) {
+		check(parse_switch(arena, tok, dst));
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_CASE)) {
+		check(parse_case(arena, tok, dst));
 	} else {
 		check(parse_expr(arena, tok, dst, 0));
 		expect_semicolon_after = true;
@@ -1498,6 +1558,19 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      "",
 		      a->u.label.unique,
 		      a->u.label.unique == UNSET_LABEL_ID ? " (unset)" : "");
+		break;
+	case NODE_SWITCH:
+		debug("%*sCONTROL", (int)indent + 1, "");
+		parse_debug_print(a->u.switch_.control, indent + 2);
+		debug("%*sBODY", (int)indent + 1, "");
+		parse_debug_print(a->u.switch_.body, indent + 2);
+		break;
+	case NODE_CASE:
+		debug("%*sCONSTANT VALUE %.*s",
+		      (int)indent + 1,
+		      "",
+		      (int)a->u.case_.constant.sz,
+		      a->u.case_.constant.data);
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;

@@ -60,10 +60,15 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(a->u.loop.incr, ops, u));
 		check(sema_walk(a->u.loop.postcond, ops, u));
 		break;
+	case NODE_SWITCH:
+		check(sema_walk(a->u.switch_.control, ops, u));
+		check(sema_walk(a->u.switch_.body, ops, u));
+		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
+	case NODE_CASE:
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -164,6 +169,8 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 {
 	struct sema_label_loops_state *state = userdata;
 
+	// TODO: detect case statement with state->depth==0, outside switch
+	// TODO: if continue + [].statement == switch, search upward for loop
 	switch (a->node_type) {
 	case NODE_FUNCTION:
 		assert(state->depth == 0);

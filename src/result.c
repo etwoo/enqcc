@@ -237,6 +237,12 @@ result_to_str(result_t r)
 		s = strdup("Parsing function call expects TOKEN_PAREN_CLOSE "
 		           "after function argument list");
 		break;
+	case ERR_PARSE_CASE_EXPECT_CONSTANT:
+		s = strdup("Parsing case expects integer constant");
+		break;
+	case ERR_PARSE_CASE_EXPECT_COLON:
+		s = strdup("Parsing case expects colon after constant");
+		break;
 	case ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing if statement expects TOKEN_PAREN_OPEN "
 		           "before controlling condition expression");
@@ -264,6 +270,14 @@ result_to_str(result_t r)
 	case ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
+		break;
+	case ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_OPEN:
+		s = strdup("Parsing switch statement expects TOKEN_PAREN_OPEN "
+		           "before controlling expression");
+		break;
+	case ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing switch statement expects TOKEN_PAREN_CLOSE "
+		           "after controlling expression");
 		break;
 	case ERR_SEMA_ALLOC:
 		s = strdup("Cannot allocate sema data");

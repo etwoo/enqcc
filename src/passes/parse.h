@@ -79,6 +79,8 @@ struct ast_symbol {
 	F(CONTINUE)                                                            \
 	F(GOTO)                                                                \
 	F(LABEL)                                                               \
+	F(SWITCH)                                                              \
+	F(CASE)                                                                \
 	F(CONSTANT_INT)                                                        \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
@@ -151,6 +153,13 @@ struct ast {
 			struct string_view name;
 			long long int unique;
 		} label;
+		struct {
+			struct ast *control;
+			struct ast *body;
+		} switch_;
+		struct {
+			struct string_view constant;
+		} case_;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
