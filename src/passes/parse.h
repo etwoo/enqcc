@@ -156,6 +156,7 @@ struct ast {
 		struct {
 			struct ast *control;
 			struct ast *body;
+			long long int label_end;
 		} switch_;
 		struct {
 			struct string_view constant;

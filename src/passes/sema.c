@@ -199,6 +199,13 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		}
 		a->u.num = state->container[state->depth - 1].label + 1;
 		break;
+	case NODE_SWITCH:
+		assert(state->depth < BLOCK_NESTING_LIMIT);
+		state->container[state->depth].label = state->generator;
+		state->container[state->depth].statement = CONTAINING_SWITCH;
+		state->depth++;
+		a->u.switch_.label_end = state->generator++;
+		break;
 	case NODE_CASE:
 		if (state->depth == 0) {
 			return make_result(ERR_SEMA_CASE_OUTSIDE);
@@ -230,6 +237,7 @@ sema_exit_loop_id(struct ast *a, void *userdata)
 
 	switch (a->node_type) {
 	case NODE_LOOP:
+	case NODE_SWITCH:
 		assert(state->depth > 0);
 		state->depth--;
 		break;

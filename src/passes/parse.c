@@ -1007,6 +1007,7 @@ parse_loop_do_while_suffix(Arena *arena,
 enum {
 	UNSET_LOOP_ID = -1,
 	UNSET_LABEL_ID = -2,
+	UNSET_SWITCH_ID = -3,
 };
 
 static WARN_UNUSED result_t
@@ -1108,6 +1109,7 @@ parse_switch(Arena *arena, const struct token **tok, struct ast **dst)
 	token_consume(tok);
 
 	check(parse_alloc(arena, dst, NODE_SWITCH));
+	(**dst).u.switch_.label_end = UNSET_LOOP_ID;
 	check(parse_expr(arena, tok, &(**dst).u.switch_.control, 0));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
