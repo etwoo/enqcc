@@ -386,19 +386,27 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 	if (a->node_type == NODE_BLOCK &&
 	    /* ... with a label as the current item */
 	    a->u.block.item != NULL &&
-	    a->u.block.item->node_type == NODE_LABEL &&
-	    /* ... and a variable declaration as the very next item! */
-	    a->u.block.next != NULL &&
-	    a->u.block.next->node_type == NODE_BLOCK &&
-	    a->u.block.next->u.block.item != NULL &&
-	    a->u.block.next->u.block.item->node_type == NODE_DECLARATION) {
+	    a->u.block.item->node_type == NODE_LABEL) {
 		/*
-		 * This is a C23 extension that the testsuite requires us to
+		 * Check for C23 extensions that the testsuite requires us to
 		 * reject with an error, rather than merely warning.
 		 */
-		return make_result(ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,
-		                   a->u.block.item->u.label.name.data,
-		                   a->u.block.item->u.label.name.sz);
+		if (a->u.block.next == NULL) {
+			/* Reject label at the very end of the block! */
+			return make_result(ERR_SEMA_LABEL_AT_BLOCK_END,
+			                   a->u.block.item->u.label.name.data,
+			                   a->u.block.item->u.label.name.sz);
+		}
+		if (a->u.block.next->node_type == NODE_BLOCK &&
+		    a->u.block.next->u.block.item != NULL &&
+		    a->u.block.next->u.block.item->node_type ==
+		            NODE_DECLARATION) {
+			/* Reject label followed by a var declaration! */
+			return make_result(
+				ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,
+				a->u.block.item->u.label.name.data,
+				a->u.block.item->u.label.name.sz);
+		}
 	}
 	return RESULT_OK;
 }
