@@ -14,6 +14,7 @@ struct sema_ops {
 static WARN_UNUSED result_t
 sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 {
+	struct ast *recurse_into_sibling_node = NULL;
 	if (ops->node_enter != NULL) {
 		check(ops->node_enter(a, u));
 	}
@@ -27,14 +28,14 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 			check(sema_walk(a->u.function.block, ops, u));
 		}
 		if (a->u.function.next != NULL) {
-			check(sema_walk(a->u.function.next, ops, u));
+			recurse_into_sibling_node = a->u.function.next;
 		}
 		break;
 	case NODE_BLOCK:
 		if (a->u.block.item != NULL) {
 			check(sema_walk(a->u.block.item, ops, u));
 			if (a->u.block.next != NULL) {
-				check(sema_walk(a->u.block.next, ops, u));
+				recurse_into_sibling_node = a->u.block.next;
 			}
 		}
 		break;
@@ -43,7 +44,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 			check(sema_walk(a->u.declare.init, ops, u));
 		}
 		if (a->u.declare.next != NULL) {
-			check(sema_walk(a->u.declare.next, ops, u));
+			recurse_into_sibling_node = a->u.declare.next;
 		}
 		break;
 	case NODE_IF_ELSE:
@@ -135,6 +136,10 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	if (ops->node_exit != NULL) {
 		check(ops->node_exit(a, u));
 	}
+	if (recurse_into_sibling_node != NULL) {
+		check(sema_walk(recurse_into_sibling_node, ops, u));
+	}
+
 	return RESULT_OK;
 }
 
@@ -162,7 +167,6 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		a->u.num = state->id; /* most recent label_end */
 		break;
 	case NODE_CONTINUE:
-		info("loop_depth=%zu at continue", state->loop_depth);
 		if (state->loop_depth == 0) {
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
