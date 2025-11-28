@@ -277,6 +277,11 @@ result_to_str(result_t r)
 	case ERR_SEMA_LABEL_DUPLICATE:
 		s = my_asprintf("Duplicate label: %s", r.msg);
 		break;
+	case ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION:
+		s = my_asprintf("Label %s followed immediately by a variable "
+		                "declaration is a C23 extension",
+		                r.msg);
+		break;
 	case ERR_SEMA_CONTINUE_OUTSIDE:
 		s = strdup("Invalid continue with no enclosing loop");
 		break;

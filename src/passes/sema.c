@@ -380,6 +380,30 @@ sema_var_usage(struct ast *a, void *userdata MAYBE_UNUSED)
 }
 
 static WARN_UNUSED result_t
+sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	/* We're in block scope ... */
+	if (a->node_type == NODE_BLOCK &&
+	    /* ... with a label as the current item */
+	    a->u.block.item != NULL &&
+	    a->u.block.item->node_type == NODE_LABEL &&
+	    /* ... and a variable declaration as the very next item! */
+	    a->u.block.next != NULL &&
+	    a->u.block.next->node_type == NODE_BLOCK &&
+	    a->u.block.next->u.block.item != NULL &&
+	    a->u.block.next->u.block.item->node_type == NODE_DECLARATION) {
+		/*
+		 * This is a C23 extension that the testsuite requires us to
+		 * reject with an error, rather than merely warning.
+		 */
+		return make_result(ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,
+		                   a->u.block.item->u.label.name.data,
+		                   a->u.block.item->u.label.name.sz);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	if (a->node_type == NODE_EXPRESSION_FUNCTION_CALL &&
@@ -894,6 +918,10 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 
 	debug("Checking variable usage");
 	ops.node_enter = sema_var_usage;
+	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking label locations");
+	ops.node_enter = sema_label_locations;
 	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking function calls");
