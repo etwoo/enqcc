@@ -171,6 +171,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 	case NODE_LOOP:
 		assert(state->depth < LOOP_NESTING_LIMIT);
 		state->container[state->depth].label = state->generator;
+		state->container[state->depth].statement = CONTAINING_LOOP;
 		state->depth++;
 		a->u.loop.label_start = state->generator++;
 		a->u.loop.label_continue = state->generator++;
