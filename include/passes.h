@@ -26,6 +26,8 @@ struct symbol_table {
 
 result_t sema_label_loops(struct ast *a, long long int *generator)
 	__attribute__((warn_unused_result));
+result_t sema_label_gotos(Arena *arena, struct ast *a, long long int *generator)
+	__attribute__((warn_unused_result));
 result_t sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	__attribute__((warn_unused_result));
 

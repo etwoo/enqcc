@@ -265,8 +265,17 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
+	case ERR_SEMA_ALLOC:
+		s = strdup("Cannot allocate sema data");
+		break;
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");
+		break;
+	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
+		s = my_asprintf("goto targets non-existent label: %s", r.msg);
+		break;
+	case ERR_SEMA_LABEL_DUPLICATE:
+		s = my_asprintf("Duplicate label: %s", r.msg);
 		break;
 	case ERR_SEMA_CONTINUE_OUTSIDE:
 		s = strdup("Invalid continue with no enclosing loop");

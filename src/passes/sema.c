@@ -6,15 +6,6 @@
 
 #include <sys/param.h> /* for MAX() */
 
-// TODO: move *f into struct of function pointers
-// rename f -> enter_callback()
-// add optional second callback, exit_callback()
-// use exit_callback() to reset containing loop context to previous value
-// ^^^ this should fix dangling break/continue outside of first/last loop
-// same structure can then be used to catch goto label_does_not_exist at end of
-//   function, once there are no more chances for label to appear
-// maybe treat goto/label like variable decl/usage, and then:
-//   use level_delimiter_prepare() in exit_callback()
 struct sema_ops {
 	result_t (*node_enter)(struct ast *a, void *userdata);
 	result_t (*node_exit)(struct ast *a, void *userdata);
@@ -211,6 +202,130 @@ sema_label_loops(struct ast *a, long long int *generator)
 	};
 	check(sema_walk(a, &ops, &state));
 	*generator = state.id;
+	return RESULT_OK;
+}
+
+static const unsigned FLAG_USED_AS_LABEL = 0x1;
+static const unsigned FLAG_USED_AS_GOTO_TARGET = 0x2;
+
+struct label {
+	struct string_view name;
+	long long int id;
+	unsigned flags;
+	struct label *next;
+};
+
+static WARN_UNUSED struct label *
+labels_get(struct label *head, const struct string_view *name)
+{
+	for (struct label *i = head; i != NULL; i = i->next) {
+		if (name->sz == i->name.sz &&
+		    0 == strncmp(name->data, i->name.data, name->sz)) {
+			return i;
+		}
+	}
+	return NULL;
+}
+
+struct sema_label_gotos_state {
+	Arena *arena;
+	long long int generator;
+	struct label *labels;
+};
+
+static WARN_UNUSED result_t
+labels_prepend(struct sema_label_gotos_state *state,
+               const struct string_view *name,
+               struct label **match)
+{
+	assert(name->sz > 0 && name->data != NULL);
+
+	*match = labels_get(state->labels, name);
+	if (*match != NULL) {
+		return RESULT_OK;
+	}
+
+	struct label *node = arena_alloc(state->arena, sizeof(*node));
+	check_if(node == NULL, ERR_SEMA_ALLOC);
+	memset(node, 0, sizeof(*node));
+
+	node->name = *name;
+	node->id = ++state->generator;
+	node->next = state->labels;
+	state->labels = node;
+	*match = node;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_enter_goto_id(struct ast *a, void *userdata)
+{
+	struct sema_label_gotos_state *state = userdata;
+	struct label *match = NULL;
+
+	switch (a->node_type) {
+	case NODE_FUNCTION:
+		assert(state->labels == NULL);
+		break;
+	case NODE_GOTO:
+		check(labels_prepend(state, &a->u.goto_.target_label, &match));
+		match->flags |= FLAG_USED_AS_GOTO_TARGET;
+		a->u.goto_.target_unique = match->id;
+		break;
+	case NODE_LABEL:
+		check(labels_prepend(state, &a->u.label.name, &match));
+		if (0 != (match->flags & FLAG_USED_AS_LABEL)) {
+			return make_result(ERR_SEMA_LABEL_DUPLICATE,
+			                   match->name.data,
+			                   match->name.sz);
+		}
+		match->flags |= FLAG_USED_AS_LABEL;
+		a->u.label.unique = match->id;
+		break;
+	default:
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_exit_goto_id(struct ast *a, void *userdata)
+{
+	if (a->node_type != NODE_FUNCTION) {
+		return RESULT_OK;
+	}
+
+	struct sema_label_gotos_state *state = userdata;
+
+	for (struct label *i = state->labels; i != NULL; i = i->next) {
+		if (0 != (i->flags & FLAG_USED_AS_GOTO_TARGET) &&
+		    0 == (i->flags & FLAG_USED_AS_LABEL)) {
+			return make_result(ERR_SEMA_GOTO_NONEXISTENT_LABEL,
+			                   i->name.data,
+			                   i->name.sz);
+		}
+	}
+
+	state->labels = NULL;
+	return RESULT_OK;
+}
+
+result_t
+sema_label_gotos(Arena *arena, struct ast *a, long long int *generator)
+{
+	debug("Labeling goto statements and labels");
+	struct sema_ops ops = {
+		.node_enter = sema_enter_goto_id,
+		.node_exit = sema_exit_goto_id,
+	};
+	struct sema_label_gotos_state state = {
+		.arena = arena,
+		.generator = *generator,
+		.labels = NULL,
+	};
+	check(sema_walk(a, &ops, &state));
+	*generator = state.generator;
 	return RESULT_OK;
 }
 
