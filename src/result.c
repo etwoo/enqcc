@@ -285,6 +285,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");
 		break;
+	case ERR_SEMA_CASE_OUTSIDE:
+		s = strdup("Invalid case with no enclosing switch");
+		break;
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);
 		break;

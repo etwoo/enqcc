@@ -169,7 +169,6 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 {
 	struct sema_label_loops_state *state = userdata;
 
-	// TODO: detect case statement with state->depth==0, outside switch
 	// TODO: if continue + [].statement == switch, search upward for loop
 	switch (a->node_type) {
 	case NODE_FUNCTION:
@@ -199,6 +198,23 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
 		a->u.num = state->container[state->depth - 1].label + 1;
+		break;
+	case NODE_CASE:
+		if (state->depth == 0) {
+			return make_result(ERR_SEMA_CASE_OUTSIDE);
+		} else {
+			bool found_switch = false;
+			for (size_t idx = state->depth; idx > 0; --idx) {
+				if (state->container[idx - 1].statement ==
+				    CONTAINING_SWITCH) {
+					found_switch = true;
+					break;
+				}
+			}
+			if (!found_switch) {
+				return make_result(ERR_SEMA_CASE_OUTSIDE);
+			}
+		}
 		break;
 	default:
 		break;
