@@ -150,7 +150,7 @@ enum {
 struct sema_label_loops_state {
 	long long int generator;
 	struct {
-		long long int id;
+		long long int label;
 		enum {
 			CONTAINING_LOOP,
 			CONTAINING_SWITCH,
@@ -170,7 +170,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		break;
 	case NODE_LOOP:
 		assert(state->loop_depth < LOOP_NESTING_LIMIT);
-		state->container[state->loop_depth].id = state->generator;
+		state->container[state->loop_depth].label = state->generator;
 		state->loop_depth++;
 		a->u.loop.label_start = state->generator++;
 		a->u.loop.label_continue = state->generator++;
@@ -184,13 +184,13 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		if (state->loop_depth == 0) {
 			return make_result(ERR_SEMA_BREAK_OUTSIDE);
 		}
-		a->u.num = state->container[state->loop_depth - 1].id + 2;
+		a->u.num = state->container[state->loop_depth - 1].label + 2;
 		break;
 	case NODE_CONTINUE:
 		if (state->loop_depth == 0) {
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
-		a->u.num = state->container[state->loop_depth - 1].id + 1;
+		a->u.num = state->container[state->loop_depth - 1].label + 1;
 		break;
 	default:
 		break;
