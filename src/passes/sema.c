@@ -547,9 +547,11 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	/* We're in block scope ... */
 	if (a->node_type == NODE_BLOCK &&
-	    /* ... with a label as the current item */
+	    /* ... with a label or switch-case as the current item */
 	    a->u.block.item != NULL &&
-	    a->u.block.item->node_type == NODE_LABEL) {
+	    (a->u.block.item->node_type == NODE_LABEL ||
+	     a->u.block.item->node_type == NODE_CASE ||
+	     a->u.block.item->node_type == NODE_CASE_DEFAULT)) {
 		/*
 		 * Check for C23 extensions that the testsuite requires us to
 		 * reject with an error, rather than merely warning.
