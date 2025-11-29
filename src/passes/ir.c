@@ -455,15 +455,13 @@ ir_goto(Arena *arena, const struct ast *a, struct ir_op **dst)
 }
 
 static WARN_UNUSED result_t
-ir_label(Arena *arena, const struct ast *a, struct ir_op **dst)
+ir_label(Arena *arena, long long int label_unique, struct ir_op **dst)
 {
-	assert(a->node_type == NODE_LABEL);
-
 	check(ir_alloc_op(arena, dst));
 	assert(*dst != NULL);
 	(**dst).opcode = IR_OP_LABEL;
 	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	(**dst).args[0].num = a->u.label.unique;
+	(**dst).args[0].num = label_unique;
 
 	return RESULT_OK;
 }
@@ -885,11 +883,13 @@ ir_expr(Arena *arena,
 		check(ir_goto(arena, a, dst));
 		break;
 	case NODE_LABEL:
-		check(ir_label(arena, a, dst));
+		check(ir_label(arena, a->u.label.unique, dst));
 		break;
 	case NODE_SWITCH:
+		assert(0 && "implement IR for switch statements"); // TODO
+		break;
 	case NODE_CASE:
-		assert(0 && "implement IR for switch/case statements"); // TODO
+		check(ir_label(arena, a->u.case_.unique, dst));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
