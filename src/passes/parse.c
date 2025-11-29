@@ -366,6 +366,7 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	check(resolve_function_params(arena, a->u.function.params, sym));
 
 	if (is_def) {
+		assert(a->u.function.block->car != NULL);
 		assert(a->u.function.block->car->node_type == NODE_BLOCK);
 		struct flat *function_body =
 			a->u.function.block->car->u.block.statements;
