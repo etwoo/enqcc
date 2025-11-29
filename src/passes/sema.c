@@ -552,6 +552,19 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 	    (a->u.block.item->node_type == NODE_LABEL ||
 	     a->u.block.item->node_type == NODE_CASE ||
 	     a->u.block.item->node_type == NODE_CASE_DEFAULT)) {
+		const struct string_view *name = NULL;
+		switch (a->u.block.item->node_type) {
+		case NODE_LABEL:
+			name = &a->u.block.item->u.label.name;
+			break;
+		case NODE_CASE:
+		case NODE_CASE_DEFAULT:
+			name = &a->u.block.item->u.case_.constant;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		/*
 		 * Check for C23 extensions that the testsuite requires us to
 		 * reject with an error, rather than merely warning.
@@ -559,8 +572,8 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 		if (a->u.block.next == NULL) {
 			/* Reject label at the very end of a block! */
 			return make_result(ERR_SEMA_LABEL_AT_BLOCK_END,
-			                   a->u.block.item->u.label.name.data,
-			                   a->u.block.item->u.label.name.sz);
+			                   name->data,
+			                   name->sz);
 		}
 		if (a->u.block.next->node_type == NODE_BLOCK &&
 		    a->u.block.next->u.block.item != NULL &&
@@ -569,8 +582,8 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 			/* Reject label followed by a var declaration! */
 			return make_result(
 				ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,
-				a->u.block.item->u.label.name.data,
-				a->u.block.item->u.label.name.sz);
+				name->data,
+				name->sz);
 		}
 	}
 	return RESULT_OK;
