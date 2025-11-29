@@ -1198,12 +1198,15 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 	//   u.if_.then_clause
 	//   u.if_.else_clause
 	//   u.switch_.body
+	//   u.function.block (?)
+	//   u.function.next (?)
+	//   u.declare.next (?)
 	//
-	// have all of the above hold a `struct ast_body *` that looks like:
+	// have all of the above hold a `struct ast_block *` that looks like:
 	//
-	//   struct ast_body {
-	//     struct ast *cur;
-	//     struct ast *next;
+	//   struct ast_block {
+	//     struct ast *car;
+	//     struct ast *cdr;
 	//   }
 	//
 	// basically, move list logic outside of `struct ast`, similar to what
