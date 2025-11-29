@@ -95,7 +95,7 @@ struct ast_case {
 enum ast_nodetype { FOREACH_AST_NODE(TO_ENUM) };
 #undef TO_ENUM
 
-/* flat non-nested collection of syntax elements */
+/* flat collection of syntax elements */
 struct flat;
 
 /* hierarchical tree of syntax elements */
