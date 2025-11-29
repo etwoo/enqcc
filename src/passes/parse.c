@@ -123,6 +123,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_GOTO:
 	case NODE_LABEL:
 	case NODE_CASE:
+	case NODE_CASE_DEFAULT:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
 		break; /* no resolution work to do */
@@ -693,6 +694,7 @@ get_precedence(const struct ast *a)
 	case NODE_LABEL:
 	case NODE_SWITCH:
 	case NODE_CASE:
+	case NODE_CASE_DEFAULT:
 	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -1109,7 +1111,8 @@ parse_switch(Arena *arena, const struct token **tok, struct ast **dst)
 	token_consume(tok);
 
 	check(parse_alloc(arena, dst, NODE_SWITCH));
-	(**dst).u.switch_.label_end = UNSET_LOOP_ID;
+	(**dst).u.switch_.label_default = UNSET_SWITCH_ID;
+	(**dst).u.switch_.label_end = UNSET_SWITCH_ID;
 	check(parse_expr(arena, tok, &(**dst).u.switch_.control, 0));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
@@ -1133,6 +1136,7 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 
 	check(parse_alloc(arena, dst, NODE_CASE));
 	(**dst).u.case_.constant = (**tok).val;
+	(**dst).u.case_.unique = UNSET_SWITCH_ID;
 	token_consume(tok);
 
 	if (!is_token_type(*tok, TOKEN_COLON)) {
@@ -1193,6 +1197,12 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_switch(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_CASE)) {
 		check(parse_case(arena, tok, dst));
+	} else if (is_token_type(*tok, TOKEN_KEYWORD_DEFAULT) &&
+	           is_token_type((**tok).next, TOKEN_COLON)) {
+		check(parse_alloc(arena, dst, NODE_CASE_DEFAULT));
+		(**dst).u.case_.unique = UNSET_SWITCH_ID;
+		token_consume(tok);
+		token_consume(tok);
 	} else {
 		check(parse_expr(arena, tok, dst, 0));
 		expect_semicolon_after = true;
@@ -1566,6 +1576,12 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.switch_.control, indent + 2);
 		debug("%*sBODY", (int)indent + 1, "");
 		parse_debug_print(a->u.switch_.body, indent + 2);
+		debug("%*sSWITCH DEFAULT LABEL %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.switch_.label_default,
+		      a->u.switch_.label_default == UNSET_SWITCH_ID ? " (unset)"
+		                                                    : "");
 		debug("%*sSWITCH END LABEL %lld%s",
 		      (int)indent + 1,
 		      "",
@@ -1592,6 +1608,8 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      "",
 		      (int)a->u.case_.constant.sz,
 		      a->u.case_.constant.data);
+		__attribute__((fallthrough));
+	case NODE_CASE_DEFAULT:
 		debug("%*sCASE LABEL: %lld%s",
 		      (int)indent + 1,
 		      "",

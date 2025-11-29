@@ -87,6 +87,7 @@ struct ast_case {
 	F(LABEL)                                                               \
 	F(SWITCH)                                                              \
 	F(CASE)                                                                \
+	F(CASE_DEFAULT)                                                        \
 	F(CONSTANT_INT)                                                        \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
@@ -162,6 +163,7 @@ struct ast {
 		struct {
 			struct ast *control;
 			struct ast *body;
+			long long int label_default;
 			long long int label_end;
 			struct ast_case *label_cases; /* computed by sema.c */
 		} switch_;

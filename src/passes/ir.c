@@ -505,6 +505,12 @@ ir_switch(Arena *arena,
 			ir_op_list_concat(jumper, case_jumpers));
 	}
 
+	struct ir_op *default_jumper = NULL;
+	check(ir_alloc_op(arena, &default_jumper));
+	default_jumper->opcode = IR_OP_JUMP;
+	default_jumper->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	default_jumper->args[0].num = a->u.switch_.label_default;
+
 	struct ir_op *body = NULL;
 	{
 		struct ir_val dummy = {0};
@@ -520,6 +526,7 @@ ir_switch(Arena *arena,
 	struct ir_op *collect[] = {
 		control,
 		case_jumpers,
+		default_jumper,
 		body,
 		end_label,
 	};
@@ -952,6 +959,7 @@ ir_expr(Arena *arena,
 		check(ir_switch(arena, a, ir, dst));
 		break;
 	case NODE_CASE:
+	case NODE_CASE_DEFAULT:
 		check(ir_label(arena, a->u.case_.unique, dst));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:

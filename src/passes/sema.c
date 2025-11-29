@@ -70,6 +70,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_GOTO:
 	case NODE_LABEL:
 	case NODE_CASE:
+	case NODE_CASE_DEFAULT:
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -263,9 +264,9 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		a->u.loop.label_continue = state->generator++;
 		a->u.loop.label_end = state->generator++;
 		/* invariant required by NODE_CONTINUE case below */
-		assert(a->u.loop.label_start + 1 == a->u.loop.label_continue);
+		assert(containing->label + 1 == a->u.loop.label_continue);
 		/* invariant required by NODE_BREAK case below */
-		assert(a->u.loop.label_start + 2 == a->u.loop.label_end);
+		assert(containing->label + 2 == a->u.loop.label_end);
 		break;
 	case NODE_BREAK:
 		if (state->depth == 0) {
@@ -276,7 +277,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 			a->u.num = state->container[state->depth - 1].label + 2;
 			break;
 		case CONTAINING_SWITCH:
-			a->u.num = state->container[state->depth - 1].label;
+			a->u.num = state->container[state->depth - 1].label + 1;
 			break;
 		}
 		break;
@@ -293,7 +294,12 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		containing->label = state->generator;
 		containing->statement = CONTAINING_SWITCH;
 		state->depth++;
+		a->u.switch_.label_default = state->generator++;
 		a->u.switch_.label_end = state->generator++;
+		/* invariant required by NODE_CASE_DEFAULT case below */
+		assert(containing->label == a->u.switch_.label_default);
+		/* invariant required by NODE_BREAK case above */
+		assert(containing->label + 1 == a->u.switch_.label_end);
 		break;
 	case NODE_CASE:
 		containing = has_container(state, CONTAINING_SWITCH);
@@ -307,6 +313,16 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		                   &containing->origin->u.switch_.label_cases,
 		                   constant,
 		                   a->u.case_.unique));
+		break;
+	case NODE_CASE_DEFAULT:
+		containing = has_container(state, CONTAINING_SWITCH);
+		if (containing == NULL) {
+			return make_result(ERR_SEMA_CASE_DEFAULT_OUTSIDE);
+		}
+		assert(containing->origin->node_type == NODE_SWITCH);
+		// TODO: error on duplicate default case
+		// TODO: remove containing_statement.label, just use origin ptr
+		a->u.case_.unique = containing->label;
 		break;
 	default:
 		break;
