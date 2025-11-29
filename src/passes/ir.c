@@ -462,7 +462,6 @@ ir_label(Arena *arena, long long int label_unique, struct ir_op **dst)
 	(**dst).opcode = IR_OP_LABEL;
 	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
 	(**dst).args[0].num = label_unique;
-
 	return RESULT_OK;
 }
 
