@@ -466,6 +466,70 @@ ir_label(Arena *arena, long long int label_unique, struct ir_op **dst)
 }
 
 static WARN_UNUSED result_t
+ir_switch(Arena *arena,
+          const struct ast *a,
+          struct intermediate *ir,
+          struct ir_op **dst)
+{
+	assert(a->node_type == NODE_SWITCH);
+
+	struct ir_op *control = NULL;
+	struct ir_val control_return = {0};
+	check(ir_expr(arena,
+	              a->u.switch_.control,
+	              ir,
+	              &control,
+	              &control_return));
+
+	struct ir_op *case_jumpers = NULL;
+	for (const struct ast_case *cur = a->u.switch_.label_cases; cur != NULL;
+	     cur = cur->next) {
+		struct ir_op *caser = NULL;
+		check(ir_alloc_op(arena, &caser));
+		caser->opcode = IR_OP_COMPARE_EQUAL;
+		ir_val_copy(&control_return, &caser->args[0]);
+		caser->args[1].subtype = IR_VAL_CONSTANT_INT;
+		caser->args[1].num = cur->constant;
+		caser->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		caser->args[2].num = ir->env.generator++;
+
+		struct ir_op *jumper = NULL;
+		check(ir_alloc_op(arena, &jumper));
+		jumper->opcode = IR_OP_JUMP_IF_ZERO;
+		ir_val_copy(&caser->args[2], &jumper->args[0]);
+		jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
+		jumper->args[1].num = cur->unique;
+
+		case_jumpers = ir_op_list_concat(
+			caser,
+			ir_op_list_concat(jumper, case_jumpers));
+	}
+
+	struct ir_op *body = NULL;
+	{
+		struct ir_val dummy = {0};
+		check(ir_expr(arena, a->u.switch_.body, ir, &body, &dummy));
+	}
+
+	struct ir_op *end_label = NULL;
+	check(ir_alloc_op(arena, &end_label));
+	end_label->opcode = IR_OP_LABEL;
+	end_label->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	end_label->args[0].num = a->u.switch_.label_end;
+
+	struct ir_op *collect[] = {
+		control,
+		case_jumpers,
+		body,
+		end_label,
+	};
+	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
+		*dst = ir_op_list_concat(*dst, collect[i]);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_unary_op(Arena *arena,
             const struct ast *a,
             struct intermediate *ir,
@@ -885,7 +949,7 @@ ir_expr(Arena *arena,
 		check(ir_label(arena, a->u.label.unique, dst));
 		break;
 	case NODE_SWITCH:
-		assert(0 && "implement IR for switch statements"); // TODO
+		check(ir_switch(arena, a, ir, dst));
 		break;
 	case NODE_CASE:
 		check(ir_label(arena, a->u.case_.unique, dst));
