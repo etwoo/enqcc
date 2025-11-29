@@ -495,7 +495,7 @@ ir_switch(Arena *arena,
 
 		struct ir_op *jumper = NULL;
 		check(ir_alloc_op(arena, &jumper));
-		jumper->opcode = IR_OP_JUMP_IF_ZERO;
+		jumper->opcode = IR_OP_JUMP_IF_NOT_ZERO;
 		ir_val_copy(&caser->args[2], &jumper->args[0]);
 		jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
 		jumper->args[1].num = cur->unique;

@@ -19,6 +19,7 @@
 	F("goto", TOKEN_KEYWORD_GOTO)                                          \
 	F("switch", TOKEN_KEYWORD_SWITCH)                                      \
 	F("case", TOKEN_KEYWORD_CASE)
+// TODO: "default" keyword for switch
 
 #define FOREACH_LEX_CHAR(F)                                                    \
 	F('(', TOKEN_PAREN_OPEN)                                               \
