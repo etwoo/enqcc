@@ -322,7 +322,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		assert(containing->origin->node_type == NODE_SWITCH);
 		if (containing->origin->u.switch_.label_default !=
 		    UNSET_DEFAULT_CASE_SENTINEL) {
-			return make_result(ERR_SEMA_CASE_DEFAULT_OUTSIDE);
+			return make_result(ERR_SEMA_CASE_DEFAULT_DUPLICATE);
 		}
 		containing->origin->u.switch_.label_default = a->u.case_.unique;
 		break;
