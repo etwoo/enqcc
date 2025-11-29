@@ -1361,7 +1361,6 @@ parse_init(Arena *arena,
 	struct flat **dst = &(**a).u.program.globals;
 	for (; tok != NULL; dst = &(**dst).cdr) {
 		check(flat_alloc(arena, dst));
-		assert((**a).u.program.globals != NULL);
 		if (parse_peek_ahead_function_maybe(tok)) {
 			check(parse_function(arena, &tok, &(**dst).car));
 		} else {
