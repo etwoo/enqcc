@@ -969,7 +969,6 @@ static WARN_UNUSED result_t
 parse_loop_for_init(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_BLOCK));
-	assert(dst != NULL && *dst != NULL);
 	check(flat_alloc(arena, &(**dst).u.block.statements));
 
 	struct ast **item_dst = &(**dst).u.block.statements->car;
