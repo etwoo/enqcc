@@ -1566,7 +1566,25 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.switch_.control, indent + 2);
 		debug("%*sBODY", (int)indent + 1, "");
 		parse_debug_print(a->u.switch_.body, indent + 2);
-		// TODO: debug-print label_end, label_cases
+		debug("%*sEND LABEL %lld%s",
+		      (int)indent + 1,
+		      "",
+		      a->u.switch_.label_end,
+		      a->u.switch_.label_end == UNSET_SWITCH_ID ? " (unset)"
+		                                                : "");
+		debug("%*sSEMANTIC CASE INFORMATION", (int)indent + 1, "");
+		for (const struct ast_case *cur = a->u.switch_.label_cases;
+		     cur != NULL;
+		     cur = cur->next) {
+			debug("%*sCASE.VALUE %lld",
+			      (int)indent + 2,
+			      "",
+			      cur->constant);
+			debug("%*sCASE.UNIQUE %lld",
+			      (int)indent + 2,
+			      "",
+			      cur->unique);
+		}
 		break;
 	case NODE_CASE:
 		debug("%*sCASE VALUE %.*s",
