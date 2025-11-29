@@ -898,7 +898,8 @@ static WARN_UNUSED bool
 fix_mul(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!(cur->opcode == ASM_OP_BINARY_MULTIPLY &&
-	      cur->args[1].operand_type == ASM_OPERAND_STACK)) {
+	      (cur->args[1].operand_type == ASM_OPERAND_STACK ||
+	      (cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA)))) {
 		return false;
 	}
 
