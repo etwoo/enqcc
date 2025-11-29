@@ -283,24 +283,24 @@ ir_if_else(Arena *arena,
            struct ir_val *return_value)
 {
 	bool has_else = false;
+	bool ternary = false;
 	switch (a->node_type) {
 	case NODE_IF_ELSE:
 		has_else = (a->u.if_.else_clause != NULL);
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		has_else = true;
+		ternary = true;
 		break;
 	default:
 		assert(0); /* logic error in caller */
-			break;
+		break;
 	}
 
 	const long long int cond_jump_to = ir->env.labels++;
 	const long long int end_jump_to = has_else ? ir->env.labels++ : -1;
 	const long long int assign_result_unique =
-		a->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL
-			? ir->env.generator++
-			: -1;
+		ternary ? ir->env.generator++ : -1;
 
 	struct ir_op *cond_ops = NULL;
 	struct ir_val cond_return = {0};
@@ -308,8 +308,8 @@ ir_if_else(Arena *arena,
 
 	struct if_else_prep then_p = {0};
 	check(ir_if_else_prepare(arena,
-	                         a->u.if_.then_clause,
-	                         a->u.op_ternary.then_expr,
+	                         ternary ? NULL : a->u.if_.then_clause,
+	                         ternary ? a->u.op_ternary.then_expr : NULL,
 	                         ir,
 	                         &cond_return,
 	                         cond_jump_to,
@@ -319,8 +319,9 @@ ir_if_else(Arena *arena,
 	struct if_else_prep or_p = {0};
 	if (has_else) {
 		check(ir_if_else_prepare(arena,
-		                         a->u.if_.else_clause,
-					 a->u.op_ternary.else_expr,
+		                         ternary ? NULL : a->u.if_.else_clause,
+		                         ternary ? a->u.op_ternary.else_expr
+		                                 : NULL,
 		                         ir,
 		                         NULL,
 		                         end_jump_to,
