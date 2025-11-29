@@ -152,21 +152,17 @@ ir_ret_op(Arena *arena,
 
 static WARN_UNUSED result_t
 ir_block(Arena *arena,
-         const struct ast *a,
+         const struct flat *cursor,
          struct intermediate *ir,
          struct ir_op **block_ops)
 {
 	struct ir_op *head = NULL;
-
 	struct ir_op **dst = block_ops;
-	for (; a != NULL; a = a->u.block.next) {
-		assert(a->node_type == NODE_BLOCK);
 
-		if (a->u.block.item == NULL) {
-			continue;
-		}
+	for (; cursor != NULL; cursor = cursor->cdr) {
+		assert(cursor->car != NULL);
 
-		if (a->u.block.item->node_type == NODE_FUNCTION) {
+		if (cursor->car->node_type == NODE_FUNCTION) {
 			/*
 			 * For IR purposes, ignore function declarations that
 			 * appear inside other blocks.
@@ -175,7 +171,7 @@ ir_block(Arena *arena,
 		}
 
 		struct ir_val dummy = {0};
-		check(ir_expr(arena, a->u.block.item, ir, dst, &dummy));
+		check(ir_expr(arena, cursor->car, ir, dst, &dummy));
 		/*
 		 * Currently, <block_return> value of each overall block
 		 * expression is unused. Discard it after each loop iteration.
@@ -226,13 +222,19 @@ struct if_else_prep {
 
 static WARN_UNUSED result_t
 ir_if_else_prepare(Arena *arena,
-                   const struct ast *ast_clause,
+                   const struct flat *ast_clause,
+                   const struct ast *ast_clause_returning_value,
                    struct intermediate *ir,
                    const struct ir_val *jump_operand,
                    const long long int jump_label,
                    const long long int assign_result_unique,
                    struct if_else_prep *out)
 {
+	/* non-NULL ast_clause XOR non-NULL ast_clause_returning_value */
+	assert((ast_clause == NULL) != (ast_clause_returning_value == NULL));
+	/* assign_result_unique set -> ast_clause_returning_value set */
+	assert(assign_result_unique < 0 || ast_clause_returning_value != NULL);
+
 	check(ir_alloc_op(arena, &out->jumper));
 	if (jump_operand != NULL) {
 		out->jumper->opcode = IR_OP_JUMP_IF_ZERO;
@@ -246,7 +248,17 @@ ir_if_else_prepare(Arena *arena,
 	}
 
 	struct ir_val body_return = {0};
-	check(ir_expr(arena, ast_clause, ir, &out->body, &body_return));
+	if (ast_clause != NULL) {
+		check(ir_block(arena, ast_clause, ir, &out->body));
+	} else if (ast_clause_returning_value != NULL) {
+		check(ir_expr(arena,
+		              ast_clause_returning_value,
+		              ir,
+		              &out->body,
+		              &body_return));
+	} else {
+		assert(0); /* logic error in caller */
+	}
 
 	if (assign_result_unique >= 0) {
 		check(ir_alloc_op(arena, &out->assign_result));
@@ -270,16 +282,25 @@ ir_if_else(Arena *arena,
            struct ir_op **dst,
            struct ir_val *return_value)
 {
-	assert(a->node_type == NODE_IF_ELSE ||
-	       a->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL);
+	bool has_else = false;
+	bool ternary = false;
+	switch (a->node_type) {
+	case NODE_IF_ELSE:
+		has_else = (a->u.if_.else_clause != NULL);
+		break;
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		has_else = true;
+		ternary = true;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
 
-	const bool has_else = (a->u.if_.else_clause != NULL);
 	const long long int cond_jump_to = ir->env.labels++;
 	const long long int end_jump_to = has_else ? ir->env.labels++ : -1;
 	const long long int assign_result_unique =
-		a->node_type == NODE_EXPRESSION_TERNARY_CONDITIONAL
-			? ir->env.generator++
-			: -1;
+		ternary ? ir->env.generator++ : -1;
 
 	struct ir_op *cond_ops = NULL;
 	struct ir_val cond_return = {0};
@@ -287,7 +308,8 @@ ir_if_else(Arena *arena,
 
 	struct if_else_prep then_p = {0};
 	check(ir_if_else_prepare(arena,
-	                         a->u.if_.then_clause,
+	                         ternary ? NULL : a->u.if_.then_clause,
+	                         ternary ? a->u.op_ternary.then_expr : NULL,
 	                         ir,
 	                         &cond_return,
 	                         cond_jump_to,
@@ -297,7 +319,9 @@ ir_if_else(Arena *arena,
 	struct if_else_prep or_p = {0};
 	if (has_else) {
 		check(ir_if_else_prepare(arena,
-		                         a->u.if_.else_clause,
+		                         ternary ? NULL : a->u.if_.else_clause,
+		                         ternary ? a->u.op_ternary.else_expr
+		                                 : NULL,
 		                         ir,
 		                         NULL,
 		                         end_jump_to,
@@ -366,11 +390,8 @@ ir_loop(Arena *arena,
 		ir_val_copy(&go_end, &precond_jumper->args[1]);
 	}
 
-	struct ir_val dummy = {0};
-
 	struct ir_op *body = NULL;
-	memset(&dummy, 0, sizeof(dummy));
-	check(ir_expr(arena, a->u.loop.body, ir, &body, &dummy));
+	check(ir_block(arena, a->u.loop.body, ir, &body));
 
 	struct ir_op *continue_label = NULL;
 	check(ir_alloc_op(arena, &continue_label));
@@ -378,7 +399,7 @@ ir_loop(Arena *arena,
 	ir_val_copy(&go_continue, &continue_label->args[0]);
 
 	struct ir_op *incr = NULL;
-	memset(&dummy, 0, sizeof(dummy));
+	struct ir_val dummy = {0};
 	check(ir_expr(arena, a->u.loop.incr, ir, &incr, &dummy));
 
 	struct ir_op *postcond = NULL;
@@ -514,10 +535,7 @@ ir_switch(Arena *arena,
 	}
 
 	struct ir_op *body = NULL;
-	{
-		struct ir_val dummy = {0};
-		check(ir_expr(arena, a->u.switch_.body, ir, &body, &dummy));
-	}
+	check(ir_block(arena, a->u.switch_.body, ir, &body));
 
 	struct ir_op *end_jumper = NULL;
 	check(ir_alloc_op(arena, &end_jumper));
@@ -939,7 +957,7 @@ ir_expr(Arena *arena,
 		check(ir_ret_op(arena, a, ir, dst));
 		break;
 	case NODE_BLOCK:
-		check(ir_block(arena, a, ir, dst));
+		check(ir_block(arena, a->u.block.statements, ir, dst));
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
@@ -1060,7 +1078,12 @@ ir_func(Arena *arena,
 		++i;
 	}
 
-	check(ir_block(arena, a->u.function.block, ir, &f->ops));
+	assert(a->u.function.block != NULL);
+	assert(a->u.function.block->node_type == NODE_BLOCK);
+	check(ir_block(arena,
+	               a->u.function.block->u.block.statements,
+	               ir,
+	               &f->ops));
 
 	/*
 	 * If necessary, add a final, often-unreachable `return 0` instruction
@@ -1124,24 +1147,22 @@ ir_program(Arena *arena,
 {
 	assert(a->node_type == NODE_PROGRAM);
 	assert(a->u.program.globals == NULL ||
-	       a->u.program.globals->node_type == NODE_FUNCTION ||
-	       a->u.program.globals->node_type == NODE_DECLARATION);
+	       a->u.program.globals->car->node_type == NODE_FUNCTION ||
+	       a->u.program.globals->car->node_type == NODE_DECLARATION);
 
 	struct ir_function **dst_fun = &ir->functions;
-	a = a->u.program.globals;
-	while (a != NULL) {
-		switch (a->node_type) {
+	struct flat *cursor = a->u.program.globals;
+	for (; cursor != NULL; cursor = cursor->cdr) {
+		switch (cursor->car->node_type) {
 		case NODE_FUNCTION:
-			if (a->u.function.block != NULL) {
-				check(ir_func(arena, a, ir, dst_fun));
+			if (cursor->car->u.function.block != NULL) {
+				check(ir_func(arena, cursor->car, ir, dst_fun));
 				assert(*dst_fun != NULL);
 				dst_fun = &(**dst_fun).next;
 			}
-			a = a->u.function.next;
 			break;
 		case NODE_DECLARATION:
 			/* skip variables, and use symbol_table instead */
-			a = a->u.declare.next;
 			break;
 		default:
 			assert(0); /* logic error in caller */

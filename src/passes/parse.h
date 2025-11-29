@@ -95,37 +95,38 @@ struct ast_case {
 enum ast_nodetype { FOREACH_AST_NODE(TO_ENUM) };
 #undef TO_ENUM
 
+/* flat collection of syntax elements */
+struct flat;
+
+/* hierarchical tree of syntax elements */
 struct ast {
 	enum ast_nodetype node_type;
 	union {
 		struct {
-			struct ast *globals;
+			struct flat *globals;
 		} program;
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
 			struct ast_symbol *params;
 			struct ast *block;
-			struct ast *next;
 		} function;
 		struct {
-			struct ast *item;
-			struct ast *next;
+			struct flat *statements;
 		} block;
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
 			struct ast *init;
-			struct ast *next;
 		} declare;
 		struct {
 			struct ast *condition;
-			struct ast *then_clause;
-			struct ast *else_clause;
+			struct flat *then_clause;
+			struct flat *else_clause;
 		} if_;
 		struct {
 			struct ast *precond;
-			struct ast *body;
+			struct flat *body;
 			struct ast *incr;
 			struct ast *postcond;
 			long long int label_end;
@@ -162,7 +163,7 @@ struct ast {
 		} label;
 		struct {
 			struct ast *control;
-			struct ast *body;
+			struct flat *body;
 			long long int label_default;
 			long long int label_end;
 			struct ast_case *label_cases; /* computed by sema.c */
@@ -174,6 +175,11 @@ struct ast {
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
+};
+
+struct flat {
+	struct ast *car;
+	struct flat *cdr;
 };
 
 /*

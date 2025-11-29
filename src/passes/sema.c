@@ -12,9 +12,16 @@ struct sema_ops {
 	result_t (*node_exit)(struct ast *a, void *userdata);
 };
 
+static result_t
+sema_walk_flat(struct flat *a, const struct sema_ops *ops, void *u) WARN_UNUSED;
+
 static WARN_UNUSED result_t
 sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 {
+	if (a == NULL) {
+		return RESULT_OK;
+	}
+
 	struct ast *recurse_into_sibling_node = NULL;
 	if (ops->node_enter != NULL) {
 		check(ops->node_enter(a, u));
@@ -22,48 +29,31 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		check(sema_walk(a->u.program.globals, ops, u));
+		check(sema_walk_flat(a->u.program.globals, ops, u));
 		break;
 	case NODE_FUNCTION:
-		if (a->u.function.block != NULL) {
-			check(sema_walk(a->u.function.block, ops, u));
-		}
-		if (a->u.function.next != NULL) {
-			recurse_into_sibling_node = a->u.function.next;
-		}
+		check(sema_walk(a->u.function.block, ops, u));
 		break;
 	case NODE_BLOCK:
-		if (a->u.block.item != NULL) {
-			check(sema_walk(a->u.block.item, ops, u));
-			if (a->u.block.next != NULL) {
-				recurse_into_sibling_node = a->u.block.next;
-			}
-		}
+		check(sema_walk_flat(a->u.block.statements, ops, u));
 		break;
 	case NODE_DECLARATION:
-		if (a->u.declare.init != NULL) {
-			check(sema_walk(a->u.declare.init, ops, u));
-		}
-		if (a->u.declare.next != NULL) {
-			recurse_into_sibling_node = a->u.declare.next;
-		}
+		check(sema_walk(a->u.declare.init, ops, u));
 		break;
 	case NODE_IF_ELSE:
 		check(sema_walk(a->u.if_.condition, ops, u));
-		check(sema_walk(a->u.if_.then_clause, ops, u));
-		if (a->u.if_.else_clause != NULL) {
-			check(sema_walk(a->u.if_.else_clause, ops, u));
-		}
+		check(sema_walk_flat(a->u.if_.then_clause, ops, u));
+		check(sema_walk_flat(a->u.if_.else_clause, ops, u));
 		break;
 	case NODE_LOOP:
 		check(sema_walk(a->u.loop.precond, ops, u));
-		check(sema_walk(a->u.loop.body, ops, u));
+		check(sema_walk_flat(a->u.loop.body, ops, u));
 		check(sema_walk(a->u.loop.incr, ops, u));
 		check(sema_walk(a->u.loop.postcond, ops, u));
 		break;
 	case NODE_SWITCH:
 		check(sema_walk(a->u.switch_.control, ops, u));
-		check(sema_walk(a->u.switch_.body, ops, u));
+		check(sema_walk_flat(a->u.switch_.body, ops, u));
 		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
@@ -119,20 +109,14 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(a->u.op_binary.lhs, ops, u));
 		check(sema_walk(a->u.op_ternary.condition, ops, u));
 		check(sema_walk(a->u.op_ternary.then_expr, ops, u));
-		if (a->u.op_ternary.else_expr != NULL) {
-			check(sema_walk(a->u.op_ternary.else_expr, ops, u));
-		}
+		check(sema_walk(a->u.op_ternary.else_expr, ops, u));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		if (a->u.call.arguments != NULL) {
-			check(sema_walk(a->u.call.arguments, ops, u));
-		}
+		check(sema_walk(a->u.call.arguments, ops, u));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 		check(sema_walk(a->u.call_args.expr, ops, u));
-		if (a->u.call_args.next != NULL) {
-			recurse_into_sibling_node = a->u.call_args.next;
-		}
+		recurse_into_sibling_node = a->u.call_args.next;
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
@@ -147,6 +131,17 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(recurse_into_sibling_node, ops, u));
 	}
 
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_walk_flat(struct flat *a, const struct sema_ops *ops, void *u)
+{
+	const struct flat *cursor = a;
+	for (; cursor != NULL; cursor = cursor->cdr) {
+		assert(cursor->car != NULL);
+		check(sema_walk(cursor->car, ops, u));
+	}
 	return RESULT_OK;
 }
 
@@ -545,47 +540,44 @@ sema_var_usage(struct ast *a, void *userdata MAYBE_UNUSED)
 static WARN_UNUSED result_t
 sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 {
-	/* We're in block scope ... */
-	if (a->node_type == NODE_BLOCK &&
-	    /* ... with a label or switch-case as the current item */
-	    a->u.block.item != NULL &&
-	    (a->u.block.item->node_type == NODE_LABEL ||
-	     a->u.block.item->node_type == NODE_CASE ||
-	     a->u.block.item->node_type == NODE_CASE_DEFAULT)) {
+	if (a->node_type != NODE_BLOCK) {
+		return RESULT_OK;
+	}
+
+	const struct flat *cursor = a->u.block.statements;
+	for (; cursor != NULL; cursor = cursor->cdr) {
+		assert(cursor->car != NULL);
 		const struct string_view *name = NULL;
-		switch (a->u.block.item->node_type) {
+		switch (cursor->car->node_type) {
 		case NODE_LABEL:
-			name = &a->u.block.item->u.label.name;
+			name = &cursor->car->u.label.name;
 			break;
 		case NODE_CASE:
 		case NODE_CASE_DEFAULT:
-			name = &a->u.block.item->u.case_.constant;
+			name = &cursor->car->u.case_.constant;
 			break;
 		default:
-			assert(0); /* logic error in caller */
-			break;
+			continue;
 		}
 		/*
 		 * Check for C23 extensions that the testsuite requires us to
 		 * reject with an error, rather than merely warning.
 		 */
-		if (a->u.block.next == NULL) {
-			/* Reject label at the very end of a block! */
+		if (cursor->cdr == NULL) {
+			/* Reject label/case at the very end of a block! */
 			return make_result(ERR_SEMA_LABEL_AT_BLOCK_END,
 			                   name->data,
 			                   name->sz);
 		}
-		if (a->u.block.next->node_type == NODE_BLOCK &&
-		    a->u.block.next->u.block.item != NULL &&
-		    a->u.block.next->u.block.item->node_type ==
-		            NODE_DECLARATION) {
-			/* Reject label followed by a var declaration! */
+		if (cursor->cdr->car->node_type == NODE_DECLARATION) {
+			/* Reject label/case followed by a var declaration! */
 			return make_result(
 				ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,
 				name->data,
 				name->sz);
 		}
 	}
+
 	return RESULT_OK;
 }
 
@@ -603,7 +595,7 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 
 struct sema_symbol_state {
 	Arena *arena;
-	struct ast *ast_program_globals;
+	struct flat *ast_program_globals;
 	struct symbol *function_symbols;
 	struct symbol *variable_symbols;
 };
@@ -667,25 +659,13 @@ sema_fn_param_names(struct ast_symbol *params)
 }
 
 static WARN_UNUSED bool
-ast_contains(const struct ast *haystack, const struct ast *needle)
+ast_contains(const struct flat *haystack, const struct ast *needle)
 {
-	while (haystack != NULL) {
-		if (needle == haystack) {
+	for (; haystack != NULL; haystack = haystack->cdr) {
+		if (needle == haystack->car) {
 			return true;
 		}
-		switch (haystack->node_type) {
-		case NODE_FUNCTION:
-			haystack = haystack->u.function.next;
-			break;
-		case NODE_DECLARATION:
-			haystack = haystack->u.declare.next;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
 	}
-
 	return false;
 }
 
