@@ -506,10 +506,12 @@ ir_switch(Arena *arena,
 	}
 
 	struct ir_op *default_jumper = NULL;
-	check(ir_alloc_op(arena, &default_jumper));
-	default_jumper->opcode = IR_OP_JUMP;
-	default_jumper->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	default_jumper->args[0].num = a->u.switch_.label_default;
+	if (a->u.switch_.label_default >= 0) {
+		check(ir_alloc_op(arena, &default_jumper));
+		default_jumper->opcode = IR_OP_JUMP;
+		default_jumper->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+		default_jumper->args[0].num = a->u.switch_.label_default;
+	}
 
 	struct ir_op *body = NULL;
 	{

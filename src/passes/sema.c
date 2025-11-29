@@ -161,7 +161,6 @@ enum containing_statement_type {
 
 struct containing_statement {
 	struct ast *origin;
-	long long int label;
 	enum containing_statement_type statement;
 };
 
@@ -242,11 +241,16 @@ case_prepend(Arena *arena,
 	return RESULT_OK;
 }
 
+enum {
+	UNSET_DEFAULT_CASE_SENTINEL = -100,
+};
+
 static WARN_UNUSED result_t
 sema_enter_loop_id(struct ast *a, void *userdata)
 {
 	struct sema_label_loops_state *state = userdata;
 	struct containing_statement *containing = NULL;
+	struct ast *origin = NULL;
 	long long int constant = 0;
 
 	switch (a->node_type) {
@@ -257,49 +261,44 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		assert(state->depth < BLOCK_NESTING_LIMIT);
 		containing = &state->container[state->depth];
 		containing->origin = a;
-		containing->label = state->generator;
 		containing->statement = CONTAINING_LOOP;
 		state->depth++;
 		a->u.loop.label_start = state->generator++;
 		a->u.loop.label_continue = state->generator++;
 		a->u.loop.label_end = state->generator++;
-		/* invariant required by NODE_CONTINUE case below */
-		assert(containing->label + 1 == a->u.loop.label_continue);
-		/* invariant required by NODE_BREAK case below */
-		assert(containing->label + 2 == a->u.loop.label_end);
 		break;
 	case NODE_BREAK:
 		if (state->depth == 0) {
 			return make_result(ERR_SEMA_BREAK_OUTSIDE);
 		}
+		origin = state->container[state->depth - 1].origin;
 		switch (state->container[state->depth - 1].statement) {
 		case CONTAINING_LOOP:
-			a->u.num = state->container[state->depth - 1].label + 2;
+			assert(origin->node_type == NODE_LOOP);
+			a->u.num = origin->u.loop.label_end;
 			break;
 		case CONTAINING_SWITCH:
-			a->u.num = state->container[state->depth - 1].label + 1;
+			assert(origin->node_type == NODE_SWITCH);
+			a->u.num = origin->u.switch_.label_end;
 			break;
 		}
 		break;
 	case NODE_CONTINUE:
-		if (has_container(state, CONTAINING_LOOP) == NULL) {
+		containing = has_container(state, CONTAINING_LOOP);
+		if (containing == NULL) {
 			return make_result(ERR_SEMA_CONTINUE_OUTSIDE);
 		}
-		a->u.num = state->container[state->depth - 1].label + 1;
+		assert(containing->origin->node_type == NODE_LOOP);
+		a->u.num = containing->origin->u.loop.label_continue;
 		break;
 	case NODE_SWITCH:
 		assert(state->depth < BLOCK_NESTING_LIMIT);
 		containing = &state->container[state->depth];
 		containing->origin = a;
-		containing->label = state->generator;
 		containing->statement = CONTAINING_SWITCH;
 		state->depth++;
-		a->u.switch_.label_default = state->generator++;
+		a->u.switch_.label_default = UNSET_DEFAULT_CASE_SENTINEL;
 		a->u.switch_.label_end = state->generator++;
-		/* invariant required by NODE_CASE_DEFAULT case below */
-		assert(containing->label == a->u.switch_.label_default);
-		/* invariant required by NODE_BREAK case above */
-		assert(containing->label + 1 == a->u.switch_.label_end);
 		break;
 	case NODE_CASE:
 		containing = has_container(state, CONTAINING_SWITCH);
@@ -319,10 +318,13 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		if (containing == NULL) {
 			return make_result(ERR_SEMA_CASE_DEFAULT_OUTSIDE);
 		}
+		a->u.case_.unique = state->generator++;
 		assert(containing->origin->node_type == NODE_SWITCH);
-		// TODO: error on duplicate default case
-		// TODO: remove containing_statement.label, just use origin ptr
-		a->u.case_.unique = containing->label;
+		if (containing->origin->u.switch_.label_default !=
+		    UNSET_DEFAULT_CASE_SENTINEL) {
+			return make_result(ERR_SEMA_CASE_DEFAULT_OUTSIDE);
+		}
+		containing->origin->u.switch_.label_default = a->u.case_.unique;
 		break;
 	default:
 		break;

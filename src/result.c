@@ -285,6 +285,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");
 		break;
+	case ERR_SEMA_CASE_DEFAULT_DUPLICATE:
+		s = strdup("Duplicate default label in switch");
+		break;
 	case ERR_SEMA_CASE_DEFAULT_OUTSIDE:
 		s = strdup("Invalid default case with no enclosing switch");
 		break;
