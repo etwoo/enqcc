@@ -932,7 +932,6 @@ parse_stmt_multi(Arena *arena, const struct token **tok, struct flat **dst)
 	bool call_again = true;
 	for (; call_again; dst = &(**dst).cdr) {
 		check(flat_alloc(arena, dst));
-		assert(*dst != NULL);
 		check(parse_stmt(arena, tok, &(**dst).car, &call_again));
 	}
 	return RESULT_OK;
@@ -1170,6 +1169,8 @@ parse_stmt(Arena *arena,
            struct ast **dst,
            bool *call_again)
 {
+	assert(dst != NULL && *dst == NULL);
+
 	bool expect_semicolon_after = false;
 	*call_again = false;
 
