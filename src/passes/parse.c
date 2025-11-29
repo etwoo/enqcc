@@ -1523,7 +1523,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.loop.label_end == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_BREAK:
-		debug("%*sLOOP ID %lld%s",
+		debug("%*sLOOP/SWITCH ID %lld%s",
 		      (int)indent + 1,
 		      "",
 		      a->u.num,
@@ -1566,7 +1566,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.switch_.control, indent + 2);
 		debug("%*sBODY", (int)indent + 1, "");
 		parse_debug_print(a->u.switch_.body, indent + 2);
-		debug("%*sEND LABEL %lld%s",
+		debug("%*sSWITCH END LABEL %lld%s",
 		      (int)indent + 1,
 		      "",
 		      a->u.switch_.label_end,
