@@ -882,7 +882,7 @@ static result_t parse_function(Arena *arena,
                                struct ast **dst) WARN_UNUSED;
 static result_t parse_stmt(Arena *arena,
                            const struct token **tok,
-                           struct flat **container,
+                           struct ast **dst,
                            bool *call_again) WARN_UNUSED;
 
 static WARN_UNUSED result_t
@@ -904,15 +904,14 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 	}
 
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
+		check(flat_alloc(arena, dst));
 		if (parse_peek_ahead_function_maybe(*tok)) {
-			check(flat_alloc(arena, dst));
 			check(parse_function(arena, tok, &(**dst).car));
 		} else if (is_token_maybe_function_prefix(*tok)) {
-			check(flat_alloc(arena, dst));
 			check(parse_decl(arena, tok, &(**dst).car));
 		} else {
 			bool dummy = false;
-			check(parse_stmt(arena, tok, dst, &dummy));
+			check(parse_stmt(arena, tok, &(**dst).car, &dummy));
 			/* can ignore dummy; we loop unconditionally here */
 		}
 		assert(*dst != NULL);
@@ -932,8 +931,9 @@ parse_stmt_multi(Arena *arena, const struct token **tok, struct flat **dst)
 {
 	bool call_again = true;
 	for (; call_again; dst = &(**dst).cdr) {
-		check(parse_stmt(arena, tok, dst, &call_again));
+		check(flat_alloc(arena, dst));
 		assert(*dst != NULL);
+		check(parse_stmt(arena, tok, &(**dst).car, &call_again));
 	}
 	return RESULT_OK;
 }
@@ -1167,15 +1167,11 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 static WARN_UNUSED result_t
 parse_stmt(Arena *arena,
            const struct token **tok,
-           struct flat **container,
+           struct ast **dst,
            bool *call_again)
 {
 	bool expect_semicolon_after = false;
 	*call_again = false;
-
-	check(flat_alloc(arena, container));
-	struct ast **dst = &(**container).car;
-	assert(dst != NULL && *dst == NULL);
 
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
