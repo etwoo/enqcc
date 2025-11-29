@@ -98,7 +98,7 @@ enum ast_nodetype { FOREACH_AST_NODE(TO_ENUM) };
 /* flat non-nested collection of syntax elements */
 struct flat;
 
-/* hierarchical tree of AST nodes */
+/* hierarchical tree of syntax elements */
 struct ast {
 	enum ast_nodetype node_type;
 	union {
