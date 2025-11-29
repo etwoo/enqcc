@@ -4,6 +4,7 @@
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
+#include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
 struct sema_ops {
@@ -183,16 +184,60 @@ has_container(struct sema_label_loops_state *state,
 }
 
 static WARN_UNUSED result_t
-parse_num(const struct string_view *str, long long int *dst)
+case_parse_constant(const struct string_view *str, long long int *dst)
 {
-	// TODO: verify a->u.case_.constant coerces to integer
-	// maybe use strtoll() plus check no dangling extra chars
-	// from manpage for strtoll
-	//
-	// If endptr is not NULL, strtol() stores the address of the
-	// first invalid character in *endptr ... if *str is not '\0'
-	// but **endptr is '\0' on return, the entire string was valid
-	(void)str; *dst = 0;
+	assert(str->sz > 0);
+
+	/* strtoll() requires a NUL-terminated C string */
+	char *nul_terminated = strndup(str->data, str->sz);
+	check_if(nul_terminated == NULL, ERR_SEMA_ALLOC);
+
+	char *end = NULL;
+	*dst = strtoll(nul_terminated, &end, 0);
+	/*
+	 * From `man strtoll`:
+	 *
+	 * If endptr is not NULL, strtol() stores the address of the first
+	 * invalid character in *endptr. If there were no digits at all,
+	 * however, strtol() stores the original value of str in *endptr.
+	 * (Thus, if *str is not '\0' but **endptr is '\0' on return, the
+	 * entire string was valid.)
+	 */
+	bool valid = (*nul_terminated != '\0' && end != NULL && *end == '\0');
+
+	free(nul_terminated);
+	nul_terminated = NULL;
+
+	if (!valid) {
+		return make_result(ERR_SEMA_CASE_PARSE_CONSTANT,
+		                   str->data,
+		                   str->sz);
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+case_prepend(Arena *arena,
+             struct ast_case **head,
+             long long int constant,
+             long long int unique)
+{
+	for (struct ast_case *i = *head; i != NULL; i = i->next) {
+		if (constant == i->constant) {
+			return make_result(ERR_SEMA_CASE_DUPLICATE,
+			                   (int)constant);
+		}
+	}
+
+	struct ast_case *node = arena_alloc(arena, sizeof(*node));
+	check_if(node == NULL, ERR_SEMA_ALLOC);
+	memset(node, 0, sizeof(*node));
+
+	node->constant = constant;
+	node->unique = unique;
+	node->next = *head;
+	*head = node;
 	return RESULT_OK;
 }
 
@@ -201,7 +246,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 {
 	struct sema_label_loops_state *state = userdata;
 	struct containing_statement *containing = NULL;
-	struct ast_case *node = NULL;
+	long long int constant = 0;
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
@@ -255,18 +300,13 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		if (containing == NULL) {
 			return make_result(ERR_SEMA_CASE_OUTSIDE);
 		}
+		check(case_parse_constant(&a->u.case_.constant, &constant));
 		a->u.case_.unique = state->generator++;
-		{
-			node = arena_alloc(state->arena, sizeof(*node));
-			check_if(node == NULL, ERR_SEMA_ALLOC);
-			memset(node, 0, sizeof(*node));
-		}
-		check(parse_num(&a->u.case_.constant, &node->constant));
-		node->unique = a->u.case_.unique;
 		assert(containing->origin->node_type == NODE_SWITCH);
-		node->next = containing->origin->u.switch_.label_cases;
-		containing->origin->u.switch_.label_cases = node;
-		// TODO: reject duplicate cases? refactor into prepend() fn
+		check(case_prepend(state->arena,
+		                   &containing->origin->u.switch_.label_cases,
+		                   constant,
+		                   a->u.case_.unique));
 		break;
 	default:
 		break;
