@@ -534,7 +534,7 @@ ir_switch(Arena *arena,
 		control,
 		case_jumpers,
 		default_jumper,
-		end_label,
+		end_jumper,
 		body,
 		end_label,
 	};
