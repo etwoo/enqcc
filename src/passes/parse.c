@@ -1618,8 +1618,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      (int)indent + 1,
 		      "",
 		      a->u.case_.unique,
-		      a->u.case_.unique == NOT_YET_UNIQUE ? " (not unique)"
-		                                          : "");
+		      a->u.case_.unique == UNSET_SWITCH_ID ? " (unset)" : "");
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
