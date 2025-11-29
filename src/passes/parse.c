@@ -407,6 +407,7 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 static WARN_UNUSED result_t
 flat_alloc(Arena *arena, struct flat **dst)
 {
+	assert(*dst == NULL);
 	*dst = arena_alloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_PARSE_ALLOC);
 	memset(*dst, 0, sizeof(**dst));
@@ -1167,7 +1168,6 @@ parse_stmt(Arena *arena,
 	bool expect_semicolon_after = false;
 	*call_again = false;
 
-	assert(*container == NULL);
 	check(flat_alloc(arena, container));
 	struct ast **dst = &(**container).car;
 	assert(dst != NULL && *dst == NULL);
