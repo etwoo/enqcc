@@ -519,16 +519,22 @@ ir_switch(Arena *arena,
 		check(ir_expr(arena, a->u.switch_.body, ir, &body, &dummy));
 	}
 
+	struct ir_op *end_jumper = NULL;
+	check(ir_alloc_op(arena, &end_jumper));
+	end_jumper->opcode = IR_OP_JUMP;
+	end_jumper->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
+	end_jumper->args[0].num = a->u.switch_.label_end;
+
 	struct ir_op *end_label = NULL;
 	check(ir_alloc_op(arena, &end_label));
 	end_label->opcode = IR_OP_LABEL;
-	end_label->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	end_label->args[0].num = a->u.switch_.label_end;
+	ir_val_copy(&end_jumper->args[0], &end_label->args[0]);
 
 	struct ir_op *collect[] = {
 		control,
 		case_jumpers,
 		default_jumper,
+		end_label,
 		body,
 		end_label,
 	};
