@@ -884,38 +884,37 @@ static result_t parse_stmt(Arena *arena,
                            bool *call_again) WARN_UNUSED;
 
 static WARN_UNUSED result_t
-parse_block(Arena *arena, const struct token **tok, struct ast **dst)
+parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 {
 	if (!is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_OPEN);
 	}
 	token_consume(tok);
 
-	check(parse_alloc(arena, dst, NODE_BLOCK));
-	assert(dst != NULL && *dst != NULL);
-	struct flat *cursor = (**dst).u.block.statements;
+	check(parse_alloc(arena, dst_outer, NODE_BLOCK));
+	struct flat **dst = &(**dst_outer).u.block.statements;
 
 	if (is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		token_consume(tok);
-		check(flat_alloc(arena, &cursor));
-		check(parse_alloc(arena, &cursor->car, NODE_EXPRESSION_NULL));
+		check(flat_alloc(arena, dst));
+		check(parse_alloc(arena, &(**dst).car, NODE_EXPRESSION_NULL));
 		return RESULT_OK;
 	}
 
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		if (parse_peek_ahead_function_maybe(*tok)) {
-			check(flat_alloc(arena, &cursor));
-			check(parse_function(arena, tok, &cursor->car));
+			check(flat_alloc(arena, dst));
+			check(parse_function(arena, tok, &(**dst).car));
 		} else if (is_token_maybe_function_prefix(*tok)) {
-			check(flat_alloc(arena, &cursor));
-			check(parse_decl(arena, tok, &cursor->car));
+			check(flat_alloc(arena, dst));
+			check(parse_decl(arena, tok, &(**dst).car));
 		} else {
 			bool dummy = false;
-			check(parse_stmt(arena, tok, &cursor, &dummy));
+			check(parse_stmt(arena, tok, dst, &dummy));
 			/* can ignore dummy; we loop unconditionally here */
 		}
-		assert(cursor != NULL);
-		cursor = cursor->cdr;
+		assert(*dst != NULL);
+		dst = &(**dst).cdr;
 	}
 
 	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
@@ -930,9 +929,9 @@ static WARN_UNUSED result_t
 parse_stmt_multi(Arena *arena, const struct token **tok, struct flat **dst)
 {
 	bool call_again = true;
-	for (struct flat **cursor = dst; call_again; cursor = &(**cursor).cdr) {
-		check(parse_stmt(arena, tok, cursor, &call_again));
-		assert(*cursor != NULL);
+	for (; call_again; dst = &(**dst).cdr) {
+		check(parse_stmt(arena, tok, dst, &call_again));
+		assert(*dst != NULL);
 	}
 	return RESULT_OK;
 }
@@ -1176,6 +1175,7 @@ parse_stmt(Arena *arena,
 	assert(*container == NULL);
 	check(flat_alloc(arena, container));
 	struct ast **dst = &(**container).car;
+	assert(dst != NULL && *dst == NULL);
 
 	// TODO: have parse_if_else(), parse_loop(), parse_switch() pass flag
 	// ... or equivalently, have parse_block() pass opposite
@@ -1420,19 +1420,20 @@ parse_init(Arena *arena,
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
 
-	struct flat *cursor = (**a).u.program.globals;
-	for (; tok != NULL; cursor = cursor->cdr) {
-		check(flat_alloc(arena, &cursor));
+	struct flat **dst = &(**a).u.program.globals;
+	for (; tok != NULL; dst = &(**dst).cdr) {
+		check(flat_alloc(arena, dst));
+		assert((**a).u.program.globals != NULL);
 		if (parse_peek_ahead_function_maybe(tok)) {
-			check(parse_function(arena, &tok, &cursor->car));
+			check(parse_function(arena, &tok, &(**dst).car));
 		} else {
-			check(parse_decl(arena, &tok, &cursor->car));
+			check(parse_decl(arena, &tok, &(**dst).car));
 		}
 	}
 
 	struct symbol *symbols = NULL;
 
-	cursor = (**a).u.program.globals;
+	struct flat *cursor = (**a).u.program.globals;
 	for (; generator != NULL && cursor != NULL; cursor = cursor->cdr) {
 		assert(cursor->car != NULL);
 		switch (cursor->car->node_type) {
@@ -1560,7 +1561,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_BLOCK:
-		assert(a->u.block.statements != NULL);
 		parse_debug_print_flat(a->u.block.statements, indent + 1);
 		break;
 	case NODE_DECLARATION:
