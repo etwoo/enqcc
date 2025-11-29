@@ -1172,64 +1172,6 @@ parse_stmt(Arena *arena,
 	struct ast **dst = &(**container).car;
 	assert(dst != NULL && *dst == NULL);
 
-	// TODO: have parse_if_else(), parse_loop(), parse_switch() pass flag
-	// ... or equivalently, have parse_block() pass opposite
-	//
-	// ... and have this flag control whether a block is auto-created or
-	// inferred, then automatically closed after 1 non-label/non-case
-	// statement
-	//
-	// in other words, always create a block to hold the body of these
-	// control structures, except when you're already in a NODE_BLOCK
-	//
-	// this is to make it possible to hold N labels/cases alongside the one
-	// "real" statement in a technically non-compound-statement
-	//
-	// this hack is necessary because i chose to represent NODE_LABEL,
-	// NODE_CASE, and NODE_CASE_DEFAULT as regular nodes in the AST,
-	// not as additional attribute(s) on each node; this causes labels to
-	// consume the slot otherwise necessary to hold the real loop body in
-	// cases like goto_bypass_init_exp.c:
-	//
-	//   int i = 0;
-	//   goto target;
-	//   for (i = 5; i < 10; ++i)
-	//   target:
-	//     if (i == 0)
-	//       return 1;
-	//
-	// in this example, NODE_LABEL for "target" ends up as the body node of
-	// the for loop, with `if (i == 0)` ending up as a sibling statement to
-	// the loop! in other words, the NODE_LABEL pushes the NODE_IF_ELSE out
-	// of the loop body!
-	//
-	// it might be cleaner to retool the representation of labels/cases
-	// entirely, but for now, i'd like to try something smaller, where we
-	// always use NODE_BLOCK, even in the one-child case, thus giving us
-	// "space" to put labels in there
-	//
-	// i think this might be not-ugly if we abstract block a bit, change
-	// the following members into a different type:
-	//
-	//   u.block -> remove next/item, replace with "impl" (or similar)
-	//   u.loop.body
-	//   u.if_.then_clause
-	//   u.if_.else_clause
-	//   u.switch_.body
-	//   u.function.block (?)
-	//   u.function.next (?)
-	//   u.declare.next (?)
-	//
-	// have all of the above hold a `struct ast_block *` that looks like:
-	//
-	//   struct ast_block {
-	//     struct ast *car;
-	//     struct ast *cdr;
-	//   }
-	//
-	// basically, move list logic outside of `struct ast`, similar to what
-	// we did for `struct ast_case` (?)
-
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
