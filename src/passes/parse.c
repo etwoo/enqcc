@@ -56,7 +56,7 @@ resolve_function_call(struct symbol *head, struct ast_symbol *callee)
 }
 
 static result_t
-resolve_block(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
+resolve_block(Arena *arena, struct flat *a, struct symbol **sym) WARN_UNUSED;
 static result_t
 resolve_function(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 
@@ -72,17 +72,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_IF_ELSE:
 		check(resolve_expr(arena, a->u.if_.condition, sym));
-		if (a->u.if_.then_clause->node_type == NODE_BLOCK) {
-			check(resolve_block(arena, a->u.if_.then_clause, sym));
-		} else {
-			check(resolve_expr(arena, a->u.if_.then_clause, sym));
-		}
-		if (a->u.if_.else_clause == NULL) {
-			/* skip missing else clause */
-		} else if (a->u.if_.else_clause->node_type == NODE_BLOCK) {
+		check(resolve_block(arena, a->u.if_.then_clause, sym));
+		if (a->u.if_.else_clause != NULL) {
 			check(resolve_block(arena, a->u.if_.else_clause, sym));
-		} else {
-			check(resolve_expr(arena, a->u.if_.else_clause, sym));
 		}
 		break;
 	case NODE_LOOP:
@@ -106,19 +98,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		 *        int y = 100;
 		 *    }
 		 */
-		if (a->u.loop.body->node_type == NODE_BLOCK) {
-			check(resolve_block(arena, a->u.loop.body, sym));
-		} else {
-			check(resolve_expr(arena, a->u.loop.body, sym));
-		}
+		check(resolve_block(arena, a->u.loop.body, sym));
 		break;
 	case NODE_SWITCH:
 		check(resolve_expr(arena, a->u.switch_.control, sym));
-		if (a->u.switch_.body->node_type == NODE_BLOCK) {
-			check(resolve_block(arena, a->u.switch_.body, sym));
-		} else {
-			check(resolve_expr(arena, a->u.switch_.body, sym));
-		}
+		check(resolve_block(arena, a->u.switch_.body, sym));
 		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
@@ -293,7 +277,7 @@ level_delimiter_prepare(struct symbol *point)
 
 static WARN_UNUSED result_t
 resolve_block_with_delimiter(Arena *arena,
-                             struct ast *a,
+                             struct flat *a,
                              struct symbol **sym,
                              struct symbol *level_delimiter_point)
 {
@@ -302,10 +286,8 @@ resolve_block_with_delimiter(Arena *arena,
 	const bool cleanup = level_delimiter_prepare(level_delimiter_point);
 	struct symbol *outer_resetter = *sym;
 
-	for (; a != NULL; a = a->u.block.next) {
-		assert(a->node_type == NODE_BLOCK);
-
-		struct ast *cur_item = a->u.block.item;
+	for (; a != NULL; a = a->cdr) {
+		struct ast *cur_item = a->car;
 		if (cur_item == NULL) {
 			continue;
 		}
@@ -323,7 +305,9 @@ resolve_block_with_delimiter(Arena *arena,
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
-			check(resolve_block(arena, cur_item, sym));
+			check(resolve_block(arena,
+			                    cur_item->u.block.statements,
+			                    sym));
 			symbols_reset_scope(sym, resetter);
 			break;
 		default:
@@ -340,7 +324,7 @@ resolve_block_with_delimiter(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-resolve_block(Arena *arena, struct ast *a, struct symbol **sym)
+resolve_block(Arena *arena, struct flat *a, struct symbol **sym)
 {
 	check(resolve_block_with_delimiter(arena, a, sym, *sym));
 	return RESULT_OK;
@@ -402,6 +386,7 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 {
 	static struct ast dummy_workaround_clang_analyzer_null_pointer = {0};
 
+	assert(dst != NULL && *dst == NULL);
 	*dst = arena_alloc(arena, sizeof(**dst));
 	if (*dst == NULL) {
 		/*
@@ -418,6 +403,15 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 
 	memset(*dst, 0, sizeof(**dst));
 	(**dst).node_type = ntype;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+flat_alloc(Arena *arena, struct flat **dst)
+{
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_PARSE_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
 	return RESULT_OK;
 }
 
@@ -886,7 +880,8 @@ static result_t parse_function(Arena *arena,
                                struct ast **dst) WARN_UNUSED;
 static result_t parse_stmt(Arena *arena,
                            const struct token **tok,
-                           struct ast **dst) WARN_UNUSED;
+                           struct flat **container,
+                           bool *call_again) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_block(Arena *arena, const struct token **tok, struct ast **dst)
@@ -896,25 +891,31 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
+	check(parse_alloc(arena, dst, NODE_BLOCK));
+	assert(dst != NULL && *dst != NULL);
+	struct flat *cursor = (**dst).u.block.statements;
+
 	if (is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		token_consume(tok);
-		check(parse_alloc(arena, dst, NODE_BLOCK));
-		dst = &(**dst).u.block.item;
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+		check(flat_alloc(arena, &cursor));
+		check(parse_alloc(arena, &cursor->car, NODE_EXPRESSION_NULL));
 		return RESULT_OK;
 	}
 
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
-		check(parse_alloc(arena, dst, NODE_BLOCK));
-		struct ast **item_dst = &(**dst).u.block.item;
 		if (parse_peek_ahead_function_maybe(*tok)) {
-			check(parse_function(arena, tok, item_dst));
+			check(flat_alloc(arena, &cursor));
+			check(parse_function(arena, tok, &cursor->car));
 		} else if (is_token_maybe_function_prefix(*tok)) {
-			check(parse_decl(arena, tok, item_dst));
+			check(flat_alloc(arena, &cursor));
+			check(parse_decl(arena, tok, &cursor->car));
 		} else {
-			check(parse_stmt(arena, tok, item_dst));
+			bool dummy = false;
+			check(parse_stmt(arena, tok, &cursor, &dummy));
+			/* can ignore dummy; we loop unconditionally here */
 		}
-		dst = &(**dst).u.block.next;
+		assert(cursor != NULL);
+		cursor = cursor->cdr;
 	}
 
 	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
@@ -922,6 +923,17 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_stmt_multi(Arena *arena, const struct token **tok, struct flat **dst)
+{
+	bool call_again = true;
+	for (struct flat **cursor = dst; call_again; cursor = &(**cursor).cdr) {
+		check(parse_stmt(arena, tok, cursor, &call_again));
+		assert(*cursor != NULL);
+	}
 	return RESULT_OK;
 }
 
@@ -944,14 +956,14 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.if_.then_clause));
+	check(parse_stmt_multi(arena, tok, &(**dst).u.if_.then_clause));
 
 	if (!is_token_type(*tok, TOKEN_KEYWORD_ELSE)) {
 		return RESULT_OK;
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.if_.else_clause));
+	check(parse_stmt_multi(arena, tok, &(**dst).u.if_.else_clause));
 	return RESULT_OK;
 }
 
@@ -959,8 +971,10 @@ static WARN_UNUSED result_t
 parse_loop_for_init(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_BLOCK));
+	assert(dst != NULL && *dst != NULL);
+	check(flat_alloc(arena, &(**dst).u.block.statements));
 
-	struct ast **item_dst = &(**dst).u.block.item;
+	struct ast **item_dst = &(**dst).u.block.statements->car;
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		check(parse_alloc_if_unset(arena, item_dst));
 		token_consume(tok);
@@ -1046,14 +1060,16 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 		 * Create block in case for-init declares a loop variable.
 		 */
 		check(parse_loop_for_init(arena, tok, dst));
+		assert(dst != NULL && *dst != NULL);
 		assert((**dst).node_type == NODE_BLOCK);
+		assert((**dst).u.block.statements != NULL);
+		assert((**dst).u.block.statements->car != NULL);
 		/*
 		 * Arrange for loop body to be allocated into next block item,
 		 * following first item that holds loop variable declaration.
 		 */
-		dst = &(**dst).u.block.next;
-		check(parse_alloc(arena, dst, NODE_BLOCK));
-		dst = &(**dst).u.block.item;
+		check(flat_alloc(arena, &(**dst).u.block.statements->cdr));
+		dst = &(**dst).u.block.statements->cdr->car;
 	}
 
 	check(parse_alloc(arena, dst, NODE_LOOP));
@@ -1087,14 +1103,13 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 		token_consume(tok);
 	}
 
-	check(parse_stmt(arena, tok, &(**dst).u.loop.body));
+	check(parse_stmt_multi(arena, tok, &(**dst).u.loop.body));
 
 	if (loop_type == PARSE_LOOP_DO) {
 		check(parse_loop_do_while_suffix(arena, tok, dst));
 	}
 
 	check(parse_alloc_if_unset(arena, &(**dst).u.loop.precond));
-	check(parse_alloc_if_unset(arena, &(**dst).u.loop.body));
 	check(parse_alloc_if_unset(arena, &(**dst).u.loop.incr));
 	check(parse_alloc_if_unset(arena, &(**dst).u.loop.postcond));
 
@@ -1122,7 +1137,7 @@ parse_switch(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	check(parse_stmt(arena, tok, &(**dst).u.switch_.body));
+	check(parse_stmt_multi(arena, tok, &(**dst).u.switch_.body));
 	return RESULT_OK;
 }
 
@@ -1150,9 +1165,17 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
+parse_stmt(Arena *arena,
+           const struct token **tok,
+           struct flat **container,
+           bool *call_again)
 {
 	bool expect_semicolon_after = false;
+	*call_again = false;
+
+	assert(*container == NULL);
+	check(flat_alloc(arena, container));
+	struct ast **dst = &(**container).car;
 
 	// TODO: have parse_if_else(), parse_loop(), parse_switch() pass flag
 	// ... or equivalently, have parse_block() pass opposite
@@ -1253,10 +1276,12 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		(**dst).u.label.unique = UNSET_LABEL_ID;
 		token_consume(tok);
 		token_consume(tok);
+		*call_again = true;
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_SWITCH)) {
 		check(parse_switch(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_CASE)) {
 		check(parse_case(arena, tok, dst));
+		*call_again = true;
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_DEFAULT) &&
 	           is_token_type((**tok).next, TOKEN_COLON)) {
 		check(parse_alloc(arena, dst, NODE_CASE_DEFAULT));
@@ -1265,6 +1290,7 @@ parse_stmt(Arena *arena, const struct token **tok, struct ast **dst)
 		(**dst).u.case_.unique = UNSET_SWITCH_ID;
 		token_consume(tok);
 		token_consume(tok);
+		*call_again = true;
 	} else {
 		check(parse_expr(arena, tok, dst, 0));
 		expect_semicolon_after = true;
@@ -1377,7 +1403,7 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 		assert((**dst).u.function.block == NULL);
 		token_consume(tok);
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
-		check(parse_block(arena, tok, &(**dst).u.function.block));
+		check(parse_stmt_multi(arena, tok, &(**dst).u.function.block));
 	} else {
 		return make_result(
 			ERR_PARSE_FUNC_EXPECT_TOKEN_SEMICOLON_OR_BRACE_OPEN);
@@ -1393,34 +1419,31 @@ parse_init(Arena *arena,
            long long int *generator)
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
-	struct ast *original = *a;
 
-	a = &original->u.program.globals;
-	while (tok != NULL) {
+	struct flat *cursor = (**a).u.program.globals;
+	for (; tok != NULL; cursor = cursor->cdr) {
+		check(flat_alloc(arena, &cursor));
 		if (parse_peek_ahead_function_maybe(tok)) {
-			check(parse_function(arena, &tok, a));
-			a = &(**a).u.function.next;
+			check(parse_function(arena, &tok, &cursor->car));
 		} else {
-			check(parse_decl(arena, &tok, a));
-			a = &(**a).u.declare.next;
+			check(parse_decl(arena, &tok, &cursor->car));
 		}
 	}
 
-	struct symbol *working_symbols = NULL;
+	struct symbol *symbols = NULL;
 
-	a = &original->u.program.globals;
-	while (generator != NULL && *a != NULL) {
-		switch ((**a).node_type) {
+	cursor = (**a).u.program.globals;
+	for (; generator != NULL && cursor != NULL; cursor = cursor->cdr) {
+		assert(cursor->car != NULL);
+		switch (cursor->car->node_type) {
 		case NODE_FUNCTION:
-			check(resolve_function(arena, *a, &working_symbols));
-			a = &(**a).u.function.next;
+			check(resolve_function(arena, cursor->car, &symbols));
 			break;
 		case NODE_DECLARATION:
 			check(resolve_decl(arena,
-			                   *a,
-			                   &working_symbols,
+			                   cursor->car,
+			                   &symbols,
 			                   SYMBOL_LINKAGE_EXTERNAL));
-			a = &(**a).u.declare.next;
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -1428,8 +1451,8 @@ parse_init(Arena *arena,
 		}
 	}
 
-	if (generator != NULL && working_symbols != NULL) {
-		*generator = working_symbols->cookie;
+	if (generator != NULL && symbols != NULL) {
+		*generator = symbols->cookie;
 	}
 	return RESULT_OK;
 }
@@ -1505,6 +1528,8 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 	}
 }
 
+void parse_debug_print_flat(const struct flat *a, size_t indent);
+
 #define TO_STR(node_type, ...) #node_type,
 static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODE(TO_STR)};
 #undef TO_STR
@@ -1517,7 +1542,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
-		parse_debug_print(a->u.program.globals, indent + 1);
+		parse_debug_print_flat(a->u.program.globals, indent + 1);
 		break;
 	case NODE_FUNCTION:
 		parse_debug_print_ast_symbol("NAME",
@@ -1531,19 +1556,12 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
-			parse_debug_print(a->u.function.block, indent + 2);
-		}
-		if (a->u.function.next != NULL) {
-			parse_debug_print(a->u.function.next, indent);
+			parse_debug_print_flat(a->u.function.block, indent + 2);
 		}
 		break;
 	case NODE_BLOCK:
-		if (a->u.block.item != NULL) {
-			parse_debug_print(a->u.block.item, indent + 1);
-			if (a->u.block.next != NULL) {
-				parse_debug_print(a->u.block.next, indent);
-			}
-		}
+		assert(a->u.block.statements != NULL);
+		parse_debug_print_flat(a->u.block.statements, indent + 1);
 		break;
 	case NODE_DECLARATION:
 		parse_debug_print_ast_symbol(NULL,
@@ -1554,18 +1572,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
 		}
-		if (a->u.declare.next != NULL) {
-			parse_debug_print(a->u.declare.next, indent);
-		}
 		break;
 	case NODE_IF_ELSE:
 		debug("%*sCONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.if_.condition, indent + 2);
 		debug("%*sTHEN", (int)indent + 1, "");
-		parse_debug_print(a->u.if_.then_clause, indent + 2);
+		parse_debug_print_flat(a->u.if_.then_clause, indent + 2);
 		if (a->u.if_.else_clause != NULL) {
 			debug("%*sELSE", (int)indent + 1, "");
-			parse_debug_print(a->u.if_.else_clause, indent + 2);
+			parse_debug_print_flat(a->u.if_.else_clause,
+			                       indent + 2);
 		}
 		break;
 	case NODE_LOOP:
@@ -1577,7 +1593,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sPRECONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.loop.precond, indent + 2);
 		debug("%*sBODY", (int)indent + 1, "");
-		parse_debug_print(a->u.loop.body, indent + 2);
+		parse_debug_print_flat(a->u.loop.body, indent + 2);
 		debug("%*sCONTINUE LABEL %lld%s",
 		      (int)indent + 1,
 		      "",
@@ -1637,7 +1653,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sCONTROL", (int)indent + 1, "");
 		parse_debug_print(a->u.switch_.control, indent + 2);
 		debug("%*sBODY", (int)indent + 1, "");
-		parse_debug_print(a->u.switch_.body, indent + 2);
+		parse_debug_print_flat(a->u.switch_.body, indent + 2);
 		debug("%*sSWITCH DEFAULT LABEL %lld%s",
 		      (int)indent + 1,
 		      "",
@@ -1755,5 +1771,15 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_CONSTANT_INT:
 		debug("%*sVALUE %lld", (int)indent + 1, "", a->u.num);
 		break;
+	}
+}
+
+void
+parse_debug_print_flat(const struct flat *a, size_t indent)
+{
+	const struct flat *cursor = a;
+	for (; cursor != NULL; cursor = cursor->cdr) {
+		assert(cursor->car != NULL);
+		parse_debug_print(cursor->car, indent);
 	}
 }
