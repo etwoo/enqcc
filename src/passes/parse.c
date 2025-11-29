@@ -966,19 +966,22 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
-parse_loop_for_init(Arena *arena, const struct token **tok, struct ast **dst)
+parse_loop_for_init(Arena *arena,
+                    const struct token **tok,
+                    struct ast **dst_outer)
 {
-	check(parse_alloc(arena, dst, NODE_BLOCK));
-	check(flat_alloc(arena, &(**dst).u.block.statements));
+	check(parse_alloc(arena, dst_outer, NODE_BLOCK));
+	struct flat **dst = &(**dst_outer).u.block.statements;
+	check(flat_alloc(arena, dst));
+	assert(*dst != NULL);
 
-	struct ast **item_dst = &(**dst).u.block.statements->car;
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
-		check(parse_alloc_if_unset(arena, item_dst));
+		check(parse_alloc_if_unset(arena, &(**dst).car));
 		token_consume(tok);
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
-		check(parse_decl(arena, tok, item_dst));
+		check(parse_decl(arena, tok, &(**dst).car));
 	} else {
-		check(parse_expr(arena, tok, item_dst, 0));
+		check(parse_expr(arena, tok, &(**dst).car, 0));
 		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 			return make_result(
 				ERR_PARSE_LOOP_EXPECT_TOKEN_SEMICOLON);
