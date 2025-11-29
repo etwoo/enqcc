@@ -410,7 +410,7 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 static WARN_UNUSED result_t
 flat_alloc(Arena *arena, struct flat **dst)
 {
-	assert(*dst == NULL);
+	assert(dst != NULL && *dst == NULL);
 	*dst = arena_alloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_PARSE_ALLOC);
 	memset(*dst, 0, sizeof(**dst));
@@ -528,7 +528,7 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	assert(*dst == NULL);
+	assert(dst != NULL && *dst == NULL);
 	size_t got_match = SIZE_MAX;
 
 #define TO_CANDIDATE(nodet, tokent) {tokent, NODE_##nodet},
@@ -975,7 +975,6 @@ parse_loop_for_init(Arena *arena,
 	check(parse_alloc(arena, dst_outer, NODE_BLOCK));
 	struct flat **dst = &(**dst_outer).u.block.statements;
 	check(flat_alloc(arena, dst));
-	assert(*dst != NULL);
 
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		check(parse_alloc_if_unset(arena, &(**dst).car));
