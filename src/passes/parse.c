@@ -288,9 +288,7 @@ resolve_block_with_delimiter(Arena *arena,
 
 	for (; a != NULL; a = a->cdr) {
 		struct ast *cur_item = a->car;
-		if (cur_item == NULL) {
-			continue;
-		}
+		assert(cur_item != NULL);
 
 		struct symbol *resetter = NULL;
 		switch (cur_item->node_type) {
@@ -1059,10 +1057,7 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 		 * Create block in case for-init declares a loop variable.
 		 */
 		check(parse_loop_for_init(arena, tok, dst));
-		assert(dst != NULL && *dst != NULL);
 		assert((**dst).node_type == NODE_BLOCK);
-		assert((**dst).u.block.statements != NULL);
-		assert((**dst).u.block.statements->car != NULL);
 		/*
 		 * Arrange for loop body to be allocated into next block item,
 		 * following first item that holds loop variable declaration.
