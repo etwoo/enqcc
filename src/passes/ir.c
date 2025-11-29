@@ -250,7 +250,7 @@ ir_if_else_prepare(Arena *arena,
 	struct ir_val body_return = {0};
 	if (ast_clause != NULL) {
 		check(ir_block(arena, ast_clause, ir, &out->body));
-	} else if (ast_clause_returning_value) {
+	} else if (ast_clause_returning_value != NULL) {
 		check(ir_expr(arena,
 		              ast_clause_returning_value,
 		              ir,
