@@ -17,14 +17,14 @@ struct ast_symbol {
 	enum symbol_linkage ltype;
 };
 
-enum ast_variable_type {
-	VARIABLE_TYPE_INT,
-	VARIABLE_TYPE_LONG,
+enum ast_ctype {
+	CTYPE_INT,
+	CTYPE_LONG,
 };
 
 struct ast_parameter {
 	struct ast_symbol symbol;
-	enum ast_variable_type ptype;
+	enum ast_ctype ptype;
 };
 
 struct ast_case {
@@ -120,7 +120,7 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
-			enum ast_variable_type return_type;
+			enum ast_ctype return_type;
 			struct ast_parameter *params;
 			struct ast *block;
 		} function;
@@ -130,7 +130,7 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
-			enum ast_variable_type var_type;
+			enum ast_ctype var_type;
 			struct ast *init;
 		} declare;
 		struct {
@@ -187,12 +187,13 @@ struct ast {
 			long long int unique;
 		} case_;
 		struct {
-			enum ast_variable_type to_type;
+			enum ast_ctype to_type;
 			struct ast *expr;
 		} cast;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
+	enum ast_ctype expr_type;
 };
 
 struct flat {

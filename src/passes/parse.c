@@ -456,18 +456,18 @@ is_token_variable_type(const struct token *tok)
 	return false;
 }
 
-static WARN_UNUSED enum ast_variable_type
+static WARN_UNUSED enum ast_ctype
 map_token_type_to_variable_type(const struct token *tok)
 {
 	assert(is_token_variable_type(tok));
 
-	enum ast_variable_type result = VARIABLE_TYPE_INT;
+	enum ast_ctype result = CTYPE_INT;
 	switch (tok->token_type) {
 	case TOKEN_KEYWORD_INT:
-		result = VARIABLE_TYPE_INT;
+		result = CTYPE_INT;
 		break;
 	case TOKEN_KEYWORD_LONG:
-		result = VARIABLE_TYPE_LONG;
+		result = CTYPE_LONG;
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -907,7 +907,7 @@ static WARN_UNUSED result_t
 parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
                                    size_t type_int_count,
                                    size_t type_long_count,
-                                   enum ast_variable_type *var_type)
+                                   enum ast_ctype *var_type)
 {
 	if (type_int_count > 1 || type_long_count > 2) {
 		return make_result(
@@ -923,14 +923,14 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 
 	switch (type_long_count) {
 	case 2:
-		assert(0 && "implement VARIABLE_TYPE_LONG_LONG");
+		assert(0 && "implement CTYPE_LONG_LONG");
 		break;
 	case 1:
-		*var_type = VARIABLE_TYPE_LONG;
+		*var_type = CTYPE_LONG;
 		break;
 	case 0:
 		assert(type_int_count == 1);
-		*var_type = VARIABLE_TYPE_INT;
+		*var_type = CTYPE_INT;
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -941,7 +941,7 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 }
 
 static WARN_UNUSED result_t
-parse_type_signature(const struct token **tok, enum ast_variable_type *var_type)
+parse_type_signature(const struct token **tok, enum ast_ctype *var_type)
 {
 	size_t type_int_count = 0;
 	size_t type_long_count = 0;
@@ -962,7 +962,7 @@ static WARN_UNUSED result_t
 parse_specifiers(bool expect_var, /* or expect_function */
                  const struct token **tok,
                  enum ast_specifier *dst,
-                 enum ast_variable_type *var_type)
+                 enum ast_ctype *var_type)
 {
 	size_t type_int_count = 0;
 	size_t type_long_count = 0;
@@ -1413,7 +1413,7 @@ parse_function_params_impl(const struct token **tok,
 			token_consume(tok);
 		}
 
-		enum ast_variable_type parameter_type = VARIABLE_TYPE_INT;
+		enum ast_ctype parameter_type = CTYPE_INT;
 		check(parse_type_signature(tok, &parameter_type));
 
 		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
@@ -1615,19 +1615,19 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 }
 
 static void
-parse_debug_print_ast_vartype(const char *description,
-                              enum ast_variable_type var_type,
-                              size_t indent)
+parse_debug_print_ast_ctype(const char *description,
+                            enum ast_ctype var_type,
+                            size_t indent)
 {
 	if (description != NULL) {
 		debug("%*s%s", (int)indent, "", description);
 	}
 	const char *type_as_str = NULL;
 	switch (var_type) {
-	case VARIABLE_TYPE_INT:
+	case CTYPE_INT:
 		type_as_str = "INT";
 		break;
-	case VARIABLE_TYPE_LONG:
+	case CTYPE_LONG:
 		type_as_str = "LONG";
 		break;
 	}
@@ -1655,16 +1655,14 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.function.identifier,
 		                             indent + 1);
 		parse_debug_print_ast_spec(a->u.function.specifier, indent + 1);
-		parse_debug_print_ast_vartype("RETURNS",
-		                              a->u.function.return_type,
-		                              indent + 1);
+		parse_debug_print_ast_ctype("RETURNS",
+		                            a->u.function.return_type,
+		                            indent + 1);
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             &cur->symbol,
 			                             indent + 1);
-			parse_debug_print_ast_vartype("",
-			                              cur->ptype,
-			                              indent + 1);
+			parse_debug_print_ast_ctype("", cur->ptype, indent + 1);
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
@@ -1679,9 +1677,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.declare.identifier,
 		                             indent);
 		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);
-		parse_debug_print_ast_vartype("",
-		                              a->u.function.return_type,
-		                              indent + 1);
+		parse_debug_print_ast_ctype("",
+		                            a->u.function.return_type,
+		                            indent + 1);
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
@@ -1883,9 +1881,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_EXPRESSION_CAST:
-		parse_debug_print_ast_vartype("",
-		                              a->u.cast.to_type,
-		                              indent + 1);
+		parse_debug_print_ast_ctype("", a->u.cast.to_type, indent + 1);
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT_INT:
