@@ -1706,7 +1706,7 @@ parse_debug_print_ast_ctype(const char *description,
 		type_as_str = "LONG";
 		break;
 	}
-	debug("%*sC.TYPE: %s", (int)indent, "", type_as_str);
+	debug("%*sC.TYPE: %s", (int)indent + 1, "", type_as_str);
 }
 
 void parse_debug_print_flat(const struct flat *a, size_t indent);
@@ -1739,7 +1739,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 			                             indent + 1);
 			parse_debug_print_ast_ctype(NULL,
 			                            cur->parameter_type,
-			                            indent + 2);
+			                            indent + 1);
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
