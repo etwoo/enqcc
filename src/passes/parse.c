@@ -1739,7 +1739,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 			                             indent + 1);
 			parse_debug_print_ast_ctype(NULL,
 			                            cur->parameter_type,
-			                            indent + 1);
+			                            indent + 2);
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
