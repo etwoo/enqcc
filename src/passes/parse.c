@@ -456,12 +456,12 @@ is_token_variable_type(const struct token *tok)
 	return false;
 }
 
-static WARN_UNUSED enum ast_ctype
+static WARN_UNUSED enum ctype
 map_token_type_to_variable_type(const struct token *tok)
 {
 	assert(is_token_variable_type(tok));
 
-	enum ast_ctype result = CTYPE_INT;
+	enum ctype result = CTYPE_INT;
 	switch (tok->token_type) {
 	case TOKEN_KEYWORD_INT:
 		result = CTYPE_INT;
@@ -907,7 +907,7 @@ static WARN_UNUSED result_t
 parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
                                    size_t type_int_count,
                                    size_t type_long_count,
-                                   enum ast_ctype *var_type)
+                                   enum ctype *var_type)
 {
 	if (type_int_count > 1 || type_long_count > 2) {
 		return make_result(
@@ -941,7 +941,7 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 }
 
 static WARN_UNUSED result_t
-parse_type_signature(const struct token **tok, enum ast_ctype *var_type)
+parse_type_signature(const struct token **tok, enum ctype *var_type)
 {
 	size_t type_int_count = 0;
 	size_t type_long_count = 0;
@@ -962,7 +962,7 @@ static WARN_UNUSED result_t
 parse_specifiers(bool expect_var, /* or expect_function */
                  const struct token **tok,
                  enum ast_specifier *dst,
-                 enum ast_ctype *var_type)
+                 enum ctype *var_type)
 {
 	size_t type_int_count = 0;
 	size_t type_long_count = 0;
@@ -1413,7 +1413,7 @@ parse_function_params_impl(const struct token **tok,
 			token_consume(tok);
 		}
 
-		enum ast_ctype parameter_type = CTYPE_INT;
+		enum ctype parameter_type = CTYPE_INT;
 		check(parse_type_signature(tok, &parameter_type));
 
 		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
@@ -1616,7 +1616,7 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 
 static void
 parse_debug_print_ast_ctype(const char *description,
-                            enum ast_ctype var_type,
+                            enum ctype var_type,
                             size_t indent)
 {
 	if (description != NULL) {

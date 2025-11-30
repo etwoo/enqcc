@@ -8,6 +8,11 @@
 
 #include <stdbool.h>
 
+enum ctype {
+	CTYPE_INT,
+	CTYPE_LONG,
+};
+
 enum {
 	NOT_YET_UNIQUE = -1,
 };
