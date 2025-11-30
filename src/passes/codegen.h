@@ -33,6 +33,10 @@ struct asm_operand {
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
 		ASM_OPERAND_VARIABLE_DATA,
 	} operand_type;
+	enum {
+		ASM_WORD_32BIT, /* DWORD */
+		ASM_WORD_64BIT, /* QWORD */
+	} word_type;
 	union {
 		long long int num;
 		enum asm_register reg;
@@ -43,14 +47,13 @@ struct asm_operand {
 
 #define FOREACH_ASM_OPCODE(F)                                                  \
 	F(MOV)                                                                 \
+	F(MOV_WITH_SIGN_EXTENSION)                                             \
 	F(UNARY_NEG)                                                           \
 	F(UNARY_NOT)                                                           \
 	F(UNARY_DECREMENT)                                                     \
 	F(UNARY_INCREMENT)                                                     \
 	F(BINARY_ADD)                                                          \
-	F(BINARY_ADD_QUAD)                                                     \
 	F(BINARY_SUBTRACT)                                                     \
-	F(BINARY_SUBTRACT_QUAD)                                                \
 	F(BINARY_MULTIPLY)                                                     \
 	F(BITWISE_AND)                                                         \
 	F(BITWISE_OR)                                                          \
@@ -60,6 +63,7 @@ struct asm_operand {
 	F(COMPARE)                                                             \
 	F(IDIV)                                                                \
 	F(CDQ)                                                                 \
+	F(CQO)                                                                 \
 	F(JMP)                                                                 \
 	F(JMP_IF_EQ)                                                           \
 	F(JMP_IF_NEQ)                                                          \
@@ -103,6 +107,7 @@ struct asm_function {
 
 struct asm_variable {
 	struct string_view identifier;
+	long long int alignment;
 	enum asm_linkage linkage;
 	struct {
 		long long int initial_as_ll;

@@ -2,6 +2,7 @@
 #define COMPILER_PASSES_PARSE_H
 
 #include "passes/symbol.h"
+#include "sys/compiler_features.h"
 #include "sys/string_view.h"
 
 enum ast_specifier {
@@ -17,10 +18,9 @@ struct ast_symbol {
 	enum symbol_linkage ltype;
 };
 
-struct ast_case {
-	long long int constant;
-	long long int unique;
-	struct ast_case *next;
+struct ast_parameter {
+	struct ast_symbol symbol;
+	enum ctype parameter_type;
 };
 
 #define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
@@ -69,7 +69,7 @@ struct ast_case {
 	F(EXPRESSION_POSTINCREMENT)                                            \
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_FUNCTION_CALL)                                            \
-	F(EXPRESSION_FUNCTION_CALL_ARGUMENTS)                                  \
+	F(EXPRESSION_CAST)                                                     \
 	FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(F)
 
@@ -88,7 +88,7 @@ struct ast_case {
 	F(SWITCH)                                                              \
 	F(CASE)                                                                \
 	F(CASE_DEFAULT)                                                        \
-	F(CONSTANT_INT)                                                        \
+	F(CONSTANT)                                           \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
 #define TO_ENUM(nodet, ...) NODE_##nodet,
@@ -108,7 +108,8 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
-			struct ast_symbol *params;
+			enum ctype return_type;
+			struct ast_parameter *params;
 			struct ast *block;
 		} function;
 		struct {
@@ -117,6 +118,7 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
+			enum ctype var_type;
 			struct ast *init;
 		} declare;
 		struct {
@@ -147,12 +149,8 @@ struct ast {
 		} op_ternary;
 		struct {
 			struct ast_symbol identifier;
-			struct ast *arguments;
+			struct flat *args;
 		} call;
-		struct {
-			struct ast *expr;
-			struct ast *next;
-		} call_args;
 		struct {
 			struct string_view target_label;
 			long long int target_unique;
@@ -166,15 +164,20 @@ struct ast {
 			struct flat *body;
 			long long int label_default;
 			long long int label_end;
-			struct ast_case *label_cases; /* computed by sema.c */
+			struct flat *label_cases; /* computed by sema.c */
 		} switch_;
 		struct {
-			struct string_view constant;
+			struct ast *constant;
 			long long int unique;
 		} case_;
+		struct {
+			enum ctype to_type;
+			struct ast *expr;
+		} cast;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
-		long long int num;     /* NODE_CONSTANT_INT */
+		long long int num;     /* NODE_CONSTANT */
 	} u;
+	enum ctype expr_type;
 };
 
 struct flat {
@@ -187,9 +190,14 @@ struct flat {
  * array, delimited by a final `struct string_view` with NULL data.
  */
 #define FOREACH_FUNCTION_PARAMETER(iter, arr)                                  \
-	for (struct ast_symbol * (iter) = arr;                                 \
-	     (iter) != NULL && (iter)->name.data != NULL &&                    \
-	     (iter)->name.sz > 0;                                              \
+	for (struct ast_parameter * (iter) = arr;                              \
+	     (iter) != NULL && (iter)->symbol.name.data != NULL &&             \
+	     (iter)->symbol.name.sz > 0;                                       \
 	     ++(iter))
+
+/*
+ * Insert NODE_EXPRESSION_CAST wherever type issues demand it.
+ */
+result_t cast_if(Arena *arena, enum ctype cast_to, struct ast **a) WARN_UNUSED;
 
 #endif

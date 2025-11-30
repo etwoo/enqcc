@@ -1,6 +1,7 @@
 #ifndef COMPILER_PASSES_IR_H
 #define COMPILER_PASSES_IR_H
 
+#include "passes/symbol.h"
 #include "sys/string_view.h"
 
 #define FUNCTION_PARAMETER_LIMIT 32
@@ -15,10 +16,13 @@ struct ir_val {
 	} subtype;
 	long long int num;          /* numeric value, variable ID, etc */
 	struct string_view varname; /* symbol name, if linkage */
+	enum ctype c89type;
 };
 
 #define FOREACH_IR_OPCODE(F)                                                   \
 	F(RET, 0)                                                              \
+	F(CTYPE_SIGN_EXTEND, 1)                                                \
+	F(CTYPE_TRUNCATE, 1)                                                   \
 	F(UNARY_COMPLEMENT, 1)                                                 \
 	F(UNARY_NEGATE, 1)                                                     \
 	F(UNARY_NOT, 1)                                                        \
@@ -73,6 +77,7 @@ struct ir_function {
 
 struct ir_variable {
 	struct string_view identifier;
+	enum ctype c89type; /* determines alignment */
 	enum ir_linkage linkage;
 	struct {
 		long long int initial_as_ll;
