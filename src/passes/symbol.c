@@ -1,9 +1,28 @@
 #include "passes/symbol.h"
 
+#include "sys/array.h"
 #include "sys/debug.h"
 
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
+
+static const char *const CTYPE_AS_STR[] = {
+	"INT",
+	"LONG",
+};
+
+const char *
+ctype_to_str(enum ctype c)
+{
+	assert(c < ARRAY_SIZE(CTYPE_AS_STR));
+	return CTYPE_AS_STR[c];
+}
+
+enum ctype
+get_common_ctype(enum ctype lhs, enum ctype rhs)
+{
+	return MAX(lhs, rhs);
+}
 
 bool
 is_internal(enum symbol_linkage linkage)
@@ -27,13 +46,15 @@ result_t
 symbols_prepend(Arena *arena,
                 struct symbol **head,
                 const struct string_view *name,
-                enum symbol_type stype)
+                enum symbol_type stype,
+                enum ctype c89type)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_SYMBOL_ALLOC);
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
+	node->c89type = c89type;
 	if (*head != NULL) {
 		long long int base = MAX((**head).unique, (**head).cookie);
 		node->unique = base + 1;

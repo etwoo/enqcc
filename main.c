@@ -111,7 +111,7 @@ compile(Arena *arena,
 	check(codegen_init(arena, ir, &cg));
 	codegen_debug_print(cg);
 
-	check(codegen_replace_pseudoregisters(cg));
+	check(codegen_replace_pseudoregisters(arena, cg));
 	codegen_debug_print(cg);
 
 	check(codegen_fixup_instructions(arena, cg));

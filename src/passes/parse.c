@@ -4,7 +4,6 @@
 #include "passes/lex.h"
 #include "passes/symbol.h"
 #include "sys/array.h"
-#include "sys/compiler_features.h"
 #include "sys/debug.h"
 
 #include <assert.h>
@@ -14,18 +13,22 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
-static const char LITERAL_DEFAULT[] = "default";
-
 static void
-map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
+map_symbol_members(const struct symbol *src,
+                   struct ast_symbol *dst_symbol,
+                   enum ctype *dst_expr_type)
 {
-	dst->unique = src->unique;
-	dst->stype = src->stype;
-	dst->ltype = src->linkage.linkage;
+	dst_symbol->unique = src->unique;
+	dst_symbol->stype = src->stype;
+	dst_symbol->ltype = src->linkage.linkage;
+	*dst_expr_type = src->c89type;
 }
 
 static WARN_UNUSED result_t
-resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
+resolve_symbol(struct symbol *head,
+               struct ast_symbol *asym,
+               enum ctype *expr_type,
+               unsigned errtype)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(asym->unique == NOT_YET_UNIQUE);
@@ -35,23 +38,31 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 		return make_result(errtype, asym->name.data, asym->name.sz);
 	}
 
-	map_symbol_members(resolved, asym);
+	map_symbol_members(resolved, asym, expr_type);
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_var_usage(struct symbol *head, struct ast_symbol *var)
+resolve_var_usage(struct symbol *head,
+                  struct ast_symbol *var,
+                  enum ctype *expr_type)
 {
 	check(resolve_symbol(head,
 	                     var,
+	                     expr_type,
 	                     ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_function_call(struct symbol *head, struct ast_symbol *callee)
+resolve_function_call(struct symbol *head,
+                      struct ast_symbol *callee,
+                      enum ctype *return_type)
 {
-	check(resolve_symbol(head, callee, ERR_SEMA_FUNCTION_CALL_UNDECLARED));
+	check(resolve_symbol(head,
+	                     callee,
+	                     return_type,
+	                     ERR_SEMA_FUNCTION_CALL_UNDECLARED));
 	return RESULT_OK;
 }
 
@@ -113,7 +124,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 	case NODE_EXPRESSION_NULL:
-	case NODE_CONSTANT_INT:
 		break; /* no resolution work to do */
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -159,7 +169,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		check(resolve_var_usage(*sym, &a->u.var));
+		check(resolve_var_usage(*sym, &a->u.var, &a->expr_type));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
@@ -167,12 +177,21 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		check(resolve_function_call(*sym, &a->u.call.identifier));
-		check(resolve_expr(arena, a->u.call.arguments, sym));
+		check(resolve_function_call(*sym,
+		                            &a->u.call.identifier,
+		                            &a->expr_type));
+		for (struct flat *f = a->u.call.args; f != NULL; f = f->cdr) {
+			check(resolve_expr(arena, f->car, sym));
+		}
 		break;
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-		check(resolve_expr(arena, a->u.call_args.expr, sym));
-		check(resolve_expr(arena, a->u.call_args.next, sym));
+	case NODE_EXPRESSION_CAST:
+		check(resolve_expr(arena, a->u.cast.expr, sym));
+		break;
+	case NODE_CONSTANT_INT:
+		assert(a->expr_type == CTYPE_INT);
+		break;
+	case NODE_CONSTANT_LONG:
+		assert(a->expr_type == CTYPE_LONG);
 		break;
 	}
 
@@ -223,7 +242,8 @@ resolve_decl(Arena *arena,
 		check(symbols_prepend(arena,
 		                      sym,
 		                      &a->u.declare.identifier.name,
-		                      SYMBOL_VARIABLE));
+		                      SYMBOL_VARIABLE,
+		                      a->u.declare.var_type));
 		(**sym).linkage.linkage = linkage;
 		resolved = *sym;
 
@@ -243,7 +263,9 @@ resolve_decl(Arena *arena,
 			(**sym).linkage.linkage = anywhere->linkage.linkage;
 		}
 	}
-	map_symbol_members(resolved, &a->u.declare.identifier);
+
+	map_symbol_members(resolved, &a->u.declare.identifier, &a->expr_type);
+	/* sema.c detects if a->u.declare.var_type and expr_type conflict */
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
@@ -325,16 +347,24 @@ resolve_block(Arena *arena, struct flat *a, struct symbol **sym)
 
 static WARN_UNUSED result_t
 resolve_function_params_one(Arena *arena,
-                            struct ast_symbol *a,
+                            struct ast_parameter *a,
                             struct symbol **sym)
 {
-	check(symbols_prepend(arena, sym, &a->name, SYMBOL_VARIABLE));
-	map_symbol_members(*sym, a);
+	check(symbols_prepend(arena,
+	                      sym,
+	                      &a->symbol.name,
+	                      SYMBOL_VARIABLE,
+	                      a->parameter_type));
+	enum ctype dummy = CTYPE_INT;
+	map_symbol_members(*sym, &a->symbol, &dummy);
+	assert(dummy == a->parameter_type);
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
+resolve_function_params(Arena *arena,
+                        struct ast_parameter *a,
+                        struct symbol **sym)
 {
 	FOREACH_FUNCTION_PARAMETER (cur, a) {
 		check(resolve_function_params_one(arena, cur, sym));
@@ -352,8 +382,11 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	                      sym,
 	                      &a->u.function.identifier.name,
 	                      is_def ? SYMBOL_FUNCTION_DEFINITION
-	                             : SYMBOL_FUNCTION_DECLARATION));
-	map_symbol_members(*sym, &a->u.function.identifier);
+	                             : SYMBOL_FUNCTION_DECLARATION,
+	                      a->u.function.return_type));
+	enum ctype dummy = CTYPE_INT;
+	map_symbol_members(*sym, &a->u.function.identifier, &dummy);
+	assert(dummy == a->u.function.return_type);
 
 	struct symbol *before_params = *sym;
 	const bool cleanup = level_delimiter_prepare(before_params);
@@ -435,9 +468,46 @@ token_consume(const struct token **tok)
 }
 
 static WARN_UNUSED bool
+is_token_variable_type(const struct token *tok)
+{
+	if (tok == NULL) {
+		return false;
+	}
+	switch (tok->token_type) {
+	case TOKEN_KEYWORD_INT:
+	case TOKEN_KEYWORD_LONG:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
+static WARN_UNUSED enum ctype
+map_token_type_to_variable_type(const struct token *tok)
+{
+	assert(is_token_variable_type(tok));
+
+	enum ctype result = CTYPE_INT;
+	switch (tok->token_type) {
+	case TOKEN_KEYWORD_INT:
+		result = CTYPE_INT;
+		break;
+	case TOKEN_KEYWORD_LONG:
+		result = CTYPE_LONG;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	return result;
+}
+
+static WARN_UNUSED bool
 is_token_maybe_function_prefix(const struct token *tok)
 {
-	return is_token_type(tok, TOKEN_KEYWORD_INT) ||
+	return is_token_variable_type(tok) ||
 	       is_token_type(tok, TOKEN_KEYWORD_STATIC) ||
 	       is_token_type(tok, TOKEN_KEYWORD_EXTERN);
 }
@@ -446,7 +516,6 @@ static WARN_UNUSED result_t
 parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_CONSTANT));
-	check(parse_alloc(arena, dst, NODE_CONSTANT_INT));
 
 	/*
 	 * strtoll() does not update errno on success, so we must clear it
@@ -454,13 +523,38 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	 */
 	errno = 0;
 
-	(**dst).u.num = strtoll((**tok).val.data, NULL, 0);
+	long long int tmp = strtoll((**tok).val.data, NULL, 0);
 	if (errno != 0) {
 		return make_result(ERR_PARSE_CONSTANT_STRTOLL,
 		                   errno,
 		                   (**tok).val.data,
 		                   (**tok).val.sz);
 	}
+
+	if (tmp > LONG_MAX) {
+		return make_result(ERR_PARSE_CONSTANT_TOO_LARGE,
+		                   (**tok).val.data,
+		                   (**tok).val.sz);
+	}
+
+	bool suffix_long = false;
+	switch ((**tok).val.data[(**tok).val.sz - 1]) {
+	case 'l':
+	case 'L':
+		suffix_long = true;
+		break;
+	default:
+		break;
+	}
+
+	if (tmp > INT_MAX || suffix_long) {
+		check(parse_alloc(arena, dst, NODE_CONSTANT_LONG));
+		(**dst).expr_type = CTYPE_LONG;
+	} else {
+		check(parse_alloc(arena, dst, NODE_CONSTANT_INT));
+		(**dst).expr_type = CTYPE_INT;
+	}
+	(**dst).u.num = tmp;
 
 	token_consume(tok);
 	return RESULT_OK;
@@ -498,13 +592,11 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 		return RESULT_OK; /* zero-arg function call */
 	}
 
-	dst = &(**dst).u.call.arguments;
+	struct flat **dst_args = &(**dst).u.call.args;
 	while (true) {
-		check(parse_alloc(arena,
-		                  dst,
-		                  NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS));
-		check(parse_expr(arena, tok, &(**dst).u.call_args.expr, 0));
-		dst = &(**dst).u.call_args.next;
+		check(flat_alloc(arena, dst_args));
+		check(parse_expr(arena, tok, &(**dst_args).car, 0));
+		dst_args = &(**dst_args).cdr;
 
 		if (!is_token_type(*tok, TOKEN_COMMA)) {
 			break;
@@ -548,6 +640,33 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_symbol(arena, tok, dst));
+	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
+	           *tok != NULL && /* avoid NULL dereference on (**tok).next */
+	           is_token_variable_type((**tok).next)) {
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
+		token_consume(tok);
+		(**dst).u.cast.to_type = map_token_type_to_variable_type(*tok);
+		token_consume(tok);
+		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			return make_result(
+				ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE);
+		}
+		token_consume(tok);
+		check(parse_expr(arena, tok, &(**dst).u.cast.expr, 0));
+		assert((**dst).u.cast.expr != NULL);
+		/* special-case hack for precedence of cast + assign */
+		if ((**dst).u.cast.expr->node_type ==
+		    NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
+			struct ast *cast_original = *dst;
+			struct ast *assign_original = (**dst).u.cast.expr;
+			struct ast *lhs_original =
+				(**dst).u.cast.expr->u.op_binary.lhs;
+			/* cast LHS of assignment, not assignment as a whole */
+			(**dst).u.cast.expr->u.op_binary.lhs = cast_original;
+			(**dst).u.cast.expr->u.op_binary.lhs->u.cast.expr =
+				lhs_original;
+			*dst = assign_original;
+		}
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
@@ -699,8 +818,9 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_POSTINCREMENT:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
+	case NODE_EXPRESSION_CAST:
 	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
 		assert(0); /* logic error in caller */
 		break;
 	}
@@ -779,7 +899,7 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 	for (; tok != NULL; tok = tok->next) {
 		if (is_token_maybe_function_prefix(tok)) {
 			/* seek past return type and specifiers */
-			typed = typed || is_token_type(tok, TOKEN_KEYWORD_INT);
+			typed = typed || is_token_variable_type(tok);
 		} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
 			/* ... until we reach the first TOKEN_IDENTIFIER  */
 			/* ... and then check if TOKEN_PAREN_OPEN follows */
@@ -800,17 +920,99 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 	return false;
 }
 
+static void
+parse_type_signature_impl_accumulate(const struct token **tok,
+                                     size_t *type_int_count,
+                                     size_t *type_long_count)
+{
+	if (!is_token_variable_type(*tok)) {
+		return;
+	}
+
+	assert(*tok != NULL);
+	switch ((**tok).token_type) {
+	case TOKEN_KEYWORD_INT:
+		++(*type_int_count);
+		break;
+	case TOKEN_KEYWORD_LONG:
+		++(*type_long_count);
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+}
+
+static WARN_UNUSED result_t
+parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
+                                   size_t type_int_count,
+                                   size_t type_long_count,
+                                   enum ctype *var_type)
+{
+	if (type_int_count > 1 || type_long_count > 2) {
+		return make_result(
+			expect_var ? ERR_PARSE_DECL_TYPE_DUPLICATE
+				   : ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
+	}
+
+	if (type_int_count == 0 && type_long_count == 0) {
+		return make_result(expect_var
+		                           ? ERR_PARSE_DECL_EXPECT_TYPE
+		                           : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE);
+	}
+
+	switch (type_long_count) {
+	case 2:
+		assert(0 && "implement CTYPE_LONG_LONG");
+		break;
+	case 1:
+		*var_type = CTYPE_LONG;
+		break;
+	case 0:
+		assert(type_int_count == 1);
+		*var_type = CTYPE_INT;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_type_signature(const struct token **tok, enum ctype *var_type)
+{
+	size_t type_int_count = 0;
+	size_t type_long_count = 0;
+	while (is_token_variable_type(*tok)) {
+		parse_type_signature_impl_accumulate(tok,
+		                                     &type_int_count,
+		                                     &type_long_count);
+		token_consume(tok);
+	}
+	check(parse_type_signature_impl_finalize(true,
+	                                         type_int_count,
+	                                         type_long_count,
+	                                         var_type));
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 parse_specifiers(bool expect_var, /* or expect_function */
                  const struct token **tok,
-                 enum ast_specifier *dst)
+                 enum ast_specifier *dst,
+                 enum ctype *var_type)
 {
-	size_t type_count = 0;
+	size_t type_int_count = 0;
+	size_t type_long_count = 0;
 	size_t specifier_count = 0;
 
 	while (is_token_maybe_function_prefix(*tok)) {
-		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
-			++type_count;
+		if (is_token_variable_type(*tok)) {
+			parse_type_signature_impl_accumulate(tok,
+			                                     &type_int_count,
+			                                     &type_long_count);
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
 			*dst = SPECIFIER_STATIC;
 			++specifier_count;
@@ -829,18 +1031,10 @@ parse_specifiers(bool expect_var, /* or expect_function */
 				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
 	}
 
-	if (type_count > 1) {
-		return make_result(
-			expect_var ? ERR_PARSE_DECL_TYPE_DUPLICATE
-				   : ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
-	}
-
-	if (type_count == 0) {
-		return make_result(
-			expect_var ? ERR_PARSE_DECL_EXPECT_TYPE_INT
-				   : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
-	}
-
+	check(parse_type_signature_impl_finalize(expect_var,
+	                                         type_int_count,
+	                                         type_long_count,
+	                                         var_type));
 	return RESULT_OK;
 }
 
@@ -848,10 +1042,10 @@ static WARN_UNUSED result_t
 parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_DECLARATION));
-
-	enum ast_specifier specifier = SPECIFIER_NONE;
-	check(parse_specifiers(true, tok, &specifier));
-	(**dst).u.declare.specifier = specifier;
+	check(parse_specifiers(true,
+	                       tok,
+	                       &(**dst).u.declare.specifier,
+	                       &(**dst).u.declare.var_type));
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER);
@@ -975,7 +1169,7 @@ parse_loop_for_init(Arena *arena,
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		check(parse_alloc_if_unset(arena, &(**dst).car));
 		token_consume(tok);
-	} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+	} else if (is_token_variable_type(*tok)) {
 		check(parse_decl(arena, tok, &(**dst).car));
 	} else {
 		check(parse_expr(arena, tok, &(**dst).car, 0));
@@ -1146,9 +1340,8 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	check(parse_alloc(arena, dst, NODE_CASE));
-	(**dst).u.case_.constant = (**tok).val;
+	check(parse_constant(arena, tok, &(**dst).u.case_.constant));
 	(**dst).u.case_.unique = UNSET_SWITCH_ID;
-	token_consume(tok);
 
 	if (!is_token_type(*tok, TOKEN_COLON)) {
 		return make_result(ERR_PARSE_CASE_EXPECT_COLON);
@@ -1219,8 +1412,7 @@ parse_stmt(Arena *arena,
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_DEFAULT) &&
 	           is_token_type((**tok).next, TOKEN_COLON)) {
 		check(parse_alloc(arena, dst, NODE_CASE_DEFAULT));
-		(**dst).u.case_.constant.data = LITERAL_DEFAULT;
-		(**dst).u.case_.constant.sz = sizeof(LITERAL_DEFAULT) - 1;
+		(**dst).u.case_.constant = NULL;
 		(**dst).u.case_.unique = UNSET_SWITCH_ID;
 		token_consume(tok);
 		token_consume(tok);
@@ -1243,7 +1435,7 @@ parse_stmt(Arena *arena,
 
 static WARN_UNUSED result_t
 parse_function_params_impl(const struct token **tok,
-                           struct ast_symbol **dst,
+                           struct ast_parameter **dst,
                            long long int *count)
 {
 	const long long int count_in = *count;
@@ -1259,11 +1451,8 @@ parse_function_params_impl(const struct token **tok,
 			token_consume(tok);
 		}
 
-		if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
-			return make_result(
-				ERR_PARSE_FUNC_PARAM_EXPECT_TYPE_INT);
-		}
-		token_consume(tok);
+		enum ctype parameter_type = CTYPE_INT;
+		check(parse_type_signature(tok, &parameter_type));
 
 		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 			return make_result(
@@ -1271,8 +1460,9 @@ parse_function_params_impl(const struct token **tok,
 		}
 		if (dst != NULL) {
 			assert(*count <= count_in);
-			(*dst)[*count].name = (**tok).val;
-			(*dst)[*count].unique = NOT_YET_UNIQUE;
+			(*dst)[*count].symbol.name = (**tok).val;
+			(*dst)[*count].symbol.unique = NOT_YET_UNIQUE;
+			(*dst)[*count].parameter_type = parameter_type;
 		}
 		token_consume(tok);
 	}
@@ -1283,7 +1473,7 @@ parse_function_params_impl(const struct token **tok,
 static WARN_UNUSED result_t
 parse_function_params(Arena *arena,
                       const struct token **tok,
-                      struct ast_symbol **dst)
+                      struct ast_parameter **dst)
 {
 	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
 		token_consume(tok);
@@ -1310,10 +1500,10 @@ static WARN_UNUSED result_t
 parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
-
-	enum ast_specifier specifier = SPECIFIER_NONE;
-	check(parse_specifiers(false, tok, &specifier));
-	(**dst).u.function.specifier = specifier;
+	check(parse_specifiers(false,
+	                       tok,
+	                       &(**dst).u.function.specifier,
+	                       &(**dst).u.function.return_type));
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
@@ -1472,7 +1662,14 @@ void
 parse_debug_print(const struct ast *a, size_t indent)
 {
 	assert(indent <= INT_MAX);
-	debug("%*s%s", (int)indent, "", NODETYPE_NAMES[a->node_type]);
+	debug("%*s%s%s%s%s",
+	      (int)indent,
+	      "",
+	      NODETYPE_NAMES[a->node_type],
+	      a->node_type >= NODE_CONSTANT_INT ? " [" : "",
+	      a->node_type >= NODE_CONSTANT_INT ? ctype_to_str(a->expr_type)
+	                                        : "",
+	      a->node_type >= NODE_CONSTANT_INT ? "]" : "");
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
@@ -1483,10 +1680,18 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.function.identifier,
 		                             indent + 1);
 		parse_debug_print_ast_spec(a->u.function.specifier, indent + 1);
+		debug("%*sRETURNS: %s",
+		      (int)(indent + 1),
+		      "",
+		      ctype_to_str(a->u.function.return_type));
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
-			                             cur,
+			                             &cur->symbol,
 			                             indent + 1);
+			debug("%*sPARAMETER.TYPE: %s",
+			      (int)indent + 2,
+			      "",
+			      ctype_to_str(cur->parameter_type));
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
@@ -1501,6 +1706,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.declare.identifier,
 		                             indent);
 		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);
+		debug("%*sVARIABLE.TYPE: %s",
+		      (int)indent + 1,
+		      "",
+		      ctype_to_str(a->u.declare.var_type));
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
@@ -1600,25 +1809,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.switch_.label_end == UNSET_SWITCH_ID ? " (unset)"
 		                                                : "");
 		debug("%*sSEMANTIC CASE INFORMATION", (int)indent + 1, "");
-		for (const struct ast_case *cur = a->u.switch_.label_cases;
-		     cur != NULL;
-		     cur = cur->next) {
-			debug("%*sCASE.VALUE %lld",
-			      (int)indent + 2,
-			      "",
-			      cur->constant);
-			debug("%*sCASE.UNIQUE %lld",
-			      (int)indent + 2,
-			      "",
-			      cur->unique);
-		}
+		parse_debug_print_flat(a->u.switch_.label_cases, indent + 2);
 		break;
 	case NODE_CASE:
-		debug("%*sCASE VALUE %.*s",
-		      (int)indent + 1,
-		      "",
-		      (int)a->u.case_.constant.sz,
-		      a->u.case_.constant.data);
+		parse_debug_print(a->u.case_.constant, indent + 1);
 		__attribute__((fallthrough));
 	case NODE_CASE_DEFAULT:
 		debug("%*sCASE LABEL: %lld%s",
@@ -1690,18 +1884,18 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("FUNCTION",
 		                             &a->u.call.identifier,
 		                             indent + 1);
-		if (a->u.call.arguments != NULL) {
-			debug("%*sARGUMENTS", (int)indent, "");
-			parse_debug_print(a->u.call.arguments, indent + 1);
-		}
+		debug("%*sARGUMENTS", (int)indent + 1, "");
+		parse_debug_print_flat(a->u.call.args, indent + 2);
 		break;
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-		parse_debug_print(a->u.call_args.expr, indent + 1);
-		if (a->u.call_args.next != NULL) {
-			parse_debug_print(a->u.call_args.next, indent);
-		}
+	case NODE_EXPRESSION_CAST:
+		debug("%*sCAST.TO: %s",
+		      (int)(indent + 1),
+		      "",
+		      ctype_to_str(a->u.cast.to_type));
+		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
 		debug("%*sVALUE %lld", (int)indent + 1, "", a->u.num);
 		break;
 	}
@@ -1715,4 +1909,19 @@ parse_debug_print_flat(const struct flat *a, size_t indent)
 		assert(cursor->car != NULL);
 		parse_debug_print(cursor->car, indent);
 	}
+}
+
+result_t
+cast_if(Arena *arena, enum ctype cast_to, struct ast **a)
+{
+	if (*a == NULL || (**a).expr_type == cast_to) {
+		return RESULT_OK;
+	}
+	struct ast *cast_wrap = NULL;
+	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
+	cast_wrap->u.cast.to_type = cast_to;
+	cast_wrap->u.cast.expr = *a;
+	cast_wrap->expr_type = cast_to;
+	*a = cast_wrap;
+	return RESULT_OK;
 }
