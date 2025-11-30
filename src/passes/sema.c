@@ -789,7 +789,8 @@ sema_declare_file_scope(struct ast *a,
 	                                 : SYMBOL_LINKAGE_INTERNAL;
 
 	if (a->u.declare.init != NULL) {
-		if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
+		if (a->u.declare.init->node_type == NODE_CONSTANT_INT ||
+		    a->u.declare.init->node_type == NODE_CONSTANT_LONG) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant = a->u.declare.init->u.num;
 			/*
@@ -924,7 +925,8 @@ sema_declare_block_scope(struct ast *a,
 		break;
 	case SPECIFIER_STATIC:
 		if (a->u.declare.init != NULL &&
-		    a->u.declare.init->node_type != NODE_CONSTANT_INT) {
+		    a->u.declare.init->node_type != NODE_CONSTANT_INT &&
+		    a->u.declare.init->node_type != NODE_CONSTANT_LONG) {
 			return make_result(
 				ERR_SEMA_VARIABLE_DECLARATION_STATIC_INIT,
 				varname->data,
@@ -934,7 +936,8 @@ sema_declare_block_scope(struct ast *a,
 		if (a->u.declare.init == NULL) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant = 0;
-		} else if (a->u.declare.init->node_type == NODE_CONSTANT_INT) {
+		} else if (a->u.declare.init->node_type == NODE_CONSTANT_INT ||
+		           a->u.declare.init->node_type == NODE_CONSTANT_LONG) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant = a->u.declare.init->u.num;
 			/*

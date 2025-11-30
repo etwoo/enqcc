@@ -947,6 +947,7 @@ ir_expr(Arena *arena,
 {
 	switch (a->node_type) {
 	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_CONSTANT_INT;
 		return_value->num = a->u.num;
