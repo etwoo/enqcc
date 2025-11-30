@@ -1706,7 +1706,7 @@ parse_debug_print_ast_ctype(const char *description,
 		type_as_str = "LONG";
 		break;
 	}
-	debug("%*sTYPE: %s", (int)indent, "", type_as_str);
+	debug("%*sC.TYPE: %s", (int)indent, "", type_as_str);
 }
 
 void parse_debug_print_flat(const struct flat *a, size_t indent);
@@ -1737,7 +1737,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             &cur->symbol,
 			                             indent + 1);
-			parse_debug_print_ast_ctype("",
+			parse_debug_print_ast_ctype(NULL,
 			                            cur->parameter_type,
 			                            indent + 1);
 		}
@@ -1754,7 +1754,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.declare.identifier,
 		                             indent);
 		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);
-		parse_debug_print_ast_ctype("",
+		parse_debug_print_ast_ctype(NULL,
 		                            a->u.function.return_type,
 		                            indent + 1);
 		if (a->u.declare.init != NULL) {
@@ -1958,7 +1958,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_EXPRESSION_CAST:
-		parse_debug_print_ast_ctype("", a->u.cast.to_type, indent + 1);
+		parse_debug_print_ast_ctype(NULL,
+		                            a->u.cast.to_type,
+		                            indent + 1);
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT_INT:
