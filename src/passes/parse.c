@@ -174,6 +174,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.call_args.expr, sym));
 		check(resolve_expr(arena, a->u.call_args.next, sym));
 		break;
+	case NODE_EXPRESSION_CAST:
+		check(resolve_expr(arena, a->u.cast.expr, sym));
+		break;
 	}
 
 	return RESULT_OK;
@@ -752,6 +755,7 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
+	case NODE_EXPRESSION_CAST:
 	case NODE_CONSTANT_INT:
 		assert(0); /* logic error in caller */
 		break;
@@ -1518,6 +1522,26 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 	}
 }
 
+static void
+parse_debug_print_ast_vartype(const char *description,
+                              enum ast_variable_type var_type,
+                              size_t indent)
+{
+	if (description != NULL) {
+		debug("%*s%s", (int)indent, "", description);
+	}
+	const char *type_as_str = NULL;
+	switch (var_type) {
+	case VARIABLE_TYPE_INT:
+		type_as_str = "INT";
+		break;
+	case VARIABLE_TYPE_LONG:
+		type_as_str = "LONG";
+		break;
+	}
+	debug("%*sTYPE: %s", (int)indent, "", type_as_str);
+}
+
 void parse_debug_print_flat(const struct flat *a, size_t indent);
 
 #define TO_STR(node_type, ...) #node_type,
@@ -1539,10 +1563,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.function.identifier,
 		                             indent + 1);
 		parse_debug_print_ast_spec(a->u.function.specifier, indent + 1);
+		parse_debug_print_ast_vartype("RETURNS",
+		                              a->u.function.return_type,
+		                              indent + 1);
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             &cur->symbol,
 			                             indent + 1);
+			parse_debug_print_ast_vartype("",
+						      cur->ptype,
+						      indent + 1);
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
@@ -1557,6 +1587,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.declare.identifier,
 		                             indent);
 		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);
+		parse_debug_print_ast_vartype("",
+		                              a->u.function.return_type,
+		                              indent + 1);
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
@@ -1756,6 +1789,12 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.call_args.next != NULL) {
 			parse_debug_print(a->u.call_args.next, indent);
 		}
+		break;
+	case NODE_EXPRESSION_CAST:
+		parse_debug_print_ast_vartype("",
+		                              a->u.cast.to_type,
+		                              indent + 1);
+		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT_INT:
 		debug("%*sVALUE %lld", (int)indent + 1, "", a->u.num);

@@ -74,13 +74,13 @@ struct ast_case {
 
 #define FOREACH_AST_NODE_EXPRESSION(F)                                         \
 	F(EXPRESSION_NULL)                                                     \
-	F(EXPRESSION_CAST)                                                     \
 	F(EXPRESSION_PAREN_ENCLOSED)                                           \
 	F(EXPRESSION_POSTDECREMENT)                                            \
 	F(EXPRESSION_POSTINCREMENT)                                            \
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_FUNCTION_CALL)                                            \
 	F(EXPRESSION_FUNCTION_CALL_ARGUMENTS)                                  \
+	F(EXPRESSION_CAST)                                                     \
 	FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(F)
 

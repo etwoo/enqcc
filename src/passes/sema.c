@@ -118,6 +118,8 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(a->u.call_args.expr, ops, u));
 		recurse_into_sibling_node = a->u.call_args.next;
 		break;
+	case NODE_EXPRESSION_CAST:
+		check(sema_walk(a->u.cast.expr, ops, u));
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
