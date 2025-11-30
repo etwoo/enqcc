@@ -778,7 +778,9 @@ sema_fn_signature(struct ast *a, void *userdata)
 			fname->data,
 			fname->sz);
 	}
-	// TODO: like n_args, check each call arg expr type matches param type
+	// TODO: like n_args, check:
+	// - for function call, each arg expr type matches param type
+	// - for fn redeclaration/def-after-decl/etc, param types match dup
 
 	return RESULT_OK;
 }
