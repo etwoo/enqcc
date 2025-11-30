@@ -186,6 +186,12 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		switch (a->node_type) {
 		case NODE_EXPRESSION_LOGICAL_AND:
 		case NODE_EXPRESSION_LOGICAL_OR:
+		case NODE_EXPRESSION_COMPARE_EQUAL:
+		case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		case NODE_EXPRESSION_COMPARE_LESS_THAN:
+		case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+		case NODE_EXPRESSION_COMPARE_MORE_THAN:
+		case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 			a->expr_type = CTYPE_INT; /* effectively cast to bool */
 			break;
 		default:
