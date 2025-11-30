@@ -60,11 +60,11 @@ resolve_var_usage(struct symbol *head,
 static WARN_UNUSED result_t
 resolve_function_call(struct symbol *head,
                       struct ast_symbol *callee,
-                      enum ctype *result_type)
+                      enum ctype *return_type)
 {
 	check(resolve_symbol(head,
 	                     callee,
-	                     result_type,
+	                     return_type,
 	                     ERR_SEMA_FUNCTION_CALL_UNDECLARED));
 	return RESULT_OK;
 }
