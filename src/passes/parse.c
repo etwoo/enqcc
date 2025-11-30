@@ -868,10 +868,10 @@ parse_type_signature_impl_accumulate(const struct token **tok,
 	assert(*tok != NULL);
 	switch ((**tok).token_type) {
 	case TOKEN_KEYWORD_INT:
-		*type_int_count++;
+		++(*type_int_count);
 		break;
 	case TOKEN_KEYWORD_LONG:
-		*type_long_count++;
+		++(*type_long_count);
 		break;
 	default:
 		assert(0); /* logic error in caller */
