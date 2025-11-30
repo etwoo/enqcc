@@ -69,6 +69,12 @@ resolve_function_call(struct symbol *head,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED enum ctype
+get_common_type(enum ctype lhs, enum ctype rhs)
+{
+	return MAX(lhs, rhs);
+}
+
 static result_t
 resolve_block(Arena *arena, struct flat *a, struct symbol **sym) WARN_UNUSED;
 static result_t
@@ -138,7 +144,13 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
-		a->expr_type = a->u.op_unary.operand->expr_type;
+		switch (a->node_type) {
+		case NODE_EXPRESSION_UNARY_NOT:
+			a->expr_type = CTYPE_INT; /* effectively cast to bool */
+			break;
+		default:
+			a->expr_type = a->u.op_unary.operand->expr_type;
+		}
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -171,8 +183,17 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
-		a->expr_type = a->u.op_binary.lhs->expr_type;
-		// TODO: verify lhs.expr_type == rhs.expr_type, maybe in sema?
+		switch (a->node_type) {
+		case NODE_EXPRESSION_LOGICAL_AND:
+		case NODE_EXPRESSION_LOGICAL_OR:
+			a->expr_type = CTYPE_INT; /* effectively cast to bool */
+			break;
+		default:
+			a->expr_type =
+				get_common_type(a->u.op_binary.lhs->expr_type,
+			                        a->u.op_binary.rhs->expr_type);
+			break;
+		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		check(resolve_var_usage(*sym, &a->u.var, &a->expr_type));
@@ -181,8 +202,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
 		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym));
 		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
-		a->expr_type = a->u.op_ternary.then_expr->expr_type;
-		// TODO: verify then/else have same expr_type, maybe in sema?
+		a->expr_type =
+			get_common_type(a->u.op_ternary.then_expr->expr_type,
+		                        a->u.op_ternary.else_expr->expr_type);
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(*sym,
@@ -204,7 +226,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_CONSTANT_LONG:
 		a->expr_type = CTYPE_LONG;
-		break; /* no resolution work to do */
+		break;
 	}
 
 	return RESULT_OK;
