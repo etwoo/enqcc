@@ -996,6 +996,10 @@ sema_declare_apply(struct ast *a,
 		dup = state->variable_symbols;
 		check(sema_alloc_auxiliary(state->arena, &dup->auxiliary));
 		sema_get_auxiliary(dup)->dscope = dscope;
+	} else if (a->u.declare.var_type != dup->c89type) {
+		return make_result(ERR_SEMA_VARIABLE_DECLARATION_TYPE_CONFLICT,
+		                   dup->name.data,
+		                   dup->name.sz);
 	}
 	dup->unique = a->u.declare.identifier.unique; /* reuse unique ID */
 	dup->linkage.linkage = linkage_state.linkage;

@@ -412,6 +412,11 @@ result_to_str(result_t r)
 		                "class has non-constant initializer",
 		                r.msg);
 		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_TYPE_CONFLICT:
+		s = my_asprintf("Conflicting variable declarations/definitions "
+		                "with different types: %s",
+		                r.msg);
+		break;
 	case ERR_SYMBOL_ALLOC:
 		s = strdup("Cannot allocate symbol");
 		break;
