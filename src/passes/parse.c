@@ -925,6 +925,7 @@ parse_type_signature(const struct token **tok, enum ast_variable_type *var_type)
 		parse_type_signature_impl_accumulate(tok,
 		                                     &type_int_count,
 		                                     &type_long_count);
+		token_consume(tok);
 	}
 	check(parse_type_signature_impl_finalize(true,
 	                                         type_int_count,
