@@ -63,6 +63,10 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym) WARN_UNUSED;
 static WARN_UNUSED result_t
 resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 {
+	if (a == NULL) {
+		return RESULT_OK;
+	}
+
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
@@ -73,9 +77,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_IF_ELSE:
 		check(resolve_expr(arena, a->u.if_.condition, sym));
 		check(resolve_block(arena, a->u.if_.then_clause, sym));
-		if (a->u.if_.else_clause != NULL) {
-			check(resolve_block(arena, a->u.if_.else_clause, sym));
-		}
+		check(resolve_block(arena, a->u.if_.else_clause, sym));
 		break;
 	case NODE_LOOP:
 		check(resolve_expr(arena, a->u.loop.precond, sym));
@@ -162,25 +164,18 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
 		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym));
-		if (a->u.op_ternary.else_expr != NULL) {
-			check(resolve_expr(arena,
-			                   a->u.op_ternary.else_expr,
-			                   sym));
-		}
+		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(*sym, &a->u.call.identifier));
-		if (a->u.call.arguments != NULL) {
-			check(resolve_expr(arena, a->u.call.arguments, sym));
-		}
+		check(resolve_expr(arena, a->u.call.arguments, sym));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 		check(resolve_expr(arena, a->u.call_args.expr, sym));
-		if (a->u.call_args.next != NULL) {
-			check(resolve_expr(arena, a->u.call_args.next, sym));
-		}
+		check(resolve_expr(arena, a->u.call_args.next, sym));
 		break;
 	}
+
 	return RESULT_OK;
 }
 
