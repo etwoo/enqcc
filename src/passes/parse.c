@@ -194,12 +194,17 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 			a->expr_type = CTYPE_INT; /* effectively cast to bool */
 			break;
+		case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+			a->expr_type = a->u.op_binary.lhs->expr_type;
+			break;
 		default:
 			a->expr_type =
 				get_common_type(a->u.op_binary.lhs->expr_type,
 			                        a->u.op_binary.rhs->expr_type);
 			break;
 		}
+		// TODO: propagate a->expr_type down to lhs/rhs if expr_type
+		// is greater? see: convert_to() book helper
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		check(resolve_var_usage(*sym, &a->u.var, &a->expr_type));
@@ -211,6 +216,8 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		a->expr_type =
 			get_common_type(a->u.op_ternary.then_expr->expr_type,
 		                        a->u.op_ternary.else_expr->expr_type);
+		// TODO: propagate a->expr_type down to then/else if expr_type
+		// is greater? see: convert_to() book helper
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(*sym,
