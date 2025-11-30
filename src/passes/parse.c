@@ -1968,6 +1968,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sVALUE %lld", (int)indent + 1, "", a->u.num);
 		break;
 	}
+	parse_debug_print_ast_ctype("EXPR TYPE (if applicable)",
+		                    a->expr_type,
+		                    indent + 1);
 }
 
 void
