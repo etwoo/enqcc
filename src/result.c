@@ -160,9 +160,12 @@ result_to_str(result_t r)
 			r.msg,
 			my_strerror(r));
 		break;
-	case ERR_PARSE_DECL_EXPECT_TYPE_INT:
-		s = strdup("Parsing variable declaration expects "
-		           "TOKEN_KEYWORD_INT in type position");
+	case ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing cast expects TOKEN_PAREN_CLOSE after type");
+		break;
+	case ERR_PARSE_DECL_EXPECT_TYPE:
+		s = strdup("Parsing variable declaration expects valid type in "
+		           "type position");
 		break;
 	case ERR_PARSE_DECL_TYPE_DUPLICATE:
 		s = strdup("Duplicate variable type");
@@ -191,9 +194,9 @@ result_to_str(result_t r)
 		s = strdup(
 			"Parsing expression; encountered unreasonable token");
 		break;
-	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT:
-		s = strdup("Parsing function expects TOKEN_KEYWORD_INT in "
-		           "return type position");
+	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE:
+		s = strdup("Parsing function expects valid type in return type "
+		           "position");
 		break;
 	case ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE:
 		s = strdup("Duplicate function return type");
@@ -209,9 +212,9 @@ result_to_str(result_t r)
 		s = strdup("Parsing function expects TOKEN_PAREN_OPEN before "
 		           "argument list");
 		break;
-	case ERR_PARSE_FUNC_PARAM_EXPECT_TYPE_INT:
-		s = strdup("Parsing function parameter expects "
-		           "TOKEN_KEYWORD_INT in parameter type position");
+	case ERR_PARSE_FUNC_PARAM_EXPECT_TYPE:
+		s = strdup("Parsing function parameter expects valid type in "
+		           "parameter type position");
 		break;
 	case ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER:
 		s = strdup("Parsing function parameter expects "

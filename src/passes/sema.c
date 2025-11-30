@@ -640,15 +640,15 @@ sema_get_auxiliary(struct symbol *s)
 }
 
 static WARN_UNUSED result_t
-sema_fn_param_names(struct ast_symbol *params)
+sema_fn_param_names(struct ast_parameter *params)
 {
-	struct ast_symbol *dup = NULL;
+	struct ast_parameter *dup = NULL;
 
 	/* O(n^2) search over <params> for duplicates */
 	FOREACH_FUNCTION_PARAMETER (i, params) {
-		struct string_view *iname = &i->name;
+		struct string_view *iname = &i->symbol.name;
 		FOREACH_FUNCTION_PARAMETER (j, i + 1) {
-			struct string_view *jname = &j->name;
+			struct string_view *jname = &j->symbol.name;
 			if (iname->sz == jname->sz &&
 			    0 == strncmp(iname->data, jname->data, iname->sz)) {
 				dup = i;
@@ -662,8 +662,8 @@ sema_fn_param_names(struct ast_symbol *params)
 
 	if (dup != NULL) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_PARAM_DUPLICATE,
-		                   dup->name.data,
-		                   dup->name.sz);
+		                   dup->symbol.name.data,
+		                   dup->symbol.name.sz);
 	}
 	return RESULT_OK;
 }

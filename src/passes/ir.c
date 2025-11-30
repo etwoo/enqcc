@@ -1074,7 +1074,7 @@ ir_func(Arena *arena,
 	size_t i = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 		f->params[i].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		f->params[i].num = cur->unique;
+		f->params[i].num = cur->symbol.unique;
 		++i;
 	}
 

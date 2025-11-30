@@ -325,16 +325,18 @@ resolve_block(Arena *arena, struct flat *a, struct symbol **sym)
 
 static WARN_UNUSED result_t
 resolve_function_params_one(Arena *arena,
-                            struct ast_symbol *a,
+                            struct ast_parameter *a,
                             struct symbol **sym)
 {
-	check(symbols_prepend(arena, sym, &a->name, SYMBOL_VARIABLE));
-	map_symbol_members(*sym, a);
+	check(symbols_prepend(arena, sym, &a->symbol.name, SYMBOL_VARIABLE));
+	map_symbol_members(*sym, &a->symbol);
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_function_params(Arena *arena, struct ast_symbol *a, struct symbol **sym)
+resolve_function_params(Arena *arena,
+                        struct ast_parameter *a,
+                        struct symbol **sym)
 {
 	FOREACH_FUNCTION_PARAMETER (cur, a) {
 		check(resolve_function_params_one(arena, cur, sym));
@@ -435,9 +437,46 @@ token_consume(const struct token **tok)
 }
 
 static WARN_UNUSED bool
+is_token_variable_type(const struct token *tok)
+{
+	if (tok == NULL) {
+		return false;
+	}
+	switch (tok->token_type) {
+	case TOKEN_KEYWORD_INT:
+	case TOKEN_KEYWORD_LONG:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
+static WARN_UNUSED enum ast_variable_type
+map_token_type_to_variable_type(const struct token *tok)
+{
+	assert(is_token_variable_type(tok));
+
+	enum ast_variable_type result = VARIABLE_TYPE_INT;
+	switch (tok->token_type) {
+	case TOKEN_KEYWORD_INT:
+		result = VARIABLE_TYPE_INT;
+		break;
+	case TOKEN_KEYWORD_LONG:
+		result = VARIABLE_TYPE_LONG;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	return result;
+}
+
+static WARN_UNUSED bool
 is_token_maybe_function_prefix(const struct token *tok)
 {
-	return is_token_type(tok, TOKEN_KEYWORD_INT) ||
+	return is_token_variable_type(tok) ||
 	       is_token_type(tok, TOKEN_KEYWORD_STATIC) ||
 	       is_token_type(tok, TOKEN_KEYWORD_EXTERN);
 }
@@ -548,6 +587,19 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_symbol(arena, tok, dst));
+	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
+	           *tok != NULL && /* avoid NULL dereference on (**tok).next */
+	           is_token_variable_type((**tok).next)) {
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
+		token_consume(tok);
+		(**dst).u.cast.to_type = map_token_type_to_variable_type(*tok);
+		token_consume(tok);
+		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			return make_result(
+				ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE);
+		}
+		token_consume(tok);
+		check(parse_expr(arena, tok, &(**dst).u.cast.expr, 0));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
@@ -779,7 +831,7 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 	for (; tok != NULL; tok = tok->next) {
 		if (is_token_maybe_function_prefix(tok)) {
 			/* seek past return type and specifiers */
-			typed = typed || is_token_type(tok, TOKEN_KEYWORD_INT);
+			typed = typed || is_token_variable_type(tok);
 		} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
 			/* ... until we reach the first TOKEN_IDENTIFIER  */
 			/* ... and then check if TOKEN_PAREN_OPEN follows */
@@ -803,13 +855,15 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 static WARN_UNUSED result_t
 parse_specifiers(bool expect_var, /* or expect_function */
                  const struct token **tok,
-                 enum ast_specifier *dst)
+                 enum ast_specifier *dst,
+                 enum ast_variable_type *var_type)
 {
 	size_t type_count = 0;
 	size_t specifier_count = 0;
 
 	while (is_token_maybe_function_prefix(*tok)) {
-		if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+		if (is_token_variable_type(*tok)) {
+			*var_type = map_token_type_to_variable_type(*tok);
 			++type_count;
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
 			*dst = SPECIFIER_STATIC;
@@ -836,9 +890,9 @@ parse_specifiers(bool expect_var, /* or expect_function */
 	}
 
 	if (type_count == 0) {
-		return make_result(
-			expect_var ? ERR_PARSE_DECL_EXPECT_TYPE_INT
-				   : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE_INT);
+		return make_result(expect_var
+		                           ? ERR_PARSE_DECL_EXPECT_TYPE
+		                           : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE);
 	}
 
 	return RESULT_OK;
@@ -848,10 +902,10 @@ static WARN_UNUSED result_t
 parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_DECLARATION));
-
-	enum ast_specifier specifier = SPECIFIER_NONE;
-	check(parse_specifiers(true, tok, &specifier));
-	(**dst).u.declare.specifier = specifier;
+	check(parse_specifiers(true,
+	                       tok,
+	                       &(**dst).u.declare.specifier,
+	                       &(**dst).u.declare.var_type));
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER);
@@ -975,7 +1029,7 @@ parse_loop_for_init(Arena *arena,
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		check(parse_alloc_if_unset(arena, &(**dst).car));
 		token_consume(tok);
-	} else if (is_token_type(*tok, TOKEN_KEYWORD_INT)) {
+	} else if (is_token_variable_type(*tok)) {
 		check(parse_decl(arena, tok, &(**dst).car));
 	} else {
 		check(parse_expr(arena, tok, &(**dst).car, 0));
@@ -1243,7 +1297,7 @@ parse_stmt(Arena *arena,
 
 static WARN_UNUSED result_t
 parse_function_params_impl(const struct token **tok,
-                           struct ast_symbol **dst,
+                           struct ast_parameter **dst,
                            long long int *count)
 {
 	const long long int count_in = *count;
@@ -1259,10 +1313,11 @@ parse_function_params_impl(const struct token **tok,
 			token_consume(tok);
 		}
 
-		if (!is_token_type(*tok, TOKEN_KEYWORD_INT)) {
-			return make_result(
-				ERR_PARSE_FUNC_PARAM_EXPECT_TYPE_INT);
+		if (!is_token_variable_type(*tok)) {
+			return make_result(ERR_PARSE_FUNC_PARAM_EXPECT_TYPE);
 		}
+		enum ast_variable_type parameter_type =
+			map_token_type_to_variable_type(*tok);
 		token_consume(tok);
 
 		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
@@ -1271,8 +1326,9 @@ parse_function_params_impl(const struct token **tok,
 		}
 		if (dst != NULL) {
 			assert(*count <= count_in);
-			(*dst)[*count].name = (**tok).val;
-			(*dst)[*count].unique = NOT_YET_UNIQUE;
+			(*dst)[*count].symbol.name = (**tok).val;
+			(*dst)[*count].symbol.unique = NOT_YET_UNIQUE;
+			(*dst)[*count].ptype = parameter_type;
 		}
 		token_consume(tok);
 	}
@@ -1283,7 +1339,7 @@ parse_function_params_impl(const struct token **tok,
 static WARN_UNUSED result_t
 parse_function_params(Arena *arena,
                       const struct token **tok,
-                      struct ast_symbol **dst)
+                      struct ast_parameter **dst)
 {
 	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
 		token_consume(tok);
@@ -1310,10 +1366,10 @@ static WARN_UNUSED result_t
 parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
-
-	enum ast_specifier specifier = SPECIFIER_NONE;
-	check(parse_specifiers(false, tok, &specifier));
-	(**dst).u.function.specifier = specifier;
+	check(parse_specifiers(false,
+	                       tok,
+	                       &(**dst).u.function.specifier,
+	                       &(**dst).u.function.return_type));
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
@@ -1485,7 +1541,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_spec(a->u.function.specifier, indent + 1);
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
-			                             cur,
+			                             &cur->symbol,
 			                             indent + 1);
 		}
 		debug("%*sBODY", (int)(indent + 1), "");

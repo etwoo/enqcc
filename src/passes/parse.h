@@ -17,6 +17,16 @@ struct ast_symbol {
 	enum symbol_linkage ltype;
 };
 
+enum ast_variable_type {
+	VARIABLE_TYPE_INT,
+	VARIABLE_TYPE_LONG,
+};
+
+struct ast_parameter {
+	struct ast_symbol symbol;
+	enum ast_variable_type ptype;
+};
+
 struct ast_case {
 	long long int constant;
 	long long int unique;
@@ -64,6 +74,7 @@ struct ast_case {
 
 #define FOREACH_AST_NODE_EXPRESSION(F)                                         \
 	F(EXPRESSION_NULL)                                                     \
+	F(EXPRESSION_CAST)                                                     \
 	F(EXPRESSION_PAREN_ENCLOSED)                                           \
 	F(EXPRESSION_POSTDECREMENT)                                            \
 	F(EXPRESSION_POSTINCREMENT)                                            \
@@ -108,7 +119,8 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
-			struct ast_symbol *params;
+			enum ast_variable_type return_type;
+			struct ast_parameter *params;
 			struct ast *block;
 		} function;
 		struct {
@@ -117,6 +129,7 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
+			enum ast_variable_type var_type;
 			struct ast *init;
 		} declare;
 		struct {
@@ -172,6 +185,10 @@ struct ast {
 			struct string_view constant;
 			long long int unique;
 		} case_;
+		struct {
+			enum ast_variable_type to_type;
+			struct ast *expr;
+		} cast;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		long long int num;     /* NODE_CONSTANT_INT */
 	} u;
@@ -187,9 +204,9 @@ struct flat {
  * array, delimited by a final `struct string_view` with NULL data.
  */
 #define FOREACH_FUNCTION_PARAMETER(iter, arr)                                  \
-	for (struct ast_symbol * (iter) = arr;                                 \
-	     (iter) != NULL && (iter)->name.data != NULL &&                    \
-	     (iter)->name.sz > 0;                                              \
+	for (struct ast_parameter * (iter) = arr;                              \
+	     (iter) != NULL && (iter)->symbol.name.data != NULL &&             \
+	     (iter)->symbol.name.sz > 0;                                       \
 	     ++(iter))
 
 #endif
