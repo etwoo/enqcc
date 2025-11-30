@@ -27,13 +27,15 @@ result_t
 symbols_prepend(Arena *arena,
                 struct symbol **head,
                 const struct string_view *name,
-                enum symbol_type stype)
+                enum symbol_type stype,
+                enum ctype c89type)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_SYMBOL_ALLOC);
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
+	node->c89type = c89type;
 	if (*head != NULL) {
 		long long int base = MAX((**head).unique, (**head).cookie);
 		node->unique = base + 1;

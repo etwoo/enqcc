@@ -17,15 +17,21 @@
 static const char LITERAL_DEFAULT[] = "default";
 
 static void
-map_symbol_members(const struct symbol *src, struct ast_symbol *dst)
+map_symbol_members(const struct symbol *src,
+                   struct ast_symbol *dst_symbol,
+                   enum ctype *dst_expr_type)
 {
-	dst->unique = src->unique;
-	dst->stype = src->stype;
-	dst->ltype = src->linkage.linkage;
+	dst_symbol->unique = src->unique;
+	dst_symbol->stype = src->stype;
+	dst_symbol->ltype = src->linkage.linkage;
+	*dst_expr_type = src->c89type;
 }
 
 static WARN_UNUSED result_t
-resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
+resolve_symbol(struct symbol *head,
+               struct ast_symbol *asym,
+               enum ctype *expr_type,
+               unsigned errtype)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(asym->unique == NOT_YET_UNIQUE);
@@ -35,23 +41,31 @@ resolve_symbol(struct symbol *head, struct ast_symbol *asym, unsigned errtype)
 		return make_result(errtype, asym->name.data, asym->name.sz);
 	}
 
-	map_symbol_members(resolved, asym);
+	map_symbol_members(resolved, asym, expr_type);
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_var_usage(struct symbol *head, struct ast_symbol *var)
+resolve_var_usage(struct symbol *head,
+                  struct ast_symbol *var,
+                  enum ctype *expr_type)
 {
 	check(resolve_symbol(head,
 	                     var,
+	                     expr_type,
 	                     ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_function_call(struct symbol *head, struct ast_symbol *callee)
+resolve_function_call(struct symbol *head,
+                      struct ast_symbol *callee,
+                      enum ctype *result_type)
 {
-	check(resolve_symbol(head, callee, ERR_SEMA_FUNCTION_CALL_UNDECLARED));
+	check(resolve_symbol(head,
+	                     callee,
+	                     result_type,
+	                     ERR_SEMA_FUNCTION_CALL_UNDECLARED));
 	return RESULT_OK;
 }
 
@@ -160,7 +174,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		check(resolve_var_usage(*sym, &a->u.var));
+		check(resolve_var_usage(*sym, &a->u.var, &a->expr_type));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
@@ -168,7 +182,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		check(resolve_function_call(*sym, &a->u.call.identifier));
+		check(resolve_function_call(*sym,
+		                            &a->u.call.identifier,
+		                            &a->expr_type));
 		check(resolve_expr(arena, a->u.call.arguments, sym));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
@@ -227,7 +243,8 @@ resolve_decl(Arena *arena,
 		check(symbols_prepend(arena,
 		                      sym,
 		                      &a->u.declare.identifier.name,
-		                      SYMBOL_VARIABLE));
+		                      SYMBOL_VARIABLE,
+		                      a->u.declare.var_type));
 		(**sym).linkage.linkage = linkage;
 		resolved = *sym;
 
@@ -247,7 +264,10 @@ resolve_decl(Arena *arena,
 			(**sym).linkage.linkage = anywhere->linkage.linkage;
 		}
 	}
-	map_symbol_members(resolved, &a->u.declare.identifier);
+
+	enum ctype dummy = CTYPE_INT;
+	map_symbol_members(resolved, &a->u.declare.identifier, &dummy);
+	assert(dummy == a->u.declare.var_type);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
@@ -332,8 +352,14 @@ resolve_function_params_one(Arena *arena,
                             struct ast_parameter *a,
                             struct symbol **sym)
 {
-	check(symbols_prepend(arena, sym, &a->symbol.name, SYMBOL_VARIABLE));
-	map_symbol_members(*sym, &a->symbol);
+	check(symbols_prepend(arena,
+	                      sym,
+	                      &a->symbol.name,
+	                      SYMBOL_VARIABLE,
+	                      a->parameter_type));
+	enum ctype dummy = CTYPE_INT;
+	map_symbol_members(*sym, &a->symbol, &dummy);
+	assert(dummy == a->parameter_type);
 	return RESULT_OK;
 }
 
@@ -358,8 +384,11 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	                      sym,
 	                      &a->u.function.identifier.name,
 	                      is_def ? SYMBOL_FUNCTION_DEFINITION
-	                             : SYMBOL_FUNCTION_DECLARATION));
-	map_symbol_members(*sym, &a->u.function.identifier);
+	                             : SYMBOL_FUNCTION_DECLARATION,
+	                      a->u.function.return_type));
+	enum ctype dummy = CTYPE_INT;
+	map_symbol_members(*sym, &a->u.function.identifier, &dummy);
+	assert(dummy == a->u.function.return_type);
 
 	struct symbol *before_params = *sym;
 	const bool cleanup = level_delimiter_prepare(before_params);
@@ -1424,7 +1453,7 @@ parse_function_params_impl(const struct token **tok,
 			assert(*count <= count_in);
 			(*dst)[*count].symbol.name = (**tok).val;
 			(*dst)[*count].symbol.unique = NOT_YET_UNIQUE;
-			(*dst)[*count].ptype = parameter_type;
+			(*dst)[*count].parameter_type = parameter_type;
 		}
 		token_consume(tok);
 	}
@@ -1662,7 +1691,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             &cur->symbol,
 			                             indent + 1);
-			parse_debug_print_ast_ctype("", cur->ptype, indent + 1);
+			parse_debug_print_ast_ctype("",
+			                            cur->parameter_type,
+			                            indent + 1);
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {

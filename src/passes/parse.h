@@ -19,7 +19,7 @@ struct ast_symbol {
 
 struct ast_parameter {
 	struct ast_symbol symbol;
-	enum ctype ptype;
+	enum ctype parameter_type;
 };
 
 struct ast_case {

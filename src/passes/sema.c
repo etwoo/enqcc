@@ -687,6 +687,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
 	const struct string_view *fname = NULL;
+	enum ctype return_type = CTYPE_INT;
 	long long int n_args = 0;
 	bool is_def = false;
 	bool is_def_or_decl = false;
@@ -699,6 +700,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		return RESULT_OK;
 	case NODE_FUNCTION:
 		fname = &a->u.function.identifier.name;
+		return_type = a->u.function.return_type;
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			++n_args;
 		}
@@ -750,7 +752,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      s,
 		                      fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
-		                             : SYMBOL_FUNCTION_DECLARATION));
+		                             : SYMBOL_FUNCTION_DECLARATION,
+		                      return_type));
 		check(sema_alloc_auxiliary(state->arena, &(**s).auxiliary));
 		sema_get_auxiliary(*s)->n_args = n_args;
 		(**s).linkage.linkage = linkage;
@@ -984,7 +987,8 @@ sema_declare_apply(struct ast *a,
 		check(symbols_prepend(state->arena,
 		                      &state->variable_symbols,
 		                      &a->u.declare.identifier.name,
-		                      SYMBOL_VARIABLE));
+		                      SYMBOL_VARIABLE,
+		                      a->u.declare.var_type));
 		dup = state->variable_symbols;
 		check(sema_alloc_auxiliary(state->arena, &dup->auxiliary));
 		sema_get_auxiliary(dup)->dscope = dscope;
