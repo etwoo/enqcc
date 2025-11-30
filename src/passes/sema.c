@@ -620,6 +620,7 @@ enum symbol_declaration_scope {
 
 struct sema_symbol_auxiliary {
 	long long int n_args;
+	enum ctype *p_types; /* array of size n_args */
 	enum symbol_declaration_scope dscope;
 };
 
@@ -683,12 +684,14 @@ ast_contains(const struct flat *haystack, const struct ast *needle)
 }
 
 static WARN_UNUSED result_t
-sema_fn_signature(struct ast *a, void *userdata)
+sema_fn_signature(struct ast *a, void *userdata) // NOLINT(*-complexity) // TODO
 {
 	struct sema_symbol_state *state = userdata;
 	const struct string_view *fname = NULL;
 	enum ctype return_type = CTYPE_INT;
 	long long int n_args = 0;
+	long long int idx = 0;
+	enum ctype *p_types = NULL;
 	bool is_def = false;
 	bool is_def_or_decl = false;
 	enum symbol_linkage linkage = SYMBOL_LINKAGE_EXTERNAL;
@@ -703,6 +706,11 @@ sema_fn_signature(struct ast *a, void *userdata)
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			++n_args;
 		}
+		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
+		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+			p_types[idx++] = cur->parameter_type;
+		}
+		assert(idx == n_args);
 		check(sema_fn_param_names(a->u.function.params));
 		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
@@ -720,6 +728,13 @@ sema_fn_signature(struct ast *a, void *userdata)
 		     arguments = arguments->u.call_args.next) {
 			++n_args;
 		}
+		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
+		for (struct ast *arguments = a->u.call.arguments;
+		     arguments != NULL;
+		     arguments = arguments->u.call_args.next) {
+			p_types[idx++] = arguments->expr_type;
+		}
+		assert(idx == n_args);
 		break;
 	default:
 		return RESULT_OK;
@@ -756,6 +771,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      return_type));
 		check(sema_alloc_auxiliary(state->arena, &(**s).auxiliary));
 		sema_get_auxiliary(*s)->n_args = n_args;
+		sema_get_auxiliary(*s)->p_types = p_types;
 		(**s).linkage.linkage = linkage;
 	} else if (is_def && dup->stype == SYMBOL_FUNCTION_DEFINITION) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_DUPLICATE,
@@ -775,12 +791,25 @@ sema_fn_signature(struct ast *a, void *userdata)
 			is_def_or_decl
 				? ERR_SEMA_FUNCTION_DEFINITION_CONFLICT
 				: ERR_SEMA_FUNCTION_CALL_WRONG_NUMBER_OF_ARGS,
-			fname->data,
-			fname->sz);
+			dup->name.data,
+			dup->name.sz);
+	} else {
+		bool p_types_match = true;
+		for (long long int i = 0; i < n_args; ++i) {
+			if (p_types[i] != sema_get_auxiliary(dup)->p_types[i]) {
+				p_types_match = false;
+				break;
+			}
+		}
+		if (!p_types_match) {
+			return make_result(
+				is_def_or_decl
+					? ERR_SEMA_FUNCTION_DEFINITION_CONFLICT
+					: ERR_SEMA_FUNCTION_CALL_WRONG_ARG_TYPE,
+				dup->name.data,
+				dup->name.sz);
+		}
 	}
-	// TODO: like n_args, check:
-	// - for function call, each arg expr type matches param type
-	// - for fn redeclaration/def-after-decl/etc, param types match dup
 
 	return RESULT_OK;
 }

@@ -333,6 +333,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_FUNCTION_CALL_UNDECLARED:
 		s = my_asprintf("Call of undeclared function: %s", r.msg);
 		break;
+	case ERR_SEMA_FUNCTION_CALL_WRONG_ARG_TYPE:
+		s = my_asprintf("Wrong argument type to call of: %s", r.msg);
+		break;
 	case ERR_SEMA_FUNCTION_CALL_WRONG_NUMBER_OF_ARGS:
 		s = my_asprintf("Incorrect arguments to call of: %s", r.msg);
 		break;
