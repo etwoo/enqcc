@@ -1964,7 +1964,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_EXPRESSION_CAST:
-		parse_debug_print_ast_ctype(NULL,
+		parse_debug_print_ast_ctype("CAST TO",
 		                            a->u.cast.to_type,
 		                            indent + 1);
 		parse_debug_print(a->u.cast.expr, indent + 1);
