@@ -700,13 +700,13 @@ sema_fn_signature(struct ast *a, void *userdata)
 		return RESULT_OK;
 	case NODE_FUNCTION:
 		fname = &a->u.function.identifier.name;
-		return_type = a->u.function.return_type;
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			++n_args;
 		}
 		check(sema_fn_param_names(a->u.function.params));
 		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
+		return_type = a->u.function.return_type;
 		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
 		                  ? SYMBOL_LINKAGE_EXTERNAL
 		                  : SYMBOL_LINKAGE_INTERNAL;
@@ -764,6 +764,10 @@ sema_fn_signature(struct ast *a, void *userdata)
 	} else if (is_def_or_decl && has_specifier_static &&
 	           is_external(dup->linkage.linkage)) {
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
+		                   dup->name.data,
+		                   dup->name.sz);
+	} else if (is_def_or_decl && return_type != dup->c89type) {
+		return make_result(ERR_SEMA_FUNCTION_DEFINITION_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
 	} else if (n_args != sema_get_auxiliary(dup)->n_args) {
