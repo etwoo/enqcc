@@ -18,6 +18,10 @@ sema_walk_flat(struct flat *a, const struct sema_ops *ops, void *u) WARN_UNUSED;
 static WARN_UNUSED result_t
 sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 {
+	if (a == NULL) {
+		return RESULT_OK;
+	}
+
 	struct ast *recurse_into_sibling_node = NULL;
 	if (ops->node_enter != NULL) {
 		check(ops->node_enter(a, u));
@@ -28,15 +32,13 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk_flat(a->u.program.globals, ops, u));
 		break;
 	case NODE_FUNCTION:
-		check(sema_walk_flat(a->u.function.block, ops, u));
+		check(sema_walk(a->u.function.block, ops, u));
 		break;
 	case NODE_BLOCK:
 		check(sema_walk_flat(a->u.block.statements, ops, u));
 		break;
 	case NODE_DECLARATION:
-		if (a->u.declare.init != NULL) {
-			check(sema_walk(a->u.declare.init, ops, u));
-		}
+		check(sema_walk(a->u.declare.init, ops, u));
 		break;
 	case NODE_IF_ELSE:
 		check(sema_walk(a->u.if_.condition, ops, u));
@@ -107,20 +109,14 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(a->u.op_binary.lhs, ops, u));
 		check(sema_walk(a->u.op_ternary.condition, ops, u));
 		check(sema_walk(a->u.op_ternary.then_expr, ops, u));
-		if (a->u.op_ternary.else_expr != NULL) {
-			check(sema_walk(a->u.op_ternary.else_expr, ops, u));
-		}
+		check(sema_walk(a->u.op_ternary.else_expr, ops, u));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		if (a->u.call.arguments != NULL) {
-			check(sema_walk(a->u.call.arguments, ops, u));
-		}
+		check(sema_walk(a->u.call.arguments, ops, u));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 		check(sema_walk(a->u.call_args.expr, ops, u));
-		if (a->u.call_args.next != NULL) {
-			recurse_into_sibling_node = a->u.call_args.next;
-		}
+		recurse_into_sibling_node = a->u.call_args.next;
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:

@@ -109,7 +109,7 @@ struct ast {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
 			struct ast_symbol *params;
-			struct flat *block;
+			struct ast *block;
 		} function;
 		struct {
 			struct flat *statements;

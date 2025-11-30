@@ -366,10 +366,9 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	check(resolve_function_params(arena, a->u.function.params, sym));
 
 	if (is_def) {
-		assert(a->u.function.block->car != NULL);
-		assert(a->u.function.block->car->node_type == NODE_BLOCK);
+		assert(a->u.function.block->node_type == NODE_BLOCK);
 		struct flat *function_body =
-			a->u.function.block->car->u.block.statements;
+			a->u.function.block->u.block.statements;
 		check(resolve_block_with_delimiter(arena,
 		                                   function_body,
 		                                   sym,
@@ -976,6 +975,7 @@ parse_loop_for_init(Arena *arena,
 	check(parse_alloc(arena, dst_outer, NODE_BLOCK));
 	struct flat **dst = &(**dst_outer).u.block.statements;
 	check(flat_alloc(arena, dst));
+	assert(*dst != NULL);
 
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		check(parse_alloc_if_unset(arena, &(**dst).car));
@@ -1342,7 +1342,7 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 		assert((**dst).u.function.block == NULL);
 		token_consume(tok);
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
-		check(parse_stmt_multi(arena, tok, &(**dst).u.function.block));
+		check(parse_block(arena, tok, &(**dst).u.function.block));
 	} else {
 		return make_result(
 			ERR_PARSE_FUNC_EXPECT_TOKEN_SEMICOLON_OR_BRACE_OPEN);
@@ -1495,7 +1495,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
-			parse_debug_print_flat(a->u.function.block, indent + 2);
+			parse_debug_print(a->u.function.block, indent + 2);
 		}
 		break;
 	case NODE_BLOCK:

@@ -1078,7 +1078,12 @@ ir_func(Arena *arena,
 		++i;
 	}
 
-	check(ir_block(arena, a->u.function.block, ir, &f->ops));
+	assert(a->u.function.block != NULL);
+	assert(a->u.function.block->node_type == NODE_BLOCK);
+	check(ir_block(arena,
+	               a->u.function.block->u.block.statements,
+	               ir,
+	               &f->ops));
 
 	/*
 	 * If necessary, add a final, often-unreachable `return 0` instruction
