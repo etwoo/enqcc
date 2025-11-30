@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <sys/param.h> /* for MAX() */
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char LINUX_LABEL_PREFIX[] = ".L";
@@ -134,122 +135,189 @@ emit_asm_operand(const struct asm_operand *o,
 }
 
 static void
+map_wordtype_to_register_alias(const struct asm_operand *o,
+                               enum register_alias *dst)
+{
+	switch (o->word_type) {
+	case ASM_WORD_32BIT:
+		*dst = REGISTER_ALIAS_4BYTE;
+		break;
+	case ASM_WORD_64BIT:
+		*dst = REGISTER_ALIAS_8BYTE;
+		break;
+	}
+}
+
+static void
 emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
 	const char *label_prefix = get_label_prefix(plat);
-	const char *print_opcode = NULL;
 
+	/*
+	 * Choose a default register_alias value based on the asm_operand that
+	 * most likely corresponds to the final destination of this asm_op.
+	 */
+	enum register_alias ralias_default = REGISTER_ALIAS_4BYTE;
+	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+		if (op->args[i].operand_type == ASM_OPERAND_NONE) {
+			continue;
+		}
+		/* last operand's mapping wins */
+		map_wordtype_to_register_alias(&op->args[i], &ralias_default);
+	}
+
+	/*
+	 * Populate register_alias values with default value. Subsequent logic
+	 * may customize these values where appropriate.
+	 */
 	enum register_alias ralias[ARRAY_SIZE(op->args)] = {0};
 	for (size_t i = 0; i < ARRAY_SIZE(ralias); ++i) {
-		ralias[i] = REGISTER_ALIAS_4BYTE;
+		ralias[i] = ralias_default;
+	}
+
+	/*
+	 * Choose the overall opcode suffix based on the word_type of the
+	 * destination operand (indicated by the value of ralias_default).
+	 */
+	char print_opcode_suffix = 0;
+	switch (ralias_default) {
+	case REGISTER_ALIAS_8BYTE:
+		print_opcode_suffix = 'q';
+		break;
+	case REGISTER_ALIAS_4BYTE:
+		print_opcode_suffix = 'l';
+		break;
+	case REGISTER_ALIAS_1BYTE:
+		print_opcode_suffix = 'b';
+		break;
 	}
 
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
 	}
 
+	/*
+	 * Customize the final opcode prefix/suffix, register aliases, etc.
+	 */
+	const char *print_opcode = NULL;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
-		print_opcode = "movl";
+		print_opcode = "mov";
+		break;
+	case ASM_OP_MOV_WITH_SIGN_EXTENSION:
+		print_opcode = "movslq";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_4BYTE;
+		assert(ralias[1] == REGISTER_ALIAS_8BYTE);
 		break;
 	case ASM_OP_UNARY_NEG:
-		print_opcode = "negl";
+		print_opcode = "neg";
 		break;
 	case ASM_OP_UNARY_NOT:
-		print_opcode = "notl";
+		print_opcode = "not";
 		break;
 	case ASM_OP_UNARY_DECREMENT:
-		print_opcode = "decl";
+		print_opcode = "dec";
 		break;
 	case ASM_OP_UNARY_INCREMENT:
-		print_opcode = "incl";
+		print_opcode = "inc";
 		break;
 	case ASM_OP_BINARY_ADD:
-		print_opcode = "addl";
-		break;
-	case ASM_OP_BINARY_ADD_QUAD:
-		print_opcode = "addq";
+		print_opcode = "add";
 		break;
 	case ASM_OP_BINARY_SUBTRACT:
-		print_opcode = "subl";
-		break;
-	case ASM_OP_BINARY_SUBTRACT_QUAD:
-		print_opcode = "subq";
+		print_opcode = "sub";
 		break;
 	case ASM_OP_BINARY_MULTIPLY:
-		print_opcode = "imull";
+		print_opcode = "imul";
 		break;
 	case ASM_OP_BITWISE_AND:
-		print_opcode = "andl";
+		print_opcode = "and";
 		break;
 	case ASM_OP_BITWISE_OR:
-		print_opcode = "orl";
+		print_opcode = "or";
 		break;
 	case ASM_OP_BITWISE_XOR:
-		print_opcode = "xorl";
+		print_opcode = "xor";
 		break;
 	case ASM_OP_BITWISE_SHIFT_LEFT:
-		print_opcode = "sall";
+		print_opcode = "sal";
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
-		assert(ralias[1] == REGISTER_ALIAS_4BYTE);
 		break;
 	case ASM_OP_BITWISE_SHIFT_RIGHT:
-		print_opcode = "sarl";
+		print_opcode = "sar";
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
-		assert(ralias[1] == REGISTER_ALIAS_4BYTE);
 		break;
 	case ASM_OP_COMPARE:
-		print_opcode = "cmpl";
+		print_opcode = "cmp";
 		break;
 	case ASM_OP_IDIV:
-		print_opcode = "idivl";
+		print_opcode = "idiv";
 		break;
 	case ASM_OP_CDQ:
 		print_opcode = "cdq";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_CQO:
+		print_opcode = "cqo";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_JMP:
 		print_opcode = "jmp";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_JMP_IF_EQ:
 		print_opcode = "je";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_JMP_IF_NEQ:
 		print_opcode = "jne";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_JMP_IF_GT:
 		print_opcode = "jg";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_JMP_IF_GTE:
 		print_opcode = "jge";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_JMP_IF_LT:
 		print_opcode = "jl";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_JMP_IF_LTE:
 		print_opcode = "jle";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_SET_IF_EQ:
 		print_opcode = "sete";
+		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_NEQ:
 		print_opcode = "setne";
+		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_GT:
 		print_opcode = "setg";
+		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_GTE:
 		print_opcode = "setge";
+		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_LT:
 		print_opcode = "setl";
+		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_SET_IF_LTE:
 		print_opcode = "setle";
+		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
 	case ASM_OP_LABEL:
@@ -263,10 +331,12 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_PUSH:
 		print_opcode = STR_OP_PUSH_QUAD;
+		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_8BYTE;
 		break;
 	case ASM_OP_CALL:
 		print_opcode = "call";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_RET:
 		dprintf(fd,
@@ -283,6 +353,10 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		return;
 	}
 	dprintf(fd, "%s", print_opcode);
+
+	if (print_opcode_suffix > 0) {
+		dprintf(fd, "%c", print_opcode_suffix);
+	}
 
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 		if (op->args[i].operand_type == ASM_OPERAND_NONE) {
@@ -337,13 +411,16 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 	}
 
 	if (var->u.initial_as_ll != 0) {
-		dprintf(fd, "\t.data\n\t.balign 4\n");
+		dprintf(fd, "\t.data\n\t.balign %lld\n", var->alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.long %lld\n", var->u.initial_as_ll);
+		dprintf(fd,
+		        "\t.%s %lld\n",
+		        var->alignment == 4 ? "long" : "quad",
+		        var->u.initial_as_ll);
 	} else {
-		dprintf(fd, "\t.bss\n\t.balign 4\n");
+		dprintf(fd, "\t.bss\n\t.balign %lld\n", var->alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.zero 4\n");
+		dprintf(fd, "\t.zero %lld\n", var->alignment);
 	}
 }
 

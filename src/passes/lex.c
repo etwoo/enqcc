@@ -141,6 +141,15 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 			pos->data++;
 			pos->sz--;
 		} while (isdigit(*pos->data));
+		switch (*pos->data) {
+		case 'l':
+		case 'L':
+			pos->data++;
+			pos->sz--;
+			break;
+		default:
+			break;
+		}
 		cur->val.sz = pos->data - cur->val.data;
 		cur->token_type = TOKEN_CONSTANT;
 		check(lex_peek_ok(pos, &cur->val));

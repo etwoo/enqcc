@@ -7,6 +7,7 @@
 	F("return", TOKEN_KEYWORD_RETURN)                                      \
 	F("void", TOKEN_KEYWORD_VOID)                                          \
 	F("int", TOKEN_KEYWORD_INT)                                            \
+	F("long", TOKEN_KEYWORD_LONG)                                          \
 	F("if", TOKEN_KEYWORD_IF)                                              \
 	F("else", TOKEN_KEYWORD_ELSE)                                          \
 	F("do", TOKEN_KEYWORD_DO)                                              \
