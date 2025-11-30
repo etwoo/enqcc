@@ -856,48 +856,35 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 	return false;
 }
 
-static WARN_UNUSED result_t
-parse_specifiers(bool expect_var, /* or expect_function */
-                 const struct token **tok,
-                 enum ast_specifier *dst,
-                 enum ast_variable_type *var_type)
+static void
+parse_type_signature_impl_accumulate(const struct token **tok,
+                                     size_t *type_int_count,
+                                     size_t *type_long_count)
 {
-	size_t type_int_count = 0;
-	size_t type_long_count = 0;
-	size_t specifier_count = 0;
-
-	while (is_token_maybe_function_prefix(*tok)) {
-		if (is_token_variable_type(*tok)) {
-			assert(*tok != NULL);
-			switch ((**tok).token_type) {
-			case TOKEN_KEYWORD_INT:
-				++type_int_count;
-				break;
-			case TOKEN_KEYWORD_LONG:
-				++type_long_count;
-				break;
-			default:
-				assert(0); /* logic error in caller */
-				break;
-			}
-		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
-			*dst = SPECIFIER_STATIC;
-			++specifier_count;
-		} else if (is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
-			*dst = SPECIFIER_EXTERN;
-			++specifier_count;
-		} else {
-			assert(0); /* logic error in caller */
-		}
-		token_consume(tok);
+	if (!is_token_variable_type(*tok)) {
+		return;
 	}
 
-	if (specifier_count > 1) {
-		return make_result(
-			expect_var ? ERR_PARSE_DECL_SPECIFIER_DUPLICATE
-				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
+	assert(*tok != NULL);
+	switch ((**tok).token_type) {
+	case TOKEN_KEYWORD_INT:
+		*type_int_count++;
+		break;
+	case TOKEN_KEYWORD_LONG:
+		*type_long_count++;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
 	}
+}
 
+static WARN_UNUSED result_t
+parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
+                                   size_t type_int_count,
+                                   size_t type_long_count,
+                                   enum ast_variable_type *var_type)
+{
 	if (type_int_count > 1 || type_long_count > 2) {
 		return make_result(
 			expect_var ? ERR_PARSE_DECL_TYPE_DUPLICATE
@@ -926,6 +913,63 @@ parse_specifiers(bool expect_var, /* or expect_function */
 		break;
 	}
 
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_type_signature(const struct token **tok, enum ast_variable_type *var_type)
+{
+	size_t type_int_count = 0;
+	size_t type_long_count = 0;
+	while (is_token_variable_type(*tok)) {
+		parse_type_signature_impl_accumulate(tok,
+		                                     &type_int_count,
+		                                     &type_long_count);
+	}
+	check(parse_type_signature_impl_finalize(true,
+	                                         type_int_count,
+	                                         type_long_count,
+	                                         var_type));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_specifiers(bool expect_var, /* or expect_function */
+                 const struct token **tok,
+                 enum ast_specifier *dst,
+                 enum ast_variable_type *var_type)
+{
+	size_t type_int_count = 0;
+	size_t type_long_count = 0;
+	size_t specifier_count = 0;
+
+	while (is_token_maybe_function_prefix(*tok)) {
+		if (is_token_variable_type(*tok)) {
+			parse_type_signature_impl_accumulate(tok,
+			                                     &type_int_count,
+			                                     &type_long_count);
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
+			*dst = SPECIFIER_STATIC;
+			++specifier_count;
+		} else if (is_token_type(*tok, TOKEN_KEYWORD_EXTERN)) {
+			*dst = SPECIFIER_EXTERN;
+			++specifier_count;
+		} else {
+			assert(0); /* logic error in caller */
+		}
+		token_consume(tok);
+	}
+
+	if (specifier_count > 1) {
+		return make_result(
+			expect_var ? ERR_PARSE_DECL_SPECIFIER_DUPLICATE
+				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
+	}
+
+	check(parse_type_signature_impl_finalize(expect_var,
+	                                         type_int_count,
+	                                         type_long_count,
+	                                         var_type));
 	return RESULT_OK;
 }
 
@@ -1344,12 +1388,8 @@ parse_function_params_impl(const struct token **tok,
 			token_consume(tok);
 		}
 
-		if (!is_token_variable_type(*tok)) {
-			return make_result(ERR_PARSE_FUNC_PARAM_EXPECT_TYPE);
-		}
-		enum ast_variable_type parameter_type =
-			map_token_type_to_variable_type(*tok);
-		token_consume(tok);
+		enum ast_variable_type parameter_type = VARIABLE_TYPE_INT;
+		check(parse_type_signature(tok, &parameter_type));
 
 		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 			return make_result(
