@@ -1761,8 +1761,8 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             indent);
 		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);
 		parse_debug_print_ast_ctype(NULL,
-		                            a->u.function.return_type,
-		                            indent + 1);
+		                            a->u.declare.var_type,
+		                            indent);
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
