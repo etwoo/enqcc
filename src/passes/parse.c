@@ -862,13 +862,24 @@ parse_specifiers(bool expect_var, /* or expect_function */
                  enum ast_specifier *dst,
                  enum ast_variable_type *var_type)
 {
-	size_t type_count = 0;
+	size_t type_int_count = 0;
+	size_t type_long_count = 0;
 	size_t specifier_count = 0;
 
 	while (is_token_maybe_function_prefix(*tok)) {
 		if (is_token_variable_type(*tok)) {
-			*var_type = map_token_type_to_variable_type(*tok);
-			++type_count;
+			assert(*tok != NULL);
+			switch ((**tok).token_type) {
+			case TOKEN_KEYWORD_INT:
+				++type_int_count;
+				break;
+			case TOKEN_KEYWORD_LONG:
+				++type_long_count;
+				break;
+			default:
+				assert(0); /* logic error in caller */
+				break;
+			}
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
 			*dst = SPECIFIER_STATIC;
 			++specifier_count;
@@ -887,16 +898,32 @@ parse_specifiers(bool expect_var, /* or expect_function */
 				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
 	}
 
-	if (type_count > 1) {
+	if (type_int_count > 1 || type_long_count > 2) {
 		return make_result(
 			expect_var ? ERR_PARSE_DECL_TYPE_DUPLICATE
 				   : ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
 	}
 
-	if (type_count == 0) {
+	if (type_int_count == 0 && type_long_count == 0) {
 		return make_result(expect_var
 		                           ? ERR_PARSE_DECL_EXPECT_TYPE
 		                           : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE);
+	}
+
+	switch (type_long_count) {
+	case 2:
+		assert(0 && "implement VARIABLE_TYPE_LONG_LONG");
+		break;
+	case 1:
+		*var_type = VARIABLE_TYPE_LONG;
+		break;
+	case 0:
+		assert(type_int_count == 1);
+		*var_type = VARIABLE_TYPE_INT;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
 	}
 
 	return RESULT_OK;
@@ -1571,8 +1598,8 @@ parse_debug_print(const struct ast *a, size_t indent)
 			                             &cur->symbol,
 			                             indent + 1);
 			parse_debug_print_ast_vartype("",
-						      cur->ptype,
-						      indent + 1);
+			                              cur->ptype,
+			                              indent + 1);
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
