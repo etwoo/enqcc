@@ -47,7 +47,7 @@ struct symbol_linkage_state {
 struct symbol {
 	struct string_view name;
 	enum symbol_type stype;
-	enum ctype c89type;
+	enum ctype c89type;   /* variable type or function return type */
 	long long int unique; /* unique ID for this symbol */
 	long long int cookie; /* maximum unique ID observed in any node */
 	bool level_delimiter; /* limit between symbols_get_*() contexts */
