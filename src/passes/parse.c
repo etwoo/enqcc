@@ -114,6 +114,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_CASE_DEFAULT:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
 		break; /* no resolution work to do */
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -488,7 +489,6 @@ static WARN_UNUSED result_t
 parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_CONSTANT));
-	check(parse_alloc(arena, dst, NODE_CONSTANT_INT));
 
 	/*
 	 * strtoll() does not update errno on success, so we must clear it
@@ -496,13 +496,36 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	 */
 	errno = 0;
 
-	(**dst).u.num = strtoll((**tok).val.data, NULL, 0);
+	long long int tmp = strtoll((**tok).val.data, NULL, 0);
 	if (errno != 0) {
 		return make_result(ERR_PARSE_CONSTANT_STRTOLL,
 		                   errno,
 		                   (**tok).val.data,
 		                   (**tok).val.sz);
 	}
+
+	if (tmp > LONG_MAX) {
+		return make_result(ERR_PARSE_CONSTANT_TOO_LARGE,
+		                   (**tok).val.data,
+		                   (**tok).val.sz);
+	}
+
+	bool suffix_long = false;
+	switch ((**tok).val.data[(**tok).val.sz - 1]) {
+	case 'l':
+	case 'L':
+		suffix_long = true;
+		break;
+	default:
+		break;
+	}
+
+	if (tmp > INT_MAX || suffix_long) {
+		check(parse_alloc(arena, dst, NODE_CONSTANT_LONG));
+	} else {
+		check(parse_alloc(arena, dst, NODE_CONSTANT_INT));
+	}
+	(**dst).u.num = tmp;
 
 	token_consume(tok);
 	return RESULT_OK;
@@ -757,6 +780,7 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 	case NODE_EXPRESSION_CAST:
 	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
 		assert(0); /* logic error in caller */
 		break;
 	}
@@ -1865,6 +1889,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
 		debug("%*sVALUE %lld", (int)indent + 1, "", a->u.num);
 		break;
 	}

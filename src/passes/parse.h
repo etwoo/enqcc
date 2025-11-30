@@ -100,6 +100,7 @@ struct ast_case {
 	F(CASE)                                                                \
 	F(CASE_DEFAULT)                                                        \
 	F(CONSTANT_INT)                                                        \
+	F(CONSTANT_LONG)                                                       \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
 #define TO_ENUM(nodet, ...) NODE_##nodet,

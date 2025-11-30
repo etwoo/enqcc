@@ -160,6 +160,11 @@ result_to_str(result_t r)
 			r.msg,
 			my_strerror(r));
 		break;
+	case ERR_PARSE_CONSTANT_TOO_LARGE:
+		s = my_asprintf(
+			"Parsing constant expr %s: too large for int or long",
+			r.msg);
+		break;
 	case ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing cast expects TOKEN_PAREN_CLOSE after type");
 		break;

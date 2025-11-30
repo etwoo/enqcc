@@ -123,6 +123,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
 		break;
 	}
 
