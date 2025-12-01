@@ -110,6 +110,9 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 	}
 
 	dst->num = sym->unique;
+	dst->c89type = src->expr_type;
+	// TODO: special-case NODE_DECLARATION to use a->u.declare.var_type
+	// instead? resolve_decl() should set expr_type, but need to verify
 }
 
 static WARN_UNUSED enum ir_linkage
@@ -600,6 +603,25 @@ ir_unary_op(Arena *arena,
 		unary->opcode = IR_OP_COPY;
 		ast_inner = a->u.op_binary.rhs;
 		break;
+	case NODE_EXPRESSION_CAST:
+		if (a->u.cast.to_type == a->u.cast.expr->expr_type) {
+			/* early return if inner expr type makes cast no-op */
+			return ir_expr(arena,
+			               a->u.cast.expr,
+			               ir,
+			               dst,
+			               return_value);
+		}
+		switch (a->u.cast.to_type) {
+		case CTYPE_INT:
+			unary->opcode = IR_OP_CTYPE_TRUNCATE;
+			break;
+		case CTYPE_LONG:
+			unary->opcode = IR_OP_CTYPE_SIGN_EXTEND;
+			break;
+		}
+		ast_inner = a->u.cast.expr;
+		break;
 	default:
 		assert(0); /* logic error in caller */
 		break;
@@ -616,6 +638,7 @@ ir_unary_op(Arena *arena,
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
+	case NODE_EXPRESSION_CAST:
 		unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		unary->args[1].num = ir->env.generator++;
 		break;
@@ -1003,6 +1026,7 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+	case NODE_EXPRESSION_CAST:
 		check(ir_unary_op(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:

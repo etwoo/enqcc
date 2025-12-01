@@ -305,9 +305,8 @@ resolve_decl(Arena *arena,
 		}
 	}
 
-	enum ctype dummy = CTYPE_INT;
-	map_symbol_members(resolved, &a->u.declare.identifier, &dummy);
-	/* note: if (dummy != a->u.declare.var_type) -> sema.c rejects */
+	map_symbol_members(resolved, &a->u.declare.identifier, &a->expr_type);
+	assert(a->expr_type != a->u.declare.var_type);
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));

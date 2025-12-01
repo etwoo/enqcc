@@ -265,6 +265,10 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
 		break;
+	case IR_OP_CTYPE_SIGN_EXTEND:
+	case IR_OP_CTYPE_TRUNCATE:
+		assert(0 && "TODO: implement codegen for casts");
+		break;
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:
 		(**dst).opcode = ASM_OP_MOV;
