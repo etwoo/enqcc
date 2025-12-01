@@ -701,6 +701,21 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		}
 		token_consume(tok);
 		check(parse_expr(arena, tok, &(**dst).u.cast.expr, 0));
+		assert((**dst).u.cast.expr != NULL);
+		/* special-cast hack for precedence of cast + assign */
+		if ((**dst).u.cast.expr->node_type ==
+		    NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
+			struct ast *cast_original = *dst;
+			struct ast *assign_original = (**dst).u.cast.expr;
+			struct ast *lhs_original =
+				(**dst).u.cast.expr->u.op_binary.lhs;
+			/* cast LHS of assignment, not assignment as a whole */
+			(**dst).u.cast.expr->u.op_binary.lhs =
+				cast_original;
+			(**dst).u.cast.expr->u.op_binary.lhs->u.cast.expr =
+				lhs_original;
+			*dst = assign_original;
+		}
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
