@@ -819,13 +819,14 @@ sema_fn_signature(struct ast *a, void *userdata) // NOLINT(*-complexity) // TODO
 				break;
 			}
 		}
-		if (!p_types_match) {
+		if (is_def_or_decl && !p_types_match) {
 			return make_result(
-				is_def_or_decl
-					? ERR_SEMA_FUNCTION_DEFINITION_CONFLICT
-					: ERR_SEMA_FUNCTION_CALL_WRONG_ARG_TYPE,
+				ERR_SEMA_FUNCTION_DEFINITION_CONFLICT,
 				dup->name.data,
 				dup->name.sz);
+		}
+		if (!is_def_or_decl && !p_types_match) {
+			// TODO: truncate call arg expr type to param type
 		}
 	}
 
