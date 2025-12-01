@@ -69,12 +69,6 @@ resolve_function_call(struct symbol *head,
 	return RESULT_OK;
 }
 
-static WARN_UNUSED enum ctype
-get_common_type(enum ctype lhs, enum ctype rhs)
-{
-	return MAX(lhs, rhs);
-}
-
 static result_t
 resolve_block(Arena *arena, struct flat *a, struct symbol **sym) WARN_UNUSED;
 static result_t
@@ -199,8 +193,8 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 			break;
 		default:
 			a->expr_type =
-				get_common_type(a->u.op_binary.lhs->expr_type,
-			                        a->u.op_binary.rhs->expr_type);
+				get_common_ctype(a->u.op_binary.lhs->expr_type,
+			                         a->u.op_binary.rhs->expr_type);
 			break;
 		}
 		// TODO: propagate a->expr_type down to lhs/rhs if expr_type
@@ -214,8 +208,8 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym));
 		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
 		a->expr_type =
-			get_common_type(a->u.op_ternary.then_expr->expr_type,
-		                        a->u.op_ternary.else_expr->expr_type);
+			get_common_ctype(a->u.op_ternary.then_expr->expr_type,
+		                         a->u.op_ternary.else_expr->expr_type);
 		// TODO: propagate a->expr_type down to then/else if expr_type
 		// is greater? see: convert_to() book helper
 		break;
@@ -710,8 +704,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 			struct ast *lhs_original =
 				(**dst).u.cast.expr->u.op_binary.lhs;
 			/* cast LHS of assignment, not assignment as a whole */
-			(**dst).u.cast.expr->u.op_binary.lhs =
-				cast_original;
+			(**dst).u.cast.expr->u.op_binary.lhs = cast_original;
 			(**dst).u.cast.expr->u.op_binary.lhs->u.cast.expr =
 				lhs_original;
 			*dst = assign_original;

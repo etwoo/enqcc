@@ -796,7 +796,25 @@ sema_fn_signature(struct ast *a, void *userdata) // NOLINT(*-complexity) // TODO
 	} else {
 		bool p_types_match = true;
 		for (long long int i = 0; i < n_args; ++i) {
-			if (p_types[i] != sema_get_auxiliary(dup)->p_types[i]) {
+			enum ctype to_check = CTYPE_INT;
+			if (is_def_or_decl) {
+				/*
+				 * Require exact parameter type match on
+				 * redeclaration, definition of preceding
+				 * declaration, etc.
+				 */
+				to_check = p_types[i];
+			} else {
+				/*
+				 * On function call, allow argument expression
+				 * type to widen to declared parameter type,
+				 * while still rejecting truncation.
+				 */
+				to_check = get_common_ctype(
+					p_types[i],
+					sema_get_auxiliary(dup)->p_types[i]);
+			}
+			if (to_check != sema_get_auxiliary(dup)->p_types[i]) {
 				p_types_match = false;
 				break;
 			}

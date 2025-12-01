@@ -5,6 +5,12 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
+enum ctype
+get_common_ctype(enum ctype lhs, enum ctype rhs)
+{
+	return MAX(lhs, rhs);
+}
+
 bool
 is_internal(enum symbol_linkage linkage)
 {

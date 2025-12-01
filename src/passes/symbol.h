@@ -13,6 +13,8 @@ enum ctype {
 	CTYPE_LONG,
 };
 
+enum ctype get_common_ctype(enum ctype lhs, enum ctype rhs) WARN_UNUSED;
+
 enum {
 	NOT_YET_UNIQUE = -1,
 };
