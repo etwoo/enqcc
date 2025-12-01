@@ -33,6 +33,10 @@ struct asm_operand {
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
 		ASM_OPERAND_VARIABLE_DATA,
 	} operand_type;
+	enum {
+		ASM_WORD_32BIT, /* DWORD */
+		ASM_WORD_64BIT, /* QWORD */
+	} word_type;
 	union {
 		long long int num;
 		enum asm_register reg;
@@ -43,6 +47,7 @@ struct asm_operand {
 
 #define FOREACH_ASM_OPCODE(F)                                                  \
 	F(MOV)                                                                 \
+	F(MOV_WITH_SIGN_EXTENSION)                                             \
 	F(UNARY_NEG)                                                           \
 	F(UNARY_NOT)                                                           \
 	F(UNARY_DECREMENT)                                                     \

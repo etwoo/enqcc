@@ -136,6 +136,15 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		dst->u.variable = src->varname;
 		break;
 	}
+
+	switch (src->c89type) {
+	case CTYPE_INT:
+		dst->word_type = ASM_WORD_32BIT;
+		break;
+	case CTYPE_LONG:
+		dst->word_type = ASM_WORD_64BIT;
+		break;
+	}
 }
 
 static void
@@ -191,7 +200,8 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	for (size_t i = n_args; i > CODEGEN_REGISTER_ARGS; --i) {
 		size_t pos = i - 1;
 		check(codegen_alloc_op(arena, dst));
-		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT) {
+		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT ||
+		    src->args[pos].c89type == CTYPE_LONG) {
 			(**dst).opcode = ASM_OP_PUSH;
 			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
 		} else {
@@ -266,8 +276,18 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
+		(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
+			codegen_map_operand(&src->args[i], &(**dst).args[i]);
+		}
+		break;
 	case IR_OP_CTYPE_TRUNCATE:
-		assert(0 && "TODO: implement codegen for casts");
+		(**dst).opcode = ASM_OP_MOV;
+		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
+			codegen_map_operand(&src->args[i], &(**dst).args[i]);
+		}
+		/* to truncate, only move CTYPE_INT's worth of source */
+		(**dst).args[0].word_type = ASM_WORD_32BIT;
 		break;
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:
