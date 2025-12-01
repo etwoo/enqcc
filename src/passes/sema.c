@@ -9,6 +9,15 @@
 
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
+static long long int
+map_numeric_type(long long int x, enum ctype dst_type)
+{
+	if (dst_type == CTYPE_INT && x > INT_MAX) {
+		return x - LONG_TO_INT_TRUNCATOR;
+	}
+	return x;
+}
+
 struct sema_ops {
 	result_t (*node_enter)(struct ast *a, void *userdata);
 	result_t (*node_exit)(struct ast *a, void *userdata);
@@ -852,12 +861,9 @@ sema_declare_file_scope(struct ast *a,
 		if (a->u.declare.init->node_type == NODE_CONSTANT_INT ||
 		    a->u.declare.init->node_type == NODE_CONSTANT_LONG) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant = a->u.declare.init->u.num;
-			if (a->u.declare.var_type == CTYPE_INT &&
-			    linkage_state->as_constant > INT_MAX) {
-				linkage_state->as_constant -=
-					LONG_TO_INT_TRUNCATOR;
-			}
+			linkage_state->as_constant =
+				map_numeric_type(a->u.declare.init->u.num,
+			                         a->u.declare.var_type);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1004,7 +1010,9 @@ sema_declare_block_scope(struct ast *a,
 		} else if (a->u.declare.init->node_type == NODE_CONSTANT_INT ||
 		           a->u.declare.init->node_type == NODE_CONSTANT_LONG) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant = a->u.declare.init->u.num;
+			linkage_state->as_constant =
+				map_numeric_type(a->u.declare.init->u.num,
+			                         a->u.declare.var_type);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
