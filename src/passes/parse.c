@@ -702,7 +702,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		token_consume(tok);
 		check(parse_expr(arena, tok, &(**dst).u.cast.expr, 0));
 		assert((**dst).u.cast.expr != NULL);
-		/* special-cast hack for precedence of cast + assign */
+		/* special-case hack for precedence of cast + assign */
 		if ((**dst).u.cast.expr->node_type ==
 		    NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
 			struct ast *cast_original = *dst;
