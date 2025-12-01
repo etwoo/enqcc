@@ -77,6 +77,7 @@ struct ir_function {
 
 struct ir_variable {
 	struct string_view identifier;
+	enum ctype c89type; /* determines alignment */
 	enum ir_linkage linkage;
 	struct {
 		long long int initial_as_ll;

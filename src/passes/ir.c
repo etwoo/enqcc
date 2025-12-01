@@ -1147,6 +1147,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = s->name;
+	(**dst).c89type = s->c89type;
 	(**dst).linkage = ir_map_linkage(s->linkage.linkage);
 
 	switch (s->linkage.initial) {
