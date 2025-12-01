@@ -705,6 +705,8 @@ codegen_replace_pseudoregisters(struct assembly *cg)
 
 		const long long int span = range[1] - range[0];
 		assert(f->stack_usage == 0);
+		// TODO: teach stack_usage and mapping to ASM_OPERAND_STACK how
+		// to deal with ASM_WORD_32BIT vs ASM_WORD_64BIT
 		f->stack_usage = CODEGEN_BYTES_PER_VALUE * (span + 1);
 
 		check(codegen_replace_pseudoregisters_fn(f, range, false));
