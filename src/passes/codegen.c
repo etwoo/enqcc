@@ -85,30 +85,34 @@ codegen_set_operand_immediate_zero(struct asm_operand *dst)
 }
 
 static void
-codegen_set_operand_eax(struct asm_operand *dst)
+codegen_set_operand_eax(struct asm_operand *dst, unsigned word_type)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->word_type = word_type;
 	dst->u.reg = ASM_REGISTER_AX;
 }
 
 static void
-codegen_set_operand_ecx(struct asm_operand *dst)
+codegen_set_operand_ecx(struct asm_operand *dst, unsigned word_type)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->word_type = word_type;
 	dst->u.reg = ASM_REGISTER_CX;
 }
 
 static void
-codegen_set_operand_r10(struct asm_operand *dst)
+codegen_set_operand_r10(struct asm_operand *dst, unsigned word_type)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->word_type = word_type;
 	dst->u.reg = ASM_REGISTER_R10;
 }
 
 static void
-codegen_set_operand_r11(struct asm_operand *dst)
+codegen_set_operand_r11(struct asm_operand *dst, unsigned word_type)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
+	dst->word_type = word_type;
 	dst->u.reg = ASM_REGISTER_R11;
 }
 
@@ -221,13 +225,19 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			(**dst).opcode = ASM_OP_PUSH;
 			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
 		} else {
+			/*
+			 * To pass a 32-bit argument via stack, we first copy
+			 * to %eax (32-bit), then push %rax (64-bit).
+			 */
 			(**dst).opcode = ASM_OP_MOV;
 			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
-			codegen_set_operand_eax(&(**dst).args[1]);
+			codegen_set_operand_eax(&(**dst).args[1],
+			                        ASM_WORD_32BIT);
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_PUSH;
-			codegen_set_operand_eax(&(**dst).args[0]);
+			codegen_set_operand_eax(&(**dst).args[0],
+			                        ASM_WORD_64BIT);
 		}
 		dst = &(**dst).next;
 		++stack_args;
@@ -248,7 +258,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
-	codegen_set_operand_eax(&(**dst).args[0]);
+	codegen_set_operand_eax(&(**dst).args[0], src->args[n_args].c89type);
 	codegen_map_operand(&src->args[n_args], &(**dst).args[1]);
 	return RESULT_OK;
 }
@@ -286,7 +296,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&(**dst).args[1]);
+		codegen_set_operand_eax(&(**dst).args[1], src->args[0].c89type);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
@@ -393,7 +403,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BINARY_REMAINDER:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&(**dst).args[1]);
+		codegen_set_operand_eax(&(**dst).args[1], src->args[0].c89type);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_CDQ;
@@ -406,7 +416,8 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_MOV;
 		switch (src->opcode) {
 		case IR_OP_BINARY_DIVIDE:
-			codegen_set_operand_eax(&(**dst).args[0]);
+			codegen_set_operand_eax(&(**dst).args[0],
+			                        src->args[0].c89type);
 			break;
 		case IR_OP_BINARY_REMAINDER:
 			(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
@@ -900,8 +911,12 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 	if (cur->opcode != ASM_OP_MOV) {
 		trampoline->ops[0]->opcode = ASM_OP_MOV;
 	}
-	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
-	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
+	codegen_set_operand_r10(&trampoline->ops[0]->args[1],
+	                        /* preserve existing word_type */
+	                        trampoline->ops[0]->args[1].word_type);
+	codegen_set_operand_r10(&trampoline->ops[1]->args[0],
+	                        /* preserve existing word_type */
+	                        trampoline->ops[1]->args[0].word_type);
 
 	return true;
 }
@@ -928,11 +943,13 @@ fix_cmp(struct asm_op *cur, struct fix *trampoline)
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
-	codegen_set_operand_r11(&trampoline->ops[0]->args[1]);
+	codegen_set_operand_r11(&trampoline->ops[0]->args[1],
+	                        cur->args[1].word_type);
 
 	trampoline->ops[1]->opcode = ASM_OP_COMPARE;
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[1]->args[0]);
-	codegen_set_operand_r11(&trampoline->ops[1]->args[1]);
+	codegen_set_operand_r11(&trampoline->ops[1]->args[1],
+	                        cur->args[0].word_type);
 
 	return true;
 }
@@ -959,10 +976,12 @@ fix_div(struct asm_op *cur, struct fix *trampoline)
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
-	codegen_set_operand_r10(&trampoline->ops[0]->args[1]);
+	codegen_set_operand_r10(&trampoline->ops[0]->args[1],
+	                        cur->args[0].word_type);
 
 	trampoline->ops[1]->opcode = ASM_OP_IDIV;
-	codegen_set_operand_r10(&trampoline->ops[1]->args[0]);
+	codegen_set_operand_r10(&trampoline->ops[1]->args[0],
+	                        cur->args[0].word_type);
 
 	return true;
 }
@@ -991,14 +1010,17 @@ fix_mul(struct asm_op *cur, struct fix *trampoline)
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
-	codegen_set_operand_r11(&trampoline->ops[0]->args[1]);
+	codegen_set_operand_r11(&trampoline->ops[0]->args[1],
+	                        cur->args[1].word_type);
 
 	trampoline->ops[1]->opcode = ASM_OP_BINARY_MULTIPLY;
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[1]->args[0]);
-	codegen_set_operand_r11(&trampoline->ops[1]->args[1]);
+	codegen_set_operand_r11(&trampoline->ops[1]->args[1],
+	                        cur->args[0].word_type);
 
 	trampoline->ops[2]->opcode = ASM_OP_MOV;
-	codegen_set_operand_r11(&trampoline->ops[2]->args[0]);
+	codegen_set_operand_r11(&trampoline->ops[2]->args[0],
+	                        cur->args[1].word_type);
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
 	return true;
 }
@@ -1026,10 +1048,12 @@ fix_shift(struct asm_op *cur, struct fix *trampoline)
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
-	codegen_set_operand_ecx(&trampoline->ops[0]->args[1]);
+	codegen_set_operand_ecx(&trampoline->ops[0]->args[1],
+	                        cur->args[0].word_type);
 
 	trampoline->ops[1]->opcode = cur->opcode;
-	codegen_set_operand_ecx(&trampoline->ops[1]->args[0]);
+	codegen_set_operand_ecx(&trampoline->ops[1]->args[0],
+	                        cur->args[1].word_type);
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[1]->args[1]);
 
 	return true;
