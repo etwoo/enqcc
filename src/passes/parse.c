@@ -306,7 +306,7 @@ resolve_decl(Arena *arena,
 	}
 
 	map_symbol_members(resolved, &a->u.declare.identifier, &a->expr_type);
-	assert(a->expr_type != a->u.declare.var_type);
+	/* sema.c detects if a->u.declare.var_type and expr_type conflict */
 
 	if (a->u.declare.init != NULL) {
 		check(resolve_expr(arena, a->u.declare.init, sym));
