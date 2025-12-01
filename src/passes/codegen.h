@@ -108,6 +108,7 @@ struct asm_function {
 
 struct asm_variable {
 	struct string_view identifier;
+	long long int alignment;
 	enum asm_linkage linkage;
 	struct {
 		long long int initial_as_ll;

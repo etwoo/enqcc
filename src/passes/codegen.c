@@ -153,6 +153,21 @@ codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 	memcpy(dst, src, sizeof(*dst));
 }
 
+static WARN_UNUSED long long int
+codegen_map_ctype(enum ctype c89type)
+{
+	long long int alignment = 0;
+	switch (c89type) {
+	case CTYPE_INT:
+		alignment = 4;
+		break;
+	case CTYPE_LONG:
+		alignment = 8;
+		break;
+	}
+	return alignment;
+}
+
 static WARN_UNUSED enum asm_linkage
 codegen_map_linkage(enum ir_linkage linkage)
 {
@@ -610,6 +625,7 @@ codegen_variable(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
+	(**dst).alignment = codegen_map_ctype(ir->c89type);
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
 	(**dst).u.initial_as_ll = ir->u.initial_as_ll;
 	return RESULT_OK;
