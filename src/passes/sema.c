@@ -518,6 +518,9 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_POSTINCREMENT:
 		to_check = a->u.op_unary.operand;
 		break;
+	case NODE_EXPRESSION_CAST:
+		to_check = a->u.cast.expr;
+		break;
 	default:
 		return RESULT_OK;
 	}
