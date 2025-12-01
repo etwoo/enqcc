@@ -1059,6 +1059,42 @@ fix_shift(struct asm_op *cur, struct fix *trampoline)
 	return true;
 }
 
+static WARN_UNUSED bool
+fix_movsx(struct asm_op *cur, struct fix *trampoline)
+{
+	if (something) {
+		return false;
+	}
+
+	// trampoline->sz = 3;
+	// TODO: fix ASM_OP_MOV_WITH_SIGN_EXTENSION
+	//   cannot use ASM_OPERAND_IMMEDIATE as src
+	//   cannot use ASM_OPERAND_STACK or ASM_OPERAND_VARIABLE_DATA as dst
+	return true;
+}
+
+static WARN_UNUSED bool
+fix_imm_big(struct asm_op *cur, struct fix *trampoline)
+{
+	if (something) {
+		return false;
+	}
+
+	// trampoline->sz = 2;
+	//
+	// TODO: fix ASM_OP_BINARY_*, ASM_OP_COMPARE, ASM_OP_PUSH
+	//   cannot use ASM_OPERAND_IMMEDIATE + 64-bit as src
+	// -> copy to r10 before using (same trampoline style as other fixup)
+	//
+	// TODO: fix movq
+	//   cannot do src ASM_OPERAND_IMMEDIATE+64-bit, dst ASM_OPERAND_STACK
+	// -> copy to src to r10, then move r10 (64bit) to stack
+	//
+	// related: consolidate SUBSTRACT_QUAD -> SUBTRACT, ADD_QUAD -> ADD
+	//   ... but with operands forced to 64bit for current QUAD users (?)
+	return true;
+}
+
 static WARN_UNUSED result_t
 codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
 {
@@ -1073,6 +1109,8 @@ codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
 		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_div));
 		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_mul));
 		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_shift));
+		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_movsx));
+		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_imm_big));
 		if (cur == orig[1]) {
 			assert(prev == orig[0]);
 			prev = cur;
