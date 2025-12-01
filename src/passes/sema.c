@@ -7,6 +7,8 @@
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
+static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
+
 struct sema_ops {
 	result_t (*node_enter)(struct ast *a, void *userdata);
 	result_t (*node_exit)(struct ast *a, void *userdata);
@@ -851,6 +853,11 @@ sema_declare_file_scope(struct ast *a,
 		    a->u.declare.init->node_type == NODE_CONSTANT_LONG) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant = a->u.declare.init->u.num;
+			if (a->u.declare.var_type == CTYPE_INT &&
+			    linkage_state->as_constant > INT_MAX) {
+				linkage_state->as_constant -=
+					LONG_TO_INT_TRUNCATOR;
+			}
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
