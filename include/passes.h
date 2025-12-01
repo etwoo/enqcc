@@ -46,7 +46,7 @@ struct assembly;
 result_t codegen_init(Arena *arena,
                       const struct intermediate *ir,
                       struct assembly **cg) __attribute__((warn_unused_result));
-result_t codegen_replace_pseudoregisters(struct assembly *cg)
+result_t codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
 	__attribute__((warn_unused_result));
 result_t codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 	__attribute__((warn_unused_result));

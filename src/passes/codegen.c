@@ -196,7 +196,8 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	assert(n_args > 0); /* one arg minimum, for return value at least */
 	--n_args;
 
-	const long long int stack_padding = n_args % 2 == 1 ? 8 : 0;
+	const long long int stack_padding =
+		n_args % 2 == 1 ? CODEGEN_BYTES_PER_PUSH : 0;
 	if (stack_padding > 0) {
 		check(codegen_alloc_subq_rsp(arena, dst, stack_padding));
 		dst = &(**dst).next;
@@ -661,11 +662,28 @@ codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED long long int
+round_up_to_multiple_of(long long int n, long long int base)
+{
+	const long long int rounded = (((n + base - 1) / base)) * base;
+	assert(rounded >= n);
+	assert(rounded - n < base);
+	assert(rounded % base == 0);
+	return rounded;
+}
+
+struct stack_offsets {
+	long long int base;
+	long long int usage;
+};
+
 static WARN_UNUSED result_t
 codegen_replace_pseudoregisters_fn(struct asm_function *cg,
                                    long long int range[2],
+                                   struct stack_offsets *offsets,
                                    bool preflight)
 {
+	long long int offset = 0;
 	for (struct asm_op *op = cg->ops; op != NULL; op = op->next) {
 		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 			struct asm_operand *arg = &op->args[i];
@@ -679,50 +697,74 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 				continue;
 			}
 
-			arg->operand_type = ASM_OPERAND_STACK;
 			assert(arg->u.num >= range[0]);
 			assert(arg->u.num <= range[1]);
 			assert(range[0] >= 0);
 			const long long int adj = arg->u.num - (range[0] - 1);
-			arg->u.num = -1 * adj * CODEGEN_BYTES_PER_VALUE;
+
+			long long int aligned = 0;
+			switch (arg->word_type) {
+			case ASM_WORD_32BIT:
+				aligned = offset;
+				break;
+			case ASM_WORD_64BIT:
+				aligned = round_up_to_multiple_of(
+					offset,
+					CODEGEN_BYTES_PER_PUSH);
+				break;
+			}
+
+			assert(offsets != NULL);
+			if (offsets[adj].usage == 0) {
+				offsets[adj].base = aligned;
+				switch (arg->word_type) {
+				case ASM_WORD_32BIT:
+					offsets[adj].usage =
+						CODEGEN_BYTES_PER_VALUE;
+					break;
+				case ASM_WORD_64BIT:
+					offsets[adj].usage =
+						CODEGEN_BYTES_PER_VALUE * 2;
+					break;
+				}
+				const long long int previous = offset;
+				offset = offsets[adj].base + offsets[adj].usage;
+				assert(offset > previous);
+			}
+
+			arg->operand_type = ASM_OPERAND_STACK;
+			arg->u.num = -1 * offsets[adj].base;
 		}
 	}
 	return RESULT_OK;
 }
 
 result_t
-codegen_replace_pseudoregisters(struct assembly *cg)
+codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
 {
 	debug("Replacing pseudoregisters with stack addresses");
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		long long int range[2] = {LLONG_MAX, LLONG_MIN};
-		check(codegen_replace_pseudoregisters_fn(f, range, true));
+		check(codegen_replace_pseudoregisters_fn(f, range, NULL, true));
 
 		if (range[0] == LLONG_MAX || range[1] == LLONG_MIN) {
 			continue;
 		}
 
 		const long long int span = range[1] - range[0];
-		assert(f->stack_usage == 0);
-		// TODO: teach stack_usage and mapping to ASM_OPERAND_STACK how
-		// to deal with ASM_WORD_32BIT vs ASM_WORD_64BIT
-		f->stack_usage = CODEGEN_BYTES_PER_VALUE * (span + 1);
+		assert(span > 0);
+		assert(span <= 4096); /* if exceeded, refactor datastructures */
 
-		check(codegen_replace_pseudoregisters_fn(f, range, false));
+		struct stack_offsets *off =
+			arena_alloc(arena, sizeof(*off) * span);
+		check(codegen_replace_pseudoregisters_fn(f, range, off, false));
+
+		assert(f->stack_usage == 0);
+		f->stack_usage = off[span - 1].base + off[span - 1].usage;
 	}
 
 	return RESULT_OK;
-}
-
-static WARN_UNUSED long long int
-round_up_to_multiple_of(long long int n, long long int base)
-{
-	const long long int rounded = (((n + base - 1) / base)) * base;
-	assert(rounded >= n);
-	assert(rounded - n < base);
-	assert(rounded % base == 0);
-	return rounded;
 }
 
 static WARN_UNUSED result_t
