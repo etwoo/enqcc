@@ -216,10 +216,8 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode = "idiv";
 		break;
 	case ASM_OP_CDQ:
-		print_opcode = "cdq";
+		print_opcode = "cdq"; // TODO use `cqo` for SX to 64-bit?
 		print_opcode_suffix = 0;
-		assert(ralias[0] == REGISTER_ALIAS_4BYTE);
-		assert(ralias[1] == REGISTER_ALIAS_8BYTE);
 		break;
 	case ASM_OP_JMP:
 		print_opcode = "jmp";
