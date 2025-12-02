@@ -63,6 +63,7 @@ struct asm_operand {
 	F(COMPARE)                                                             \
 	F(IDIV)                                                                \
 	F(CDQ)                                                                 \
+	F(CQO)                                                                 \
 	F(JMP)                                                                 \
 	F(JMP_IF_EQ)                                                           \
 	F(JMP_IF_NEQ)                                                          \

@@ -420,7 +420,14 @@ codegen_statement_one(Arena *arena,
 			codegen_map_ctype(src->args[0].c89type));
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_CDQ;
+		switch (src->args[0].c89type) {
+		case CTYPE_INT:
+			(**dst).opcode = ASM_OP_CDQ;
+			break;
+		case CTYPE_LONG:
+			(**dst).opcode = ASM_OP_CQO;
+			break;
+		}
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_IDIV;
