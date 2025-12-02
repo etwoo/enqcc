@@ -269,6 +269,8 @@ ir_if_else_prepare(Arena *arena,
 		ir_val_copy(&body_return, &out->assign_result->args[0]);
 		out->assign_result->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		out->assign_result->args[1].num = assign_result_unique;
+		out->assign_result->args[1].c89type =
+			ast_clause_returning_value->expr_type;
 	}
 
 	check(ir_alloc_op(arena, &out->jump_target));
@@ -336,6 +338,7 @@ ir_if_else(Arena *arena,
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
 		return_value->num = assign_result_unique;
+		return_value->c89type = a->expr_type;
 	}
 
 	struct ir_op *collect[] = {
@@ -514,8 +517,10 @@ ir_switch(Arena *arena,
 		ir_val_copy(&control_return, &caser->args[0]);
 		caser->args[1].subtype = IR_VAL_CONSTANT_INT;
 		caser->args[1].num = cur->constant;
+		caser->args[1].c89type = CTYPE_INT; // TODO: long vals for case?
 		caser->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		caser->args[2].num = ir->env.generator++;
+		caser->args[2].c89type = CTYPE_INT; // TODO: can assume bool?
 
 		struct ir_op *jumper = NULL;
 		check(ir_alloc_op(arena, &jumper));
@@ -641,6 +646,7 @@ ir_unary_op(Arena *arena,
 	case NODE_EXPRESSION_CAST:
 		unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		unary->args[1].num = ir->env.generator++;
+		unary->args[1].c89type = a->expr_type;
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -662,6 +668,7 @@ ir_unary_op(Arena *arena,
 		ir_val_from_ast_variable_like(a, &header->args[0]);
 		header->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		header->args[1].num = ir->env.generator++;
+		header->args[1].c89type = a->expr_type;
 		ir_val_copy(&header->args[1], return_value);
 	} else {
 		assert(return_value->subtype == IR_VAL_NONE);
@@ -782,6 +789,7 @@ ir_binary_op(Arena *arena,
 	default:
 		binary->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		binary->args[2].num = ir->env.generator++;
+		binary->args[2].c89type = a->expr_type;
 		break;
 	}
 
@@ -857,6 +865,7 @@ ir_logical_op(Arena *arena,
 	assert(return_value->subtype == IR_VAL_NONE);
 	return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
 	return_value->num = ir->env.generator++;
+	return_value->c89type = a->expr_type;
 
 	struct ir_op *footer = NULL;
 	check(ir_alloc_op(arena, &footer));
@@ -953,6 +962,7 @@ ir_call(Arena *arena,
 
 	caller->args[pos].subtype = IR_VAL_TEMPORARY_VARIABLE;
 	caller->args[pos].num = ir->env.generator++;
+	caller->args[pos].c89type = a->expr_type;
 
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&caller->args[pos], return_value);

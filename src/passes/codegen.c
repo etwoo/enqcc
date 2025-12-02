@@ -311,6 +311,8 @@ codegen_statement_one(Arena *arena,
 		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
 		}
+		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
+		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
 		break;
 	case IR_OP_CTYPE_TRUNCATE:
 		(**dst).opcode = ASM_OP_MOV;
