@@ -368,13 +368,16 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 	}
 
 	if (var->u.initial_as_ll != 0) {
-		dprintf(fd, "\t.data\n\t.balign 4\n");
+		dprintf(fd, "\t.data\n\t.balign %lld\n", var->alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.long %lld\n", var->u.initial_as_ll);
+		dprintf(fd,
+		        "\t.%s %lld\n",
+		        var->alignment == 4 ? "long" : "quad",
+		        var->u.initial_as_ll);
 	} else {
-		dprintf(fd, "\t.bss\n\t.balign 4\n");
+		dprintf(fd, "\t.bss\n\t.balign %lld\n", var->alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.zero 4\n");
+		dprintf(fd, "\t.zero %lld\n", var->alignment);
 	}
 }
 
