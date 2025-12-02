@@ -1181,7 +1181,7 @@ result_t
 codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 {
 	debug("Fixing up invalid instructions");
-	fixer fixers[] = {
+	const fixer fixers[] = {
 		fix_s2s,
 		fix_imm_big,
 		fix_cmp,
