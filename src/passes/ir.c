@@ -1100,6 +1100,7 @@ ir_func(Arena *arena,
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 		f->params[i].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		f->params[i].num = cur->symbol.unique;
+		f->params[i].c89type = cur->parameter_type;
 		++i;
 	}
 

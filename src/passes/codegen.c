@@ -117,6 +117,17 @@ codegen_set_operand_r11(struct asm_operand *dst, unsigned word_type)
 	dst->u.reg = ASM_REGISTER_R11;
 }
 
+static unsigned
+codegen_map_ctype(const enum ctype c89type)
+{
+	switch (c89type) {
+	case CTYPE_INT:
+		return ASM_WORD_32BIT;
+	case CTYPE_LONG:
+		return ASM_WORD_64BIT;
+	}
+}
+
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
@@ -142,14 +153,7 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		break;
 	}
 
-	switch (src->c89type) {
-	case CTYPE_INT:
-		dst->word_type = ASM_WORD_32BIT;
-		break;
-	case CTYPE_LONG:
-		dst->word_type = ASM_WORD_64BIT;
-		break;
-	}
+	dst->word_type = codegen_map_ctype(src->c89type);
 }
 
 static void
@@ -159,7 +163,7 @@ codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 }
 
 static WARN_UNUSED long long int
-codegen_map_ctype(enum ctype c89type)
+codegen_align_ctype(enum ctype c89type)
 {
 	long long int alignment = 0;
 	switch (c89type) {
@@ -553,8 +557,10 @@ codegen_copy_reg_to_pseudo(Arena *arena,
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
 	(**dst).args[0].u.reg = CALL_REG[pos];
+	(**dst).args[0].word_type = codegen_map_ctype(ir[pos].c89type);
 	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 	(**dst).args[1].u.num = ir[pos].num;
+	(**dst).args[1].word_type = codegen_map_ctype(ir[pos].c89type);
 	return RESULT_OK;
 }
 
@@ -576,8 +582,10 @@ codegen_copy_stack_to_pseudo(Arena *arena,
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
 	(**dst).args[0].u.num = stack_offset;
+	(**dst).args[0].word_type = codegen_map_ctype(ir[pos].c89type);
 	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 	(**dst).args[1].u.num = ir[pos].num;
+	(**dst).args[1].word_type = codegen_map_ctype(ir[pos].c89type);
 
 	return RESULT_OK;
 }
@@ -638,7 +646,7 @@ codegen_variable(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
-	(**dst).alignment = codegen_map_ctype(ir->c89type);
+	(**dst).alignment = codegen_align_ctype(ir->c89type);
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
 	(**dst).u.initial_as_ll = ir->u.initial_as_ll;
 	return RESULT_OK;
@@ -722,7 +730,10 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			case ASM_WORD_64BIT:
 				aligned = round_up_to_multiple_of(
 					offset,
-					CODEGEN_BYTES_PER_PUSH);
+					// TODO: do longs really require 16-byte
+				        // aligmment on stack? or is this just
+				        // covering up some other problems?
+					CODEGEN_BYTES_PER_PUSH * 2);
 				break;
 			}
 
