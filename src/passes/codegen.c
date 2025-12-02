@@ -916,11 +916,9 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 		trampoline->ops[0]->opcode = ASM_OP_MOV;
 	}
 	codegen_set_operand_r10(&trampoline->ops[0]->args[1],
-	                        /* preserve existing word_type */
-	                        trampoline->ops[0]->args[1].word_type);
+	                        cur->args[1].word_type);
 	codegen_set_operand_r10(&trampoline->ops[1]->args[0],
-	                        /* preserve existing word_type */
-	                        trampoline->ops[1]->args[0].word_type);
+	                        cur->args[1].word_type);
 
 	return true;
 }
@@ -1088,8 +1086,9 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 	trampoline->sz = 3;
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
-	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[1]);
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
 	assert(cur->args[0].word_type == ASM_WORD_32BIT);
+	codegen_set_operand_r10(&trampoline->ops[0]->args[1], ASM_WORD_32BIT);
 
 	trampoline->ops[1]->opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
 	codegen_set_operand_r10(&trampoline->ops[1]->args[0], ASM_WORD_32BIT);
