@@ -752,10 +752,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			case ASM_WORD_64BIT:
 				aligned = round_up_to_multiple_of(
 					offset,
-					// TODO: do longs really require 16-byte
-				        // aligmment on stack? or is this just
-				        // covering up some other problems?
-					CODEGEN_BYTES_PER_PUSH * 2);
+					CODEGEN_BYTES_PER_PUSH);
 				break;
 			}
 
@@ -765,11 +762,13 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 				switch (arg->word_type) {
 				case ASM_WORD_32BIT:
 					offsets[adj].usage =
-						CODEGEN_BYTES_PER_VALUE;
+						// TODO: why 2x? shouldn't 4
+						// bytes be enough?
+						CODEGEN_BYTES_PER_VALUE * 2;
 					break;
 				case ASM_WORD_64BIT:
 					offsets[adj].usage =
-						CODEGEN_BYTES_PER_VALUE * 2;
+						CODEGEN_BYTES_PER_VALUE * 4;
 					break;
 				}
 				const long long int previous = offset;
