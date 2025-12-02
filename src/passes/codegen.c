@@ -1022,6 +1022,7 @@ fix_mul(struct asm_op *cur, struct fix *trampoline)
 	codegen_set_operand_r11(&trampoline->ops[2]->args[0],
 	                        cur->args[1].word_type);
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
+
 	return true;
 }
 
@@ -1059,39 +1060,85 @@ fix_shift(struct asm_op *cur, struct fix *trampoline)
 	return true;
 }
 
+/*
+ * Translate:
+ *
+ *     movslq $10, -16(%rbp)
+ *
+ * ... into:
+ *
+ *     mov    $10, %r10d
+ *     movslq %r10d, %r11 # note: src uses 32-bit alias, dst uses 64-bit alias
+ *     mov    %r11, -16(%rbp)
+ */
 static WARN_UNUSED bool
 fix_movsx(struct asm_op *cur, struct fix *trampoline)
 {
-	if (something) {
+	if (!(cur->opcode == ASM_OP_MOV_WITH_SIGN_EXTENSION &&
+	      (cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE ||
+	       cur->args[1].operand_type == ASM_OPERAND_STACK ||
+	       cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA))) {
 		return false;
 	}
 
-	// trampoline->sz = 3;
-	// TODO: fix ASM_OP_MOV_WITH_SIGN_EXTENSION
-	//   cannot use ASM_OPERAND_IMMEDIATE as src
-	//   cannot use ASM_OPERAND_STACK or ASM_OPERAND_VARIABLE_DATA as dst
+	trampoline->sz = 3;
+
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[1]);
+	assert(cur->args[0].word_type == ASM_WORD_32BIT);
+
+	trampoline->ops[1]->opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+	codegen_set_operand_r10(&trampoline->ops[1]->args[0], ASM_WORD_32BIT);
+	codegen_set_operand_r11(&trampoline->ops[1]->args[1], ASM_WORD_64BIT);
+
+	trampoline->ops[2]->opcode = ASM_OP_MOV;
+	codegen_set_operand_r11(&trampoline->ops[2]->args[0], ASM_WORD_64BIT);
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
+	assert(cur->args[1].word_type == ASM_WORD_64BIT);
+
 	return true;
 }
 
+/*
+ * An immediate (constant) value that does not fit into an int needs to bounce
+ * through a register before an arithmetic op can use it as an operand.
+ *
+ * Ditto for ASM_OP_MOV op with a large immediate value as a source and an
+ * ASM_OPERAND_STACK as a destination.
+ */
 static WARN_UNUSED bool
 fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 {
-	if (something) {
+	// TODO: consolidate SUBSTRACT_QUAD -> SUBTRACT, ADD_QUAD -> ADD
+	//   ... but with operands forced to 64bit for current QUAD users (?)
+	if (!(((cur->opcode == ASM_OP_BINARY_ADD ||
+	        cur->opcode == ASM_OP_BINARY_ADD_QUAD ||
+	        cur->opcode == ASM_OP_BINARY_SUBTRACT ||
+	        cur->opcode == ASM_OP_BINARY_SUBTRACT_QUAD ||
+	        cur->opcode == ASM_OP_BINARY_MULTIPLY ||
+	        cur->opcode == ASM_OP_COMPARE || /* cmpq  */
+	        cur->opcode == ASM_OP_PUSH) &&   /* pushq */
+	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
+	       cur->args[0].word_type == ASM_WORD_64BIT &&
+	       cur->args[0].u.num > INT_MAX) ||
+	      (cur->opcode == ASM_OP_MOV &&
+	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
+	       cur->args[0].word_type == ASM_WORD_64BIT &&
+	       cur->args[0].u.num > INT_MAX &&
+	       (cur->args[1].operand_type == ASM_OPERAND_STACK ||
+	        cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA)))) {
 		return false;
 	}
 
-	// trampoline->sz = 2;
-	//
-	// TODO: fix ASM_OP_BINARY_*, ASM_OP_COMPARE, ASM_OP_PUSH
-	//   cannot use ASM_OPERAND_IMMEDIATE + 64-bit as src
-	// -> copy to r10 before using (same trampoline style as other fixup)
-	//
-	// TODO: fix movq
-	//   cannot do src ASM_OPERAND_IMMEDIATE+64-bit, dst ASM_OPERAND_STACK
-	// -> copy to src to r10, then move r10 (64bit) to stack
-	//
-	// related: consolidate SUBSTRACT_QUAD -> SUBTRACT, ADD_QUAD -> ADD
-	//   ... but with operands forced to 64bit for current QUAD users (?)
+	trampoline->sz = 2;
+	for (size_t i = 0; i < trampoline->sz; ++i) {
+		memcpy(trampoline->ops[i], cur, sizeof(*cur));
+		trampoline->ops[i]->next = NULL;
+	}
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	codegen_set_operand_r10(&trampoline->ops[0]->args[1], ASM_WORD_64BIT);
+	codegen_set_operand_r10(&trampoline->ops[1]->args[0], ASM_WORD_64BIT);
+
 	return true;
 }
 
