@@ -53,9 +53,7 @@ struct asm_operand {
 	F(UNARY_DECREMENT)                                                     \
 	F(UNARY_INCREMENT)                                                     \
 	F(BINARY_ADD)                                                          \
-	F(BINARY_ADD_QUAD)                                                     \
 	F(BINARY_SUBTRACT)                                                     \
-	F(BINARY_SUBTRACT_QUAD)                                                \
 	F(BINARY_MULTIPLY)                                                     \
 	F(BITWISE_AND)                                                         \
 	F(BITWISE_OR)                                                          \

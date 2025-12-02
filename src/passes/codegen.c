@@ -36,12 +36,13 @@ codegen_alloc_modify_rsp(Arena *arena,
                          long long int n)
 {
 	check(codegen_alloc_op(arena, dst));
-	(**dst).opcode =
-		add ? ASM_OP_BINARY_ADD_QUAD : ASM_OP_BINARY_SUBTRACT_QUAD;
+	(**dst).opcode = add ? ASM_OP_BINARY_ADD : ASM_OP_BINARY_SUBTRACT;
 	(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
 	(**dst).args[0].u.num = n;
+	(**dst).args[0].word_type = ASM_WORD_64BIT;
 	(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
 	(**dst).args[1].u.reg = ASM_REGISTER_RSP;
+	(**dst).args[1].word_type = ASM_WORD_64BIT;
 	return RESULT_OK;
 }
 
@@ -1109,12 +1110,8 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED bool
 fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 {
-	// TODO: consolidate SUBSTRACT_QUAD -> SUBTRACT, ADD_QUAD -> ADD
-	//   ... but with operands forced to 64bit for current QUAD users (?)
 	if (!(((cur->opcode == ASM_OP_BINARY_ADD ||
-	        cur->opcode == ASM_OP_BINARY_ADD_QUAD ||
 	        cur->opcode == ASM_OP_BINARY_SUBTRACT ||
-	        cur->opcode == ASM_OP_BINARY_SUBTRACT_QUAD ||
 	        cur->opcode == ASM_OP_BINARY_MULTIPLY ||
 	        cur->opcode == ASM_OP_COMPARE || /* cmpq  */
 	        cur->opcode == ASM_OP_PUSH) &&   /* pushq */
