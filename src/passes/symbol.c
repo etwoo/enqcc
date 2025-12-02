@@ -1,9 +1,22 @@
 #include "passes/symbol.h"
 
+#include "sys/array.h"
 #include "sys/debug.h"
 
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
+
+static const char *const CTYPE_AS_STR[] = {
+	"INT",
+	"LONG",
+};
+
+const char *
+ctype_to_str(enum ctype c)
+{
+	assert(c < ARRAY_SIZE(CTYPE_AS_STR));
+	return CTYPE_AS_STR[c];
+}
 
 enum ctype
 get_common_ctype(enum ctype lhs, enum ctype rhs)

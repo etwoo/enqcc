@@ -1696,26 +1696,6 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 	}
 }
 
-static void
-parse_debug_print_ast_ctype(const char *description,
-                            enum ctype var_type,
-                            size_t indent)
-{
-	if (description != NULL) {
-		debug("%*s%s", (int)indent, "", description);
-	}
-	const char *type_as_str = NULL;
-	switch (var_type) {
-	case CTYPE_INT:
-		type_as_str = "INT";
-		break;
-	case CTYPE_LONG:
-		type_as_str = "LONG";
-		break;
-	}
-	debug("%*sC.TYPE: %s", (int)indent + 1, "", type_as_str);
-}
-
 void parse_debug_print_flat(const struct flat *a, size_t indent);
 
 #define TO_STR(node_type, ...) #node_type,
@@ -1726,13 +1706,14 @@ void
 parse_debug_print(const struct ast *a, size_t indent)
 {
 	assert(indent <= INT_MAX);
-	debug("%*s%s", (int)indent, "", NODETYPE_NAMES[a->node_type]);
-
-	if (a->node_type >= NODE_CONSTANT_INT) {
-		parse_debug_print_ast_ctype("EXPR TYPE",
-		                            a->expr_type,
-		                            indent + 1);
-	}
+	debug("%*s%s%s%s%s",
+	      (int)indent,
+	      "",
+	      NODETYPE_NAMES[a->node_type],
+	      a->node_type >= NODE_CONSTANT_INT ? " [" : "",
+	      a->node_type >= NODE_CONSTANT_INT ? ctype_to_str(a->expr_type)
+	                                        : "",
+	      a->node_type >= NODE_CONSTANT_INT ? "]" : "");
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
@@ -1743,16 +1724,18 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.function.identifier,
 		                             indent + 1);
 		parse_debug_print_ast_spec(a->u.function.specifier, indent + 1);
-		parse_debug_print_ast_ctype("RETURNS",
-		                            a->u.function.return_type,
-		                            indent + 1);
+		debug("%*sRETURNS: %s",
+		      (int)(indent + 1),
+		      "",
+		      ctype_to_str(a->u.function.return_type));
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             &cur->symbol,
 			                             indent + 1);
-			parse_debug_print_ast_ctype(NULL,
-			                            cur->parameter_type,
-			                            indent + 1);
+			debug("%*sPARAMETER.TYPE: %s",
+			      (int)indent + 2,
+			      "",
+			      ctype_to_str(cur->parameter_type));
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
@@ -1767,9 +1750,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 		                             &a->u.declare.identifier,
 		                             indent);
 		parse_debug_print_ast_spec(a->u.declare.specifier, indent + 1);
-		parse_debug_print_ast_ctype(NULL,
-		                            a->u.declare.var_type,
-		                            indent);
+		debug("%*sVARIABLE.TYPE: %s",
+		      (int)indent + 1,
+		      "",
+		      ctype_to_str(a->u.declare.var_type));
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
@@ -1971,9 +1955,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_EXPRESSION_CAST:
-		parse_debug_print_ast_ctype("CAST TO",
-		                            a->u.cast.to_type,
-		                            indent + 1);
+		debug("%*sCAST.TO: %s",
+		      (int)(indent + 1),
+		      "",
+		      ctype_to_str(a->u.cast.to_type));
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT_INT:

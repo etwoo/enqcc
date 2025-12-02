@@ -13,6 +13,7 @@ enum ctype {
 	CTYPE_LONG,
 };
 
+const char *ctype_to_str(enum ctype c) WARN_UNUSED;
 enum ctype get_common_ctype(enum ctype lhs, enum ctype rhs) WARN_UNUSED;
 
 enum {
