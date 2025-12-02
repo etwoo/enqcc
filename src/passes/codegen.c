@@ -425,6 +425,9 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_IDIV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		(**dst).args[0].word_type = codegen_map_ctype(
+			get_common_ctype(src->args[0].c89type,
+		                         src->args[1].c89type));
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
