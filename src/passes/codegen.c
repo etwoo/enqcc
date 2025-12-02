@@ -765,15 +765,15 @@ codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
 		}
 
 		const long long int span = range[1] - range[0];
-		assert(span > 0);
+		assert(span >= 0);
 		assert(span <= 4096); /* if exceeded, refactor datastructures */
 
 		struct stack_offsets *off =
-			arena_alloc(arena, sizeof(*off) * span);
+			arena_alloc(arena, sizeof(*off) * (span + 1));
 		check(codegen_replace_pseudoregisters_fn(f, range, off, false));
 
 		assert(f->stack_usage == 0);
-		f->stack_usage = off[span - 1].base + off[span - 1].usage;
+		f->stack_usage = off[span].base + off[span].usage;
 	}
 
 	return RESULT_OK;
