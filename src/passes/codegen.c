@@ -712,7 +712,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			assert(arg->u.num >= range[0]);
 			assert(arg->u.num <= range[1]);
 			assert(range[0] >= 0);
-			const long long int adj = arg->u.num - (range[0] - 1);
+			const long long int adj = arg->u.num - range[0];
 
 			long long int aligned = 0;
 			switch (arg->word_type) {
@@ -773,7 +773,10 @@ codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
 		check(codegen_replace_pseudoregisters_fn(f, range, off, false));
 
 		assert(f->stack_usage == 0);
-		f->stack_usage = off[span].base + off[span].usage;
+		for (long long int i = 0; i < span + 1; ++i) {
+			f->stack_usage =
+				MAX(f->stack_usage, off[i].base + off[i].usage);
+		}
 	}
 
 	return RESULT_OK;
