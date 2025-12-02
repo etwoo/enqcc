@@ -931,7 +931,7 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 		trampoline->ops[0]->opcode = ASM_OP_MOV;
 	}
 	codegen_set_operand_r10(&trampoline->ops[0]->args[1],
-	                        cur->args[1].word_type);
+	                        cur->args[0].word_type);
 	codegen_set_operand_r10(&trampoline->ops[1]->args[0],
 	                        cur->args[1].word_type);
 
