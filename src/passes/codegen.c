@@ -265,7 +265,8 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
-	codegen_set_operand_eax(&(**dst).args[0], src->args[n_args].c89type);
+	codegen_set_operand_eax(&(**dst).args[0],
+	                        codegen_map_ctype(src->args[n_args].c89type));
 	codegen_map_operand(&src->args[n_args], &(**dst).args[1]);
 	return RESULT_OK;
 }
@@ -303,7 +304,9 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&(**dst).args[1], src->args[0].c89type);
+		codegen_set_operand_eax(
+			&(**dst).args[1],
+			codegen_map_ctype(src->args[0].c89type));
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
@@ -412,7 +415,9 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BINARY_REMAINDER:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&(**dst).args[1], src->args[0].c89type);
+		codegen_set_operand_eax(
+			&(**dst).args[1],
+			codegen_map_ctype(src->args[0].c89type));
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_CDQ;
@@ -425,8 +430,9 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_MOV;
 		switch (src->opcode) {
 		case IR_OP_BINARY_DIVIDE:
-			codegen_set_operand_eax(&(**dst).args[0],
-			                        src->args[0].c89type);
+			codegen_set_operand_eax(
+				&(**dst).args[0],
+				codegen_map_ctype(src->args[0].c89type));
 			break;
 		case IR_OP_BINARY_REMAINDER:
 			(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
