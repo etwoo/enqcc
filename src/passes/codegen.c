@@ -816,13 +816,14 @@ struct fix {
 	struct asm_op *ops[3];
 };
 
+typedef bool (*fixer)(struct asm_op *cur, struct fix *trampoline);
+
 static WARN_UNUSED result_t
 codegen_fixup_apply(Arena *arena,
                     struct asm_function *cg,
                     struct asm_op **new_prev,
                     struct asm_op **new_cur,
-                    bool (*fix_init)(struct asm_op *cur,
-                                     struct fix *trampoline))
+                    fixer fix_init)
 {
 	struct asm_op *prev = *new_prev;
 	struct asm_op *cur = *new_cur;
@@ -1157,7 +1158,7 @@ fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 }
 
 static WARN_UNUSED result_t
-codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
+codegen_fixup_function(Arena *arena, struct asm_function *cg, fixer fix_init)
 {
 	check(codegen_fixup_alloc_stack(arena, cg));
 
@@ -1165,13 +1166,7 @@ codegen_fixup_instructions_fn(Arena *arena, struct asm_function *cg)
 	struct asm_op *cur = cg->ops;
 	while (cur != NULL) {
 		struct asm_op *orig[2] = {prev, cur};
-		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_s2s));
-		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_cmp));
-		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_div));
-		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_mul));
-		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_shift));
-		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_movsx));
-		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_imm_big));
+		check(codegen_fixup_apply(arena, cg, &prev, &cur, fix_init));
 		if (cur == orig[1]) {
 			assert(prev == orig[0]);
 			prev = cur;
@@ -1186,8 +1181,19 @@ result_t
 codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 {
 	debug("Fixing up invalid instructions");
+	fixer fixers[] = {
+		fix_s2s,
+		fix_imm_big,
+		fix_cmp,
+		fix_div,
+		fix_mul,
+		fix_shift,
+		fix_movsx,
+	};
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
-		check(codegen_fixup_instructions_fn(arena, f));
+		for (size_t i = 0; i < ARRAY_SIZE(fixers); ++i) {
+			check(codegen_fixup_function(arena, f, fixers[i]));
+		}
 	}
 	return RESULT_OK;
 }
