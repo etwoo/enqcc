@@ -12,8 +12,8 @@ static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 static long long int
 map_numeric_type(long long int x, enum ctype dst_type)
 {
-	if (dst_type == CTYPE_INT && x > INT_MAX) {
-		return x - LONG_TO_INT_TRUNCATOR;
+	while (dst_type == CTYPE_INT && x > INT_MAX) {
+		x -= LONG_TO_INT_TRUNCATOR;
 	}
 	return x;
 }
