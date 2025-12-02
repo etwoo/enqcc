@@ -1282,13 +1282,11 @@ ir_debug_print_one(const struct ir_op *op)
 
 	const size_t required_args = OPCODE_NAMES[op->opcode].required_args;
 	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
-		bool skip = false;
 		switch (op->args[i].subtype) {
 		case IR_VAL_NONE:
 			assert(i >= required_args &&
 			       "op lacks required operand");
-			skip = true;
-			break;
+			continue;
 		case IR_VAL_CONSTANT_INT:
 			debug("  CONSTANT %lld", op->args[i].num);
 			break;
@@ -1303,10 +1301,6 @@ ir_debug_print_one(const struct ir_op *op)
 			      (int)op->args[i].varname.sz,
 			      op->args[i].varname.data);
 			break;
-		}
-
-		if (skip) {
-			continue;
 		}
 
 		switch (op->args[i].c89type) {

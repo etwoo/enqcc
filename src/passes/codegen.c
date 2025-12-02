@@ -218,6 +218,8 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[i], &(**dst).args[0]);
 		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
 		(**dst).args[1].u.reg = CALL_REG[i];
+		(**dst).args[1].word_type =
+			codegen_map_ctype(src->args[i].c89type);
 		dst = &(**dst).next;
 	}
 
@@ -1199,7 +1201,7 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 {
 	switch (operand->operand_type) {
 	case ASM_OPERAND_NONE:
-		break;
+		return;
 	case ASM_OPERAND_IMMEDIATE:
 		debug("  IMMEDIATE %lld", operand->u.num);
 		break;
