@@ -695,7 +695,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
                                    struct stack_offsets *offsets,
                                    bool preflight)
 {
-	long long int offset = 0;
+	long long int offset = CODEGEN_BYTES_PER_VALUE;
 	for (struct asm_op *op = cg->ops; op != NULL; op = op->next) {
 		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 			struct asm_operand *arg = &op->args[i];
