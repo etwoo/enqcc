@@ -1224,6 +1224,15 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		      operand->u.variable.data);
 		break;
 	}
+
+	switch (operand->word_type) {
+	case ASM_WORD_32BIT:
+		debug("    WORD TYPE: 32-BIT WORD");
+		break;
+	case ASM_WORD_64BIT:
+		debug("    WORD TYPE: 64-BIT QUADWORD");
+		break;
+	}
 }
 
 #define TO_STR(opcode) #opcode,
@@ -1247,6 +1256,7 @@ codegen_debug_print(const struct assembly *cg)
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
+		debug("  ALIGNMENT %lld", v->alignment);
 		debug("  LINKAGE %s",
 		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
 		                                         : "INTERNAL");
