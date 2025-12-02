@@ -984,6 +984,17 @@ ir_expr(Arena *arena,
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_CONSTANT_INT;
 		return_value->num = a->u.num;
+		switch (a->node_type) {
+		case NODE_CONSTANT_INT:
+			return_value->c89type = CTYPE_INT;
+			break;
+		case NODE_CONSTANT_LONG:
+			return_value->c89type = CTYPE_LONG;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		assert(*dst == NULL); /* does not create new dst op */
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
