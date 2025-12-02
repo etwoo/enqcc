@@ -1160,8 +1160,6 @@ fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED result_t
 codegen_fixup_function(Arena *arena, struct asm_function *cg, fixer fix_init)
 {
-	check(codegen_fixup_alloc_stack(arena, cg));
-
 	struct asm_op *prev = NULL;
 	struct asm_op *cur = cg->ops;
 	while (cur != NULL) {
@@ -1191,6 +1189,7 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 		fix_movsx,
 	};
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
+		check(codegen_fixup_alloc_stack(arena, f));
 		for (size_t i = 0; i < ARRAY_SIZE(fixers); ++i) {
 			check(codegen_fixup_function(arena, f, fixers[i]));
 		}
