@@ -431,6 +431,8 @@ codegen_statement_one(Arena *arena,
 		case IR_OP_BINARY_REMAINDER:
 			(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
 			(**dst).args[0].u.reg = ASM_REGISTER_DX;
+			(**dst).args[0].word_type =
+				codegen_map_ctype(src->args[0].c89type);
 			break;
 		default:
 			assert(0); /* logic error in caller */
