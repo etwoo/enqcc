@@ -840,7 +840,7 @@ ast_contains(const struct flat *haystack, const struct ast *needle)
 }
 
 static WARN_UNUSED result_t
-sema_fn_signature(struct ast *a, void *userdata) // NOLINT(*-complexity) // TODO
+sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
 	const struct string_view *fname = NULL;
