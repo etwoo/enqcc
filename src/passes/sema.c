@@ -724,8 +724,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BITWISE_AND:
 	case NODE_EXPRESSION_BITWISE_OR:
 	case NODE_EXPRESSION_BITWISE_XOR:
-	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
-	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
 	case NODE_EXPRESSION_LOGICAL_AND:
 	case NODE_EXPRESSION_LOGICAL_OR:
 	case NODE_EXPRESSION_COMPARE_EQUAL:
@@ -742,13 +740,19 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		common = get_common_ctype(a->u.op_binary.lhs->expr_type,
 		                          a->u.op_binary.rhs->expr_type);
 		check(cast_if(arena, common, &a->u.op_binary.lhs));
 		check(cast_if(arena, common, &a->u.op_binary.rhs));
+		break;
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		check(cast_if(arena,
+		              a->u.op_binary.lhs->expr_type,
+		              &a->u.op_binary.rhs));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		common = get_common_ctype(a->u.op_ternary.then_expr->expr_type,
