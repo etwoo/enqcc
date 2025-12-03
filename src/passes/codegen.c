@@ -120,9 +120,9 @@ codegen_set_operand_r11(struct asm_operand *dst, unsigned word_type)
 // TODO: make it hard to forget to propagate ctype value between different
 // types, structs; this helper doesn't seem good enough, easy to forget it
 static unsigned
-codegen_map_ctype(const enum ctype c89type)
+codegen_map_ctype(const struct ir_val *src)
 {
-	switch (c89type) {
+	switch (src->c89type) {
 	case CTYPE_INT:
 		return ASM_WORD_32BIT;
 	case CTYPE_LONG:
@@ -155,7 +155,7 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		break;
 	}
 
-	dst->word_type = codegen_map_ctype(src->c89type);
+	dst->word_type = codegen_map_ctype(src);
 }
 
 static void
@@ -165,10 +165,10 @@ codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 }
 
 static WARN_UNUSED long long int
-codegen_align_ctype(enum ctype c89type)
+codegen_get_alignment(const struct ir_variable *ir)
 {
 	long long int alignment = 0;
-	switch (c89type) {
+	switch (ir->c89type) {
 	case CTYPE_INT:
 		alignment = 4;
 		break;
@@ -220,8 +220,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[i], &(**dst).args[0]);
 		(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
 		(**dst).args[1].u.reg = CALL_REG[i];
-		(**dst).args[1].word_type =
-			codegen_map_ctype(src->args[i].c89type);
+		(**dst).args[1].word_type = codegen_map_ctype(&src->args[i]);
 		dst = &(**dst).next;
 	}
 
@@ -268,7 +267,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	codegen_set_operand_eax(&(**dst).args[0],
-	                        codegen_map_ctype(src->args[n_args].c89type));
+	                        codegen_map_ctype(&src->args[n_args]));
 	codegen_map_operand(&src->args[n_args], &(**dst).args[1]);
 	return RESULT_OK;
 }
@@ -306,9 +305,8 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(
-			&(**dst).args[1],
-			codegen_map_ctype(src->args[0].c89type));
+		codegen_set_operand_eax(&(**dst).args[1],
+		                        codegen_map_ctype(&src->args[0]));
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
@@ -417,9 +415,8 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BINARY_REMAINDER:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(
-			&(**dst).args[1],
-			codegen_map_ctype(src->args[0].c89type));
+		codegen_set_operand_eax(&(**dst).args[1],
+		                        codegen_map_ctype(&src->args[0]));
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		switch (src->args[0].c89type) {
@@ -434,9 +431,9 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_IDIV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		(**dst).args[0].word_type = codegen_map_ctype(
-			get_common_ctype(src->args[0].c89type,
-		                         src->args[1].c89type));
+		(**dst).args[0].word_type =
+			MAX(codegen_map_ctype(&src->args[0]),
+		            codegen_map_ctype(&src->args[1]));
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
@@ -444,13 +441,13 @@ codegen_statement_one(Arena *arena,
 		case IR_OP_BINARY_DIVIDE:
 			codegen_set_operand_eax(
 				&(**dst).args[0],
-				codegen_map_ctype(src->args[0].c89type));
+				codegen_map_ctype(&src->args[0]));
 			break;
 		case IR_OP_BINARY_REMAINDER:
 			(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
 			(**dst).args[0].u.reg = ASM_REGISTER_DX;
 			(**dst).args[0].word_type =
-				codegen_map_ctype(src->args[0].c89type);
+				codegen_map_ctype(&src->args[0]);
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -581,10 +578,10 @@ codegen_copy_reg_to_pseudo(Arena *arena,
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
 	(**dst).args[0].u.reg = CALL_REG[pos];
-	(**dst).args[0].word_type = codegen_map_ctype(ir[pos].c89type);
+	(**dst).args[0].word_type = codegen_map_ctype(&ir[pos]);
 	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 	(**dst).args[1].u.num = ir[pos].num;
-	(**dst).args[1].word_type = codegen_map_ctype(ir[pos].c89type);
+	(**dst).args[1].word_type = codegen_map_ctype(&ir[pos]);
 	return RESULT_OK;
 }
 
@@ -606,10 +603,10 @@ codegen_copy_stack_to_pseudo(Arena *arena,
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
 	(**dst).args[0].u.num = stack_offset;
-	(**dst).args[0].word_type = codegen_map_ctype(ir[pos].c89type);
+	(**dst).args[0].word_type = codegen_map_ctype(&ir[pos]);
 	(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 	(**dst).args[1].u.num = ir[pos].num;
-	(**dst).args[1].word_type = codegen_map_ctype(ir[pos].c89type);
+	(**dst).args[1].word_type = codegen_map_ctype(&ir[pos]);
 
 	return RESULT_OK;
 }
@@ -670,7 +667,7 @@ codegen_variable(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
-	(**dst).alignment = codegen_align_ctype(ir->c89type);
+	(**dst).alignment = codegen_get_alignment(ir);
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
 	(**dst).u.initial_as_ll = ir->u.initial_as_ll;
 	return RESULT_OK;
