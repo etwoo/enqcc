@@ -184,20 +184,142 @@ has_container(struct sema_label_loops_state *state,
 	return NULL;
 }
 
-static WARN_UNUSED result_t
-case_prepend(Arena *arena, struct flat **head, struct ast *new_case)
+static WARN_UNUSED long long int
+guess(struct ast *a, enum ctype expected_type)
 {
+	long long int value = 0;
+	switch (a->node_type) {
+	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
+		value = map_numeric_type(a->u.num, expected_type);
+		break;
+	case NODE_EXPRESSION_PAREN_ENCLOSED:
+		value = guess(a->u.op_unary.operand, expected_type);
+		break;
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		value = ~guess(a->u.op_unary.operand, expected_type);
+		break;
+	case NODE_EXPRESSION_UNARY_NEGATE:
+		value = -1 * guess(a->u.op_unary.operand, expected_type);
+		break;
+	case NODE_EXPRESSION_UNARY_NOT:
+		value = !guess(a->u.op_unary.operand, expected_type);
+		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+		value = guess(a->u.op_binary.lhs, expected_type) +
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		value = guess(a->u.op_binary.lhs, expected_type) -
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+		value = guess(a->u.op_binary.lhs, expected_type) *
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+		value = guess(a->u.op_binary.rhs, expected_type);
+		if (value == 0) {
+			/* avoid divide by zero, return arbitrary guess */
+			value = 1;
+		}
+		switch (a->node_type) {
+		case NODE_EXPRESSION_BINARY_DIVIDE:
+			value = guess(a->u.op_binary.lhs, expected_type) /
+			        value;
+			break;
+		case NODE_EXPRESSION_BINARY_REMAINDER:
+			value = guess(a->u.op_binary.lhs, expected_type) %
+			        value;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		break;
+	case NODE_EXPRESSION_BITWISE_AND:
+		value = guess(a->u.op_binary.lhs, expected_type) &
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_BITWISE_OR:
+		value = guess(a->u.op_binary.lhs, expected_type) |
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+		value = guess(a->u.op_binary.lhs, expected_type)
+		        << guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+		value = guess(a->u.op_binary.lhs, expected_type) >>
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_LOGICAL_AND:
+		value = guess(a->u.op_binary.lhs, expected_type) &&
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_LOGICAL_OR:
+		value = guess(a->u.op_binary.lhs, expected_type) ||
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+		value = guess(a->u.op_binary.lhs, expected_type) ==
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		value = guess(a->u.op_binary.lhs, expected_type) !=
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+		value = guess(a->u.op_binary.lhs, expected_type) <
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+		value = guess(a->u.op_binary.lhs, expected_type) <=
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+		value = guess(a->u.op_binary.lhs, expected_type) >
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		value = guess(a->u.op_binary.lhs, expected_type) >=
+		        guess(a->u.op_binary.rhs, expected_type);
+		break;
+	default:
+		break;
+	}
+	return value;
+}
+
+static WARN_UNUSED long long int
+guess_case_value(struct ast *containing_case, enum ctype expected_type)
+{
+	assert(containing_case->node_type == NODE_CASE);
+	return guess(containing_case->u.case_.constant, expected_type);
+}
+
+static WARN_UNUSED result_t
+case_prepend(Arena *arena, struct ast *containing_switch, struct ast *new_case)
+{
+	assert(containing_switch->node_type == NODE_SWITCH);
 	assert(new_case->node_type == NODE_CASE);
 
-	for (struct flat *f = *head; f != NULL; f = f->cdr) {
-		assert(f->car->node_type == NODE_CASE);
-		// TODO: detect collisions, return ERR_SEMA_CASE_DUPLICATE
-		// TODO: use map_numeric_type() and knowledge of type of
-		// controlling expression to determine effective value, with
-		// truncation
-		// TODO: handle some cases like negation by interpreting
-		// NODE_EXPRESSION_UNARY_NEGATE at compile-time, i.e.
-		// open-coded interpreter logic here
+	enum ctype control_type =
+		containing_switch->u.switch_.control->expr_type;
+	const long long int new_value =
+		guess_case_value(new_case, control_type);
+
+	struct flat *head = containing_switch->u.switch_.label_cases;
+	for (; head != NULL; head = head->cdr) {
+		assert(head->car->node_type == NODE_CASE);
+		const long long int existing_value =
+			guess_case_value(head->car, control_type);
+		if (new_value == existing_value) {
+			return make_result(ERR_SEMA_CASE_DUPLICATE,
+			                   (int)new_value);
+		}
 	}
 
 	struct flat *node = arena_alloc(arena, sizeof(*node));
@@ -205,8 +327,8 @@ case_prepend(Arena *arena, struct flat **head, struct ast *new_case)
 	memset(node, 0, sizeof(*node));
 
 	node->car = new_case;
-	node->cdr = *head;
-	*head = node;
+	node->cdr = containing_switch->u.switch_.label_cases;
+	containing_switch->u.switch_.label_cases = node;
 	return RESULT_OK;
 }
 
@@ -275,9 +397,7 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		}
 		a->u.case_.unique = state->generator++;
 		assert(containing->origin->node_type == NODE_SWITCH);
-		check(case_prepend(state->arena,
-		                   &containing->origin->u.switch_.label_cases,
-		                   a));
+		check(case_prepend(state->arena, containing->origin, a));
 		break;
 	case NODE_CASE_DEFAULT:
 		containing = has_container(state, CONTAINING_SWITCH);
