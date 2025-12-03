@@ -118,13 +118,21 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 	}
 
 	dst->num = sym->unique;
-	// TODO: make it hard to forget to propagate ctype value between
-	// different types, structs; this helper doesn't seem good enough,
-	// given how many uses of c89type exist in the rest of this file
-	//
-	// maybe the main issue is c89type + IR_VAL_TEMPORARY_VARIABLE? try
-	// adding a helper for that scenario, see if that reduces copy-pasta
 	dst->c89type = src->expr_type;
+}
+
+static void
+ir_val_tmpvar(long long int unique, enum ctype vtype, struct ir_val *dst)
+{
+	dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
+	dst->num = unique;
+	dst->c89type = vtype;
+}
+
+static void
+ir_val_tmpvar_gen(struct intermediate *ir, enum ctype vtype, struct ir_val *dst)
+{
+	ir_val_tmpvar(ir->env.generator++, vtype, dst);
 }
 
 static WARN_UNUSED enum ir_linkage
@@ -279,10 +287,9 @@ ir_if_else_prepare(Arena *arena,
 		check(ir_alloc_op(arena, &out->assign_result));
 		out->assign_result->opcode = IR_OP_COPY;
 		ir_val_copy(&body_return, &out->assign_result->args[0]);
-		out->assign_result->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		out->assign_result->args[1].num = assign_result_unique;
-		out->assign_result->args[1].c89type =
-			ast_clause_returning_value->expr_type;
+		ir_val_tmpvar(assign_result_unique,
+		              ast_clause_returning_value->expr_type,
+		              &out->assign_result->args[1]);
 	}
 
 	check(ir_alloc_op(arena, &out->jump_target));
@@ -348,9 +355,7 @@ ir_if_else(Arena *arena,
 
 	if (assign_result_unique >= 0) {
 		assert(return_value->subtype == IR_VAL_NONE);
-		return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
-		return_value->num = assign_result_unique;
-		return_value->c89type = a->expr_type;
+		ir_val_tmpvar(assign_result_unique, a->expr_type, return_value);
 	}
 
 	struct ir_op *collect[] = {
@@ -537,10 +542,8 @@ ir_switch(Arena *arena,
 		case_cmp->opcode = IR_OP_COMPARE_EQUAL;
 		ir_val_copy(&control_return, &case_cmp->args[0]);
 		ir_val_copy(&case_return, &case_cmp->args[1]);
-		case_cmp->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		case_cmp->args[2].num = ir->env.generator++;
-		case_cmp->args[2].c89type =
-			CTYPE_INT; /* effectively cast to bool */
+		ir_val_tmpvar_gen(ir, CTYPE_INT, &case_cmp->args[2]);
+		/* see CTYPE_INT above ^^^^^^^^ -> effectively cast to bool */
 
 		struct ir_op *jumper = NULL;
 		check(ir_alloc_op(arena, &jumper));
@@ -664,9 +667,7 @@ ir_unary_op(Arena *arena,
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_CAST:
-		unary->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		unary->args[1].num = ir->env.generator++;
-		unary->args[1].c89type = a->expr_type;
+		ir_val_tmpvar_gen(ir, a->expr_type, &unary->args[1]);
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -686,9 +687,7 @@ ir_unary_op(Arena *arena,
 		check(ir_alloc_op(arena, &header));
 		header->opcode = IR_OP_COPY;
 		ir_val_from_ast_variable_like(a, &header->args[0]);
-		header->args[1].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		header->args[1].num = ir->env.generator++;
-		header->args[1].c89type = a->expr_type;
+		ir_val_tmpvar_gen(ir, a->expr_type, &header->args[1]);
 		ir_val_copy(&header->args[1], return_value);
 	} else {
 		assert(return_value->subtype == IR_VAL_NONE);
@@ -807,9 +806,7 @@ ir_binary_op(Arena *arena,
 		ir_val_from_ast_variable_like(a, &binary->args[2]);
 		break;
 	default:
-		binary->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		binary->args[2].num = ir->env.generator++;
-		binary->args[2].c89type = a->expr_type;
+		ir_val_tmpvar_gen(ir, a->expr_type, &binary->args[2]);
 		break;
 	}
 
@@ -883,9 +880,7 @@ ir_logical_op(Arena *arena,
 	const long long int label_end = ir->env.labels++;
 
 	assert(return_value->subtype == IR_VAL_NONE);
-	return_value->subtype = IR_VAL_TEMPORARY_VARIABLE;
-	return_value->num = ir->env.generator++;
-	return_value->c89type = a->expr_type;
+	ir_val_tmpvar_gen(ir, a->expr_type, return_value);
 
 	struct ir_op *footer = NULL;
 	check(ir_alloc_op(arena, &footer));
@@ -977,9 +972,7 @@ ir_call(Arena *arena,
 		check(ir_call_args(arena, args, ir, &inner, caller, &pos));
 	}
 
-	caller->args[pos].subtype = IR_VAL_TEMPORARY_VARIABLE;
-	caller->args[pos].num = ir->env.generator++;
-	caller->args[pos].c89type = a->expr_type;
+	ir_val_tmpvar_gen(ir, a->expr_type, &caller->args[pos]);
 
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&caller->args[pos], return_value);
@@ -1136,9 +1129,9 @@ ir_func(Arena *arena,
 
 	size_t i = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-		f->params[i].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		f->params[i].num = cur->symbol.unique;
-		f->params[i].c89type = cur->parameter_type;
+		ir_val_tmpvar(cur->symbol.unique,
+		              cur->parameter_type,
+		              &f->params[i]);
 		++i;
 	}
 
