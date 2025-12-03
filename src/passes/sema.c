@@ -832,9 +832,9 @@ sema_fn_signature(struct ast *a, void *userdata) // NOLINT(*-complexity) // TODO
 
 	if (!is_def_or_decl) {
 		long long int i = 0;
-		enum ctype *expected = sema_get_auxiliary(dup)->p_types;
 		struct flat *actual = a->u.call.args;
-		while (i < n_args && actual != NULL) {
+		enum ctype *expected = sema_get_auxiliary(dup)->p_types;
+		while (actual != NULL && i < sema_get_auxiliary(dup)->n_args) {
 			if (actual->car->expr_type != expected[i]) {
 				check(cast_if(state->arena,
 				              expected[i],
