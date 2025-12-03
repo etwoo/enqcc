@@ -1840,22 +1840,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.switch_.label_end == UNSET_SWITCH_ID ? " (unset)"
 		                                                : "");
 		debug("%*sSEMANTIC CASE INFORMATION", (int)indent + 1, "");
-		for (const struct ast_case *cur = a->u.switch_.label_cases;
-		     cur != NULL;
-		     cur = cur->next) {
-			debug("%*sCASE.VALUE %lld",
-			      (int)indent + 2,
-			      "",
-			      cur->constant);
-			debug("%*sCASE.UNIQUE %lld",
-			      (int)indent + 3,
-			      "",
-			      cur->unique);
-			debug("%*sCASE.CTYPE %s",
-			      (int)indent + 3,
-			      "",
-			      ctype_to_str((cur->constant_type)));
-		}
+		parse_debug_print_flat(a->u.switch_.label_cases, indent + 2);
 		break;
 	case NODE_CASE:
 		parse_debug_print(a->u.case_.constant, indent + 1);

@@ -515,29 +515,36 @@ ir_switch(Arena *arena,
 	              &control_return));
 
 	struct ir_op *case_jumpers = NULL;
-	for (const struct ast_case *cur = a->u.switch_.label_cases; cur != NULL;
-	     cur = cur->next) {
-		struct ir_op *caser = NULL;
-		check(ir_alloc_op(arena, &caser));
-		caser->opcode = IR_OP_COMPARE_EQUAL;
-		ir_val_copy(&control_return, &caser->args[0]);
-		caser->args[1].subtype = IR_VAL_CONSTANT_INT;
-		caser->args[1].num = cur->constant;
-		caser->args[1].c89type = cur->constant_type;
-		caser->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
-		caser->args[2].num = ir->env.generator++;
-		caser->args[2].c89type =
+	for (struct flat *f = a->u.switch_.label_cases; f != NULL; f = f->cdr) {
+		assert(f->car->node_type == NODE_CASE);
+
+		struct ir_op *case_expr = NULL;
+		struct ir_val case_return = {0};
+		check(ir_expr(arena,
+		              f->car->u.case_.constant,
+		              ir,
+		              &case_expr,
+		              &case_return));
+
+		struct ir_op *case_cmp = NULL;
+		check(ir_alloc_op(arena, &case_cmp));
+		case_cmp->opcode = IR_OP_COMPARE_EQUAL;
+		ir_val_copy(&control_return, &case_cmp->args[0]);
+		ir_val_copy(&case_return, &case_cmp->args[1]);
+		case_cmp->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
+		case_cmp->args[2].num = ir->env.generator++;
+		case_cmp->args[2].c89type =
 			CTYPE_INT; /* effectively cast to bool */
 
 		struct ir_op *jumper = NULL;
 		check(ir_alloc_op(arena, &jumper));
 		jumper->opcode = IR_OP_JUMP_IF_NOT_ZERO;
-		ir_val_copy(&caser->args[2], &jumper->args[0]);
+		ir_val_copy(&case_cmp->args[2], &jumper->args[0]);
 		jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
-		jumper->args[1].num = cur->unique;
+		jumper->args[1].num = f->car->u.case_.unique;
 
 		case_jumpers = ir_op_list_concat(
-			caser,
+			ir_op_list_concat(case_expr, case_cmp),
 			ir_op_list_concat(jumper, case_jumpers));
 	}
 

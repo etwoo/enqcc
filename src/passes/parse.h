@@ -23,13 +23,6 @@ struct ast_parameter {
 	enum ctype parameter_type;
 };
 
-struct ast_case {
-	long long int constant;
-	enum ctype constant_type;
-	long long int unique;
-	struct ast_case *next;
-};
-
 #define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
 	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
@@ -172,7 +165,7 @@ struct ast {
 			struct flat *body;
 			long long int label_default;
 			long long int label_end;
-			struct ast_case *label_cases; /* computed by sema.c */
+			struct flat *label_cases; /* computed by sema.c */
 		} switch_;
 		struct {
 			struct ast *constant;

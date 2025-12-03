@@ -185,27 +185,33 @@ has_container(struct sema_label_loops_state *state,
 }
 
 static WARN_UNUSED result_t
-case_prepend(Arena *arena,
-             struct ast_case **head,
-             long long int constant,
-             enum ctype constant_type,
-             long long int unique)
+case_prepend(Arena *arena, struct flat **head, struct ast *new_case)
 {
-	for (struct ast_case *i = *head; i != NULL; i = i->next) {
-		if (constant == i->constant) {
+	assert(new_case->node_type == NODE_CASE);
+
+	for (struct flat *f = *head; f != NULL; f = f->cdr) {
+		assert(f->car->node_type == NODE_CASE);
+		if (new_case->u.case_.unique == f->car->u.case_.unique) {
+			long long int maybe_num = 0;
+			switch (f->car->u.case_.constant->node_type) {
+			case NODE_CONSTANT_INT:
+			case NODE_CONSTANT_LONG:
+				maybe_num = f->car->u.case_.constant->u.num;
+				break;
+			default:
+				break;
+			}
 			return make_result(ERR_SEMA_CASE_DUPLICATE,
-			                   (int)constant);
+			                   (int)maybe_num);
 		}
 	}
 
-	struct ast_case *node = arena_alloc(arena, sizeof(*node));
+	struct flat *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_SEMA_ALLOC);
 	memset(node, 0, sizeof(*node));
 
-	node->constant = constant;
-	node->constant_type = constant_type;
-	node->unique = unique;
-	node->next = *head;
+	node->car = new_case;
+	node->cdr = *head;
 	*head = node;
 	return RESULT_OK;
 }
@@ -274,24 +280,10 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 			return make_result(ERR_SEMA_CASE_OUTSIDE);
 		}
 		a->u.case_.unique = state->generator++;
-		enum ctype constant_type = CTYPE_INT;
-		switch (a->u.case_.constant->node_type) {
-		case NODE_CONSTANT_INT:
-			constant_type = CTYPE_INT;
-			break;
-		case NODE_CONSTANT_LONG:
-			constant_type = CTYPE_LONG;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
 		assert(containing->origin->node_type == NODE_SWITCH);
 		check(case_prepend(state->arena,
 		                   &containing->origin->u.switch_.label_cases,
-		                   a->u.case_.constant->u.num,
-		                   constant_type,
-		                   a->u.case_.unique));
+		                   a));
 		break;
 	case NODE_CASE_DEFAULT:
 		containing = has_container(state, CONTAINING_SWITCH);
