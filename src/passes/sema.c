@@ -738,6 +738,103 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	switch (a->node_type) {
+	case NODE_PROGRAM:
+	case NODE_FUNCTION:
+	case NODE_BLOCK:
+	case NODE_DECLARATION:
+	case NODE_IF_ELSE:
+	case NODE_LOOP:
+	case NODE_BREAK:
+	case NODE_CONTINUE:
+	case NODE_GOTO:
+	case NODE_LABEL:
+	case NODE_SWITCH:
+	case NODE_CASE:
+	case NODE_CASE_DEFAULT:
+	case NODE_EXPRESSION_NULL:
+		break; /* expr_type has no meaning in this context */
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+	case NODE_EXPRESSION_FUNCTION_CALL:
+		break; /* resolve_expr() in parse.c handles leaf nodes */
+	case NODE_FUNCTION_RETURN_STATEMENT:
+	case NODE_EXPRESSION_UNARY_NEGATE:
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+	case NODE_EXPRESSION_PAREN_ENCLOSED:
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		a->expr_type = a->u.op_unary.operand->expr_type;
+		break;
+	case NODE_EXPRESSION_UNARY_NOT:
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		a->expr_type = CTYPE_INT; /* effectively cast to bool */
+		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+		a->expr_type = get_common_ctype(a->u.op_binary.lhs->expr_type,
+		                                a->u.op_binary.rhs->expr_type);
+		break;
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		/*
+		 * Shift left/right takes the LHS type, not the common
+		 * type of the two sides. The number of shift bits on
+		 * the RHS is typically small, but even if that value is
+		 * large enough to require a type wider than the LHS,
+		 * that should not result in sign extension.
+		 *
+		 * Variable assignment similarly takes the type of the
+		 * LHS, corresponding to the assigned-to variable.
+		 */
+		a->expr_type = a->u.op_binary.lhs->expr_type;
+		break;
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		a->expr_type =
+			get_common_ctype(a->u.op_ternary.then_expr->expr_type,
+		                         a->u.op_ternary.else_expr->expr_type);
+		break;
+	case NODE_EXPRESSION_CAST:
+		a->expr_type = a->u.cast.to_type;
+		break;
+	case NODE_CONSTANT_INT:
+		assert(a->expr_type == CTYPE_INT);
+		break;
+	case NODE_CONSTANT_LONG:
+		assert(a->expr_type == CTYPE_LONG);
+		break;
+	}
+	return RESULT_OK;
+}
+
 struct sema_implicit_cast_state {
 	Arena *arena;
 	enum ctype expected_return_type;
@@ -1389,6 +1486,12 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	debug("Checking function calls");
 	ops.node_enter = sema_fn_call;
 	check(sema_walk(a, &ops, NULL));
+
+	debug("Propagating expression types");
+	ops.node_enter = NULL;
+	ops.node_exit = sema_expr_types;
+	check(sema_walk(a, &ops, NULL));
+	ops.node_exit = NULL;
 
 	debug("Inserting cast expressions");
 	ops.node_enter = sema_implicit_cast;

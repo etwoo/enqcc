@@ -135,14 +135,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
-		// TODO: move expr_type logic to sema (except leaf declarations)
-		switch (a->node_type) {
-		case NODE_EXPRESSION_UNARY_NOT:
-			a->expr_type = CTYPE_INT; /* effectively cast to bool */
-			break;
-		default:
-			a->expr_type = a->u.op_unary.operand->expr_type;
-		}
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -175,42 +167,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
-		// TODO: move expr_type logic to sema (except leaf declarations)
-		switch (a->node_type) {
-		case NODE_EXPRESSION_LOGICAL_AND:
-		case NODE_EXPRESSION_LOGICAL_OR:
-		case NODE_EXPRESSION_COMPARE_EQUAL:
-		case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
-		case NODE_EXPRESSION_COMPARE_LESS_THAN:
-		case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
-		case NODE_EXPRESSION_COMPARE_MORE_THAN:
-		case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-			a->expr_type = CTYPE_INT; /* effectively cast to bool */
-			break;
-		case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
-		case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-		case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-		case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
-			/*
-			 * Shift left/right takes the LHS type, not the common
-			 * type of the two sides. The number of shift bits on
-			 * the RHS is typically small, but even if that value is
-			 * large enough to require a type wider than the LHS,
-			 * that should not result in sign extension.
-			 */
-		case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-			/*
-			 * Variable assignment takes the type of the LHS,
-			 * corresponding to the assigned-to variable.
-			 */
-			a->expr_type = a->u.op_binary.lhs->expr_type;
-			break;
-		default:
-			a->expr_type =
-				get_common_ctype(a->u.op_binary.lhs->expr_type,
-			                         a->u.op_binary.rhs->expr_type);
-			break;
-		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		check(resolve_var_usage(*sym, &a->u.var, &a->expr_type));
@@ -219,10 +175,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
 		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym));
 		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
-		// TODO: move expr_type logic to sema (except leaf declarations)
-		a->expr_type =
-			get_common_ctype(a->u.op_ternary.then_expr->expr_type,
-		                         a->u.op_ternary.else_expr->expr_type);
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(*sym,
@@ -234,15 +186,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_EXPRESSION_CAST:
 		check(resolve_expr(arena, a->u.cast.expr, sym));
-		// TODO: move expr_type logic to sema (except leaf declarations)
-		a->expr_type = a->u.cast.to_type;
 		break;
 	case NODE_CONSTANT_INT:
-		// TODO: move expr_type logic to sema (except leaf declarations)
 		assert(a->expr_type == CTYPE_INT);
 		break;
 	case NODE_CONSTANT_LONG:
-		// TODO: move expr_type logic to sema (except leaf declarations)
 		assert(a->expr_type == CTYPE_LONG);
 		break;
 	}
