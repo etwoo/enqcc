@@ -197,6 +197,7 @@ case_prepend(Arena *arena, struct flat **head, struct ast *new_case)
 		break;
 	// TODO: compute constants from NODE_EXPRESSION_BITWISE_SHIFT_*,
 	// NODE_EXPRESSION_UNARY_NEGATE, etc. based on testcases
+	// TODO: use truncation if necessary, reuse map_numeric_type()
 	default:
 		return RESULT_OK;
 	}
