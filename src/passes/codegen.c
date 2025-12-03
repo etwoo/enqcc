@@ -1148,6 +1148,9 @@ fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 	if (!(((cur->opcode == ASM_OP_BINARY_ADD ||
 	        cur->opcode == ASM_OP_BINARY_SUBTRACT ||
 	        cur->opcode == ASM_OP_BINARY_MULTIPLY ||
+	        cur->opcode == ASM_OP_BITWISE_AND ||
+	        cur->opcode == ASM_OP_BITWISE_OR ||
+	        cur->opcode == ASM_OP_BITWISE_XOR ||
 	        cur->opcode == ASM_OP_COMPARE || /* cmpq  */
 	        cur->opcode == ASM_OP_PUSH) &&   /* pushq */
 	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
