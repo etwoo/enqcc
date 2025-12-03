@@ -117,6 +117,8 @@ codegen_set_operand_r11(struct asm_operand *dst, unsigned word_type)
 	dst->u.reg = ASM_REGISTER_R11;
 }
 
+// TODO: make it hard to forget to propagate ctype value between different
+// types, structs; this helper doesn't seem good enough, easy to forget it
 static unsigned
 codegen_map_ctype(const enum ctype c89type)
 {

@@ -118,6 +118,12 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 	}
 
 	dst->num = sym->unique;
+	// TODO: make it hard to forget to propagate ctype value between
+	// different types, structs; this helper doesn't seem good enough,
+	// given how many uses of c89type exist in the rest of this file
+	//
+	// maybe the main issue is c89type + IR_VAL_TEMPORARY_VARIABLE? try
+	// adding a helper for that scenario, see if that reduces copy-pasta
 	dst->c89type = src->expr_type;
 }
 
