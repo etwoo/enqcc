@@ -90,9 +90,16 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		assert(src->u.op_binary.lhs->node_type ==
-		       NODE_EXPRESSION_VARIABLE_USAGE);
-		sym = &src->u.op_binary.lhs->u.var;
+		if (src->u.op_binary.lhs->node_type == NODE_EXPRESSION_CAST) {
+			const struct ast *lhs = src->u.op_binary.lhs;
+			assert(lhs->u.cast.expr->node_type ==
+			       NODE_EXPRESSION_VARIABLE_USAGE);
+			sym = &lhs->u.cast.expr->u.var;
+		} else {
+			assert(src->u.op_binary.lhs->node_type ==
+			       NODE_EXPRESSION_VARIABLE_USAGE);
+			sym = &src->u.op_binary.lhs->u.var;
+		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		sym = &src->u.var;
