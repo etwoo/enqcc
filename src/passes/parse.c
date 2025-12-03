@@ -66,31 +66,6 @@ resolve_function_call(struct symbol *head,
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
-{
-	static struct ast dummy_workaround_clang_analyzer_null_pointer = {0};
-
-	assert(dst != NULL && *dst == NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
-	if (*dst == NULL) {
-		/*
-		 * Workaround spurious clang-analyzer-core.NullDereference
-		 * warnings at callsites of this helper function. The Clang
-		 * Static Analyzer seems to forget that (*dst != NULL) when
-		 * this function returns RESULT_OK, which should then protect
-		 * callers from accessing a NULL pointer when they use
-		 * check(parse_alloc(...)) properly.
-		 */
-		*dst = &dummy_workaround_clang_analyzer_null_pointer;
-		return make_result(ERR_PARSE_ALLOC);
-	}
-
-	memset(*dst, 0, sizeof(**dst));
-	(**dst).node_type = ntype;
-	return RESULT_OK;
-}
-
 static result_t
 resolve_block(Arena *arena, struct flat *a, struct symbol **sym) WARN_UNUSED;
 static result_t
@@ -199,6 +174,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
+		// TODO: move expr_type logic to sema (except leaf declarations)
 		switch (a->node_type) {
 		case NODE_EXPRESSION_LOGICAL_AND:
 		case NODE_EXPRESSION_LOGICAL_OR:
@@ -478,6 +454,31 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	if (cleanup) {
 		before_params->level_delimiter = false;
 	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
+{
+	static struct ast dummy_workaround_clang_analyzer_null_pointer = {0};
+
+	assert(dst != NULL && *dst == NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	if (*dst == NULL) {
+		/*
+		 * Workaround spurious clang-analyzer-core.NullDereference
+		 * warnings at callsites of this helper function. The Clang
+		 * Static Analyzer seems to forget that (*dst != NULL) when
+		 * this function returns RESULT_OK, which should then protect
+		 * callers from accessing a NULL pointer when they use
+		 * check(parse_alloc(...)) properly.
+		 */
+		*dst = &dummy_workaround_clang_analyzer_null_pointer;
+		return make_result(ERR_PARSE_ALLOC);
+	}
+
+	memset(*dst, 0, sizeof(**dst));
+	(**dst).node_type = ntype;
 	return RESULT_OK;
 }
 
