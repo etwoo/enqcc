@@ -185,43 +185,10 @@ has_container(struct sema_label_loops_state *state,
 }
 
 static WARN_UNUSED result_t
-case_parse_constant(const struct string_view *str, long long int *dst)
-{
-	assert(str->sz > 0);
-
-	/* strtoll() requires a NUL-terminated C string */
-	char *nul_terminated = strndup(str->data, str->sz);
-	check_if(nul_terminated == NULL, ERR_SEMA_ALLOC);
-
-	char *end = NULL;
-	*dst = strtoll(nul_terminated, &end, 0);
-	/*
-	 * From `man strtoll`:
-	 *
-	 * If endptr is not NULL, strtol() stores the address of the first
-	 * invalid character in *endptr. If there were no digits at all,
-	 * however, strtol() stores the original value of str in *endptr.
-	 * (Thus, if *str is not '\0' but **endptr is '\0' on return, the
-	 * entire string was valid.)
-	 */
-	bool valid = (*nul_terminated != '\0' && end != NULL && *end == '\0');
-
-	free(nul_terminated);
-	nul_terminated = NULL;
-
-	if (!valid) {
-		return make_result(ERR_SEMA_CASE_PARSE_CONSTANT,
-		                   str->data,
-		                   str->sz);
-	}
-
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 case_prepend(Arena *arena,
              struct ast_case **head,
              long long int constant,
+             enum ctype constant_type,
              long long int unique)
 {
 	for (struct ast_case *i = *head; i != NULL; i = i->next) {
@@ -236,6 +203,7 @@ case_prepend(Arena *arena,
 	memset(node, 0, sizeof(*node));
 
 	node->constant = constant;
+	node->constant_type = constant_type;
 	node->unique = unique;
 	node->next = *head;
 	*head = node;
@@ -252,7 +220,6 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 	struct sema_label_loops_state *state = userdata;
 	struct containing_statement *containing = NULL;
 	struct ast *origin = NULL;
-	long long int constant = 0;
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
@@ -306,12 +273,24 @@ sema_enter_loop_id(struct ast *a, void *userdata)
 		if (containing == NULL) {
 			return make_result(ERR_SEMA_CASE_OUTSIDE);
 		}
-		check(case_parse_constant(&a->u.case_.constant, &constant));
 		a->u.case_.unique = state->generator++;
+		enum ctype constant_type = CTYPE_INT;
+		switch (a->u.case_.constant->node_type) {
+		case NODE_CONSTANT_INT:
+			constant_type = CTYPE_INT;
+			break;
+		case NODE_CONSTANT_LONG:
+			constant_type = CTYPE_LONG;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		assert(containing->origin->node_type == NODE_SWITCH);
 		check(case_prepend(state->arena,
 		                   &containing->origin->u.switch_.label_cases,
-		                   constant,
+		                   a->u.case_.constant->u.num,
+		                   constant_type,
 		                   a->u.case_.unique));
 		break;
 	case NODE_CASE_DEFAULT:
@@ -560,17 +539,18 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 		return RESULT_OK;
 	}
 
+	struct string_view name = {0};
 	const struct flat *cursor = a->u.block.statements;
 	for (; cursor != NULL; cursor = cursor->cdr) {
 		assert(cursor->car != NULL);
-		const struct string_view *name = NULL;
 		switch (cursor->car->node_type) {
 		case NODE_LABEL:
-			name = &cursor->car->u.label.name;
+			name = cursor->car->u.label.name;
 			break;
 		case NODE_CASE:
 		case NODE_CASE_DEFAULT:
-			name = &cursor->car->u.case_.constant;
+			name.data = "<case>";
+			name.sz = strlen(name.data);
 			break;
 		default:
 			continue;
@@ -582,15 +562,15 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 		if (cursor->cdr == NULL) {
 			/* Reject label/case at the very end of a block! */
 			return make_result(ERR_SEMA_LABEL_AT_BLOCK_END,
-			                   name->data,
-			                   name->sz);
+			                   name.data,
+			                   name.sz);
 		}
 		if (cursor->cdr->car->node_type == NODE_DECLARATION) {
 			/* Reject label/case followed by a var declaration! */
 			return make_result(
 				ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,
-				name->data,
-				name->sz);
+				name.data,
+				name.sz);
 		}
 	}
 

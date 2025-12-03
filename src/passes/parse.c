@@ -13,8 +13,6 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
-static const char LITERAL_DEFAULT[] = "default";
-
 static void
 map_symbol_members(const struct symbol *src,
                    struct ast_symbol *dst_symbol,
@@ -1371,9 +1369,8 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	check(parse_alloc(arena, dst, NODE_CASE));
-	(**dst).u.case_.constant = (**tok).val;
+	check(parse_constant(arena, tok, &(**dst).u.case_.constant));
 	(**dst).u.case_.unique = UNSET_SWITCH_ID;
-	token_consume(tok);
 
 	if (!is_token_type(*tok, TOKEN_COLON)) {
 		return make_result(ERR_PARSE_CASE_EXPECT_COLON);
@@ -1444,8 +1441,7 @@ parse_stmt(Arena *arena,
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_DEFAULT) &&
 	           is_token_type((**tok).next, TOKEN_COLON)) {
 		check(parse_alloc(arena, dst, NODE_CASE_DEFAULT));
-		(**dst).u.case_.constant.data = LITERAL_DEFAULT;
-		(**dst).u.case_.constant.sz = sizeof(LITERAL_DEFAULT) - 1;
+		(**dst).u.case_.constant = NULL;
 		(**dst).u.case_.unique = UNSET_SWITCH_ID;
 		token_consume(tok);
 		token_consume(tok);
@@ -1856,11 +1852,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_CASE:
-		debug("%*sCASE VALUE %.*s",
-		      (int)indent + 1,
-		      "",
-		      (int)a->u.case_.constant.sz,
-		      a->u.case_.constant.data);
+		parse_debug_print(a->u.case_.constant, indent + 1);
 		__attribute__((fallthrough));
 	case NODE_CASE_DEFAULT:
 		debug("%*sCASE LABEL: %lld%s",

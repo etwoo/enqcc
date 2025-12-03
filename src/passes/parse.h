@@ -25,6 +25,7 @@ struct ast_parameter {
 
 struct ast_case {
 	long long int constant;
+	enum ctype constant_type;
 	long long int unique;
 	struct ast_case *next;
 };
@@ -174,7 +175,7 @@ struct ast {
 			struct ast_case *label_cases; /* computed by sema.c */
 		} switch_;
 		struct {
-			struct string_view constant;
+			struct ast *constant;
 			long long int unique;
 		} case_;
 		struct {

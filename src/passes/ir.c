@@ -515,10 +515,11 @@ ir_switch(Arena *arena,
 		ir_val_copy(&control_return, &caser->args[0]);
 		caser->args[1].subtype = IR_VAL_CONSTANT_INT;
 		caser->args[1].num = cur->constant;
-		caser->args[1].c89type = CTYPE_INT; // TODO: long vals for case?
+		caser->args[1].c89type = cur->constant_type;
 		caser->args[2].subtype = IR_VAL_TEMPORARY_VARIABLE;
 		caser->args[2].num = ir->env.generator++;
-		caser->args[2].c89type = CTYPE_INT; // TODO: can assume bool?
+		caser->args[2].c89type =
+			CTYPE_INT; /* effectively cast to bool */
 
 		struct ir_op *jumper = NULL;
 		check(ir_alloc_op(arena, &jumper));
