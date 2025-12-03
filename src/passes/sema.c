@@ -1003,16 +1003,14 @@ sema_fn_signature(struct ast *a, void *userdata)
 		enum ctype to_check = CTYPE_INT;
 		if (is_def_or_decl) {
 			/*
-			 * Require exact parameter type match on
-			 * redeclaration, definition of preceding
-			 * declaration, etc.
+			 * Require exact parameter type match on redeclaration,
+			 * definition of preceding declaration, etc.
 			 */
 			to_check = p_types[i];
 		} else {
 			/*
-			 * On function call, allow argument expression
-			 * type to widen to declared parameter type,
-			 * while still rejecting truncation.
+			 * On function call, allow argument expression type
+			 * to widen or narrow to declared parameter type,
 			 */
 			to_check = get_common_ctype(
 				p_types[i],
