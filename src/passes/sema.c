@@ -185,7 +185,7 @@ has_container(struct sema_label_loops_state *state,
 }
 
 static WARN_UNUSED long long int
-guess(struct ast *a, enum ctype expected_type)
+guess(const struct ast *a, enum ctype expected_type)
 {
 	long long int value = 0;
 	switch (a->node_type) {
@@ -294,14 +294,48 @@ guess(struct ast *a, enum ctype expected_type)
 }
 
 static WARN_UNUSED long long int
-guess_case_value(struct ast *containing_case, enum ctype expected_type)
+guess_case_value(const struct ast *containing_case, enum ctype expected_type)
 {
 	assert(containing_case->node_type == NODE_CASE);
 	return guess(containing_case->u.case_.constant, expected_type);
 }
 
 static WARN_UNUSED result_t
-case_prepend(Arena *arena, struct ast *containing_switch, struct ast *new_case)
+make_case(Arena *arena,
+          enum ctype control_type,
+          long long int new_value,
+          long long int existing_unique,
+          struct ast **dst)
+{
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_SEMA_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).node_type = NODE_CASE;
+	(**dst).u.case_.unique = existing_unique;
+
+	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	check_if(new_node == NULL, ERR_SEMA_ALLOC);
+	memset(new_node, 0, sizeof(*new_node));
+
+	switch (control_type) {
+	case CTYPE_INT:
+		new_node->node_type = NODE_CONSTANT_INT;
+		break;
+	case CTYPE_LONG:
+		new_node->node_type = NODE_CONSTANT_LONG;
+		break;
+	}
+	new_node->u.num = new_value;
+
+	(**dst).u.case_.constant = new_node;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+case_prepend(Arena *arena,
+             struct ast *containing_switch,
+             const struct ast *new_case)
 {
 	assert(containing_switch->node_type == NODE_SWITCH);
 	assert(new_case->node_type == NODE_CASE);
@@ -326,7 +360,16 @@ case_prepend(Arena *arena, struct ast *containing_switch, struct ast *new_case)
 	check_if(node == NULL, ERR_SEMA_ALLOC);
 	memset(node, 0, sizeof(*node));
 
-	node->car = new_case;
+	/*
+	 * Synthesize NODE_CASE equivalent to <new_case>, only with
+	 * u.case_.constant replaced with simplified <new_value>.
+	 */
+	check(make_case(arena,
+	                control_type,
+	                new_value,
+	                new_case->u.case_.unique,
+	                &node->car));
+
 	node->cdr = containing_switch->u.switch_.label_cases;
 	containing_switch->u.switch_.label_cases = node;
 	return RESULT_OK;
