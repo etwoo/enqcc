@@ -913,24 +913,21 @@ ir_logical_op(Arena *arena,
 
 static WARN_UNUSED result_t
 ir_call_args(Arena *arena,
-             const struct ast *a,
+             const struct flat *args,
              struct intermediate *ir,
              struct ir_op **dst,
              struct ir_op *caller,
              size_t *pos)
 {
-	assert(a->node_type == NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS);
-
-	while (a != NULL && a->u.call_args.expr != NULL) {
+	for (; args != NULL; args = args->cdr) {
 		struct ir_val arg_value = {0};
-		check(ir_expr(arena, a->u.call_args.expr, ir, dst, &arg_value));
+		check(ir_expr(arena, args->car, ir, dst, &arg_value));
 		assert(arg_value.subtype != IR_VAL_NONE);
 
 		assert(*pos < FUNCTION_PARAMETER_LIMIT);
 		ir_val_copy(&arg_value, &caller->args[*pos]);
 		*pos = *pos + 1;
 
-		a = a->u.call_args.next;
 		if (*dst != NULL) {
 			dst = &ir_op_list_back(*dst)->next;
 		}
@@ -955,8 +952,8 @@ ir_call(Arena *arena,
 
 	struct ir_op *inner = NULL;
 	size_t pos = 0;
-	if (a->u.call.arguments != NULL) {
-		struct ast *args = a->u.call.arguments;
+	if (a->u.call.args != NULL) {
+		struct flat *args = a->u.call.args;
 		check(ir_call_args(arena, args, ir, &inner, caller, &pos));
 	}
 

@@ -33,7 +33,6 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		return RESULT_OK;
 	}
 
-	struct ast *recurse_into_sibling_node = NULL;
 	if (ops->node_enter != NULL) {
 		check(ops->node_enter(a, u));
 	}
@@ -123,11 +122,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(a->u.op_ternary.else_expr, ops, u));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		check(sema_walk(a->u.call.arguments, ops, u));
-		break;
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-		check(sema_walk(a->u.call_args.expr, ops, u));
-		recurse_into_sibling_node = a->u.call_args.next;
+		check(sema_walk_flat(a->u.call.args, ops, u));
 		break;
 	case NODE_EXPRESSION_CAST:
 		check(sema_walk(a->u.cast.expr, ops, u));
@@ -140,9 +135,6 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 
 	if (ops->node_exit != NULL) {
 		check(ops->node_exit(a, u));
-	}
-	if (recurse_into_sibling_node != NULL) {
-		check(sema_walk(recurse_into_sibling_node, ops, u));
 	}
 
 	return RESULT_OK;
@@ -734,16 +726,12 @@ sema_fn_signature(struct ast *a, void *userdata) // NOLINT(*-complexity) // TODO
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		fname = &a->u.call.identifier.name;
-		for (struct ast *arguments = a->u.call.arguments;
-		     arguments != NULL;
-		     arguments = arguments->u.call_args.next) {
+		for (struct flat *x = a->u.call.args; x != NULL; x = x->cdr) {
 			++n_args;
 		}
 		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
-		for (struct ast *arguments = a->u.call.arguments;
-		     arguments != NULL;
-		     arguments = arguments->u.call_args.next) {
-			p_types[idx++] = arguments->expr_type;
+		for (struct flat *x = a->u.call.args; x != NULL; x = x->cdr) {
+			p_types[idx++] = x->car->expr_type;
 		}
 		assert(idx == n_args);
 		break;
@@ -804,40 +792,56 @@ sema_fn_signature(struct ast *a, void *userdata) // NOLINT(*-complexity) // TODO
 				: ERR_SEMA_FUNCTION_CALL_WRONG_NUMBER_OF_ARGS,
 			dup->name.data,
 			dup->name.sz);
-	} else {
-		bool p_types_match = true;
-		for (long long int i = 0; i < n_args; ++i) {
-			enum ctype to_check = CTYPE_INT;
-			if (is_def_or_decl) {
-				/*
-				 * Require exact parameter type match on
-				 * redeclaration, definition of preceding
-				 * declaration, etc.
-				 */
-				to_check = p_types[i];
-			} else {
-				/*
-				 * On function call, allow argument expression
-				 * type to widen to declared parameter type,
-				 * while still rejecting truncation.
-				 */
-				to_check = get_common_ctype(
-					p_types[i],
-					sema_get_auxiliary(dup)->p_types[i]);
-			}
-			if (to_check != sema_get_auxiliary(dup)->p_types[i]) {
-				p_types_match = false;
-				break;
-			}
+	}
+
+	if (dup == NULL) {
+		return RESULT_OK;
+	}
+
+	bool p_types_match = true;
+	for (long long int i = 0; i < n_args; ++i) {
+		enum ctype to_check = CTYPE_INT;
+		if (is_def_or_decl) {
+			/*
+			 * Require exact parameter type match on
+			 * redeclaration, definition of preceding
+			 * declaration, etc.
+			 */
+			to_check = p_types[i];
+		} else {
+			/*
+			 * On function call, allow argument expression
+			 * type to widen to declared parameter type,
+			 * while still rejecting truncation.
+			 */
+			to_check = get_common_ctype(
+				p_types[i],
+				sema_get_auxiliary(dup)->p_types[i]);
 		}
-		if (is_def_or_decl && !p_types_match) {
-			return make_result(
-				ERR_SEMA_FUNCTION_DEFINITION_CONFLICT,
-				dup->name.data,
-				dup->name.sz);
+		if (to_check != sema_get_auxiliary(dup)->p_types[i]) {
+			p_types_match = false;
+			break;
 		}
-		if (!is_def_or_decl && !p_types_match) {
-			// TODO: truncate call arg expr type to param type
+	}
+
+	if (is_def_or_decl && !p_types_match) {
+		return make_result(ERR_SEMA_FUNCTION_DEFINITION_CONFLICT,
+		                   dup->name.data,
+		                   dup->name.sz);
+	}
+
+	if (!is_def_or_decl) {
+		long long int i = 0;
+		enum ctype *expected = sema_get_auxiliary(dup)->p_types;
+		struct flat *actual = a->u.call.args;
+		while (i < n_args && actual != NULL) {
+			if (actual->car->expr_type != expected[i]) {
+				check(cast_if(state->arena,
+				              expected[i],
+				              &actual->car));
+			}
+			++i;
+			actual = actual->cdr;
 		}
 	}
 

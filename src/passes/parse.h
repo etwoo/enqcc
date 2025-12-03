@@ -2,6 +2,7 @@
 #define COMPILER_PASSES_PARSE_H
 
 #include "passes/symbol.h"
+#include "sys/compiler_features.h"
 #include "sys/string_view.h"
 
 enum ast_specifier {
@@ -74,7 +75,6 @@ struct ast_case {
 	F(EXPRESSION_POSTINCREMENT)                                            \
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_FUNCTION_CALL)                                            \
-	F(EXPRESSION_FUNCTION_CALL_ARGUMENTS)                                  \
 	F(EXPRESSION_CAST)                                                     \
 	FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(F)
@@ -156,12 +156,8 @@ struct ast {
 		} op_ternary;
 		struct {
 			struct ast_symbol identifier;
-			struct ast *arguments;
+			struct flat *args;
 		} call;
-		struct {
-			struct ast *expr;
-			struct ast *next;
-		} call_args;
 		struct {
 			struct string_view target_label;
 			long long int target_unique;
@@ -205,5 +201,10 @@ struct flat {
 	     (iter) != NULL && (iter)->symbol.name.data != NULL &&             \
 	     (iter)->symbol.name.sz > 0;                                       \
 	     ++(iter))
+
+/*
+ * Insert NODE_EXPRESSION_CAST wherever type issues demand it.
+ */
+result_t cast_if(Arena *arena, enum ctype cast_to, struct ast **a) WARN_UNUSED;
 
 #endif

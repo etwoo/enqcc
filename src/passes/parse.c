@@ -4,7 +4,6 @@
 #include "passes/lex.h"
 #include "passes/symbol.h"
 #include "sys/array.h"
-#include "sys/compiler_features.h"
 #include "sys/debug.h"
 
 #include <assert.h>
@@ -94,17 +93,17 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-cast_if(Arena *arena, enum ctype required_ctype, struct ast **a)
+result_t
+cast_if(Arena *arena, enum ctype cast_to, struct ast **a)
 {
-	if (*a == NULL || (**a).expr_type == required_ctype) {
+	if (*a == NULL || (**a).expr_type == cast_to) {
 		return RESULT_OK;
 	}
 	struct ast *cast_wrap = NULL;
 	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
-	cast_wrap->u.cast.to_type = required_ctype;
+	cast_wrap->u.cast.to_type = cast_to;
 	cast_wrap->u.cast.expr = *a;
-	cast_wrap->expr_type = required_ctype;
+	cast_wrap->expr_type = cast_to;
 	*a = cast_wrap;
 	return RESULT_OK;
 }
@@ -219,7 +218,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
 		/* infer likely expr_type based on LHS and RHS */
 		a->expr_type = get_common_ctype(a->u.op_binary.lhs->expr_type,
-			                        a->u.op_binary.rhs->expr_type);
+		                                a->u.op_binary.rhs->expr_type);
 		/* cast LHS and RHS in case of differences with inferred type */
 		check(cast_if(arena, a->expr_type, &a->u.op_binary.lhs));
 		check(cast_if(arena, a->expr_type, &a->u.op_binary.rhs));
@@ -260,12 +259,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_function_call(*sym,
 		                            &a->u.call.identifier,
 		                            &a->expr_type));
-		check(resolve_expr(arena, a->u.call.arguments, sym));
-		break;
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-		check(resolve_expr(arena, a->u.call_args.expr, sym));
-		a->expr_type = a->u.call_args.expr->expr_type;
-		check(resolve_expr(arena, a->u.call_args.next, sym));
+		for (struct flat *f = a->u.call.args; f != NULL; f = f->cdr) {
+			check(resolve_expr(arena, f->car, sym));
+		}
 		break;
 	case NODE_EXPRESSION_CAST:
 		check(resolve_expr(arena, a->u.cast.expr, sym));
@@ -649,13 +645,11 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 		return RESULT_OK; /* zero-arg function call */
 	}
 
-	dst = &(**dst).u.call.arguments;
+	struct flat **dst_args = &(**dst).u.call.args;
 	while (true) {
-		check(parse_alloc(arena,
-		                  dst,
-		                  NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS));
-		check(parse_expr(arena, tok, &(**dst).u.call_args.expr, 0));
-		dst = &(**dst).u.call_args.next;
+		check(flat_alloc(arena, dst_args));
+		check(parse_expr(arena, tok, &(**dst_args).car, 0));
+		dst_args = &(**dst_args).cdr;
 
 		if (!is_token_type(*tok, TOKEN_COMMA)) {
 			break;
@@ -877,7 +871,6 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_POSTINCREMENT:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
 	case NODE_EXPRESSION_CAST:
 	case NODE_CONSTANT_INT:
 	case NODE_CONSTANT_LONG:
@@ -1961,16 +1954,8 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print_ast_symbol("FUNCTION",
 		                             &a->u.call.identifier,
 		                             indent + 1);
-		if (a->u.call.arguments != NULL) {
-			debug("%*sARGUMENTS", (int)indent, "");
-			parse_debug_print(a->u.call.arguments, indent + 1);
-		}
-		break;
-	case NODE_EXPRESSION_FUNCTION_CALL_ARGUMENTS:
-		parse_debug_print(a->u.call_args.expr, indent + 1);
-		if (a->u.call_args.next != NULL) {
-			parse_debug_print(a->u.call_args.next, indent);
-		}
+		debug("%*sARGUMENTS", (int)indent + 1, "");
+		parse_debug_print_flat(a->u.call.args, indent + 2);
 		break;
 	case NODE_EXPRESSION_CAST:
 		debug("%*sCAST.TO: %s",
