@@ -189,20 +189,34 @@ case_prepend(Arena *arena, struct flat **head, struct ast *new_case)
 {
 	assert(new_case->node_type == NODE_CASE);
 
+	long long int new_value = 0;
+	switch (new_case->node_type) {
+	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_LONG:
+		new_value = new_case->u.case_.constant->u.num;
+		break;
+	// TODO: compute constants from NODE_EXPRESSION_BITWISE_SHIFT_*,
+	// NODE_EXPRESSION_UNARY_NEGATE, etc. based on testcases
+	default:
+		return RESULT_OK;
+	}
+
 	for (struct flat *f = *head; f != NULL; f = f->cdr) {
 		assert(f->car->node_type == NODE_CASE);
-		if (new_case->u.case_.unique == f->car->u.case_.unique) {
-			long long int maybe_num = 0;
-			switch (f->car->u.case_.constant->node_type) {
-			case NODE_CONSTANT_INT:
-			case NODE_CONSTANT_LONG:
-				maybe_num = f->car->u.case_.constant->u.num;
-				break;
-			default:
-				break;
-			}
+
+		long long int candidate = 0;
+		switch (f->car->u.case_.constant->node_type) {
+		case NODE_CONSTANT_INT:
+		case NODE_CONSTANT_LONG:
+			candidate = f->car->u.case_.constant->u.num;
+			break;
+		default:
+			continue;
+		}
+
+		if (new_value == candidate) {
 			return make_result(ERR_SEMA_CASE_DUPLICATE,
-			                   (int)maybe_num);
+			                   (int)new_value);
 		}
 	}
 
@@ -606,9 +620,10 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		for (struct flat *f = a->u.switch_.label_cases;
 		     f != NULL; /* sema_label_loops() inits, if cases exist */
 		     f = f->cdr) {
+			assert(f->car->node_type == NODE_CASE);
 			check(cast_if(arena,
 			              a->u.switch_.control->expr_type,
-			              &f->car));
+			              &f->car->u.case_.constant));
 		}
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
