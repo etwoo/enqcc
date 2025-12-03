@@ -609,6 +609,30 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+struct sema_return_state {
+	Arena *arena;
+	enum ctype expected_return_type;
+};
+
+static WARN_UNUSED result_t
+sema_return(struct ast *a, void *userdata)
+{
+	struct sema_return_state *state = userdata;
+	switch (a->node_type) {
+	case NODE_FUNCTION:
+		state->expected_return_type = a->u.function.return_type;
+		break;
+	case NODE_FUNCTION_RETURN_STATEMENT:
+		check(cast_if(state->arena,
+		              state->expected_return_type,
+		              &a->u.op_unary.operand));
+		break;
+	default:
+		break;
+	}
+	return RESULT_OK;
+}
+
 struct sema_symbol_state {
 	Arena *arena;
 	struct flat *ast_program_globals;
@@ -1191,6 +1215,14 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	debug("Checking function calls");
 	ops.node_enter = sema_fn_call;
 	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking function return statements");
+	ops.node_enter = sema_return;
+	{
+		struct sema_return_state return_state = {0};
+		return_state.arena = arena;
+		check(sema_walk(a, &ops, &return_state));
+	}
 
 	struct sema_symbol_state state = {0};
 	state.arena = arena;
