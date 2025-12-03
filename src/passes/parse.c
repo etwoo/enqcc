@@ -244,10 +244,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		a->expr_type = a->u.cast.to_type;
 		break;
 	case NODE_CONSTANT_INT:
-		a->expr_type = CTYPE_INT;
+		assert(a->expr_type == CTYPE_INT);
 		break;
 	case NODE_CONSTANT_LONG:
-		a->expr_type = CTYPE_LONG;
+		assert(a->expr_type == CTYPE_LONG);
 		break;
 	}
 
@@ -580,8 +580,10 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 
 	if (tmp > INT_MAX || suffix_long) {
 		check(parse_alloc(arena, dst, NODE_CONSTANT_LONG));
+		(**dst).expr_type = CTYPE_LONG;
 	} else {
 		check(parse_alloc(arena, dst, NODE_CONSTANT_INT));
+		(**dst).expr_type = CTYPE_INT;
 	}
 	(**dst).u.num = tmp;
 
@@ -1846,9 +1848,13 @@ parse_debug_print(const struct ast *a, size_t indent)
 			      "",
 			      cur->constant);
 			debug("%*sCASE.UNIQUE %lld",
-			      (int)indent + 2,
+			      (int)indent + 3,
 			      "",
 			      cur->unique);
+			debug("%*sCASE.CTYPE %s",
+			      (int)indent + 3,
+			      "",
+			      ctype_to_str((cur->constant_type)));
 		}
 		break;
 	case NODE_CASE:
