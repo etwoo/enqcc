@@ -763,7 +763,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 				case ASM_WORD_32BIT:
 					offsets[adj].usage =
 						// TODO: why 2x? shouldn't 4
-						// bytes be enough?
+					        // bytes be enough?
 						CODEGEN_BYTES_PER_VALUE * 2;
 					break;
 				case ASM_WORD_64BIT:
