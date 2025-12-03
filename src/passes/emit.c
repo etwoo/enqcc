@@ -202,12 +202,10 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_BITWISE_SHIFT_LEFT:
 		print_opcode = "sal";
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
-		assert(ralias[1] == REGISTER_ALIAS_4BYTE);
 		break;
 	case ASM_OP_BITWISE_SHIFT_RIGHT:
 		print_opcode = "sar";
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
-		assert(ralias[1] == REGISTER_ALIAS_4BYTE);
 		break;
 	case ASM_OP_COMPARE:
 		print_opcode = "cmp";
