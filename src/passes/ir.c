@@ -91,10 +91,11 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		if (src->u.op_binary.lhs->node_type == NODE_EXPRESSION_CAST) {
-			const struct ast *lhs = src->u.op_binary.lhs;
-			assert(lhs->u.cast.expr->node_type ==
+			/* unpack nodes inserted by sema_implicit_cast() */
+			const struct ast *cast_envelope = src->u.op_binary.lhs;
+			assert(cast_envelope->u.cast.expr->node_type ==
 			       NODE_EXPRESSION_VARIABLE_USAGE);
-			sym = &lhs->u.cast.expr->u.var;
+			sym = &cast_envelope->u.cast.expr->u.var;
 		} else {
 			assert(src->u.op_binary.lhs->node_type ==
 			       NODE_EXPRESSION_VARIABLE_USAGE);
