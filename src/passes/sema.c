@@ -191,19 +191,13 @@ case_prepend(Arena *arena, struct flat **head, struct ast *new_case)
 
 	for (struct flat *f = *head; f != NULL; f = f->cdr) {
 		assert(f->car->node_type == NODE_CASE);
-		if (new_case->u.case_.unique == f->car->u.case_.unique) {
-			long long int maybe_num = 0;
-			switch (f->car->u.case_.constant->node_type) {
-			case NODE_CONSTANT_INT:
-			case NODE_CONSTANT_LONG:
-				maybe_num = f->car->u.case_.constant->u.num;
-				break;
-			default:
-				break;
-			}
-			return make_result(ERR_SEMA_CASE_DUPLICATE,
-			                   (int)maybe_num);
-		}
+		// TODO: detect collisions, return ERR_SEMA_CASE_DUPLICATE
+		// TODO: use map_numeric_type() and knowledge of type of
+		// controlling expression to determine effective value, with
+		// truncation
+		// TODO: handle some cases like negation by interpreting
+		// NODE_EXPRESSION_UNARY_NEGATE at compile-time, i.e.
+		// open-coded interpreter logic here
 	}
 
 	struct flat *node = arena_alloc(arena, sizeof(*node));
