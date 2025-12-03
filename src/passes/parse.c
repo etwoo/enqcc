@@ -210,7 +210,22 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 			a->expr_type = CTYPE_INT; /* effectively cast to bool */
 			break;
+		case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+		case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+		case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+		case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+			/*
+			 * Shift left/right takes the LHS type, not the common
+			 * type of the two sides. The number of shift bits on
+			 * the RHS is typically small, but even if that value is
+			 * large enough to require a type wider than the LHS,
+			 * that should not result in sign extension.
+			 */
 		case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+			/*
+			 * Variable assignment takes the type of the LHS,
+			 * corresponding to the assigned-to variable.
+			 */
 			a->expr_type = a->u.op_binary.lhs->expr_type;
 			break;
 		default:
