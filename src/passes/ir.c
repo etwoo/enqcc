@@ -111,8 +111,6 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 
 	dst->num = sym->unique;
 	dst->c89type = src->expr_type;
-	// TODO: special-case NODE_DECLARATION to use a->u.declare.var_type
-	// instead? resolve_decl() should set expr_type, but need to verify
 }
 
 static WARN_UNUSED enum ir_linkage
