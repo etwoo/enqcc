@@ -93,21 +93,6 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned ntype)
 	return RESULT_OK;
 }
 
-result_t
-cast_if(Arena *arena, enum ctype cast_to, struct ast **a)
-{
-	if (*a == NULL || (**a).expr_type == cast_to) {
-		return RESULT_OK;
-	}
-	struct ast *cast_wrap = NULL;
-	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
-	cast_wrap->u.cast.to_type = cast_to;
-	cast_wrap->u.cast.expr = *a;
-	cast_wrap->expr_type = cast_to;
-	*a = cast_wrap;
-	return RESULT_OK;
-}
-
 static result_t
 resolve_block(Arena *arena, struct flat *a, struct symbol **sym) WARN_UNUSED;
 static result_t
@@ -216,13 +201,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
-		/* infer likely expr_type based on LHS and RHS */
-		a->expr_type = get_common_ctype(a->u.op_binary.lhs->expr_type,
-		                                a->u.op_binary.rhs->expr_type);
-		/* cast LHS and RHS in case of differences with inferred type */
-		check(cast_if(arena, a->expr_type, &a->u.op_binary.lhs));
-		check(cast_if(arena, a->expr_type, &a->u.op_binary.rhs));
-		/* in certain cases, override expr_type (after casting) */
 		switch (a->node_type) {
 		case NODE_EXPRESSION_LOGICAL_AND:
 		case NODE_EXPRESSION_LOGICAL_OR:
@@ -238,6 +216,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 			a->expr_type = a->u.op_binary.lhs->expr_type;
 			break;
 		default:
+			a->expr_type =
+				get_common_ctype(a->u.op_binary.lhs->expr_type,
+			                         a->u.op_binary.rhs->expr_type);
 			break;
 		}
 		break;
@@ -251,9 +232,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		a->expr_type =
 			get_common_ctype(a->u.op_ternary.then_expr->expr_type,
 		                         a->u.op_ternary.else_expr->expr_type);
-		/* cast then/else in case of differences with common type */
-		check(cast_if(arena, a->expr_type, &a->u.op_ternary.then_expr));
-		check(cast_if(arena, a->expr_type, &a->u.op_ternary.else_expr));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(*sym,
@@ -1979,4 +1957,19 @@ parse_debug_print_flat(const struct flat *a, size_t indent)
 		assert(cursor->car != NULL);
 		parse_debug_print(cursor->car, indent);
 	}
+}
+
+result_t
+cast_if(Arena *arena, enum ctype cast_to, struct ast **a)
+{
+	if (*a == NULL || (**a).expr_type == cast_to) {
+		return RESULT_OK;
+	}
+	struct ast *cast_wrap = NULL;
+	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
+	cast_wrap->u.cast.to_type = cast_to;
+	cast_wrap->u.cast.expr = *a;
+	cast_wrap->expr_type = cast_to;
+	*a = cast_wrap;
+	return RESULT_OK;
 }

@@ -609,23 +609,66 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
-struct sema_return_state {
+struct sema_implicit_cast_state {
 	Arena *arena;
 	enum ctype expected_return_type;
 };
 
 static WARN_UNUSED result_t
-sema_return(struct ast *a, void *userdata)
+sema_implicit_cast(struct ast *a, void *userdata)
 {
-	struct sema_return_state *state = userdata;
+	struct sema_implicit_cast_state *state = userdata;
+	Arena *arena = state->arena;
+	enum ctype common = CTYPE_INT;
+
 	switch (a->node_type) {
 	case NODE_FUNCTION:
 		state->expected_return_type = a->u.function.return_type;
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
-		check(cast_if(state->arena,
+		check(cast_if(arena,
 		              state->expected_return_type,
 		              &a->u.op_unary.operand));
+		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		common = get_common_ctype(a->u.op_binary.lhs->expr_type,
+		                          a->u.op_binary.rhs->expr_type);
+		check(cast_if(arena, common, &a->u.op_binary.lhs));
+		check(cast_if(arena, common, &a->u.op_binary.rhs));
+		break;
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		common = get_common_ctype(a->u.op_ternary.then_expr->expr_type,
+		                          a->u.op_ternary.else_expr->expr_type);
+		check(cast_if(arena, common, &a->u.op_ternary.then_expr));
+		check(cast_if(arena, common, &a->u.op_ternary.else_expr));
 		break;
 	default:
 		break;
@@ -1216,12 +1259,12 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	ops.node_enter = sema_fn_call;
 	check(sema_walk(a, &ops, NULL));
 
-	debug("Checking function return statements");
-	ops.node_enter = sema_return;
+	debug("Inserting cast expressions");
+	ops.node_enter = sema_implicit_cast;
 	{
-		struct sema_return_state return_state = {0};
-		return_state.arena = arena;
-		check(sema_walk(a, &ops, &return_state));
+		struct sema_implicit_cast_state cast_state = {0};
+		cast_state.arena = arena;
+		check(sema_walk(a, &ops, &cast_state));
 	}
 
 	struct sema_symbol_state state = {0};
