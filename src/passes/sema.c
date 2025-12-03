@@ -602,6 +602,15 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              state->expected_return_type,
 		              &a->u.op_unary.operand));
 		break;
+	case NODE_SWITCH:
+		for (struct flat *f = a->u.switch_.label_cases;
+		     f != NULL; /* sema_label_loops() inits, if cases exist */
+		     f = f->cdr) {
+			check(cast_if(arena,
+			              a->u.switch_.control->expr_type,
+			              &f->car));
+		}
+		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
