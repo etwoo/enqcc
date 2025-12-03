@@ -135,6 +135,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym));
+		// TODO: move expr_type logic to sema (except leaf declarations)
 		switch (a->node_type) {
 		case NODE_EXPRESSION_UNARY_NOT:
 			a->expr_type = CTYPE_INT; /* effectively cast to bool */
@@ -218,6 +219,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
 		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym));
 		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
+		// TODO: move expr_type logic to sema (except leaf declarations)
 		a->expr_type =
 			get_common_ctype(a->u.op_ternary.then_expr->expr_type,
 		                         a->u.op_ternary.else_expr->expr_type);
@@ -232,12 +234,15 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_EXPRESSION_CAST:
 		check(resolve_expr(arena, a->u.cast.expr, sym));
+		// TODO: move expr_type logic to sema (except leaf declarations)
 		a->expr_type = a->u.cast.to_type;
 		break;
 	case NODE_CONSTANT_INT:
+		// TODO: move expr_type logic to sema (except leaf declarations)
 		assert(a->expr_type == CTYPE_INT);
 		break;
 	case NODE_CONSTANT_LONG:
+		// TODO: move expr_type logic to sema (except leaf declarations)
 		assert(a->expr_type == CTYPE_LONG);
 		break;
 	}
