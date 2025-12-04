@@ -29,37 +29,6 @@ codegen_alloc_op(Arena *arena, struct asm_op **dst)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-codegen_alloc_modify_rsp(Arena *arena,
-                         struct asm_op **dst,
-                         bool add,
-                         long long int n)
-{
-	check(codegen_alloc_op(arena, dst));
-	(**dst).opcode = add ? ASM_OP_BINARY_ADD : ASM_OP_BINARY_SUBTRACT;
-	(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-	(**dst).args[0].u.num = n;
-	(**dst).args[0].word_type = ASM_WORD_64BIT;
-	(**dst).args[1].operand_type = ASM_OPERAND_REGISTER;
-	(**dst).args[1].u.reg = ASM_REGISTER_RSP;
-	(**dst).args[1].word_type = ASM_WORD_64BIT;
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-codegen_alloc_subq_rsp(Arena *arena, struct asm_op **dst, long long int n)
-{
-	check(codegen_alloc_modify_rsp(arena, dst, false, n));
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-codegen_alloc_addq_rsp(Arena *arena, struct asm_op **dst, long long int n)
-{
-	check(codegen_alloc_modify_rsp(arena, dst, true, n));
-	return RESULT_OK;
-}
-
 static void
 codegen_op_list_concat(struct asm_op *first, struct asm_op *second)
 {
@@ -140,63 +109,37 @@ codegen_set_operand_eax(const struct ir_val *basis, struct asm_operand *dst)
 }
 
 static void
-codegen_set_operand_rax_64b(struct asm_operand *dst)
+codegen_set_operand_eax_64b(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
 	dst->u.reg = ASM_REGISTER_AX;
 	dst->word_type = ASM_WORD_64BIT;
 }
 
-static void
-codegen_set_operand_ecx(const struct asm_operand *basis,
-                        struct asm_operand *dst)
-{
-	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->u.reg = ASM_REGISTER_CX;
-	dst->word_type = basis->word_type;
-}
-
-static void
-codegen_set_operand_r10(const struct asm_operand *basis,
-                        struct asm_operand *dst)
-{
-	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->u.reg = ASM_REGISTER_R10;
-	dst->word_type = basis->word_type;
-}
-
-static void
-codegen_set_operand_r10_64b(struct asm_operand *dst)
-{
-	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->u.reg = ASM_REGISTER_R10;
-	dst->word_type = ASM_WORD_64BIT;
-}
-
-static void
-codegen_set_operand_r10d_32b(struct asm_operand *dst)
-{
-	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->u.reg = ASM_REGISTER_R10;
-	dst->word_type = ASM_WORD_32BIT;
-}
-
-static void
-codegen_set_operand_r11(const struct asm_operand *basis,
-                        struct asm_operand *dst)
-{
-	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->u.reg = ASM_REGISTER_R11;
-	dst->word_type = basis->word_type;
-}
-
-static void
-codegen_set_operand_r11_64b(struct asm_operand *dst)
-{
-	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->u.reg = ASM_REGISTER_R11;
-	dst->word_type = ASM_WORD_64BIT;
-}
+#define MAKE_SETTER(fn, register_value)                                        \
+	MAYBE_UNUSED static void fn(const struct asm_operand *basis,           \
+	                            struct asm_operand *dst)                   \
+	{                                                                      \
+		dst->operand_type = ASM_OPERAND_REGISTER;                      \
+		dst->u.reg = register_value;                                   \
+		dst->word_type = basis->word_type;                             \
+	}                                                                      \
+	MAYBE_UNUSED static void fn##_32b(struct asm_operand *dst)             \
+	{                                                                      \
+		dst->operand_type = ASM_OPERAND_REGISTER;                      \
+		dst->u.reg = register_value;                                   \
+		dst->word_type = ASM_WORD_32BIT;                               \
+	}                                                                      \
+	MAYBE_UNUSED static void fn##_64b(struct asm_operand *dst)             \
+	{                                                                      \
+		dst->operand_type = ASM_OPERAND_REGISTER;                      \
+		dst->u.reg = register_value;                                   \
+		dst->word_type = ASM_WORD_64BIT;                               \
+	}
+MAKE_SETTER(codegen_set_operand_ecx, ASM_REGISTER_CX)
+MAKE_SETTER(codegen_set_operand_r10, ASM_REGISTER_R10)
+MAKE_SETTER(codegen_set_operand_r11, ASM_REGISTER_R11)
+MAKE_SETTER(codegen_set_operand_rsp, ASM_REGISTER_RSP)
 
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
@@ -260,6 +203,35 @@ codegen_map_linkage(enum ir_linkage linkage)
 }
 
 static WARN_UNUSED result_t
+codegen_alloc_modify_rsp(Arena *arena,
+                         struct asm_op **dst,
+                         bool add,
+                         long long int n)
+{
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = add ? ASM_OP_BINARY_ADD : ASM_OP_BINARY_SUBTRACT;
+	(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+	(**dst).args[0].u.num = n;
+	(**dst).args[0].word_type = ASM_WORD_64BIT;
+	codegen_set_operand_rsp_64b(&(**dst).args[1]);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_alloc_subq_rsp(Arena *arena, struct asm_op **dst, long long int n)
+{
+	check(codegen_alloc_modify_rsp(arena, dst, false, n));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_alloc_addq_rsp(Arena *arena, struct asm_op **dst, long long int n)
+{
+	check(codegen_alloc_modify_rsp(arena, dst, true, n));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 {
 	assert(src->opcode == IR_OP_CALL);
@@ -312,7 +284,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_PUSH;
-			codegen_set_operand_rax_64b(&(**dst).args[0]);
+			codegen_set_operand_eax_64b(&(**dst).args[0]);
 		}
 		dst = &(**dst).next;
 		++stack_args;
@@ -1157,10 +1129,10 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
 	assert(cur->args[0].word_type == ASM_WORD_32BIT);
-	codegen_set_operand_r10d_32b(&trampoline->ops[0]->args[1]);
+	codegen_set_operand_r10_32b(&trampoline->ops[0]->args[1]);
 
 	trampoline->ops[1]->opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
-	codegen_set_operand_r10d_32b(&trampoline->ops[1]->args[0]);
+	codegen_set_operand_r10_32b(&trampoline->ops[1]->args[0]);
 	codegen_set_operand_r11_64b(&trampoline->ops[1]->args[1]);
 
 	trampoline->ops[2]->opcode = ASM_OP_MOV;
