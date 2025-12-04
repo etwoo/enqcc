@@ -226,7 +226,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	for (size_t i = n_args; i > CODEGEN_REGISTER_ARGS; --i) {
 		size_t pos = i - 1;
 		check(codegen_alloc_op(arena, dst));
-		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT || // TODO:&&?
+		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT &&
 		    src->args[pos].c89type == CTYPE_LONG) {
 			(**dst).opcode = ASM_OP_PUSH;
 			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
@@ -242,7 +242,8 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_PUSH;
-			codegen_set_operand_eax(&src->args[pos], &(**dst).args[0]);
+			codegen_set_operand_eax(&src->args[pos],
+			                        &(**dst).args[0]);
 			(**dst).args[0].word_type = ASM_WORD_64BIT;
 		}
 		dst = &(**dst).next;
@@ -752,18 +753,10 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			assert(offsets != NULL);
 			if (offsets[adj].usage == 0) {
 				offsets[adj].base = aligned;
-				switch (arg->word_type) {
-				case ASM_WORD_32BIT:
-					offsets[adj].usage =
-						// TODO: why 2x? shouldn't 4
-					        // bytes be enough?
-						CODEGEN_BYTES_PER_VALUE * 2;
-					break;
-				case ASM_WORD_64BIT:
-					offsets[adj].usage =
-						CODEGEN_BYTES_PER_VALUE * 4;
-					break;
-				}
+				offsets[adj].usage =
+					// TODO: why do INT/LONG both need 8
+				        // bytes? 4 bytes isn't enough for INT?
+					CODEGEN_BYTES_PER_VALUE * 2;
 				const long long int previous = offset;
 				offset = offsets[adj].base + offsets[adj].usage;
 				assert(offset > previous);
