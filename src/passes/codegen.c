@@ -108,38 +108,43 @@ codegen_set_operand_eax(const struct ir_val *basis, struct asm_operand *dst)
 	codegen_map_ctype(basis, dst);
 }
 
-static void
-codegen_set_operand_eax_64b(struct asm_operand *dst)
-{
-	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->u.reg = ASM_REGISTER_AX;
-	dst->word_type = ASM_WORD_64BIT;
-}
-
 #define MAKE_SETTER(fn, register_value)                                        \
-	MAYBE_UNUSED static void fn(const struct asm_operand *basis,           \
-	                            struct asm_operand *dst)                   \
+	static void fn(const struct asm_operand *basis,                        \
+	               struct asm_operand *dst)                                \
 	{                                                                      \
 		dst->operand_type = ASM_OPERAND_REGISTER;                      \
 		dst->u.reg = register_value;                                   \
 		dst->word_type = basis->word_type;                             \
-	}                                                                      \
-	MAYBE_UNUSED static void fn##_32b(struct asm_operand *dst)             \
-	{                                                                      \
-		dst->operand_type = ASM_OPERAND_REGISTER;                      \
-		dst->u.reg = register_value;                                   \
-		dst->word_type = ASM_WORD_32BIT;                               \
-	}                                                                      \
-	MAYBE_UNUSED static void fn##_64b(struct asm_operand *dst)             \
-	{                                                                      \
-		dst->operand_type = ASM_OPERAND_REGISTER;                      \
-		dst->u.reg = register_value;                                   \
-		dst->word_type = ASM_WORD_64BIT;                               \
 	}
 MAKE_SETTER(codegen_set_operand_ecx, ASM_REGISTER_CX)
 MAKE_SETTER(codegen_set_operand_r10, ASM_REGISTER_R10)
 MAKE_SETTER(codegen_set_operand_r11, ASM_REGISTER_R11)
-MAKE_SETTER(codegen_set_operand_rsp, ASM_REGISTER_RSP)
+
+static const struct asm_operand OPERAND_RSP_64BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_RSP,
+};
+static const struct asm_operand OPERAND_RAX_64BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_AX,
+};
+static const struct asm_operand OPERAND_R10_64BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_R10,
+};
+static const struct asm_operand OPERAND_R10_32BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_32BIT,
+	.u.reg = ASM_REGISTER_R10,
+};
+static const struct asm_operand OPERAND_R11_64BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_R11,
+};
 
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
@@ -213,7 +218,7 @@ codegen_alloc_modify_rsp(Arena *arena,
 	(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
 	(**dst).args[0].u.num = n;
 	(**dst).args[0].word_type = ASM_WORD_64BIT;
-	codegen_set_operand_rsp_64b(&(**dst).args[1]);
+	(**dst).args[1] = OPERAND_RSP_64BIT;
 	return RESULT_OK;
 }
 
@@ -284,7 +289,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_PUSH;
-			codegen_set_operand_eax_64b(&(**dst).args[0]);
+			(**dst).args[0] = OPERAND_RAX_64BIT;
 		}
 		dst = &(**dst).next;
 		++stack_args;
@@ -1129,14 +1134,14 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
 	assert(cur->args[0].word_type == ASM_WORD_32BIT);
-	codegen_set_operand_r10_32b(&trampoline->ops[0]->args[1]);
+	trampoline->ops[0]->args[1] = OPERAND_R10_32BIT;
 
 	trampoline->ops[1]->opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
-	codegen_set_operand_r10_32b(&trampoline->ops[1]->args[0]);
-	codegen_set_operand_r11_64b(&trampoline->ops[1]->args[1]);
+	trampoline->ops[1]->args[0] = OPERAND_R10_32BIT;
+	trampoline->ops[1]->args[1] = OPERAND_R11_64BIT;
 
 	trampoline->ops[2]->opcode = ASM_OP_MOV;
-	codegen_set_operand_r11_64b(&trampoline->ops[2]->args[0]);
+	trampoline->ops[2]->args[0] = OPERAND_R11_64BIT;
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
 	assert(cur->args[1].word_type == ASM_WORD_64BIT);
 
@@ -1179,8 +1184,8 @@ fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 		trampoline->ops[i]->next = NULL;
 	}
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
-	codegen_set_operand_r10_64b(&trampoline->ops[0]->args[1]);
-	codegen_set_operand_r10_64b(&trampoline->ops[1]->args[0]);
+	trampoline->ops[0]->args[1] = OPERAND_R10_64BIT;
+	trampoline->ops[1]->args[0] = OPERAND_R10_64BIT;
 
 	return true;
 }
