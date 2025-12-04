@@ -135,30 +135,71 @@ emit_asm_operand(const struct asm_operand *o,
 }
 
 static void
+map_wordtype_to_register_alias(const struct asm_operand *o,
+                               enum register_alias *dst)
+{
+	switch (o->word_type) {
+	case ASM_WORD_32BIT:
+		*dst = REGISTER_ALIAS_4BYTE;
+		break;
+	case ASM_WORD_64BIT:
+		*dst = REGISTER_ALIAS_8BYTE;
+		break;
+	}
+}
+
+static void
 emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
 	const char *label_prefix = get_label_prefix(plat);
-	const char *print_opcode = NULL;
-	char print_opcode_suffix = 0;
 
+	/*
+	 * Choose a default register_alias value based on the asm_operand that
+	 * most likely corresponds to the final destination of this asm_op.
+	 */
+	enum register_alias ralias_default = REGISTER_ALIAS_4BYTE;
+	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+		if (op->args[i].operand_type == ASM_OPERAND_NONE) {
+			continue;
+		}
+		/* last operand's mapping wins */
+		map_wordtype_to_register_alias(&op->args[i], &ralias_default);
+	}
+
+	/*
+	 * Populate register_alias values with default value. Subsequent logic
+	 * may customize these values where appropriate.
+	 */
 	enum register_alias ralias[ARRAY_SIZE(op->args)] = {0};
 	for (size_t i = 0; i < ARRAY_SIZE(ralias); ++i) {
-		switch (op->args[i].word_type) {
-		case ASM_WORD_32BIT:
-			ralias[i] = REGISTER_ALIAS_4BYTE;
-			print_opcode_suffix = MAX(print_opcode_suffix, 'l');
-			break;
-		case ASM_WORD_64BIT:
-			ralias[i] = REGISTER_ALIAS_8BYTE;
-			print_opcode_suffix = MAX(print_opcode_suffix, 'q');
-			break;
-		}
+		ralias[i] = ralias_default;
+	}
+
+	/*
+	 * Choose the overall opcode suffix based on the word_type of the
+	 * destination operand (indicated by the value of ralias_default).
+	 */
+	char print_opcode_suffix = 0;
+	switch (ralias_default) {
+	case REGISTER_ALIAS_8BYTE:
+		print_opcode_suffix = 'q';
+		break;
+	case REGISTER_ALIAS_4BYTE:
+		print_opcode_suffix = 'l';
+		break;
+	case REGISTER_ALIAS_1BYTE:
+		print_opcode_suffix = 'b';
+		break;
 	}
 
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
 	}
 
+	/*
+	 * Customize the final opcode prefix/suffix, register aliases, etc.
+	 */
+	const char *print_opcode = NULL;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		print_opcode = "mov";
@@ -166,7 +207,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_MOV_WITH_SIGN_EXTENSION:
 		print_opcode = "movslq";
 		print_opcode_suffix = 0;
-		assert(ralias[0] == REGISTER_ALIAS_4BYTE);
+		ralias[0] = REGISTER_ALIAS_4BYTE;
 		assert(ralias[1] == REGISTER_ALIAS_8BYTE);
 		break;
 	case ASM_OP_UNARY_NEG:
