@@ -812,15 +812,28 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		 * large enough to require a type wider than the LHS,
 		 * that should not result in sign extension.
 		 *
-		 * Variable assignment similarly takes the type of the
-		 * LHS, corresponding to the assigned-to variable.
+		 * Variable assignment similarly takes the LHS type,
+		 * corresponding to the assigned-to variable.
 		 *
-		 * Compound assignment also takes the type of the LHS, like
-		 * regular variable assignment. However, do note that as a
-		 * result of lvalue-to-rvalue, sign extension can occur when
-		 * computing the new value if the RHS type causes the common
-		 * type to be wider than the LHS type; truncation will occur
-		 * when assigning back to the LHS lvalue, however! [TYPE1]
+		 * Compound assignment takes the LHS type, like regular
+		 * variable assignment. That said, lvalue-to-rvalue
+		 * conversion can lead to sign extension when computing
+		 * the new value if the RHS type causes the common type
+		 * to be wider than the LHS type. Truncation will then
+		 * occur when assigning to the lvalue. Note: [TYPE1].
+		 *
+		 * For example, given:
+		 *
+		 *     int x = 0;
+		 *     x += 100l;
+		 *
+		 * ... equivalent to:
+		 *
+		 *     x = x + 100l;
+		 *
+		 * ... we can think of the resulting behavior like:
+		 *
+		 *     x = (int)(((long)x) + 100l);
 		 */
 		a->expr_type = a->u.op_binary.lhs->expr_type;
 		break;
@@ -879,12 +892,12 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD: /* See sema_expr_types() for why */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB: /* compound assignment operators */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL: /* may require casts even though */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV: /* the LHS lvalue determines the */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM: /* the final type. Note: [TYPE1] */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD: /* See [TYPE1] comment in  */
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB: /* sema_expr_types() re:   */
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL: /* compound assignment ops */
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV: /* requiring casts despite */
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM: /* LHS lvalue unilaterally */
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND: /* determining expr_type.  */
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 		common = get_common_ctype(a->u.op_binary.lhs->expr_type,
