@@ -82,6 +82,21 @@ codegen_map_common_ctype(const struct ir_val *src_lhs,
 	}
 }
 
+static WARN_UNUSED long long int
+codegen_get_alignment(const struct ir_variable *ir)
+{
+	long long int alignment = 0;
+	switch (ir->c89type) {
+	case CTYPE_INT:
+		alignment = 4;
+		break;
+	case CTYPE_LONG:
+		alignment = 8;
+		break;
+	}
+	return alignment;
+}
+
 static void
 codegen_set_operand_register(const struct ir_val *basis,
                              enum asm_register reg,
@@ -178,21 +193,6 @@ static void
 codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 {
 	memcpy(dst, src, sizeof(*dst));
-}
-
-static WARN_UNUSED long long int
-codegen_get_alignment(const struct ir_variable *ir)
-{
-	long long int alignment = 0;
-	switch (ir->c89type) {
-	case CTYPE_INT:
-		alignment = 4;
-		break;
-	case CTYPE_LONG:
-		alignment = 8;
-		break;
-	}
-	return alignment;
 }
 
 static WARN_UNUSED enum asm_linkage
