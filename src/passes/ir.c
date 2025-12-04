@@ -633,21 +633,23 @@ ir_unary_op(Arena *arena,
 		ast_inner = a->u.op_binary.rhs;
 		break;
 	case NODE_EXPRESSION_CAST:
-		if (a->u.cast.to_type == a->u.cast.expr->expr_type) {
+		if (a->u.cast.expr->expr_type == a->u.cast.to_type) {
 			/* early return if inner expr type makes cast no-op */
 			return ir_expr(arena,
 			               a->u.cast.expr,
 			               ir,
 			               dst,
 			               return_value);
-		}
-		switch (a->u.cast.to_type) {
-		case CTYPE_INT:
+		} else if (ctype_to_size_bytes(a->u.cast.expr->expr_type) ==
+		           ctype_to_size_bytes(a->u.cast.to_type)) {
+			unary->opcode = IR_OP_COPY;
+		} else if (ctype_to_size_bytes(a->u.cast.expr->expr_type) >
+		           ctype_to_size_bytes(a->u.cast.to_type)) {
 			unary->opcode = IR_OP_CTYPE_TRUNCATE;
-			break;
-		case CTYPE_LONG:
+		} else if (ctype_is_signed(a->u.cast.expr->expr_type)) {
 			unary->opcode = IR_OP_CTYPE_SIGN_EXTEND;
-			break;
+		} else {
+			unary->opcode = IR_OP_CTYPE_ZERO_EXTEND;
 		}
 		ast_inner = a->u.cast.expr;
 		break;
@@ -1177,10 +1179,10 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 		assert(0); /* logic error in caller */
 		break;
 	case INITIAL_VALUE_TENTATIVE:
-		(**dst).u.initial_as_ll = 0;
+		(**dst).u.initial_as_int128 = 0;
 		break;
 	case INITIAL_VALUE_CONSTANT:
-		(**dst).u.initial_as_ll = s->linkage.as_constant;
+		(**dst).u.initial_as_int128 = s->linkage.as_constant;
 		break;
 	}
 
@@ -1288,13 +1290,13 @@ ir_debug_print_one(const struct ir_op *op)
 			       "op lacks required operand");
 			continue;
 		case IR_VAL_CONSTANT_INT:
-			debug("  CONSTANT %lld", op->args[i].num);
+			debug("  CONSTANT %lld", (long long)op->args[i].num);
 			break;
 		case IR_VAL_TEMPORARY_VARIABLE:
-			debug("  VARIABLE tmp.%lld", op->args[i].num);
+			debug("  VAR tmp.%lld", (long long)op->args[i].num);
 			break;
 		case IR_VAL_JUMP_TARGET_LABEL:
-			debug("  LABEL label_%lld", op->args[i].num);
+			debug("  LABEL label_%lld", (long long)op->args[i].num);
 			break;
 		case IR_VAL_VARIABLE_DATA:
 			debug("  DATA %.*s",
@@ -1303,14 +1305,7 @@ ir_debug_print_one(const struct ir_op *op)
 			break;
 		}
 
-		switch (op->args[i].c89type) {
-		case CTYPE_INT:
-			debug("    TYPE INT");
-			break;
-		case CTYPE_LONG:
-			debug("    TYPE LONG");
-			break;
-		}
+		debug("    TYPE %s", ctype_to_str(op->args[i].c89type));
 	}
 }
 
@@ -1331,14 +1326,7 @@ ir_debug_print(const struct intermediate *ir)
 	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		switch (v->c89type) {
-		case CTYPE_INT:
-			debug("  VARIABLE TYPE INT");
-			break;
-		case CTYPE_LONG:
-			debug("  VARIABLE TYPE LONG");
-			break;
-		}
+		debug("  VARIABLE TYPE %s", ctype_to_str(v->c89type));
 		switch (v->linkage) {
 		case IR_LINKAGE_INTERNAL:
 			debug("  VARIABLE LINKAGE INTERNAL");
@@ -1347,7 +1335,8 @@ ir_debug_print(const struct intermediate *ir)
 			debug("  VARIABLE LINKAGE EXTERNAL");
 			break;
 		}
-		debug("  VARIABLE INIT %lld", v->u.initial_as_ll);
+		debug("  VARIABLE INIT %lld",
+		      (long long)v->u.initial_as_int128);
 	}
 
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {

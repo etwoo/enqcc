@@ -1,6 +1,7 @@
 #ifndef COMPILER_PASSES_CODEGEN_H
 #define COMPILER_PASSES_CODEGEN_H
 
+#include "passes/int128_t.h"
 #include "sys/string_view.h"
 
 #define FOREACH_CALL_REGISTER(F)                                               \
@@ -38,7 +39,7 @@ struct asm_operand {
 		ASM_WORD_64BIT, /* QWORD */
 	} word_type;
 	union {
-		long long int num;
+		int128_t num;
 		enum asm_register reg;
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
@@ -48,6 +49,7 @@ struct asm_operand {
 #define FOREACH_ASM_OPCODE(F)                                                  \
 	F(MOV)                                                                 \
 	F(MOV_WITH_SIGN_EXTENSION)                                             \
+	F(MOV_WITH_ZERO_EXTENSION)                                             \
 	F(UNARY_NEG)                                                           \
 	F(UNARY_NOT)                                                           \
 	F(UNARY_DECREMENT)                                                     \
@@ -58,10 +60,13 @@ struct asm_operand {
 	F(BITWISE_AND)                                                         \
 	F(BITWISE_OR)                                                          \
 	F(BITWISE_XOR)                                                         \
-	F(BITWISE_SHIFT_LEFT)                                                  \
-	F(BITWISE_SHIFT_RIGHT)                                                 \
+	F(BITWISE_SIGNED_SHIFT_LEFT)                                           \
+	F(BITWISE_SIGNED_SHIFT_RIGHT)                                          \
+	F(BITWISE_UNSIGNED_SHIFT_LEFT)                                         \
+	F(BITWISE_UNSIGNED_SHIFT_RIGHT)                                        \
 	F(COMPARE)                                                             \
 	F(IDIV)                                                                \
+	F(DIV)                                                                 \
 	F(CDQ)                                                                 \
 	F(CQO)                                                                 \
 	F(JMP)                                                                 \
@@ -71,12 +76,20 @@ struct asm_operand {
 	F(JMP_IF_GTE)                                                          \
 	F(JMP_IF_LT)                                                           \
 	F(JMP_IF_LTE)                                                          \
+	F(JMP_IF_A)                                                            \
+	F(JMP_IF_AE)                                                           \
+	F(JMP_IF_B)                                                            \
+	F(JMP_IF_BE)                                                           \
 	F(SET_IF_EQ)                                                           \
 	F(SET_IF_NEQ)                                                          \
 	F(SET_IF_GT)                                                           \
 	F(SET_IF_GTE)                                                          \
 	F(SET_IF_LT)                                                           \
 	F(SET_IF_LTE)                                                          \
+	F(SET_IF_A)                                                            \
+	F(SET_IF_AE)                                                           \
+	F(SET_IF_B)                                                            \
+	F(SET_IF_BE)                                                           \
 	F(LABEL)                                                               \
 	F(PUSH)                                                                \
 	F(CALL)                                                                \
@@ -110,7 +123,7 @@ struct asm_variable {
 	long long int alignment;
 	enum asm_linkage linkage;
 	struct {
-		long long int initial_as_ll;
+		int128_t initial_as_int128;
 	} u;
 	struct asm_variable *next;
 };

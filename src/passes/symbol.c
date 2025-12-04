@@ -6,16 +6,49 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
-static const char *const CTYPE_AS_STR[] = {
-	"INT",
-	"LONG",
-};
+#define TO_STR(t) #t,
+static const char *const CTYPE_AS_STR[] = {FOREACH_CTYPE(TO_STR)};
+#undef TO_STR
 
 const char *
 ctype_to_str(enum ctype c)
 {
 	assert(c < ARRAY_SIZE(CTYPE_AS_STR));
 	return CTYPE_AS_STR[c];
+}
+
+long long int
+ctype_to_size_bytes(enum ctype c)
+{
+	long long int b = 0;
+	switch (c) {
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+		b = 4;
+		break;
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+		b = 8;
+		break;
+	}
+	return b;
+}
+
+bool
+ctype_is_signed(enum ctype c)
+{
+	bool b = true;
+	switch (c) {
+	case CTYPE_INT:
+	case CTYPE_LONG:
+		b = true;
+		break;
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_UNSIGNED_LONG:
+		b = false;
+		break;
+	}
+	return b;
 }
 
 enum ctype

@@ -7,21 +7,40 @@
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
-static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
-
-static long long int
-map_numeric_type(long long int x, enum ctype dst_type)
+static WARN_UNUSED const struct ast *
+unpack_constant(const struct ast *a)
 {
-	while (dst_type == CTYPE_INT && x > INT_MAX) {
-		x -= LONG_TO_INT_TRUNCATOR;
+	if (a->node_type == NODE_EXPRESSION_CAST) {
+		/* unpack nodes inserted by sema_implicit_cast() */
+		a = a->u.cast.expr;
 	}
-	return x;
+	if (a->node_type == NODE_CONSTANT) {
+		return a;
+	}
+	return NULL;
 }
 
 static WARN_UNUSED bool
 is_node_constant(const struct ast *a)
 {
-	return a->node_type == NODE_CONSTANT;
+	return (unpack_constant(a) != NULL);
+}
+
+static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
+
+static WARN_UNUSED int128_t
+map_numeric_type(const struct ast *init, enum ctype dst_type)
+{
+	const struct ast *a = unpack_constant(init);
+	assert(a != NULL);
+
+	int128_t x = a->u.num;
+	if ((dst_type == CTYPE_INT && x > INT_MAX) ||
+	    (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
+		x %= LONG_TO_INT_TRUNCATOR;
+	}
+
+	return x;
 }
 
 struct sema_ops {
@@ -195,7 +214,7 @@ guess(const struct ast *a, enum ctype expected_type)
 	long long int value = 0;
 	switch (a->node_type) {
 	case NODE_CONSTANT:
-		value = map_numeric_type(a->u.num, expected_type);
+		value = map_numeric_type(a, expected_type);
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		value = guess(a->u.op_unary.operand, expected_type);
@@ -869,6 +888,11 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              state->expected_return_type,
 		              &a->u.op_unary.operand));
 		break;
+	case NODE_DECLARATION:
+		check(cast_if(arena,
+		              a->u.declare.var_type,
+		              &a->u.declare.init));
+		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -1173,7 +1197,7 @@ sema_declare_file_scope(struct ast *a,
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant =
-				map_numeric_type(a->u.declare.init->u.num,
+				map_numeric_type(a->u.declare.init,
 			                         a->u.declare.var_type);
 			/*
 			 * Remove init expression from AST. We will initialize
@@ -1320,7 +1344,7 @@ sema_declare_block_scope(struct ast *a,
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant =
-				map_numeric_type(a->u.declare.init->u.num,
+				map_numeric_type(a->u.declare.init,
 			                         a->u.declare.var_type);
 			/*
 			 * Remove init expression from AST. We will initialize

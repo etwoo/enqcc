@@ -2,18 +2,27 @@
 #define COMPILER_SYMBOLS_H
 
 #include "arena.h"
+#include "passes/int128_t.h"
 #include "result.h"
 #include "sys/compiler_features.h"
 #include "sys/string_view.h"
 
 #include <stdbool.h>
 
-enum ctype {
-	CTYPE_INT,
-	CTYPE_LONG,
-};
+/* note: order of values below determines integer conversion rank */
+#define FOREACH_CTYPE(F)                                                       \
+	F(INT)                                                                 \
+	F(UNSIGNED_INT)                                                        \
+	F(LONG)                                                                \
+	F(UNSIGNED_LONG)
+
+#define TO_ENUM(t) CTYPE_##t,
+enum ctype { FOREACH_CTYPE(TO_ENUM) };
+#undef TO_ENUM
 
 const char *ctype_to_str(enum ctype c) WARN_UNUSED;
+long long int ctype_to_size_bytes(enum ctype c) WARN_UNUSED;
+bool ctype_is_signed(enum ctype c) WARN_UNUSED;
 enum ctype get_common_ctype(enum ctype lhs, enum ctype rhs) WARN_UNUSED;
 
 enum {
@@ -43,7 +52,7 @@ struct symbol_linkage_state {
 		INITIAL_VALUE_TENTATIVE,
 		INITIAL_VALUE_CONSTANT,
 	} initial;
-	long long int as_constant;
+	int128_t as_constant;
 };
 
 // TODO: for typedef support, add tracking for types (like variables)

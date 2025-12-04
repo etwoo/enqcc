@@ -8,6 +8,8 @@
 	F("void", TOKEN_KEYWORD_VOID)                                          \
 	F("int", TOKEN_KEYWORD_INT)                                            \
 	F("long", TOKEN_KEYWORD_LONG)                                          \
+	F("signed", TOKEN_KEYWORD_SIGNED)                                      \
+	F("unsigned", TOKEN_KEYWORD_UNSIGNED)                                  \
 	F("if", TOKEN_KEYWORD_IF)                                              \
 	F("else", TOKEN_KEYWORD_ELSE)                                          \
 	F("do", TOKEN_KEYWORD_DO)                                              \

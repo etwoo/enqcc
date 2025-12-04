@@ -14,7 +14,7 @@ struct ir_val {
 		IR_VAL_JUMP_TARGET_LABEL,
 		IR_VAL_VARIABLE_DATA,
 	} subtype;
-	long long int num;          /* numeric value, variable ID, etc */
+	int128_t num;               /* numeric value, variable ID, etc */
 	struct string_view varname; /* symbol name, if linkage */
 	enum ctype c89type;
 };
@@ -23,6 +23,7 @@ struct ir_val {
 	F(RET, 0)                                                              \
 	F(CTYPE_SIGN_EXTEND, 1)                                                \
 	F(CTYPE_TRUNCATE, 1)                                                   \
+	F(CTYPE_ZERO_EXTEND, 1)                                                \
 	F(UNARY_COMPLEMENT, 1)                                                 \
 	F(UNARY_NEGATE, 1)                                                     \
 	F(UNARY_NOT, 1)                                                        \
@@ -80,7 +81,7 @@ struct ir_variable {
 	enum ctype c89type; /* determines alignment */
 	enum ir_linkage linkage;
 	struct {
-		long long int initial_as_ll;
+		int128_t initial_as_int128;
 	} u;
 	struct ir_variable *next;
 };

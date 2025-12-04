@@ -7,6 +7,7 @@
 #include "sys/debug.h"
 
 #include <assert.h>
+#include <ctype.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h> /* for strtoll() */
@@ -471,32 +472,13 @@ is_token_variable_type(const struct token *tok)
 	switch (tok->token_type) {
 	case TOKEN_KEYWORD_INT:
 	case TOKEN_KEYWORD_LONG:
+	case TOKEN_KEYWORD_SIGNED:
+	case TOKEN_KEYWORD_UNSIGNED:
 		return true;
 	default:
 		break;
 	}
 	return false;
-}
-
-static WARN_UNUSED enum ctype
-map_token_type_to_variable_type(const struct token *tok)
-{
-	assert(is_token_variable_type(tok));
-
-	enum ctype result = CTYPE_INT;
-	switch (tok->token_type) {
-	case TOKEN_KEYWORD_INT:
-		result = CTYPE_INT;
-		break;
-	case TOKEN_KEYWORD_LONG:
-		result = CTYPE_LONG;
-		break;
-	default:
-		assert(0); /* logic error in caller */
-		break;
-	}
-
-	return result;
 }
 
 static WARN_UNUSED bool
@@ -513,42 +495,57 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	assert(is_token_type(*tok, TOKEN_CONSTANT));
 
 	/*
-	 * strtoll() does not update errno on success, so we must clear it
+	 * strtoull() does not update errno on success, so we must clear it
 	 * explicitly if we want a predictable value.
 	 */
 	errno = 0;
 
-	long long int tmp = strtoll((**tok).val.data, NULL, 0);
+	long long unsigned tmp = strtoull((**tok).val.data, NULL, 0);
 	if (errno != 0) {
-		return make_result(ERR_PARSE_CONSTANT_STRTOLL,
+		return make_result(ERR_PARSE_CONSTANT_STRTOULL,
 		                   errno,
 		                   (**tok).val.data,
 		                   (**tok).val.sz);
 	}
 
-	if (tmp > LONG_MAX) {
+	bool suffix_long = false;
+	bool suffix_unsigned = false;
+	for (size_t i = 2; i > 0 && (**tok).val.sz >= i; --i) {
+		switch (toupper((**tok).val.data[(**tok).val.sz - i])) {
+		case 'L':
+			suffix_long = true;
+			break;
+		case 'U':
+			suffix_unsigned = true;
+			break;
+		default:
+			break;
+		}
+	}
+
+	bool too_large = false;
+
+	check(parse_alloc(arena, dst, NODE_CONSTANT));
+	if (suffix_unsigned && (tmp > UINT_MAX || suffix_long)) {
+		(**dst).expr_type = CTYPE_UNSIGNED_LONG;
+		too_large = (tmp > ULONG_MAX);
+	} else if (suffix_unsigned) {
+		(**dst).expr_type = CTYPE_UNSIGNED_INT;
+		assert(tmp <= UINT_MAX);
+	} else if (tmp > INT_MAX || suffix_long) {
+		(**dst).expr_type = CTYPE_LONG;
+		too_large = (tmp > LONG_MAX);
+	} else {
+		(**dst).expr_type = CTYPE_INT;
+		assert(tmp <= INT_MAX);
+	}
+	(**dst).u.num = tmp;
+
+	if (too_large) {
 		return make_result(ERR_PARSE_CONSTANT_TOO_LARGE,
 		                   (**tok).val.data,
 		                   (**tok).val.sz);
 	}
-
-	bool suffix_long = false;
-	switch ((**tok).val.data[(**tok).val.sz - 1]) {
-	case 'l':
-	case 'L':
-		suffix_long = true;
-		break;
-	default:
-		break;
-	}
-
-	check(parse_alloc(arena, dst, NODE_CONSTANT));
-	if (tmp > INT_MAX || suffix_long) {
-		(**dst).expr_type = CTYPE_LONG;
-	} else {
-		(**dst).expr_type = CTYPE_INT;
-	}
-	(**dst).u.num = tmp;
 
 	token_consume(tok);
 	return RESULT_OK;
@@ -558,6 +555,8 @@ static result_t parse_expr(Arena *arena,
                            const struct token **tok,
                            struct ast **dst,
                            unsigned minimum_precedence) WARN_UNUSED;
+static result_t parse_type_signature(const struct token **tok,
+                                     enum ctype *var_type) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
@@ -606,6 +605,37 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+parse_needs_weird_hack_for_cast_lhs_precedence(const struct ast *a)
+{
+	assert(a->node_type == NODE_EXPRESSION_CAST);
+	switch (a->u.cast.expr->node_type) {
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
@@ -637,10 +667,9 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
 	           *tok != NULL && /* avoid NULL dereference on (**tok).next */
 	           is_token_variable_type((**tok).next)) {
+		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
-		token_consume(tok);
-		(**dst).u.cast.to_type = map_token_type_to_variable_type(*tok);
-		token_consume(tok);
+		check(parse_type_signature(tok, &(**dst).u.cast.to_type));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE);
@@ -648,9 +677,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		token_consume(tok);
 		check(parse_expr(arena, tok, &(**dst).u.cast.expr, 0));
 		assert((**dst).u.cast.expr != NULL);
-		/* special-case hack for precedence of cast + assign */
-		if ((**dst).u.cast.expr->node_type ==
-		    NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
+		if (parse_needs_weird_hack_for_cast_lhs_precedence(*dst)) {
 			struct ast *cast_original = *dst;
 			struct ast *assign_original = (**dst).u.cast.expr;
 			struct ast *lhs_original =
@@ -913,10 +940,16 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 	return false;
 }
 
+struct parse_type_signature_state {
+	size_t n_int;
+	size_t n_long;
+	size_t n_signed;
+	size_t n_unsigned;
+};
+
 static void
 parse_type_signature_impl_accumulate(const struct token **tok,
-                                     size_t *type_int_count,
-                                     size_t *type_long_count)
+                                     struct parse_type_signature_state *state)
 {
 	if (!is_token_variable_type(*tok)) {
 		return;
@@ -925,10 +958,16 @@ parse_type_signature_impl_accumulate(const struct token **tok,
 	assert(*tok != NULL);
 	switch ((**tok).token_type) {
 	case TOKEN_KEYWORD_INT:
-		++(*type_int_count);
+		state->n_int++;
 		break;
 	case TOKEN_KEYWORD_LONG:
-		++(*type_long_count);
+		state->n_long++;
+		break;
+	case TOKEN_KEYWORD_SIGNED:
+		state->n_signed++;
+		break;
+	case TOKEN_KEYWORD_UNSIGNED:
+		state->n_unsigned++;
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -938,32 +977,44 @@ parse_type_signature_impl_accumulate(const struct token **tok,
 
 static WARN_UNUSED result_t
 parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
-                                   size_t type_int_count,
-                                   size_t type_long_count,
+                                   struct parse_type_signature_state *state,
                                    enum ctype *var_type)
 {
-	if (type_int_count > 1 || type_long_count > 2) {
+	if (state->n_int > 1 ||      /* int int -- invalid                 */
+	    state->n_long > 1 ||     /* long long -- unsupported           */
+	    state->n_signed > 1 ||   /* signed signed -- invalid           */
+	    state->n_unsigned > 1 || /* unsigned unsigned -- invalid       */
+	    (state->n_signed > 0 &&  /* signed/unsigned mutually exclusive */
+	     state->n_unsigned > 0)) {
 		return make_result(
 			expect_var ? ERR_PARSE_DECL_TYPE_DUPLICATE
 				   : ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
 	}
 
-	if (type_int_count == 0 && type_long_count == 0) {
+	if (state->n_int == 0 &&    /* Any particular type may occur zero   */
+	    state->n_long == 0 &&   /* times, but there must exist at least */
+	    state->n_signed == 0 && /* one non-zero option keyword count.   */
+	    state->n_unsigned == 0) {
 		return make_result(expect_var
 		                           ? ERR_PARSE_DECL_EXPECT_TYPE
 		                           : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE);
 	}
 
-	switch (type_long_count) {
-	case 2:
-		assert(0 && "implement CTYPE_LONG_LONG");
-		break;
+	switch (state->n_long) {
 	case 1:
-		*var_type = CTYPE_LONG;
+		if (state->n_unsigned > 0) {
+			*var_type = CTYPE_UNSIGNED_LONG;
+		} else {
+			*var_type = CTYPE_LONG;
+		}
 		break;
 	case 0:
-		assert(type_int_count == 1);
-		*var_type = CTYPE_INT;
+		if (state->n_unsigned > 0) {
+			*var_type = CTYPE_UNSIGNED_INT;
+		} else {
+			assert(state->n_int == 1 || state->n_signed == 1);
+			*var_type = CTYPE_INT;
+		}
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -976,18 +1027,12 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 static WARN_UNUSED result_t
 parse_type_signature(const struct token **tok, enum ctype *var_type)
 {
-	size_t type_int_count = 0;
-	size_t type_long_count = 0;
+	struct parse_type_signature_state state = {0};
 	while (is_token_variable_type(*tok)) {
-		parse_type_signature_impl_accumulate(tok,
-		                                     &type_int_count,
-		                                     &type_long_count);
+		parse_type_signature_impl_accumulate(tok, &state);
 		token_consume(tok);
 	}
-	check(parse_type_signature_impl_finalize(true,
-	                                         type_int_count,
-	                                         type_long_count,
-	                                         var_type));
+	check(parse_type_signature_impl_finalize(true, &state, var_type));
 	return RESULT_OK;
 }
 
@@ -997,15 +1042,12 @@ parse_specifiers(bool expect_var, /* or expect_function */
                  enum ast_specifier *dst,
                  enum ctype *var_type)
 {
-	size_t type_int_count = 0;
-	size_t type_long_count = 0;
+	struct parse_type_signature_state state = {0};
 	size_t specifier_count = 0;
 
 	while (is_token_maybe_function_prefix(*tok)) {
 		if (is_token_variable_type(*tok)) {
-			parse_type_signature_impl_accumulate(tok,
-			                                     &type_int_count,
-			                                     &type_long_count);
+			parse_type_signature_impl_accumulate(tok, &state);
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
 			*dst = SPECIFIER_STATIC;
 			++specifier_count;
@@ -1024,10 +1066,7 @@ parse_specifiers(bool expect_var, /* or expect_function */
 				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
 	}
 
-	check(parse_type_signature_impl_finalize(expect_var,
-	                                         type_int_count,
-	                                         type_long_count,
-	                                         var_type));
+	check(parse_type_signature_impl_finalize(expect_var, &state, var_type));
 	return RESULT_OK;
 }
 
@@ -1748,14 +1787,14 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sLOOP/SWITCH ID %lld%s",
 		      (int)indent + 1,
 		      "",
-		      a->u.num,
+		      (long long)a->u.num,
 		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_CONTINUE:
 		debug("%*sLOOP ID %lld%s",
 		      (int)indent + 1,
 		      "",
-		      a->u.num,
+		      (long long)a->u.num,
 		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_GOTO:
@@ -1887,7 +1926,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT:
-		debug("%*sVALUE %lld", (int)indent + 1, "", a->u.num);
+		debug("%*sVALUE %lld",
+		      (int)indent + 1,
+		      "",
+		      (long long)a->u.num);
 		break;
 	}
 }

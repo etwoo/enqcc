@@ -141,14 +141,19 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 			pos->data++;
 			pos->sz--;
 		} while (isdigit(*pos->data));
-		switch (*pos->data) {
-		case 'l':
-		case 'L':
-			pos->data++;
-			pos->sz--;
-			break;
-		default:
-			break;
+		const char allowed[2] = {'L', 'U'};
+		for (size_t i = 0; i < ARRAY_SIZE(allowed); ++i) {
+			if (toupper(*pos->data) == allowed[i]) {
+				pos->data++;
+				pos->sz--;
+				const size_t other =
+					ARRAY_SIZE(allowed) - (i + 1);
+				if (toupper(*pos->data) == allowed[other]) {
+					pos->data++;
+					pos->sz--;
+				}
+				break;
+			}
 		}
 		cur->val.sz = pos->data - cur->val.data;
 		cur->token_type = TOKEN_CONSTANT;

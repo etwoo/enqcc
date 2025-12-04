@@ -83,7 +83,12 @@ emit_asm_operand(const struct asm_operand *o,
 		assert(0); /* logic error in caller */
 		break;
 	case ASM_OPERAND_IMMEDIATE:
-		dprintf(fd, "$%lld", o->u.num);
+		if (o->u.num > LLONG_MAX) {
+			assert(o->u.num <= ULLONG_MAX);
+			dprintf(fd, "$%llu", (long long unsigned)o->u.num);
+		} else {
+			dprintf(fd, "$%lld", (long long)o->u.num);
+		}
 		break;
 	case ASM_OPERAND_REGISTER:
 		dprintf(fd, "%s", REGISTER_AS_STR[o->u.reg][ralias]);
@@ -95,15 +100,20 @@ emit_asm_operand(const struct asm_operand *o,
 		if (o->u.num == 0) {
 			dprintf(fd, "(%s)", STR_REG_RBP);
 		} else {
-			dprintf(fd, "%lld(%s)", o->u.num, STR_REG_RBP);
+			assert(o->u.num <= LLONG_MAX);
+			dprintf(fd,
+			        "%lld(%s)",
+			        (long long)o->u.num,
+			        STR_REG_RBP);
 		}
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
+		assert(o->u.num <= LLONG_MAX);
 		dprintf(fd,
 		        "%s%s%lld",
 		        label_prefix,
 		        CUSTOM_LABEL_ID,
-		        o->u.num);
+		        (long long)o->u.num);
 		break;
 	case ASM_OPERAND_CALL_TARGET_FUNCTION:
 		dprintf(fd,
@@ -210,6 +220,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		ralias[0] = REGISTER_ALIAS_4BYTE;
 		assert(ralias[1] == REGISTER_ALIAS_8BYTE);
 		break;
+	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
+		assert(0 && "MOV W/ ZEROEXTENSION should have been eliminated");
+		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
 		break;
@@ -240,12 +253,20 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_BITWISE_XOR:
 		print_opcode = "xor";
 		break;
-	case ASM_OP_BITWISE_SHIFT_LEFT:
+	case ASM_OP_BITWISE_SIGNED_SHIFT_LEFT:
 		print_opcode = "sal";
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
 		break;
-	case ASM_OP_BITWISE_SHIFT_RIGHT:
+	case ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT:
 		print_opcode = "sar";
+		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
+		break;
+	case ASM_OP_BITWISE_UNSIGNED_SHIFT_LEFT:
+		print_opcode = "shl";
+		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
+		break;
+	case ASM_OP_BITWISE_UNSIGNED_SHIFT_RIGHT:
+		print_opcode = "shr";
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
 		break;
 	case ASM_OP_COMPARE:
@@ -253,6 +274,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_IDIV:
 		print_opcode = "idiv";
+		break;
+	case ASM_OP_DIV:
+		print_opcode = "div";
 		break;
 	case ASM_OP_CDQ:
 		print_opcode = "cdq";
@@ -290,6 +314,22 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode = "jle";
 		print_opcode_suffix = 0;
 		break;
+	case ASM_OP_JMP_IF_A:
+		print_opcode = "ja";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_JMP_IF_AE:
+		print_opcode = "jae";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_JMP_IF_B:
+		print_opcode = "jb";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_JMP_IF_BE:
+		print_opcode = "jbe";
+		print_opcode_suffix = 0;
+		break;
 	case ASM_OP_SET_IF_EQ:
 		print_opcode = "sete";
 		print_opcode_suffix = 0;
@@ -320,14 +360,35 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
+	case ASM_OP_SET_IF_A:
+		print_opcode = "seta";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_AE:
+		print_opcode = "setae";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_B:
+		print_opcode = "setb";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_BE:
+		print_opcode = "setbe";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
 	case ASM_OP_LABEL:
 		assert(op->args[0].operand_type ==
 		       ASM_OPERAND_JUMP_TARGET_LABEL);
+		assert(op->args[0].u.num <= LLONG_MAX);
 		dprintf(fd,
 		        "%s%s%lld:\n",
 		        label_prefix,
 		        CUSTOM_LABEL_ID,
-		        op->args[0].u.num);
+		        (long long)op->args[0].u.num);
 		break;
 	case ASM_OP_PUSH:
 		print_opcode = STR_OP_PUSH_QUAD;
@@ -410,13 +471,23 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	if (var->u.initial_as_ll != 0) {
+	if (var->u.initial_as_int128 != 0) {
 		dprintf(fd, "\t.data\n\t.balign %lld\n", var->alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd,
-		        "\t.%s %lld\n",
-		        var->alignment == 4 ? "long" : "quad",
-		        var->u.initial_as_ll);
+		if (var->alignment == 4) {
+			dprintf(fd, "\t.long ");
+		} else {
+			dprintf(fd, "\t.quad ");
+		}
+		if (var->u.initial_as_int128 > LLONG_MAX) {
+			dprintf(fd,
+			        "%llu\n",
+			        (long long unsigned)var->u.initial_as_int128);
+		} else {
+			dprintf(fd,
+			        "%lld\n",
+			        (long long)var->u.initial_as_int128);
+		}
 	} else {
 		dprintf(fd, "\t.bss\n\t.balign %lld\n", var->alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);

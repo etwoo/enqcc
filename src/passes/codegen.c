@@ -59,9 +59,11 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->c89type) {
 	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
 		break;
 	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
 		dst->word_type = ASM_WORD_64BIT;
 		break;
 	}
@@ -70,16 +72,7 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 static WARN_UNUSED long long int
 codegen_get_alignment(const struct ir_variable *ir)
 {
-	long long int alignment = 0;
-	switch (ir->c89type) {
-	case CTYPE_INT:
-		alignment = 4;
-		break;
-	case CTYPE_LONG:
-		alignment = 8;
-		break;
-	}
-	return alignment;
+	return ctype_to_size_bytes(ir->c89type);
 }
 
 static void
@@ -130,6 +123,11 @@ static const struct asm_operand OPERAND_RAX_64BIT = {
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_AX,
 };
+static const struct asm_operand OPERAND_RDX_64BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_DX,
+};
 static const struct asm_operand OPERAND_R10_64BIT = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
@@ -143,6 +141,11 @@ static const struct asm_operand OPERAND_R10_32BIT = {
 static const struct asm_operand OPERAND_R11_64BIT = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_R11,
+};
+static const struct asm_operand OPERAND_R11_32BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_32BIT,
 	.u.reg = ASM_REGISTER_R11,
 };
 
@@ -328,6 +331,9 @@ codegen_statement_one(Arena *arena,
 	assert(*dst == NULL);
 	check(codegen_alloc_op(arena, dst));
 
+	/* guess overall op signedness ahead of time */
+	const bool a_signed = ctype_is_signed(src->args[0].c89type);
+
 	switch (src->opcode) {
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
@@ -338,7 +344,18 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
-		(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+	case IR_OP_CTYPE_ZERO_EXTEND:
+		switch (src->opcode) {
+		case IR_OP_CTYPE_SIGN_EXTEND:
+			(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+			break;
+		case IR_OP_CTYPE_ZERO_EXTEND:
+			(**dst).opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
 		}
@@ -425,10 +442,14 @@ codegen_statement_one(Arena *arena,
 			(**dst).opcode = ASM_OP_BITWISE_XOR;
 			break;
 		case IR_OP_BITWISE_SHIFT_LEFT:
-			(**dst).opcode = ASM_OP_BITWISE_SHIFT_LEFT;
+			(**dst).opcode =
+				a_signed ? ASM_OP_BITWISE_SIGNED_SHIFT_LEFT
+					 : ASM_OP_BITWISE_UNSIGNED_SHIFT_LEFT;
 			break;
 		case IR_OP_BITWISE_SHIFT_RIGHT:
-			(**dst).opcode = ASM_OP_BITWISE_SHIFT_RIGHT;
+			(**dst).opcode =
+				a_signed ? ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT
+					 : ASM_OP_BITWISE_UNSIGNED_SHIFT_RIGHT;
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -453,11 +474,17 @@ codegen_statement_one(Arena *arena,
 		case CTYPE_LONG:
 			(**dst).opcode = ASM_OP_CQO;
 			break;
+		case CTYPE_UNSIGNED_INT:
+		case CTYPE_UNSIGNED_LONG:
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_set_operand_immediate_zero(&(**dst).args[0]);
+			(**dst).args[1] = OPERAND_RDX_64BIT;
+			break;
 		}
 		dst = &(**dst).next;
 		/* prepare divisor and idiv op */
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_IDIV;
+		(**dst).opcode = a_signed ? ASM_OP_IDIV : ASM_OP_DIV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		assert(src->args[0].c89type == src->args[1].c89type);
 		dst = &(**dst).next;
@@ -519,16 +546,20 @@ codegen_statement_one(Arena *arena,
 			(**dst).opcode = ASM_OP_SET_IF_NEQ;
 			break;
 		case IR_OP_COMPARE_LESS_THAN:
-			(**dst).opcode = ASM_OP_SET_IF_LT;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_LT : ASM_OP_SET_IF_B;
 			break;
 		case IR_OP_COMPARE_LESS_THAN_EQ:
-			(**dst).opcode = ASM_OP_SET_IF_LTE;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_LTE : ASM_OP_SET_IF_BE;
 			break;
 		case IR_OP_COMPARE_MORE_THAN:
-			(**dst).opcode = ASM_OP_SET_IF_GT;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_GT : ASM_OP_SET_IF_A;
 			break;
 		case IR_OP_COMPARE_MORE_THAN_EQ:
-			(**dst).opcode = ASM_OP_SET_IF_GTE;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_GTE : ASM_OP_SET_IF_AE;
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -688,7 +719,7 @@ codegen_variable(Arena *arena,
 	(**dst).identifier = ir->identifier;
 	(**dst).alignment = codegen_get_alignment(ir);
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
-	(**dst).u.initial_as_ll = ir->u.initial_as_ll;
+	(**dst).u.initial_as_int128 = ir->u.initial_as_int128;
 	return RESULT_OK;
 }
 
@@ -993,7 +1024,7 @@ fix_cmp(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED bool
 fix_div(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!(cur->opcode == ASM_OP_IDIV &&
+	if (!((cur->opcode == ASM_OP_IDIV || cur->opcode == ASM_OP_DIV) &&
 	      cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE)) {
 		return false;
 	}
@@ -1004,7 +1035,7 @@ fix_div(struct asm_op *cur, struct fix *trampoline)
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
 	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[0]->args[1]);
 
-	trampoline->ops[1]->opcode = ASM_OP_IDIV;
+	trampoline->ops[1]->opcode = cur->opcode;
 	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[1]->args[0]);
 
 	return true;
@@ -1060,8 +1091,10 @@ fix_mul(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED bool
 fix_shift(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!((cur->opcode == ASM_OP_BITWISE_SHIFT_LEFT ||
-	       cur->opcode == ASM_OP_BITWISE_SHIFT_RIGHT) &&
+	if (!((cur->opcode == ASM_OP_BITWISE_SIGNED_SHIFT_LEFT ||
+	       cur->opcode == ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT ||
+	       cur->opcode == ASM_OP_BITWISE_UNSIGNED_SHIFT_LEFT ||
+	       cur->opcode == ASM_OP_BITWISE_UNSIGNED_SHIFT_RIGHT) &&
 	      cur->args[0].operand_type != ASM_OPERAND_IMMEDIATE)) {
 		return false;
 	}
@@ -1119,6 +1152,32 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 	return true;
 }
 
+static WARN_UNUSED bool
+fix_movzx(struct asm_op *cur, struct fix *trampoline)
+{
+	if (cur->opcode != ASM_OP_MOV_WITH_ZERO_EXTENSION) {
+		return false;
+	}
+
+	if (cur->args[1].operand_type == ASM_OPERAND_REGISTER) {
+		trampoline->sz = 1;
+		memcpy(trampoline->ops[0], cur, sizeof(*cur));
+		trampoline->ops[0]->next = NULL;
+		trampoline->ops[0]->opcode = ASM_OP_MOV;
+	} else {
+		trampoline->sz = 2;
+		for (size_t i = 0; i < trampoline->sz; ++i) {
+			memcpy(trampoline->ops[i], cur, sizeof(*cur));
+			trampoline->ops[i]->next = NULL;
+			trampoline->ops[i]->opcode = ASM_OP_MOV;
+		}
+		trampoline->ops[0]->args[1] = OPERAND_R11_32BIT;
+		trampoline->ops[1]->args[0] = OPERAND_R11_64BIT;
+	}
+
+	return true;
+}
+
 /*
  * An immediate (constant) value that does not fit into an int needs to bounce
  * through a register before an arithmetic op can use it as an operand.
@@ -1138,11 +1197,13 @@ fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 	        cur->opcode == ASM_OP_COMPARE || /* cmpq  */
 	        cur->opcode == ASM_OP_PUSH) &&   /* pushq */
 	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
-	       cur->args[0].word_type == ASM_WORD_64BIT &&
+	       /*
+	        * An ASM_WORD_64BIT immediate value can clearly exceed INT_MAX,
+	        * but note: an unsigned value in ASM_WORD_32BIT can, as well!
+	        */
 	       cur->args[0].u.num > INT_MAX) ||
 	      (cur->opcode == ASM_OP_MOV &&
 	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
-	       cur->args[0].word_type == ASM_WORD_64BIT &&
 	       cur->args[0].u.num > INT_MAX &&
 	       (cur->args[1].operand_type == ASM_OPERAND_STACK ||
 	        cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA)))) {
@@ -1191,6 +1252,7 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 		fix_mul,
 		fix_shift,
 		fix_movsx,
+		fix_movzx,
 	};
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		check(codegen_fixup_alloc_stack(arena, f));
@@ -1212,19 +1274,25 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 	case ASM_OPERAND_NONE:
 		return;
 	case ASM_OPERAND_IMMEDIATE:
-		debug("  IMMEDIATE %lld", operand->u.num);
+		if (operand->u.num > LLONG_MAX) {
+			assert(operand->u.num <= ULLONG_MAX);
+			debug("  IMMEDIATE %llu",
+			      (long long unsigned)operand->u.num);
+		} else {
+			debug("  IMMEDIATE %lld", (long long)operand->u.num);
+		}
 		break;
 	case ASM_OPERAND_REGISTER:
 		debug("  REGISTER %s", REGISTER_NAMES[operand->u.reg]);
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
-		debug("  PSEUDO %lld", operand->u.num);
+		debug("  PSEUDO %lld", (long long)operand->u.num);
 		break;
 	case ASM_OPERAND_STACK:
-		debug("  STACK %lld", operand->u.num);
+		debug("  STACK %lld", (long long)operand->u.num);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
-		debug("  LABEL %lld", operand->u.num);
+		debug("  LABEL %lld", (long long)operand->u.num);
 		break;
 	case ASM_OPERAND_CALL_TARGET_FUNCTION:
 		debug("  FUNCTION %.*s",
@@ -1273,7 +1341,8 @@ codegen_debug_print(const struct assembly *cg)
 		debug("  LINKAGE %s",
 		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
 		                                         : "INTERNAL");
-		debug("  INITIAL VALUE %lld", v->u.initial_as_ll);
+		debug("  INITIAL VALUE %lld",
+		      (long long)v->u.initial_as_int128);
 	}
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
