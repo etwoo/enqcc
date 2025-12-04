@@ -732,18 +732,13 @@ round_up_to_multiple_of(long long int n, long long int base)
 	return rounded;
 }
 
-struct stack_offsets {
-	long long int base;
-	long long int usage;
-};
-
 static WARN_UNUSED result_t
 codegen_replace_pseudoregisters_fn(struct asm_function *cg,
                                    long long int range[2],
-                                   struct stack_offsets *offsets,
+                                   long long int *offsets,
                                    bool preflight)
 {
-	long long int offset = CODEGEN_BYTES_PER_VALUE;
+	long long int cursor = 0;
 	for (struct asm_op *op = cg->ops; op != NULL; op = op->next) {
 		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 			struct asm_operand *arg = &op->args[i];
@@ -760,34 +755,26 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			assert(arg->u.num >= range[0]);
 			assert(arg->u.num <= range[1]);
 			assert(range[0] >= 0);
-			const long long int adj = arg->u.num - range[0];
-
-			long long int aligned = 0;
-			switch (arg->word_type) {
-			case ASM_WORD_32BIT:
-				aligned = offset;
-				break;
-			case ASM_WORD_64BIT:
-				aligned = round_up_to_multiple_of(
-					offset,
-					CODEGEN_BYTES_PER_PUSH);
-				break;
-			}
+			const long long int idx = arg->u.num - range[0];
 
 			assert(offsets != NULL);
-			if (offsets[adj].usage == 0) {
-				offsets[adj].base = aligned;
-				offsets[adj].usage =
-					// TODO: why do INT/LONG both need 8
-				        // bytes? 4 bytes isn't enough for INT?
-					CODEGEN_BYTES_PER_VALUE * 2;
-				const long long int previous = offset;
-				offset = offsets[adj].base + offsets[adj].usage;
-				assert(offset > previous);
+			if (offsets[idx] == 0) {
+				switch (arg->word_type) {
+				case ASM_WORD_32BIT:
+					cursor += CODEGEN_BYTES_PER_VALUE;
+					break;
+				case ASM_WORD_64BIT:
+					cursor += CODEGEN_BYTES_PER_VALUE * 2;
+					cursor = round_up_to_multiple_of(
+						cursor,
+						CODEGEN_BYTES_PER_PUSH);
+					break;
+				}
+				offsets[idx] = cursor;
 			}
 
 			arg->operand_type = ASM_OPERAND_STACK;
-			arg->u.num = -1 * offsets[adj].base;
+			arg->u.num = -1 * offsets[idx];
 		}
 	}
 	return RESULT_OK;
@@ -806,18 +793,16 @@ codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
 			continue;
 		}
 
-		const long long int span = range[1] - range[0];
-		assert(span >= 0);
-		assert(span <= 4096); /* if exceeded, refactor datastructures */
+		const long long int size = 1 + range[1] - range[0];
+		assert(size > 0);
+		assert(size <= 4096); /* if exceeded, refactor */
 
-		struct stack_offsets *off =
-			arena_alloc(arena, sizeof(*off) * (span + 1));
+		long long int *off = arena_alloc(arena, sizeof(*off) * size);
 		check(codegen_replace_pseudoregisters_fn(f, range, off, false));
 
 		assert(f->stack_usage == 0);
-		for (long long int i = 0; i < span + 1; ++i) {
-			f->stack_usage =
-				MAX(f->stack_usage, off[i].base + off[i].usage);
+		for (long long int i = 0; i < size; ++i) {
+			f->stack_usage = MAX(f->stack_usage, off[i]);
 		}
 	}
 
