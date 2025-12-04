@@ -187,10 +187,10 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_CAST:
 		check(resolve_expr(arena, a->u.cast.expr, sym));
 		break;
-	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_INT: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		assert(a->expr_type == CTYPE_INT);
 		break;
-	case NODE_CONSTANT_LONG:
+	case NODE_CONSTANT_LONG: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		assert(a->expr_type == CTYPE_LONG);
 		break;
 	}
@@ -549,9 +549,11 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 
 	if (tmp > INT_MAX || suffix_long) {
 		check(parse_alloc(arena, dst, NODE_CONSTANT_LONG));
+		// TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		(**dst).expr_type = CTYPE_LONG;
 	} else {
 		check(parse_alloc(arena, dst, NODE_CONSTANT_INT));
+		// TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		(**dst).expr_type = CTYPE_INT;
 	}
 	(**dst).u.num = tmp;

@@ -997,9 +997,11 @@ ir_expr(Arena *arena,
 		return_value->num = a->u.num;
 		switch (a->node_type) {
 		case NODE_CONSTANT_INT:
+			// TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 			return_value->c89type = CTYPE_INT;
 			break;
 		case NODE_CONSTANT_LONG:
+			// TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 			return_value->c89type = CTYPE_LONG;
 			break;
 		default:

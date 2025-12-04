@@ -21,6 +21,7 @@ map_numeric_type(long long int x, enum ctype dst_type)
 static WARN_UNUSED bool
 is_node_constant(const struct ast *a)
 {
+	// TODO: centralize NODE_CONSTANT_* -> CTYPE_* (or similar here)
 	return a->node_type == NODE_CONSTANT_INT ||
 	       a->node_type == NODE_CONSTANT_LONG;
 }
@@ -326,10 +327,10 @@ make_case(Arena *arena,
 	memset(new_node, 0, sizeof(*new_node));
 
 	switch (control_type) {
-	case CTYPE_INT:
+	case CTYPE_INT: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		new_node->node_type = NODE_CONSTANT_INT;
 		break;
-	case CTYPE_LONG:
+	case CTYPE_LONG: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		new_node->node_type = NODE_CONSTANT_LONG;
 		break;
 	}
@@ -852,10 +853,10 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_CAST:
 		a->expr_type = a->u.cast.to_type;
 		break;
-	case NODE_CONSTANT_INT:
+	case NODE_CONSTANT_INT: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		assert(a->expr_type == CTYPE_INT);
 		break;
-	case NODE_CONSTANT_LONG:
+	case NODE_CONSTANT_LONG: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		assert(a->expr_type == CTYPE_LONG);
 		break;
 	}
