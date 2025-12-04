@@ -85,14 +85,31 @@ codegen_set_operand_immediate_zero(struct asm_operand *dst)
 	dst->u.num = 0;
 }
 
-static unsigned
-codegen_map_ctype(const struct ir_val *src)
+static void
+codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->c89type) {
 	case CTYPE_INT:
-		return ASM_WORD_32BIT;
+		dst->word_type = ASM_WORD_32BIT;
+		break;
 	case CTYPE_LONG:
-		return ASM_WORD_64BIT;
+		dst->word_type = ASM_WORD_64BIT;
+		break;
+	}
+}
+
+static void
+codegen_map_common_ctype(const struct ir_val *src_lhs,
+                         const struct ir_val *src_rhs,
+                         struct asm_operand *dst)
+{
+	switch (get_common_ctype(src_lhs->c89type, src_rhs->c89type)) {
+	case CTYPE_INT:
+		dst->word_type = ASM_WORD_32BIT;
+		break;
+	case CTYPE_LONG:
+		dst->word_type = ASM_WORD_64BIT;
+		break;
 	}
 }
 
@@ -103,7 +120,7 @@ codegen_set_operand_register(const struct ir_val *basis,
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
 	dst->u.reg = reg;
-	dst->word_type = codegen_map_ctype(basis);
+	codegen_map_ctype(basis, dst);
 }
 
 static void
@@ -111,23 +128,23 @@ codegen_set_operand_pseudo(const struct ir_val *basis, struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
 	dst->u.num = basis->num;
-	dst->word_type = codegen_map_ctype(basis);
+	codegen_map_ctype(basis, dst);
 }
 
 static void
 codegen_set_operand_eax(const struct ir_val *basis, struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = codegen_map_ctype(basis);
 	dst->u.reg = ASM_REGISTER_AX;
+	codegen_map_ctype(basis, dst);
 }
 
 static void
 codegen_set_operand_rax_64b(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = ASM_WORD_64BIT;
 	dst->u.reg = ASM_REGISTER_AX;
+	dst->word_type = ASM_WORD_64BIT;
 }
 
 static void
@@ -135,8 +152,8 @@ codegen_set_operand_ecx(const struct asm_operand *basis,
                         struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = basis->word_type;
 	dst->u.reg = ASM_REGISTER_CX;
+	dst->word_type = basis->word_type;
 }
 
 static void
@@ -144,24 +161,24 @@ codegen_set_operand_r10(const struct asm_operand *basis,
                         struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = basis->word_type;
 	dst->u.reg = ASM_REGISTER_R10;
+	dst->word_type = basis->word_type;
 }
 
 static void
 codegen_set_operand_r10_64b(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = ASM_WORD_64BIT;
 	dst->u.reg = ASM_REGISTER_R10;
+	dst->word_type = ASM_WORD_64BIT;
 }
 
 static void
 codegen_set_operand_r10d_32b(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = ASM_WORD_32BIT;
 	dst->u.reg = ASM_REGISTER_R10;
+	dst->word_type = ASM_WORD_32BIT;
 }
 
 static void
@@ -169,16 +186,16 @@ codegen_set_operand_r11(const struct asm_operand *basis,
                         struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = basis->word_type;
 	dst->u.reg = ASM_REGISTER_R11;
+	dst->word_type = basis->word_type;
 }
 
 static void
 codegen_set_operand_r11_64b(struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = ASM_WORD_64BIT;
 	dst->u.reg = ASM_REGISTER_R11;
+	dst->word_type = ASM_WORD_64BIT;
 }
 
 static void
@@ -206,7 +223,7 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		break;
 	}
 
-	dst->word_type = codegen_map_ctype(src);
+	codegen_map_ctype(src, dst);
 }
 
 static void
@@ -478,9 +495,9 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_IDIV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		(**dst).args[0].word_type =
-			MAX(codegen_map_ctype(&src->args[0]),
-		            codegen_map_ctype(&src->args[1]));
+		codegen_map_common_ctype(&src->args[0],
+		                         &src->args[1],
+		                         &(**dst).args[0]);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
@@ -644,7 +661,7 @@ codegen_copy_stack_to_pseudo(Arena *arena,
 	(**dst).opcode = ASM_OP_MOV;
 	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
 	(**dst).args[0].u.num = stack_offset;
-	(**dst).args[0].word_type = codegen_map_ctype(&ir[pos]);
+	codegen_map_ctype(&ir[pos], &(**dst).args[0]);
 	codegen_set_operand_pseudo(&ir[pos], &(**dst).args[1]);
 
 	return RESULT_OK;
