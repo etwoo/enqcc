@@ -542,8 +542,9 @@ ir_switch(Arena *arena,
 		case_cmp->opcode = IR_OP_COMPARE_EQUAL;
 		ir_val_copy(&control_return, &case_cmp->args[0]);
 		ir_val_copy(&case_return, &case_cmp->args[1]);
-		ir_val_tmpvar_gen(ir, CTYPE_INT, &case_cmp->args[2]);
-		/* see CTYPE_INT above ^^^^^^^^ -> effectively cast to bool */
+		ir_val_tmpvar_gen(ir,
+		                  CTYPE_INT, /* effectively cast to bool */
+		                  &case_cmp->args[2]);
 
 		struct ir_op *jumper = NULL;
 		check(ir_alloc_op(arena, &jumper));
