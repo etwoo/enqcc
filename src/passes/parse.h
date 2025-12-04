@@ -23,6 +23,11 @@ struct ast_parameter {
 	enum ctype parameter_type;
 };
 
+// TODO: consolidate NODE_CONSTANT_* -> CTYPE_* to use this macro or similar
+#define FOREACH_AST_NODE_CONSTANT(F)                                           \
+	F(CONSTANT_INT, CTYPE_INT)                                             \
+	F(CONSTANT_LONG, CTYPE_LONG)
+
 #define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
 	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
@@ -72,11 +77,6 @@ struct ast_parameter {
 	F(EXPRESSION_CAST)                                                     \
 	FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(F)
-
-// TODO: consolidate NODE_CONSTANT_* -> CTYPE_* to use this macro or similar
-#define FOREACH_AST_NODE_CONSTANT(F)                                           \
-	F(CONSTANT_INT, CTYPE_INT)                                             \
-	F(CONSTANT_LONG, CTYPE_LONG)
 
 #define FOREACH_AST_NODE(F)                                                    \
 	F(PROGRAM)                                                             \
