@@ -257,7 +257,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	for (size_t i = n_args; i > CODEGEN_REGISTER_ARGS; --i) {
 		size_t pos = i - 1;
 		check(codegen_alloc_op(arena, dst));
-		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT &&
+		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT ||
 		    src->args[pos].c89type == CTYPE_LONG) {
 			(**dst).opcode = ASM_OP_PUSH;
 			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
