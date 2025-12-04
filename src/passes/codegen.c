@@ -1149,8 +1149,7 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 	trampoline->ops[2]->opcode = ASM_OP_MOV;
 	codegen_set_operand_r11_64b(&trampoline->ops[2]->args[0]);
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
-	cur->args[1].word_type = ASM_WORD_64BIT;
-	// TODO: change line above to modify trampoline, not cur->args[1]?
+	assert(cur->args[1].word_type == ASM_WORD_64BIT);
 
 	return true;
 }
