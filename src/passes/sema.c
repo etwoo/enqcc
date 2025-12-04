@@ -21,9 +21,7 @@ map_numeric_type(long long int x, enum ctype dst_type)
 static WARN_UNUSED bool
 is_node_constant(const struct ast *a)
 {
-	// TODO: centralize NODE_CONSTANT_* -> CTYPE_* (or similar here)
-	return a->node_type == NODE_CONSTANT_INT ||
-	       a->node_type == NODE_CONSTANT_LONG;
+	return a->node_type == NODE_CONSTANT;
 }
 
 struct sema_ops {
@@ -136,8 +134,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(a->u.cast.expr, ops, u));
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
-	case NODE_CONSTANT_INT:
-	case NODE_CONSTANT_LONG:
+	case NODE_CONSTANT:
 		break;
 	}
 
@@ -197,8 +194,7 @@ guess(const struct ast *a, enum ctype expected_type)
 {
 	long long int value = 0;
 	switch (a->node_type) {
-	case NODE_CONSTANT_INT:
-	case NODE_CONSTANT_LONG:
+	case NODE_CONSTANT:
 		value = map_numeric_type(a->u.num, expected_type);
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
@@ -326,15 +322,9 @@ make_case(Arena *arena,
 	check_if(new_node == NULL, ERR_SEMA_ALLOC);
 	memset(new_node, 0, sizeof(*new_node));
 
-	switch (control_type) {
-	case CTYPE_INT: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
-		new_node->node_type = NODE_CONSTANT_INT;
-		break;
-	case CTYPE_LONG: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
-		new_node->node_type = NODE_CONSTANT_LONG;
-		break;
-	}
+	new_node->node_type = NODE_CONSTANT;
 	new_node->u.num = new_value;
+	new_node->expr_type = control_type;
 
 	(**dst).u.case_.constant = new_node;
 	return RESULT_OK;
@@ -767,6 +757,7 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		break; /* expr_type has no meaning in this context */
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
+	case NODE_CONSTANT:
 		break; /* resolve_expr() in parse.c handles leaf nodes */
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -852,12 +843,6 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		break;
 	case NODE_EXPRESSION_CAST:
 		a->expr_type = a->u.cast.to_type;
-		break;
-	case NODE_CONSTANT_INT: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
-		assert(a->expr_type == CTYPE_INT);
-		break;
-	case NODE_CONSTANT_LONG: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
-		assert(a->expr_type == CTYPE_LONG);
 		break;
 	}
 	return RESULT_OK;

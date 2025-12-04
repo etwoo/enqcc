@@ -23,25 +23,6 @@ struct ast_parameter {
 	enum ctype parameter_type;
 };
 
-// TODO: consolidate NODE_CONSTANT_* -> CTYPE_* to use this macro or similar
-//
-// TODO: maybe go back to only NODE_CONSTANT, then change u.var to:
-// union {
-//     ...
-//     struct {
-//         enum ctype constant_type;
-//         long long int num;
-//     } constant;
-// } u;
-//
-// ... or just use existing expr_type and u.num fields
-//
-// avoiding different NODE_CONSTANT_* variants avoids this whole mapping issue?
-// avoids sprawl because enum ast_nodetype would no longer be dup-ing enum ctype
-#define FOREACH_AST_NODE_CONSTANT(F)                                           \
-	F(CONSTANT_INT, CTYPE_INT)                                             \
-	F(CONSTANT_LONG, CTYPE_LONG)
-
 #define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
 	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
@@ -107,7 +88,7 @@ struct ast_parameter {
 	F(SWITCH)                                                              \
 	F(CASE)                                                                \
 	F(CASE_DEFAULT)                                                        \
-	FOREACH_AST_NODE_CONSTANT(F)                                           \
+	F(CONSTANT)                                           \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
 #define TO_ENUM(nodet, ...) NODE_##nodet,
@@ -194,7 +175,7 @@ struct ast {
 			struct ast *expr;
 		} cast;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
-		long long int num;     /* NODE_CONSTANT_INT */
+		long long int num;     /* NODE_CONSTANT */
 	} u;
 	enum ctype expr_type;
 };

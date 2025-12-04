@@ -990,24 +990,11 @@ ir_expr(Arena *arena,
         struct ir_val *return_value)
 {
 	switch (a->node_type) {
-	case NODE_CONSTANT_INT:
-	case NODE_CONSTANT_LONG:
+	case NODE_CONSTANT:
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_CONSTANT_INT;
 		return_value->num = a->u.num;
-		switch (a->node_type) {
-		case NODE_CONSTANT_INT:
-			// TODO: centralize NODE_CONSTANT_* -> CTYPE_*
-			return_value->c89type = CTYPE_INT;
-			break;
-		case NODE_CONSTANT_LONG:
-			// TODO: centralize NODE_CONSTANT_* -> CTYPE_*
-			return_value->c89type = CTYPE_LONG;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
+		return_value->c89type = a->expr_type;
 		assert(*dst == NULL); /* does not create new dst op */
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:

@@ -124,6 +124,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 	case NODE_EXPRESSION_NULL:
+	case NODE_CONSTANT:
 		break; /* no resolution work to do */
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -186,12 +187,6 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		break;
 	case NODE_EXPRESSION_CAST:
 		check(resolve_expr(arena, a->u.cast.expr, sym));
-		break;
-	case NODE_CONSTANT_INT: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
-		assert(a->expr_type == CTYPE_INT);
-		break;
-	case NODE_CONSTANT_LONG: // TODO: centralize NODE_CONSTANT_* -> CTYPE_*
-		assert(a->expr_type == CTYPE_LONG);
 		break;
 	}
 
@@ -547,13 +542,10 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 		break;
 	}
 
+	check(parse_alloc(arena, dst, NODE_CONSTANT));
 	if (tmp > INT_MAX || suffix_long) {
-		check(parse_alloc(arena, dst, NODE_CONSTANT_LONG));
-		// TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		(**dst).expr_type = CTYPE_LONG;
 	} else {
-		check(parse_alloc(arena, dst, NODE_CONSTANT_INT));
-		// TODO: centralize NODE_CONSTANT_* -> CTYPE_*
 		(**dst).expr_type = CTYPE_INT;
 	}
 	(**dst).u.num = tmp;
@@ -821,8 +813,7 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_EXPRESSION_CAST:
-	case NODE_CONSTANT_INT:
-	case NODE_CONSTANT_LONG:
+	case NODE_CONSTANT:
 		assert(0); /* logic error in caller */
 		break;
 	}
@@ -1668,10 +1659,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 	      (int)indent,
 	      "",
 	      NODETYPE_NAMES[a->node_type],
-	      a->node_type >= NODE_CONSTANT_INT ? " [" : "",
-	      a->node_type >= NODE_CONSTANT_INT ? ctype_to_str(a->expr_type)
+	      a->node_type >= NODE_CONSTANT ? " [" : "",
+	      a->node_type >= NODE_CONSTANT ? ctype_to_str(a->expr_type)
 	                                        : "",
-	      a->node_type >= NODE_CONSTANT_INT ? "]" : "");
+	      a->node_type >= NODE_CONSTANT ? "]" : "");
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
@@ -1896,8 +1887,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      ctype_to_str(a->u.cast.to_type));
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
-	case NODE_CONSTANT_INT:
-	case NODE_CONSTANT_LONG:
+	case NODE_CONSTANT:
 		debug("%*sVALUE %lld", (int)indent + 1, "", a->u.num);
 		break;
 	}
