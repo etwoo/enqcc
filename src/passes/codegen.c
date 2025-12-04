@@ -217,7 +217,6 @@ codegen_alloc_modify_rsp(Arena *arena,
 	(**dst).opcode = add ? ASM_OP_BINARY_ADD : ASM_OP_BINARY_SUBTRACT;
 	(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
 	(**dst).args[0].u.num = n;
-	(**dst).args[0].word_type = ASM_WORD_64BIT;
 	(**dst).args[1] = OPERAND_RSP_64BIT;
 	return RESULT_OK;
 }
