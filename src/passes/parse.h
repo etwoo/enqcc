@@ -24,6 +24,20 @@ struct ast_parameter {
 };
 
 // TODO: consolidate NODE_CONSTANT_* -> CTYPE_* to use this macro or similar
+//
+// TODO: maybe go back to only NODE_CONSTANT, then change u.var to:
+// union {
+//     ...
+//     struct {
+//         enum ctype constant_type;
+//         long long int num;
+//     } constant;
+// } u;
+//
+// ... or just use existing expr_type and u.num fields
+//
+// avoiding different NODE_CONSTANT_* variants avoids this whole mapping issue?
+// avoids sprawl because enum ast_nodetype would no longer be dup-ing enum ctype
 #define FOREACH_AST_NODE_CONSTANT(F)                                           \
 	F(CONSTANT_INT, CTYPE_INT)                                             \
 	F(CONSTANT_LONG, CTYPE_LONG)
