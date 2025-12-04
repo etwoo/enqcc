@@ -73,6 +73,11 @@ struct ast_parameter {
 	FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	FOREACH_AST_NODE_EXPRESSION_INFIX_OP(F)
 
+// TODO: consolidate NODE_CONSTANT_* -> CTYPE_* to use this macro or similar
+#define FOREACH_AST_NODE_CONSTANT(F)                                           \
+	F(CONSTANT_INT, CTYPE_INT)                                             \
+	F(CONSTANT_LONG, CTYPE_LONG)
+
 #define FOREACH_AST_NODE(F)                                                    \
 	F(PROGRAM)                                                             \
 	F(FUNCTION)                                                            \
@@ -88,8 +93,7 @@ struct ast_parameter {
 	F(SWITCH)                                                              \
 	F(CASE)                                                                \
 	F(CASE_DEFAULT)                                                        \
-	F(CONSTANT_INT)                                                        \
-	F(CONSTANT_LONG)                                                       \
+	FOREACH_AST_NODE_CONSTANT(F)                                           \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
 #define TO_ENUM(nodet, ...) NODE_##nodet,
