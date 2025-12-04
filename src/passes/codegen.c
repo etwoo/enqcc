@@ -85,11 +85,22 @@ codegen_set_operand_immediate_zero(struct asm_operand *dst)
 	dst->u.num = 0;
 }
 
+static unsigned
+codegen_map_ctype(const struct ir_val *src)
+{
+	switch (src->c89type) {
+	case CTYPE_INT:
+		return ASM_WORD_32BIT;
+	case CTYPE_LONG:
+		return ASM_WORD_64BIT;
+	}
+}
+
 static void
-codegen_set_operand_eax(struct asm_operand *dst, unsigned word_type)
+codegen_set_operand_eax(const struct ir_val *basis, struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_REGISTER;
-	dst->word_type = word_type;
+	dst->word_type = codegen_map_ctype(basis);
 	dst->u.reg = ASM_REGISTER_AX;
 }
 
@@ -115,19 +126,6 @@ codegen_set_operand_r11(struct asm_operand *dst, unsigned word_type)
 	dst->operand_type = ASM_OPERAND_REGISTER;
 	dst->word_type = word_type;
 	dst->u.reg = ASM_REGISTER_R11;
-}
-
-// TODO: make it hard to forget to propagate ctype value between different
-// types, structs; this helper doesn't seem good enough, easy to forget it
-static unsigned
-codegen_map_ctype(const struct ir_val *src)
-{
-	switch (src->c89type) {
-	case CTYPE_INT:
-		return ASM_WORD_32BIT;
-	case CTYPE_LONG:
-		return ASM_WORD_64BIT;
-	}
 }
 
 static void
@@ -228,7 +226,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	for (size_t i = n_args; i > CODEGEN_REGISTER_ARGS; --i) {
 		size_t pos = i - 1;
 		check(codegen_alloc_op(arena, dst));
-		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT ||
+		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT || // TODO:&&?
 		    src->args[pos].c89type == CTYPE_LONG) {
 			(**dst).opcode = ASM_OP_PUSH;
 			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
@@ -239,13 +237,13 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			 */
 			(**dst).opcode = ASM_OP_MOV;
 			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
-			codegen_set_operand_eax(&(**dst).args[1],
-			                        ASM_WORD_32BIT);
+			codegen_set_operand_eax(&src->args[pos],
+			                        &(**dst).args[1]);
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_PUSH;
-			codegen_set_operand_eax(&(**dst).args[0],
-			                        ASM_WORD_64BIT);
+			codegen_set_operand_eax(&src->args[pos], &(**dst).args[0]);
+			(**dst).args[0].word_type = ASM_WORD_64BIT;
 		}
 		dst = &(**dst).next;
 		++stack_args;
@@ -266,8 +264,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
-	codegen_set_operand_eax(&(**dst).args[0],
-	                        codegen_map_ctype(&src->args[n_args]));
+	codegen_set_operand_eax(&src->args[n_args], &(**dst).args[0]);
 	codegen_map_operand(&src->args[n_args], &(**dst).args[1]);
 	return RESULT_OK;
 }
@@ -305,8 +302,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&(**dst).args[1],
-		                        codegen_map_ctype(&src->args[0]));
+		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
@@ -415,8 +411,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BINARY_REMAINDER:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&(**dst).args[1],
-		                        codegen_map_ctype(&src->args[0]));
+		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		switch (src->args[0].c89type) {
@@ -439,9 +434,8 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_MOV;
 		switch (src->opcode) {
 		case IR_OP_BINARY_DIVIDE:
-			codegen_set_operand_eax(
-				&(**dst).args[0],
-				codegen_map_ctype(&src->args[0]));
+			codegen_set_operand_eax(&src->args[0],
+			                        &(**dst).args[0]);
 			break;
 		case IR_OP_BINARY_REMAINDER:
 			(**dst).args[0].operand_type = ASM_OPERAND_REGISTER;
