@@ -1660,8 +1660,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 	      "",
 	      NODETYPE_NAMES[a->node_type],
 	      a->node_type >= NODE_CONSTANT ? " [" : "",
-	      a->node_type >= NODE_CONSTANT ? ctype_to_str(a->expr_type)
-	                                        : "",
+	      a->node_type >= NODE_CONSTANT ? ctype_to_str(a->expr_type) : "",
 	      a->node_type >= NODE_CONSTANT ? "]" : "");
 
 	switch (a->node_type) {

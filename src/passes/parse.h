@@ -88,7 +88,7 @@ struct ast_parameter {
 	F(SWITCH)                                                              \
 	F(CASE)                                                                \
 	F(CASE_DEFAULT)                                                        \
-	F(CONSTANT)                                           \
+	F(CONSTANT)                                                            \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
 #define TO_ENUM(nodet, ...) NODE_##nodet,
