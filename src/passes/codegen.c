@@ -67,21 +67,6 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 	}
 }
 
-static void
-codegen_map_common_ctype(const struct ir_val *src_lhs,
-                         const struct ir_val *src_rhs,
-                         struct asm_operand *dst)
-{
-	switch (get_common_ctype(src_lhs->c89type, src_rhs->c89type)) {
-	case CTYPE_INT:
-		dst->word_type = ASM_WORD_32BIT;
-		break;
-	case CTYPE_LONG:
-		dst->word_type = ASM_WORD_64BIT;
-		break;
-	}
-}
-
 static WARN_UNUSED long long int
 codegen_get_alignment(const struct ir_variable *ir)
 {
@@ -454,10 +439,12 @@ codegen_statement_one(Arena *arena,
 		break;
 	case IR_OP_BINARY_DIVIDE:
 	case IR_OP_BINARY_REMAINDER:
+		/* copy dividend to eax */
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
+		/* sign-extend dividend from eax into edx */
 		check(codegen_alloc_op(arena, dst));
 		switch (src->args[0].c89type) {
 		case CTYPE_INT:
@@ -468,13 +455,13 @@ codegen_statement_one(Arena *arena,
 			break;
 		}
 		dst = &(**dst).next;
+		/* prepare divisor and idiv op */
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_IDIV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		codegen_map_common_ctype(&src->args[0],
-		                         &src->args[1],
-		                         &(**dst).args[0]);
+		assert(src->args[0].c89type == src->args[1].c89type);
 		dst = &(**dst).next;
+		/* copy result from eax (quotient) or edx (remainder) */
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		switch (src->opcode) {
