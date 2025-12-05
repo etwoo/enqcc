@@ -1177,10 +1177,10 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 		assert(0); /* logic error in caller */
 		break;
 	case INITIAL_VALUE_TENTATIVE:
-		(**dst).u.initial_as_ll = 0;
+		(**dst).u.initial_as_int128 = 0;
 		break;
 	case INITIAL_VALUE_CONSTANT:
-		(**dst).u.initial_as_ll = s->linkage.as_constant;
+		(**dst).u.initial_as_int128 = s->linkage.as_constant;
 		break;
 	}
 
@@ -1288,13 +1288,13 @@ ir_debug_print_one(const struct ir_op *op)
 			       "op lacks required operand");
 			continue;
 		case IR_VAL_CONSTANT_INT:
-			debug("  CONSTANT %lld", op->args[i].num);
+			debug("  CONSTANT %lld", (long long)op->args[i].num);
 			break;
 		case IR_VAL_TEMPORARY_VARIABLE:
-			debug("  VARIABLE tmp.%lld", op->args[i].num);
+			debug("  VAR tmp.%lld", (long long)op->args[i].num);
 			break;
 		case IR_VAL_JUMP_TARGET_LABEL:
-			debug("  LABEL label_%lld", op->args[i].num);
+			debug("  LABEL label_%lld", (long long)op->args[i].num);
 			break;
 		case IR_VAL_VARIABLE_DATA:
 			debug("  DATA %.*s",
@@ -1347,7 +1347,8 @@ ir_debug_print(const struct intermediate *ir)
 			debug("  VARIABLE LINKAGE EXTERNAL");
 			break;
 		}
-		debug("  VARIABLE INIT %lld", v->u.initial_as_ll);
+		debug("  VARIABLE INIT %lld",
+		      (long long)v->u.initial_as_int128);
 	}
 
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {

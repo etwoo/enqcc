@@ -1,6 +1,7 @@
 #ifndef COMPILER_PASSES_CODEGEN_H
 #define COMPILER_PASSES_CODEGEN_H
 
+#include "passes/int128_t.h"
 #include "sys/string_view.h"
 
 #define FOREACH_CALL_REGISTER(F)                                               \
@@ -38,7 +39,7 @@ struct asm_operand {
 		ASM_WORD_64BIT, /* QWORD */
 	} word_type;
 	union {
-		long long int num;
+		int128_t num;
 		enum asm_register reg;
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
@@ -110,7 +111,7 @@ struct asm_variable {
 	long long int alignment;
 	enum asm_linkage linkage;
 	struct {
-		long long int initial_as_ll;
+		int128_t initial_as_int128;
 	} u;
 	struct asm_variable *next;
 };

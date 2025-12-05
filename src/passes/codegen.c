@@ -688,7 +688,7 @@ codegen_variable(Arena *arena,
 	(**dst).identifier = ir->identifier;
 	(**dst).alignment = codegen_get_alignment(ir);
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
-	(**dst).u.initial_as_ll = ir->u.initial_as_ll;
+	(**dst).u.initial_as_int128 = ir->u.initial_as_int128;
 	return RESULT_OK;
 }
 
@@ -1273,7 +1273,8 @@ codegen_debug_print(const struct assembly *cg)
 		debug("  LINKAGE %s",
 		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
 		                                         : "INTERNAL");
-		debug("  INITIAL VALUE %lld", v->u.initial_as_ll);
+		debug("  INITIAL VALUE %lld",
+		      (long long)v->u.initial_as_int128);
 	}
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {

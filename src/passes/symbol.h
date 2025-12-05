@@ -2,6 +2,7 @@
 #define COMPILER_SYMBOLS_H
 
 #include "arena.h"
+#include "passes/int128_t.h"
 #include "result.h"
 #include "sys/compiler_features.h"
 #include "sys/string_view.h"
@@ -37,8 +38,6 @@ enum symbol_linkage {
 bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
 bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
 bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
-
-typedef __int128_t int128_t;
 
 struct symbol_linkage_state {
 	enum symbol_linkage linkage;

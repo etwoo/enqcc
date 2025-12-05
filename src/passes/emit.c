@@ -83,7 +83,12 @@ emit_asm_operand(const struct asm_operand *o,
 		assert(0); /* logic error in caller */
 		break;
 	case ASM_OPERAND_IMMEDIATE:
-		dprintf(fd, "$%lld", o->u.num);
+		if (o->u.num > LLONG_MAX) {
+			assert(o->u.num <= ULLONG_MAX);
+			dprintf(fd, "$%llu", (long long unsigned)o->u.num);
+		} else {
+			dprintf(fd, "$%lld", (long long)o->u.num);
+		}
 		break;
 	case ASM_OPERAND_REGISTER:
 		dprintf(fd, "%s", REGISTER_AS_STR[o->u.reg][ralias]);
@@ -94,16 +99,26 @@ emit_asm_operand(const struct asm_operand *o,
 	case ASM_OPERAND_STACK:
 		if (o->u.num == 0) {
 			dprintf(fd, "(%s)", STR_REG_RBP);
+		} else if (o->u.num > LLONG_MAX) {
+			assert(o->u.num <= ULLONG_MAX);
+			dprintf(fd,
+			        "%llu(%s)",
+			        (long long unsigned)o->u.num,
+			        STR_REG_RBP);
 		} else {
-			dprintf(fd, "%lld(%s)", o->u.num, STR_REG_RBP);
+			dprintf(fd,
+			        "%lld(%s)",
+			        (long long)o->u.num,
+			        STR_REG_RBP);
 		}
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
+		assert(o->u.num <= LLONG_MAX);
 		dprintf(fd,
 		        "%s%s%lld",
 		        label_prefix,
 		        CUSTOM_LABEL_ID,
-		        o->u.num);
+		        (long long)o->u.num);
 		break;
 	case ASM_OPERAND_CALL_TARGET_FUNCTION:
 		dprintf(fd,
@@ -323,11 +338,12 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_LABEL:
 		assert(op->args[0].operand_type ==
 		       ASM_OPERAND_JUMP_TARGET_LABEL);
+		assert(op->args[0].u.num <= LLONG_MAX);
 		dprintf(fd,
 		        "%s%s%lld:\n",
 		        label_prefix,
 		        CUSTOM_LABEL_ID,
-		        op->args[0].u.num);
+		        (long long)op->args[0].u.num);
 		break;
 	case ASM_OP_PUSH:
 		print_opcode = STR_OP_PUSH_QUAD;
@@ -410,13 +426,23 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	if (var->u.initial_as_ll != 0) {
+	if (var->u.initial_as_int128 != 0) {
 		dprintf(fd, "\t.data\n\t.balign %lld\n", var->alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd,
-		        "\t.%s %lld\n",
-		        var->alignment == 4 ? "long" : "quad",
-		        var->u.initial_as_ll);
+		if (var->alignment == 4) {
+			dprintf(fd, "\t.long ");
+		} else {
+			dprintf(fd, "\t.quad ");
+		}
+		if (var->u.initial_as_int128 > LLONG_MAX) {
+			dprintf(fd,
+				"%llu\n",
+				(long long unsigned)var->u.initial_as_int128);
+		} else {
+			dprintf(fd,
+				"%lld\n",
+				(long long)var->u.initial_as_int128);
+		}
 	} else {
 		dprintf(fd, "\t.bss\n\t.balign %lld\n", var->alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);

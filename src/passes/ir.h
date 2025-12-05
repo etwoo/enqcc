@@ -14,8 +14,7 @@ struct ir_val {
 		IR_VAL_JUMP_TARGET_LABEL,
 		IR_VAL_VARIABLE_DATA,
 	} subtype;
-	// TODO: change num to long long unsigned? ditto codegen, except stack?
-	long long int num;          /* numeric value, variable ID, etc */
+	int128_t num;               /* numeric value, variable ID, etc */
 	struct string_view varname; /* symbol name, if linkage */
 	enum ctype c89type;
 };
@@ -81,7 +80,7 @@ struct ir_variable {
 	enum ctype c89type; /* determines alignment */
 	enum ir_linkage linkage;
 	struct {
-		long long int initial_as_ll;
+		int128_t initial_as_int128;
 	} u;
 	struct ir_variable *next;
 };
