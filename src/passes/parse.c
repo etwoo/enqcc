@@ -1217,9 +1217,9 @@ parse_loop_do_while_suffix(Arena *arena,
 }
 
 enum {
-	UNSET_LOOP_ID = INT_MAX - 1,
-	UNSET_LABEL_ID = INT_MAX - 2,
-	UNSET_SWITCH_ID = INT_MAX - 3,
+	UNSET_LOOP_ID = -1,
+	UNSET_LABEL_ID = -2,
+	UNSET_SWITCH_ID = -3,
 };
 
 static WARN_UNUSED result_t
