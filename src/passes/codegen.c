@@ -59,9 +59,11 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->c89type) {
 	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
 		break;
 	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
 		dst->word_type = ASM_WORD_64BIT;
 		break;
 	}
@@ -73,9 +75,11 @@ codegen_get_alignment(const struct ir_variable *ir)
 	long long int alignment = 0;
 	switch (ir->c89type) {
 	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
 		alignment = 4;
 		break;
 	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
 		alignment = 8;
 		break;
 	}
@@ -448,9 +452,11 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		switch (src->args[0].c89type) {
 		case CTYPE_INT:
+		case CTYPE_UNSIGNED_INT:
 			(**dst).opcode = ASM_OP_CDQ;
 			break;
 		case CTYPE_LONG:
+		case CTYPE_UNSIGNED_LONG:
 			(**dst).opcode = ASM_OP_CQO;
 			break;
 		}
@@ -1212,19 +1218,25 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 	case ASM_OPERAND_NONE:
 		return;
 	case ASM_OPERAND_IMMEDIATE:
-		debug("  IMMEDIATE %lld", operand->u.num);
+		if (operand->u.num > LLONG_MAX) {
+			assert(operand->u.num <= ULLONG_MAX);
+			debug("  IMMEDIATE %llu",
+			      (long long unsigned)operand->u.num);
+		} else {
+			debug("  IMMEDIATE %lld", (long long)operand->u.num);
+		}
 		break;
 	case ASM_OPERAND_REGISTER:
 		debug("  REGISTER %s", REGISTER_NAMES[operand->u.reg]);
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
-		debug("  PSEUDO %lld", operand->u.num);
+		debug("  PSEUDO %lld", (long long)operand->u.num);
 		break;
 	case ASM_OPERAND_STACK:
-		debug("  STACK %lld", operand->u.num);
+		debug("  STACK %lld", (long long)operand->u.num);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
-		debug("  LABEL %lld", operand->u.num);
+		debug("  LABEL %lld", (long long)operand->u.num);
 		break;
 	case ASM_OPERAND_CALL_TARGET_FUNCTION:
 		debug("  FUNCTION %.*s",

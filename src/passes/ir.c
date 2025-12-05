@@ -643,9 +643,11 @@ ir_unary_op(Arena *arena,
 		}
 		switch (a->u.cast.to_type) {
 		case CTYPE_INT:
+		case CTYPE_UNSIGNED_INT:
 			unary->opcode = IR_OP_CTYPE_TRUNCATE;
 			break;
 		case CTYPE_LONG:
+		case CTYPE_UNSIGNED_LONG:
 			unary->opcode = IR_OP_CTYPE_SIGN_EXTEND;
 			break;
 		}
@@ -1303,14 +1305,7 @@ ir_debug_print_one(const struct ir_op *op)
 			break;
 		}
 
-		switch (op->args[i].c89type) {
-		case CTYPE_INT:
-			debug("    TYPE INT");
-			break;
-		case CTYPE_LONG:
-			debug("    TYPE LONG");
-			break;
-		}
+		debug("    TYPE %s", ctype_to_str(op->args[i].c89type));
 	}
 }
 
@@ -1331,14 +1326,7 @@ ir_debug_print(const struct intermediate *ir)
 	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		switch (v->c89type) {
-		case CTYPE_INT:
-			debug("  VARIABLE TYPE INT");
-			break;
-		case CTYPE_LONG:
-			debug("  VARIABLE TYPE LONG");
-			break;
-		}
+		debug("  VARIABLE TYPE %s", ctype_to_str(v->c89type));
 		switch (v->linkage) {
 		case IR_LINKAGE_INTERNAL:
 			debug("  VARIABLE LINKAGE INTERNAL");
