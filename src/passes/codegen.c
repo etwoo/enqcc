@@ -1191,7 +1191,8 @@ fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 	        cur->opcode == ASM_OP_COMPARE || /* cmpq  */
 	        cur->opcode == ASM_OP_PUSH) &&   /* pushq */
 	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
-	       cur->args[0].word_type == ASM_WORD_64BIT &&
+	       // TODO: why does removing below fix unsigned_args_client.c?
+	       // cur->args[0].word_type == ASM_WORD_64BIT && // TODO?
 	       cur->args[0].u.num > INT_MAX) ||
 	      (cur->opcode == ASM_OP_MOV &&
 	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&

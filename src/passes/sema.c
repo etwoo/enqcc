@@ -870,6 +870,11 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              state->expected_return_type,
 		              &a->u.op_unary.operand));
 		break;
+	case NODE_DECLARATION:
+		check(cast_if(arena,
+		              a->u.declare.var_type,
+		              &a->u.declare.init));
+		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
