@@ -26,10 +26,10 @@ ctype_to_size_bytes(enum ctype c)
 	long long int b = 0;
 	switch (c) {
 	case CTYPE_INT:
-	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_INT:
 		b = 4;
 		break;
-	case CTYPE_UNSIGNED_INT:
+	case CTYPE_LONG:
 	case CTYPE_UNSIGNED_LONG:
 		b = 8;
 		break;
