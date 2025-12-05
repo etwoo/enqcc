@@ -60,8 +60,10 @@ struct asm_operand {
 	F(BITWISE_AND)                                                         \
 	F(BITWISE_OR)                                                          \
 	F(BITWISE_XOR)                                                         \
-	F(BITWISE_SHIFT_LEFT)                                                  \
-	F(BITWISE_SHIFT_RIGHT)                                                 \
+	F(BITWISE_SIGNED_SHIFT_LEFT)                                           \
+	F(BITWISE_SIGNED_SHIFT_RIGHT)                                          \
+	F(BITWISE_UNSIGNED_SHIFT_LEFT)                                         \
+	F(BITWISE_UNSIGNED_SHIFT_RIGHT)                                        \
 	F(COMPARE)                                                             \
 	F(IDIV)                                                                \
 	F(DIV)                                                                 \
@@ -84,10 +86,10 @@ struct asm_operand {
 	F(SET_IF_GTE)                                                          \
 	F(SET_IF_LT)                                                           \
 	F(SET_IF_LTE)                                                          \
-	F(SET_IF_A)                                                           \
-	F(SET_IF_AE)                                                          \
-	F(SET_IF_B)                                                           \
-	F(SET_IF_BE)                                                          \
+	F(SET_IF_A)                                                            \
+	F(SET_IF_AE)                                                           \
+	F(SET_IF_B)                                                            \
+	F(SET_IF_BE)                                                           \
 	F(LABEL)                                                               \
 	F(PUSH)                                                                \
 	F(CALL)                                                                \

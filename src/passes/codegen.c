@@ -442,10 +442,14 @@ codegen_statement_one(Arena *arena,
 			(**dst).opcode = ASM_OP_BITWISE_XOR;
 			break;
 		case IR_OP_BITWISE_SHIFT_LEFT:
-			(**dst).opcode = ASM_OP_BITWISE_SHIFT_LEFT;
+			(**dst).opcode =
+				a_signed ? ASM_OP_BITWISE_SIGNED_SHIFT_LEFT
+					 : ASM_OP_BITWISE_UNSIGNED_SHIFT_LEFT;
 			break;
 		case IR_OP_BITWISE_SHIFT_RIGHT:
-			(**dst).opcode = ASM_OP_BITWISE_SHIFT_RIGHT;
+			(**dst).opcode =
+				a_signed ? ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT
+					 : ASM_OP_BITWISE_UNSIGNED_SHIFT_RIGHT;
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -1087,8 +1091,10 @@ fix_mul(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED bool
 fix_shift(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!((cur->opcode == ASM_OP_BITWISE_SHIFT_LEFT ||
-	       cur->opcode == ASM_OP_BITWISE_SHIFT_RIGHT) &&
+	if (!((cur->opcode == ASM_OP_BITWISE_SIGNED_SHIFT_LEFT ||
+	       cur->opcode == ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT ||
+	       cur->opcode == ASM_OP_BITWISE_UNSIGNED_SHIFT_LEFT ||
+	       cur->opcode == ASM_OP_BITWISE_UNSIGNED_SHIFT_RIGHT) &&
 	      cur->args[0].operand_type != ASM_OPERAND_IMMEDIATE)) {
 		return false;
 	}

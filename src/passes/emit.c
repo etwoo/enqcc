@@ -253,12 +253,20 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_BITWISE_XOR:
 		print_opcode = "xor";
 		break;
-	case ASM_OP_BITWISE_SHIFT_LEFT:
+	case ASM_OP_BITWISE_SIGNED_SHIFT_LEFT:
 		print_opcode = "sal";
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
 		break;
-	case ASM_OP_BITWISE_SHIFT_RIGHT:
+	case ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT:
 		print_opcode = "sar";
+		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
+		break;
+	case ASM_OP_BITWISE_UNSIGNED_SHIFT_LEFT:
+		print_opcode = "shl";
+		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
+		break;
+	case ASM_OP_BITWISE_UNSIGNED_SHIFT_RIGHT:
+		print_opcode = "shr";
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
 		break;
 	case ASM_OP_COMPARE:
@@ -473,12 +481,12 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		}
 		if (var->u.initial_as_int128 > LLONG_MAX) {
 			dprintf(fd,
-				"%llu\n",
-				(long long unsigned)var->u.initial_as_int128);
+			        "%llu\n",
+			        (long long unsigned)var->u.initial_as_int128);
 		} else {
 			dprintf(fd,
-				"%lld\n",
-				(long long)var->u.initial_as_int128);
+			        "%lld\n",
+			        (long long)var->u.initial_as_int128);
 		}
 	} else {
 		dprintf(fd, "\t.bss\n\t.balign %lld\n", var->alignment);
