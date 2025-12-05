@@ -138,6 +138,11 @@ static const struct asm_operand OPERAND_R11_64BIT = {
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_R11,
 };
+static const struct asm_operand OPERAND_R11_32BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_32BIT,
+	.u.reg = ASM_REGISTER_R11,
+};
 
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
@@ -1008,7 +1013,7 @@ fix_cmp(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED bool
 fix_div(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!(cur->opcode == ASM_OP_IDIV &&
+	if (!((cur->opcode == ASM_OP_IDIV || cur->opcode == ASM_OP_DIV) &&
 	      cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE)) {
 		return false;
 	}
@@ -1134,6 +1139,32 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 	return true;
 }
 
+static WARN_UNUSED bool
+fix_movzx(struct asm_op *cur, struct fix *trampoline)
+{
+	if (cur->opcode != ASM_OP_MOV_WITH_ZERO_EXTENSION) {
+		return false;
+	}
+
+	if (cur->args[1].operand_type == ASM_OPERAND_REGISTER) {
+		trampoline->sz = 1;
+		memcpy(trampoline->ops[0], cur, sizeof(*cur));
+		trampoline->ops[0]->next = NULL;
+		trampoline->ops[0]->opcode = ASM_OP_MOV;
+	} else {
+		trampoline->sz = 2;
+		for (size_t i = 0; i < trampoline->sz; ++i) {
+			memcpy(trampoline->ops[i], cur, sizeof(*cur));
+			trampoline->ops[i]->next = NULL;
+		}
+		trampoline->ops[0]->opcode = ASM_OP_MOV;
+		trampoline->ops[0]->args[1] = OPERAND_R11_32BIT;
+		trampoline->ops[1]->args[0] = OPERAND_R11_64BIT;
+	}
+
+	return true;
+}
+
 /*
  * An immediate (constant) value that does not fit into an int needs to bounce
  * through a register before an arithmetic op can use it as an operand.
@@ -1206,6 +1237,7 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 		fix_mul,
 		fix_shift,
 		fix_movsx,
+		fix_movzx,
 	};
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		check(codegen_fixup_alloc_stack(arena, f));
