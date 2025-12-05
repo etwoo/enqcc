@@ -123,6 +123,11 @@ static const struct asm_operand OPERAND_RAX_64BIT = {
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_AX,
 };
+static const struct asm_operand OPERAND_RDX_64BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_DX,
+};
 static const struct asm_operand OPERAND_R10_64BIT = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
@@ -469,7 +474,7 @@ codegen_statement_one(Arena *arena,
 		case CTYPE_UNSIGNED_LONG:
 			(**dst).opcode = ASM_OP_MOV;
 			codegen_set_operand_immediate_zero(&(**dst).args[0]);
-			(**dst).args[1] = OPERAND_RAX_64BIT;
+			(**dst).args[1] = OPERAND_RDX_64BIT;
 			break;
 		}
 		dst = &(**dst).next;
