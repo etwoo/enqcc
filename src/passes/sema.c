@@ -35,10 +35,9 @@ map_numeric_type(const struct ast *init, enum ctype dst_type)
 	assert(a != NULL);
 
 	int128_t x = a->u.num;
-	// TODO: make this faster using modulo?
-	while ((dst_type == CTYPE_INT && x > INT_MAX) ||
-	       (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
-		x -= LONG_TO_INT_TRUNCATOR;
+	if ((dst_type == CTYPE_INT && x > INT_MAX) ||
+	    (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
+		x %= LONG_TO_INT_TRUNCATOR;
 	}
 
 	return x;
