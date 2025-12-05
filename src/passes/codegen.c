@@ -325,7 +325,9 @@ codegen_statement_one(Arena *arena,
 {
 	assert(*dst == NULL);
 	check(codegen_alloc_op(arena, dst));
-	const bool a_signed = src->args[0].c89type; /* guess signedness early */
+
+	/* guess overall op signedness ahead of time */
+	const bool a_signed = ctype_is_signed(src->args[0].c89type);
 
 	switch (src->opcode) {
 	case IR_OP_RET:
