@@ -9,10 +9,11 @@
 
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
-static long long int
-map_numeric_type(long long int x, enum ctype dst_type)
+static int128_t
+map_numeric_type(int128_t x, enum ctype dst_type)
 {
-	while (dst_type == CTYPE_INT && x > INT_MAX) {
+	while ((dst_type == CTYPE_INT && x > INT_MAX) ||
+	       (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
 		x -= LONG_TO_INT_TRUNCATOR;
 	}
 	return x;

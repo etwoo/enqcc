@@ -11,10 +11,11 @@
 
 enum ctype {
 	CTYPE_INT,
-	CTYPE_LONG,
 	CTYPE_UNSIGNED_INT,
+	CTYPE_LONG,
 	CTYPE_UNSIGNED_LONG,
 };
+/* note: order of enum values above determines integer conversion rank */
 
 const char *ctype_to_str(enum ctype c) WARN_UNUSED;
 enum ctype get_common_ctype(enum ctype lhs, enum ctype rhs) WARN_UNUSED;
