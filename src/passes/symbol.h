@@ -11,6 +11,8 @@
 enum ctype {
 	CTYPE_INT,
 	CTYPE_LONG,
+	CTYPE_UNSIGNED_INT,
+	CTYPE_UNSIGNED_LONG,
 };
 
 const char *ctype_to_str(enum ctype c) WARN_UNUSED;
