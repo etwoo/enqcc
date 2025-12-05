@@ -1026,7 +1026,7 @@ fix_div(struct asm_op *cur, struct fix *trampoline)
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
 	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[0]->args[1]);
 
-	trampoline->ops[1]->opcode = ASM_OP_IDIV;
+	trampoline->ops[1]->opcode = cur->opcode;
 	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[1]->args[0]);
 
 	return true;
