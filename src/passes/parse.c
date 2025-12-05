@@ -605,6 +605,37 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+parse_needs_weird_hack_for_cast_lhs_precedence(const struct ast *a)
+{
+	assert(a->node_type == NODE_EXPRESSION_CAST);
+	switch (a->u.cast.expr->node_type) {
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
 static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
@@ -646,9 +677,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		token_consume(tok);
 		check(parse_expr(arena, tok, &(**dst).u.cast.expr, 0));
 		assert((**dst).u.cast.expr != NULL);
-		/* special-case hack for precedence of cast + assign */
-		if ((**dst).u.cast.expr->node_type ==
-		    NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
+		if (parse_needs_weird_hack_for_cast_lhs_precedence(*dst)) {
 			struct ast *cast_original = *dst;
 			struct ast *assign_original = (**dst).u.cast.expr;
 			struct ast *lhs_original =
