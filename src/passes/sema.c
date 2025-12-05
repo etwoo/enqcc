@@ -7,19 +7,6 @@
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
-static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
-
-static int128_t
-map_numeric_type(int128_t x, enum ctype dst_type)
-{
-	// TODO: make this faster using modulo?
-	while ((dst_type == CTYPE_INT && x > INT_MAX) ||
-	       (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
-		x -= LONG_TO_INT_TRUNCATOR;
-	}
-	return x;
-}
-
 static WARN_UNUSED const struct ast *
 unpack_constant(const struct ast *a)
 {
@@ -33,18 +20,28 @@ unpack_constant(const struct ast *a)
 	return NULL;
 }
 
-static int128_t
-map_numeric_type_from_init_expr(const struct ast *init, enum ctype dst_type)
-{
-	const struct ast *a = unpack_constant(init);
-	assert(a != NULL);
-	return map_numeric_type(a->u.num, dst_type);
-}
-
 static WARN_UNUSED bool
 is_node_constant(const struct ast *a)
 {
 	return (unpack_constant(a) != NULL);
+}
+
+static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
+
+static WARN_UNUSED int128_t
+map_numeric_type(const struct ast *init, enum ctype dst_type)
+{
+	const struct ast *a = unpack_constant(init);
+	assert(a != NULL);
+
+	int128_t x = a->u.num;
+	// TODO: make this faster using modulo?
+	while ((dst_type == CTYPE_INT && x > INT_MAX) ||
+	       (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
+		x -= LONG_TO_INT_TRUNCATOR;
+	}
+
+	return x;
 }
 
 struct sema_ops {
@@ -218,7 +215,7 @@ guess(const struct ast *a, enum ctype expected_type)
 	long long int value = 0;
 	switch (a->node_type) {
 	case NODE_CONSTANT:
-		value = map_numeric_type(a->u.num, expected_type);
+		value = map_numeric_type(a, expected_type);
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		value = guess(a->u.op_unary.operand, expected_type);
@@ -1201,9 +1198,8 @@ sema_declare_file_scope(struct ast *a,
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant =
-				map_numeric_type_from_init_expr(
-					a->u.declare.init,
-					a->u.declare.var_type);
+				map_numeric_type(a->u.declare.init,
+			                         a->u.declare.var_type);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1349,9 +1345,8 @@ sema_declare_block_scope(struct ast *a,
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant =
-				map_numeric_type_from_init_expr(
-					a->u.declare.init,
-					a->u.declare.var_type);
+				map_numeric_type(a->u.declare.init,
+			                         a->u.declare.var_type);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
