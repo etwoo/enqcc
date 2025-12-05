@@ -6,12 +6,9 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
-static const char *const CTYPE_AS_STR[] = {
-	"INT",
-	"UNSIGNED INT",
-	"LONG",
-	"UNSIGNED LONG",
-};
+#define TO_STR(t) #t,
+static const char *const CTYPE_AS_STR[] = {FOREACH_CTYPE(TO_STR)};
+#undef TO_STR
 
 const char *
 ctype_to_str(enum ctype c)

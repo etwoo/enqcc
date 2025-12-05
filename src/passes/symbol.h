@@ -9,13 +9,16 @@
 
 #include <stdbool.h>
 
-enum ctype {
-	CTYPE_INT,
-	CTYPE_UNSIGNED_INT,
-	CTYPE_LONG,
-	CTYPE_UNSIGNED_LONG,
-};
-/* note: order of enum values above determines integer conversion rank */
+/* note: order of values below determines integer conversion rank */
+#define FOREACH_CTYPE(F)                                                       \
+	F(INT)                                                                 \
+	F(UNSIGNED_INT)                                                        \
+	F(LONG)                                                                \
+	F(UNSIGNED_LONG)
+
+#define TO_ENUM(t) CTYPE_##t,
+enum ctype { FOREACH_CTYPE(TO_ENUM) };
+#undef TO_ENUM
 
 const char *ctype_to_str(enum ctype c) WARN_UNUSED;
 long long int ctype_to_size_bytes(enum ctype c) WARN_UNUSED;
