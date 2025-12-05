@@ -38,6 +38,8 @@ bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
 bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
 bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 
+typedef __int128_t int128_t;
+
 struct symbol_linkage_state {
 	enum symbol_linkage linkage;
 	enum {
@@ -45,7 +47,7 @@ struct symbol_linkage_state {
 		INITIAL_VALUE_TENTATIVE,
 		INITIAL_VALUE_CONSTANT,
 	} initial;
-	long long int as_constant;
+	int128_t as_constant;
 };
 
 // TODO: for typedef support, add tracking for types (like variables)

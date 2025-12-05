@@ -175,7 +175,7 @@ struct ast {
 			struct ast *expr;
 		} cast;
 		struct ast_symbol var;  /* NODE_EXPRESSION_VARIABLE_USAGE */
-		long long unsigned num; /* NODE_CONSTANT */
+		int128_t num; /* NODE_CONSTANT */
 	} u;
 	enum ctype expr_type;
 };

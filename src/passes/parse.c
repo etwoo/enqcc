@@ -543,8 +543,8 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 
 	if (too_large) {
 		return make_result(ERR_PARSE_CONSTANT_TOO_LARGE,
-				   (**tok).val.data,
-				   (**tok).val.sz);
+		                   (**tok).val.data,
+		                   (**tok).val.sz);
 	}
 
 	token_consume(tok);
@@ -1755,17 +1755,17 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.loop.label_end == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_BREAK:
-		debug("%*sLOOP/SWITCH ID %llu%s",
+		debug("%*sLOOP/SWITCH ID %lld%s",
 		      (int)indent + 1,
 		      "",
-		      a->u.num,
+		      (long long)a->u.num,
 		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_CONTINUE:
-		debug("%*sLOOP ID %llu%s",
+		debug("%*sLOOP ID %lld%s",
 		      (int)indent + 1,
 		      "",
-		      a->u.num,
+		      (long long)a->u.num,
 		      a->u.num == UNSET_LOOP_ID ? " (unset)" : "");
 		break;
 	case NODE_GOTO:
@@ -1897,7 +1897,10 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT:
-		debug("%*sVALUE %llu", (int)indent + 1, "", a->u.num);
+		debug("%*sVALUE %lld",
+		      (int)indent + 1,
+		      "",
+		      (long long)a->u.num);
 		break;
 	}
 }
