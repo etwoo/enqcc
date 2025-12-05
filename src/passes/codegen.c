@@ -1156,8 +1156,8 @@ fix_movzx(struct asm_op *cur, struct fix *trampoline)
 		for (size_t i = 0; i < trampoline->sz; ++i) {
 			memcpy(trampoline->ops[i], cur, sizeof(*cur));
 			trampoline->ops[i]->next = NULL;
+			trampoline->ops[i]->opcode = ASM_OP_MOV;
 		}
-		trampoline->ops[0]->opcode = ASM_OP_MOV;
 		trampoline->ops[0]->args[1] = OPERAND_R11_32BIT;
 		trampoline->ops[1]->args[0] = OPERAND_R11_64BIT;
 	}
