@@ -226,7 +226,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		assert(ralias[1] == REGISTER_ALIAS_8BYTE);
 		break;
 	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
-		assert(0 && "TODO implement");
+		assert(0 && "MOV W/ ZEROEXTENSION should have been eliminated");
 		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
