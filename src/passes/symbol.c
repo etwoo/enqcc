@@ -8,8 +8,8 @@
 
 static const char *const CTYPE_AS_STR[] = {
 	"INT",
-	"LONG",
 	"UNSIGNED INT",
+	"LONG",
 	"UNSIGNED LONG",
 };
 
