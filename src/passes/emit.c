@@ -99,13 +99,8 @@ emit_asm_operand(const struct asm_operand *o,
 	case ASM_OPERAND_STACK:
 		if (o->u.num == 0) {
 			dprintf(fd, "(%s)", STR_REG_RBP);
-		} else if (o->u.num > LLONG_MAX) {
-			assert(o->u.num <= ULLONG_MAX);
-			dprintf(fd,
-			        "%llu(%s)",
-			        (long long unsigned)o->u.num,
-			        STR_REG_RBP);
 		} else {
+			assert(o->u.num <= LLONG_MAX);
 			dprintf(fd,
 			        "%lld(%s)",
 			        (long long)o->u.num,
