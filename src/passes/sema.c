@@ -12,6 +12,7 @@ static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 static int128_t
 map_numeric_type(int128_t x, enum ctype dst_type)
 {
+	// TODO: make this faster using modulo?
 	while ((dst_type == CTYPE_INT && x > INT_MAX) ||
 	       (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
 		x -= LONG_TO_INT_TRUNCATOR;
@@ -19,10 +20,31 @@ map_numeric_type(int128_t x, enum ctype dst_type)
 	return x;
 }
 
+static WARN_UNUSED const struct ast *
+unpack_constant(const struct ast *a)
+{
+	if (a->node_type == NODE_EXPRESSION_CAST) {
+		/* unpack nodes inserted by sema_implicit_cast() */
+		a = a->u.cast.expr;
+	}
+	if (a->node_type == NODE_CONSTANT) {
+		return a;
+	}
+	return NULL;
+}
+
+static int128_t
+map_numeric_type_from_init_expr(const struct ast *init, enum ctype dst_type)
+{
+	const struct ast *a = unpack_constant(init);
+	assert(a != NULL);
+	return map_numeric_type(a->u.num, dst_type);
+}
+
 static WARN_UNUSED bool
 is_node_constant(const struct ast *a)
 {
-	return a->node_type == NODE_CONSTANT;
+	return (unpack_constant(a) != NULL);
 }
 
 struct sema_ops {
@@ -1179,8 +1201,9 @@ sema_declare_file_scope(struct ast *a,
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant =
-				map_numeric_type(a->u.declare.init->u.num,
-			                         a->u.declare.var_type);
+				map_numeric_type_from_init_expr(
+					a->u.declare.init,
+					a->u.declare.var_type);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1326,8 +1349,9 @@ sema_declare_block_scope(struct ast *a,
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			linkage_state->as_constant =
-				map_numeric_type(a->u.declare.init->u.num,
-			                         a->u.declare.var_type);
+				map_numeric_type_from_init_expr(
+					a->u.declare.init,
+					a->u.declare.var_type);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
