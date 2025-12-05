@@ -225,6 +225,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		ralias[0] = REGISTER_ALIAS_4BYTE;
 		assert(ralias[1] == REGISTER_ALIAS_8BYTE);
 		break;
+	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
+		assert(0 && "TODO implement");
+		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
 		break;
@@ -269,6 +272,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_IDIV:
 		print_opcode = "idiv";
 		break;
+	case ASM_OP_DIV:
+		print_opcode = "div";
+		break;
 	case ASM_OP_CDQ:
 		print_opcode = "cdq";
 		print_opcode_suffix = 0;
@@ -305,6 +311,22 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode = "jle";
 		print_opcode_suffix = 0;
 		break;
+	case ASM_OP_JMP_IF_A:
+		print_opcode = "ja";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_JMP_IF_AE:
+		print_opcode = "jae";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_JMP_IF_B:
+		print_opcode = "jb";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_JMP_IF_BE:
+		print_opcode = "jbe";
+		print_opcode_suffix = 0;
+		break;
 	case ASM_OP_SET_IF_EQ:
 		print_opcode = "sete";
 		print_opcode_suffix = 0;
@@ -332,6 +354,26 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_SET_IF_LTE:
 		print_opcode = "setle";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_A:
+		print_opcode = "seta";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_AE:
+		print_opcode = "setae";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_B:
+		print_opcode = "setb";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_BE:
+		print_opcode = "setbe";
 		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;

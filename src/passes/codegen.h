@@ -49,6 +49,7 @@ struct asm_operand {
 #define FOREACH_ASM_OPCODE(F)                                                  \
 	F(MOV)                                                                 \
 	F(MOV_WITH_SIGN_EXTENSION)                                             \
+	F(MOV_WITH_ZERO_EXTENSION)                                             \
 	F(UNARY_NEG)                                                           \
 	F(UNARY_NOT)                                                           \
 	F(UNARY_DECREMENT)                                                     \
@@ -63,6 +64,7 @@ struct asm_operand {
 	F(BITWISE_SHIFT_RIGHT)                                                 \
 	F(COMPARE)                                                             \
 	F(IDIV)                                                                \
+	F(DIV)                                                                 \
 	F(CDQ)                                                                 \
 	F(CQO)                                                                 \
 	F(JMP)                                                                 \
@@ -72,12 +74,20 @@ struct asm_operand {
 	F(JMP_IF_GTE)                                                          \
 	F(JMP_IF_LT)                                                           \
 	F(JMP_IF_LTE)                                                          \
+	F(JMP_IF_A)                                                            \
+	F(JMP_IF_AE)                                                           \
+	F(JMP_IF_B)                                                            \
+	F(JMP_IF_BE)                                                           \
 	F(SET_IF_EQ)                                                           \
 	F(SET_IF_NEQ)                                                          \
 	F(SET_IF_GT)                                                           \
 	F(SET_IF_GTE)                                                          \
 	F(SET_IF_LT)                                                           \
 	F(SET_IF_LTE)                                                          \
+	F(SET_IF_A)                                                           \
+	F(SET_IF_AE)                                                          \
+	F(SET_IF_B)                                                           \
+	F(SET_IF_BE)                                                          \
 	F(LABEL)                                                               \
 	F(PUSH)                                                                \
 	F(CALL)                                                                \

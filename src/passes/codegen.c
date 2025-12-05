@@ -320,6 +320,7 @@ codegen_statement_one(Arena *arena,
 {
 	assert(*dst == NULL);
 	check(codegen_alloc_op(arena, dst));
+	const bool a_signed = src->args[0].c89type; /* guess signedness early */
 
 	switch (src->opcode) {
 	case IR_OP_RET:
@@ -331,7 +332,18 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
-		(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+	case IR_OP_CTYPE_ZERO_EXTEND:
+		switch (src->opcode) {
+		case IR_OP_CTYPE_SIGN_EXTEND:
+			(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+			break;
+		case IR_OP_CTYPE_ZERO_EXTEND:
+			(**dst).opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
 			codegen_map_operand(&src->args[i], &(**dst).args[i]);
 		}
@@ -345,9 +357,6 @@ codegen_statement_one(Arena *arena,
 		}
 		/* to truncate, only move CTYPE_INT's worth of source */
 		(**dst).args[0].word_type = ASM_WORD_32BIT;
-		break;
-	case IR_OP_CTYPE_ZERO_EXTEND:
-		assert(0 && "TODO: implement zero-extend in codegen");
 		break;
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:
@@ -444,18 +453,22 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		switch (src->args[0].c89type) {
 		case CTYPE_INT:
-		case CTYPE_UNSIGNED_INT:
 			(**dst).opcode = ASM_OP_CDQ;
 			break;
 		case CTYPE_LONG:
-		case CTYPE_UNSIGNED_LONG:
 			(**dst).opcode = ASM_OP_CQO;
+			break;
+		case CTYPE_UNSIGNED_INT:
+		case CTYPE_UNSIGNED_LONG:
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_set_operand_immediate_zero(&(**dst).args[0]);
+			(**dst).args[1] = OPERAND_RAX_64BIT;
 			break;
 		}
 		dst = &(**dst).next;
 		/* prepare divisor and idiv op */
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_IDIV;
+		(**dst).opcode = a_signed ? ASM_OP_IDIV : ASM_OP_DIV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		assert(src->args[0].c89type == src->args[1].c89type);
 		dst = &(**dst).next;
@@ -517,16 +530,20 @@ codegen_statement_one(Arena *arena,
 			(**dst).opcode = ASM_OP_SET_IF_NEQ;
 			break;
 		case IR_OP_COMPARE_LESS_THAN:
-			(**dst).opcode = ASM_OP_SET_IF_LT;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_LT : ASM_OP_SET_IF_B;
 			break;
 		case IR_OP_COMPARE_LESS_THAN_EQ:
-			(**dst).opcode = ASM_OP_SET_IF_LTE;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_LTE : ASM_OP_SET_IF_BE;
 			break;
 		case IR_OP_COMPARE_MORE_THAN:
-			(**dst).opcode = ASM_OP_SET_IF_GT;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_GT : ASM_OP_SET_IF_A;
 			break;
 		case IR_OP_COMPARE_MORE_THAN_EQ:
-			(**dst).opcode = ASM_OP_SET_IF_GTE;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_GTE : ASM_OP_SET_IF_AE;
 			break;
 		default:
 			assert(0); /* logic error in caller */
