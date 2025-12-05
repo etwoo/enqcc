@@ -72,18 +72,7 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 static WARN_UNUSED long long int
 codegen_get_alignment(const struct ir_variable *ir)
 {
-	long long int alignment = 0;
-	switch (ir->c89type) {
-	case CTYPE_INT:
-	case CTYPE_UNSIGNED_INT:
-		alignment = 4;
-		break;
-	case CTYPE_LONG:
-	case CTYPE_UNSIGNED_LONG:
-		alignment = 8;
-		break;
-	}
-	return alignment;
+	return ctype_to_size_bytes(ir->c89type);
 }
 
 static void
@@ -356,6 +345,9 @@ codegen_statement_one(Arena *arena,
 		}
 		/* to truncate, only move CTYPE_INT's worth of source */
 		(**dst).args[0].word_type = ASM_WORD_32BIT;
+		break;
+	case IR_OP_CTYPE_ZERO_EXTEND:
+		assert(0 && "TODO: implement zero-extend in codegen");
 		break;
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:

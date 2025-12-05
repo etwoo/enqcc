@@ -18,6 +18,8 @@ enum ctype {
 /* note: order of enum values above determines integer conversion rank */
 
 const char *ctype_to_str(enum ctype c) WARN_UNUSED;
+long long int ctype_to_size_bytes(enum ctype c) WARN_UNUSED;
+bool ctype_is_signed(enum ctype c) WARN_UNUSED;
 enum ctype get_common_ctype(enum ctype lhs, enum ctype rhs) WARN_UNUSED;
 
 enum {

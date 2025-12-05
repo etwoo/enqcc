@@ -20,6 +20,40 @@ ctype_to_str(enum ctype c)
 	return CTYPE_AS_STR[c];
 }
 
+long long int
+ctype_to_size_bytes(enum ctype c)
+{
+	long long int b = 0;
+	switch (c) {
+	case CTYPE_INT:
+	case CTYPE_LONG:
+		b = 4;
+		break;
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_UNSIGNED_LONG:
+		b = 8;
+		break;
+	}
+	return b;
+}
+
+bool
+ctype_is_signed(enum ctype c)
+{
+	bool b = true;
+	switch (c) {
+	case CTYPE_INT:
+	case CTYPE_LONG:
+		b = true;
+		break;
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_UNSIGNED_LONG:
+		b = false;
+		break;
+	}
+	return b;
+}
+
 enum ctype
 get_common_ctype(enum ctype lhs, enum ctype rhs)
 {

@@ -633,23 +633,23 @@ ir_unary_op(Arena *arena,
 		ast_inner = a->u.op_binary.rhs;
 		break;
 	case NODE_EXPRESSION_CAST:
-		if (a->u.cast.to_type == a->u.cast.expr->expr_type) {
+		if (a->u.cast.expr->expr_type == a->u.cast.to_type) {
 			/* early return if inner expr type makes cast no-op */
 			return ir_expr(arena,
 			               a->u.cast.expr,
 			               ir,
 			               dst,
 			               return_value);
-		}
-		switch (a->u.cast.to_type) {
-		case CTYPE_INT:
-		case CTYPE_UNSIGNED_INT:
+		} else if (ctype_to_size_bytes(a->u.cast.expr->expr_type) ==
+		           ctype_to_size_bytes(a->u.cast.to_type)) {
+			unary->opcode = IR_OP_COPY;
+		} else if (ctype_to_size_bytes(a->u.cast.expr->expr_type) >
+		           ctype_to_size_bytes(a->u.cast.to_type)) {
 			unary->opcode = IR_OP_CTYPE_TRUNCATE;
-			break;
-		case CTYPE_LONG:
-		case CTYPE_UNSIGNED_LONG:
+		} else if (ctype_is_signed(a->u.cast.expr->expr_type)) {
 			unary->opcode = IR_OP_CTYPE_SIGN_EXTEND;
-			break;
+		} else {
+			unary->opcode = IR_OP_CTYPE_ZERO_EXTEND;
 		}
 		ast_inner = a->u.cast.expr;
 		break;
