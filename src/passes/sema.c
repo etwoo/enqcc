@@ -4,6 +4,7 @@
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
+#include <assert.h>
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
@@ -28,19 +29,48 @@ is_node_constant(const struct ast *a)
 
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
-static WARN_UNUSED int128_t
-map_numeric_type(const struct ast *init, enum ctype dst_type)
+static void
+map_numeric_type(const struct ast *init,
+                 enum ctype dst_type,
+                 union constant_value *val)
 {
 	const struct ast *a = unpack_constant(init);
 	assert(a != NULL);
 
-	int128_t x = a->u.num;
+	if (dst_type == CTYPE_DOUBLE) {
+		switch (a->expr_type) {
+		case CTYPE_INT:
+		case CTYPE_UNSIGNED_INT:
+		case CTYPE_LONG:
+		case CTYPE_UNSIGNED_LONG:
+			val->as_double = (double)a->u.num;
+			break;
+		case CTYPE_DOUBLE:
+			val->as_double = a->u.double_;
+			break;
+		}
+		return;
+	}
+
+	int128_t x = 0;
+	switch (a->expr_type) {
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+		x = a->u.num;
+		break;
+	case CTYPE_DOUBLE:
+		x = (int128_t)a->u.double_;
+		break;
+	}
+
 	if ((dst_type == CTYPE_INT && x > INT_MAX) ||
 	    (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
 		x %= LONG_TO_INT_TRUNCATOR;
 	}
 
-	return x;
+	val->as_integer = x;
 }
 
 struct sema_ops {
@@ -208,19 +238,27 @@ has_container(struct sema_label_loops_state *state,
 	return NULL;
 }
 
-static WARN_UNUSED long long int
+static WARN_UNUSED int128_t
 guess(const struct ast *a, enum ctype expected_type)
 {
-	long long int value = 0;
+	int128_t value = 0;
+	union constant_value tmp = {0};
+	int128_t l_tmp = 0;
+	int128_t r_tmp = 0;
+
 	switch (a->node_type) {
 	case NODE_CONSTANT:
-		value = map_numeric_type(a, expected_type);
+		map_numeric_type(a, expected_type, &tmp);
+		/* double values ignored here get rejected by sema_double() */
+		value = tmp.as_integer;
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		value = guess(a->u.op_unary.operand, expected_type);
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-		value = ~guess(a->u.op_unary.operand, expected_type);
+		value = guess(a->u.op_unary.operand, expected_type);
+		assert(value <= ULLONG_MAX);
+		value = ~(long long unsigned)value;
 		break;
 	case NODE_EXPRESSION_UNARY_NEGATE:
 		value = -1 * guess(a->u.op_unary.operand, expected_type);
@@ -262,20 +300,33 @@ guess(const struct ast *a, enum ctype expected_type)
 		}
 		break;
 	case NODE_EXPRESSION_BITWISE_AND:
-		value = guess(a->u.op_binary.lhs, expected_type) &
-		        guess(a->u.op_binary.rhs, expected_type);
-		break;
 	case NODE_EXPRESSION_BITWISE_OR:
-		value = guess(a->u.op_binary.lhs, expected_type) |
-		        guess(a->u.op_binary.rhs, expected_type);
-		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
-		value = guess(a->u.op_binary.lhs, expected_type)
-		        << guess(a->u.op_binary.rhs, expected_type);
-		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-		value = guess(a->u.op_binary.lhs, expected_type) >>
-		        guess(a->u.op_binary.rhs, expected_type);
+		l_tmp = guess(a->u.op_binary.lhs, expected_type);
+		r_tmp = guess(a->u.op_binary.rhs, expected_type);
+		assert(l_tmp <= ULLONG_MAX && r_tmp <= ULLONG_MAX);
+		switch (a->node_type) {
+		case NODE_EXPRESSION_BITWISE_AND:
+			value = (long long unsigned)l_tmp &
+			        (long long unsigned)r_tmp;
+			break;
+		case NODE_EXPRESSION_BITWISE_OR:
+			value = (long long unsigned)l_tmp |
+			        (long long unsigned)r_tmp;
+			break;
+		case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+			value = (long long unsigned)l_tmp
+			        << (long long unsigned)r_tmp;
+			break;
+		case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+			value = (long long unsigned)l_tmp >>
+			        (long long unsigned)r_tmp;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
 		value = guess(a->u.op_binary.lhs, expected_type) &&
@@ -313,10 +364,11 @@ guess(const struct ast *a, enum ctype expected_type)
 	default:
 		break;
 	}
+
 	return value;
 }
 
-static WARN_UNUSED long long int
+static WARN_UNUSED int128_t
 guess_case_value(const struct ast *containing_case, enum ctype expected_type)
 {
 	assert(containing_case->node_type == NODE_CASE);
@@ -325,10 +377,10 @@ guess_case_value(const struct ast *containing_case, enum ctype expected_type)
 
 static WARN_UNUSED result_t
 make_case(Arena *arena,
-          enum ctype control_type,
-          long long int new_value,
           long long int existing_unique,
-          struct ast **dst)
+          struct ast **dst,
+          enum ctype control_type,
+          int128_t new_value)
 {
 	*dst = arena_alloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_SEMA_ALLOC);
@@ -359,13 +411,12 @@ case_prepend(Arena *arena,
 
 	enum ctype control_type =
 		containing_switch->u.switch_.control->expr_type;
-	const long long int new_value =
-		guess_case_value(new_case, control_type);
+	const int128_t new_value = guess_case_value(new_case, control_type);
 
 	struct flat *head = containing_switch->u.switch_.label_cases;
 	for (; head != NULL; head = head->cdr) {
 		assert(head->car->node_type == NODE_CASE);
-		const long long int existing_value =
+		const int128_t existing_value =
 			guess_case_value(head->car, control_type);
 		if (new_value == existing_value) {
 			return make_result(ERR_SEMA_CASE_DUPLICATE,
@@ -382,10 +433,10 @@ case_prepend(Arena *arena,
 	 * u.case_.constant replaced with simplified <new_value>.
 	 */
 	check(make_case(arena,
-	                control_type,
-	                new_value,
 	                new_case->u.case_.unique,
-	                &node->car));
+	                &node->car,
+	                control_type,
+	                new_value));
 
 	node->cdr = containing_switch->u.switch_.label_cases;
 	containing_switch->u.switch_.label_cases = node;
@@ -642,22 +693,71 @@ sema_label_gotos(Arena *arena, struct ast *a, long long int *generator)
 	return RESULT_OK;
 }
 
+struct sema_compound_assignment_state {
+	Arena *arena;
+};
+
+static WARN_UNUSED result_t
+sema_compound_assignment(struct ast *a, void *userdata)
+{
+	struct sema_compound_assignment_state *state = userdata;
+	Arena *arena = state->arena;
+
+	enum ast_nodetype new_type = 0;
+	switch (a->node_type) {
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+		new_type = NODE_EXPRESSION_BINARY_ADD;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+		new_type = NODE_EXPRESSION_BINARY_SUBTRACT;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+		new_type = NODE_EXPRESSION_BINARY_MULTIPLY;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+		new_type = NODE_EXPRESSION_BINARY_DIVIDE;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+		new_type = NODE_EXPRESSION_BINARY_REMAINDER;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+		new_type = NODE_EXPRESSION_BITWISE_AND;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+		new_type = NODE_EXPRESSION_BITWISE_OR;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+		new_type = NODE_EXPRESSION_BITWISE_XOR;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+		new_type = NODE_EXPRESSION_BITWISE_SHIFT_LEFT;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+		new_type = NODE_EXPRESSION_BITWISE_SHIFT_RIGHT;
+		break;
+	default:
+		return RESULT_OK;
+	}
+
+	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	check_if(new_node == NULL, ERR_SEMA_ALLOC);
+	new_node->node_type = new_type;
+	new_node->expr_type = a->expr_type;
+	new_node->u.op_binary = a->u.op_binary;
+
+	a->node_type = NODE_EXPRESSION_VARIABLE_ASSIGNMENT;
+	a->u.op_binary.rhs = new_node;
+	/* retain existing a->u.op_binary.lhs */
+
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	struct ast *to_check = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		to_check = a->u.op_binary.lhs;
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
@@ -772,12 +872,7 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_SWITCH:
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
-	case NODE_EXPRESSION_NULL:
 		break; /* expr_type has no meaning in this context */
-	case NODE_EXPRESSION_VARIABLE_USAGE:
-	case NODE_EXPRESSION_FUNCTION_CALL:
-	case NODE_CONSTANT:
-		break; /* resolve_expr() in parse.c handles leaf nodes */
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -812,16 +907,6 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		/*
 		 * Shift left/right takes the LHS type, not the common
@@ -832,26 +917,6 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		 *
 		 * Variable assignment similarly takes the LHS type,
 		 * corresponding to the assigned-to variable.
-		 *
-		 * Compound assignment takes the LHS type, like regular
-		 * variable assignment. That said, lvalue-to-rvalue
-		 * conversion can lead to sign extension when computing
-		 * the new value if the RHS type causes the common type
-		 * to be wider than the LHS type. Truncation will then
-		 * occur when assigning to the lvalue. Note: [TYPE1].
-		 *
-		 * For example, given:
-		 *
-		 *     int x = 0;
-		 *     x += 100l;
-		 *
-		 * ... equivalent to:
-		 *
-		 *     x = x + 100l;
-		 *
-		 * ... we can think of the resulting behavior like:
-		 *
-		 *     x = (int)(((long)x) + 100l);
 		 */
 		a->expr_type = a->u.op_binary.lhs->expr_type;
 		break;
@@ -863,6 +928,58 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_CAST:
 		a->expr_type = a->u.cast.to_type;
 		break;
+	case NODE_EXPRESSION_NULL:
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+	case NODE_EXPRESSION_FUNCTION_CALL:
+	case NODE_CONSTANT:
+		break; /* resolve_expr() in parse.c handles leaf nodes */
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+		assert(0 && "COMPOUND_ASSIGN_* should have been eliminated");
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	bool valid = true;
+
+	switch (a->node_type) {
+	case NODE_SWITCH:
+		valid = (a->u.switch_.control->expr_type != CTYPE_DOUBLE);
+		break;
+	case NODE_CASE:
+		valid = (a->u.case_.constant->expr_type != CTYPE_DOUBLE);
+		break;
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		valid = (a->expr_type != CTYPE_DOUBLE);
+		break;
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+		valid = (a->u.op_binary.lhs->expr_type != CTYPE_DOUBLE) &&
+		        (a->u.op_binary.rhs->expr_type != CTYPE_DOUBLE);
+		break;
+	default:
+		break;
+	}
+
+	if (!valid) {
+		return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
 	}
 	return RESULT_OK;
 }
@@ -909,14 +1026,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD: /* See [TYPE1] comment in  */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB: /* sema_expr_types() re:   */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL: /* compound assignment ops */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV: /* requiring casts despite */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM: /* LHS lvalue unilaterally */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND: /* determining expr_type.  */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 		common = get_common_ctype(a->u.op_binary.lhs->expr_type,
 		                          a->u.op_binary.rhs->expr_type);
 		check(cast_if(arena, common, &a->u.op_binary.lhs));
@@ -924,8 +1033,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(cast_if(arena,
 		              a->u.op_binary.lhs->expr_type,
@@ -1196,9 +1303,9 @@ sema_declare_file_scope(struct ast *a,
 	if (a->u.declare.init != NULL) {
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant =
-				map_numeric_type(a->u.declare.init,
-			                         a->u.declare.var_type);
+			map_numeric_type(a->u.declare.init,
+			                 a->u.declare.var_type,
+			                 &linkage_state->as_constant);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1340,12 +1447,12 @@ sema_declare_block_scope(struct ast *a,
 
 		if (a->u.declare.init == NULL) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant = 0;
+			linkage_state->as_constant.as_integer = 0;
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant =
-				map_numeric_type(a->u.declare.init,
-			                         a->u.declare.var_type);
+			map_numeric_type(a->u.declare.init,
+			                 a->u.declare.var_type,
+			                 &linkage_state->as_constant);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1505,6 +1612,14 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 {
 	struct sema_ops ops = {0};
 
+	debug("Expanding compound assignment statements");
+	ops.node_enter = sema_compound_assignment;
+	{
+		struct sema_compound_assignment_state compound_state = {0};
+		compound_state.arena = arena;
+		check(sema_walk(a, &ops, &compound_state));
+	}
+
 	debug("Checking lvalues");
 	ops.node_enter = sema_lvalue;
 	check(sema_walk(a, &ops, NULL));
@@ -1526,6 +1641,10 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	ops.node_exit = sema_expr_types;
 	check(sema_walk(a, &ops, NULL));
 	ops.node_exit = NULL;
+
+	debug("Checking for invalid double usage");
+	ops.node_enter = sema_double;
+	check(sema_walk(a, &ops, NULL));
 
 	debug("Inserting cast expressions");
 	ops.node_enter = sema_implicit_cast;

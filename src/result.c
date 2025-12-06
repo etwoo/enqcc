@@ -125,6 +125,9 @@ result_to_str(result_t r)
 		                r.msg,
 		                my_strerror(r));
 		break;
+	case ERR_EMIT_ALLOC:
+		s = strdup("Cannot allocate emit tracking datastructure");
+		break;
 	case ERR_IR_ALLOC:
 		s = strdup("Cannot allocate intermediate representation");
 		break;
@@ -141,6 +144,10 @@ result_to_str(result_t r)
 	case ERR_LEX_ALLOC:
 		s = strdup("Cannot allocate token during lex");
 		break;
+	case ERR_LEX_FLOAT_EXPONENT_NO_DIGITS:
+		s = my_asprintf("Floating point exponent has no digits: %s",
+		                r.msg);
+		break;
 	case ERR_LEX_NO_MATCH:
 		s = my_asprintf("No matching expression to lex: %s", r.msg);
 		break;
@@ -153,6 +160,12 @@ result_to_str(result_t r)
 		break;
 	case ERR_PARSE_ALLOC:
 		s = strdup("Cannot allocate ast node during parse");
+		break;
+	case ERR_PARSE_CONSTANT_STRTOD:
+		s = my_asprintf(
+			"Parsing constant expr %s with strtod() failed: %s",
+			r.msg,
+			my_strerror(r));
 		break;
 	case ERR_PARSE_CONSTANT_STRTOULL:
 		s = my_asprintf(
@@ -171,6 +184,10 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_EXPECT_TYPE:
 		s = strdup("Parsing variable declaration expects valid type in "
 		           "type position");
+		break;
+	case ERR_PARSE_DECL_TYPE_DOUBLE_INVALID:
+		s = strdup("Variable type 'double' cannot be combined with "
+		           "int/long/signed/unsigned");
 		break;
 	case ERR_PARSE_DECL_TYPE_DUPLICATE:
 		s = strdup("Duplicate variable type");
@@ -202,6 +219,10 @@ result_to_str(result_t r)
 	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE:
 		s = strdup("Parsing function expects valid type in return type "
 		           "position");
+		break;
+	case ERR_PARSE_FUNC_RETURN_TYPE_DOUBLE_INVALID:
+		s = strdup("Function return type 'double' cannot be combined "
+		           "with int/long/signed/unsigned");
 		break;
 	case ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE:
 		s = strdup("Duplicate function return type");
@@ -354,6 +375,10 @@ result_to_str(result_t r)
 		s = my_asprintf("static declaration of function %s follows "
 		                "non-static declaration",
 		                r.msg);
+		break;
+	case ERR_SEMA_OPERAND_DOUBLE_INVALID:
+		s = strdup("Complement ~, remainder %, and bitwise operations "
+		           "cannot take arguments of type 'double'");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");

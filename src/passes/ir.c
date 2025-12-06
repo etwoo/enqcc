@@ -79,16 +79,6 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 		       NODE_EXPRESSION_VARIABLE_USAGE);
 		sym = &ir_unpack_parens(src->u.op_unary.operand)->u.var;
 		break;
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		if (src->u.op_binary.lhs->node_type == NODE_EXPRESSION_CAST) {
 			/* unpack nodes inserted by sema_implicit_cast() */
@@ -640,6 +630,27 @@ ir_unary_op(Arena *arena,
 			               ir,
 			               dst,
 			               return_value);
+		} else if (ctype_is_floating_point(a->u.cast.expr->expr_type) !=
+		           ctype_is_floating_point(a->u.cast.to_type)) {
+			const bool src_fp = ctype_is_floating_point(
+				a->u.cast.expr->expr_type);
+			const bool src_signed =
+				ctype_is_signed(a->u.cast.expr->expr_type);
+			const bool dst_fp =
+				ctype_is_floating_point(a->u.cast.to_type);
+			const bool dst_signed =
+				ctype_is_signed(a->u.cast.to_type);
+			if (src_fp && dst_signed) {
+				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_INT;
+			} else if (src_fp && !dst_signed) {
+				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_UINT;
+			} else if (src_signed && dst_fp) {
+				unary->opcode = IR_OP_CTYPE_INT_TO_DOUBLE;
+			} else if (!src_signed && dst_fp) {
+				unary->opcode = IR_OP_CTYPE_UINT_TO_DOUBLE;
+			} else {
+				assert(0); /* mistake in truth table above */
+			}
 		} else if (ctype_to_size_bytes(a->u.cast.expr->expr_type) ==
 		           ctype_to_size_bytes(a->u.cast.to_type)) {
 			unary->opcode = IR_OP_COPY;
@@ -720,43 +731,33 @@ ir_binary_op(Arena *arena,
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
 		binary->opcode = IR_OP_BINARY_ADD;
 		break;
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
 		binary->opcode = IR_OP_BINARY_SUBTRACT;
 		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
 		binary->opcode = IR_OP_BINARY_MULTIPLY;
 		break;
 	case NODE_EXPRESSION_BINARY_DIVIDE:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
 		binary->opcode = IR_OP_BINARY_DIVIDE;
 		break;
 	case NODE_EXPRESSION_BINARY_REMAINDER:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
 		binary->opcode = IR_OP_BINARY_REMAINDER;
 		break;
 	case NODE_EXPRESSION_BITWISE_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
 		binary->opcode = IR_OP_BITWISE_AND;
 		break;
 	case NODE_EXPRESSION_BITWISE_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 		binary->opcode = IR_OP_BITWISE_OR;
 		break;
 	case NODE_EXPRESSION_BITWISE_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 		binary->opcode = IR_OP_BITWISE_XOR;
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 		binary->opcode = IR_OP_BITWISE_SHIFT_LEFT;
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		binary->opcode = IR_OP_BITWISE_SHIFT_RIGHT;
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
@@ -794,24 +795,7 @@ ir_binary_op(Arena *arena,
 
 	ir_val_copy(&left_return, &binary->args[0]);
 	ir_val_copy(&right_return, &binary->args[1]);
-
-	switch (a->node_type) {
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
-		ir_val_from_ast_variable_like(a, &binary->args[2]);
-		break;
-	default:
-		ir_val_tmpvar_gen(ir, a->expr_type, &binary->args[2]);
-		break;
-	}
+	ir_val_tmpvar_gen(ir, a->expr_type, &binary->args[2]);
 
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&binary->args[2], return_value);
@@ -890,7 +874,7 @@ ir_logical_op(Arena *arena,
 	struct ir_op *foot_pos = footer;
 
 	foot_pos->opcode = IR_OP_COPY;
-	foot_pos->args[0].subtype = IR_VAL_CONSTANT_INT;
+	foot_pos->args[0].subtype = IR_VAL_CONSTANT;
 	foot_pos->args[0].num = jz ? 1 : 0;
 	foot_pos->args[1].subtype = return_value->subtype;
 	foot_pos->args[1].num = return_value->num;
@@ -913,7 +897,7 @@ ir_logical_op(Arena *arena,
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_COPY;
-	foot_pos->args[0].subtype = IR_VAL_CONSTANT_INT;
+	foot_pos->args[0].subtype = IR_VAL_CONSTANT;
 	foot_pos->args[0].num = jz ? 0 : 1;
 	foot_pos->args[1].subtype = return_value->subtype;
 	foot_pos->args[1].num = return_value->num;
@@ -994,8 +978,18 @@ ir_expr(Arena *arena,
 	switch (a->node_type) {
 	case NODE_CONSTANT:
 		assert(return_value->subtype == IR_VAL_NONE);
-		return_value->subtype = IR_VAL_CONSTANT_INT;
-		return_value->num = a->u.num;
+		return_value->subtype = IR_VAL_CONSTANT;
+		switch (a->expr_type) {
+		case CTYPE_INT:
+		case CTYPE_UNSIGNED_INT:
+		case CTYPE_LONG:
+		case CTYPE_UNSIGNED_LONG:
+			return_value->num = a->u.num;
+			break;
+		case CTYPE_DOUBLE:
+			return_value->dnum = a->u.double_;
+			break;
+		}
 		return_value->c89type = a->expr_type;
 		assert(*dst == NULL); /* does not create new dst op */
 		break;
@@ -1075,16 +1069,6 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		check(ir_binary_op(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
@@ -1155,7 +1139,7 @@ ir_func(Arena *arena,
 		check(ir_alloc_op(arena, return_0));
 		assert(*return_0 != NULL);
 		(**return_0).opcode = IR_OP_RET;
-		(**return_0).args[0].subtype = IR_VAL_CONSTANT_INT;
+		(**return_0).args[0].subtype = IR_VAL_CONSTANT;
 		(**return_0).args[0].num = 0;
 	}
 
@@ -1179,10 +1163,10 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 		assert(0); /* logic error in caller */
 		break;
 	case INITIAL_VALUE_TENTATIVE:
-		(**dst).u.initial_as_int128 = 0;
+		(**dst).initial.as_integer = 0;
 		break;
 	case INITIAL_VALUE_CONSTANT:
-		(**dst).u.initial_as_int128 = s->linkage.as_constant;
+		(**dst).initial = s->linkage.as_constant;
 		break;
 	}
 
@@ -1289,8 +1273,13 @@ ir_debug_print_one(const struct ir_op *op)
 			assert(i >= required_args &&
 			       "op lacks required operand");
 			continue;
-		case IR_VAL_CONSTANT_INT:
-			debug("  CONSTANT %lld", (long long)op->args[i].num);
+		case IR_VAL_CONSTANT:
+			if (op->args[i].c89type == CTYPE_DOUBLE) {
+				debug("  CONSTANT %f", op->args[i].dnum);
+			} else {
+				debug("  CONSTANT %lld",
+				      (long long)op->args[i].num);
+			}
 			break;
 		case IR_VAL_TEMPORARY_VARIABLE:
 			debug("  VAR tmp.%lld", (long long)op->args[i].num);
@@ -1335,8 +1324,12 @@ ir_debug_print(const struct intermediate *ir)
 			debug("  VARIABLE LINKAGE EXTERNAL");
 			break;
 		}
-		debug("  VARIABLE INIT %lld",
-		      (long long)v->u.initial_as_int128);
+		if (v->c89type == CTYPE_DOUBLE) {
+			debug("  VARIABLE INIT %f", v->initial.as_double);
+		} else {
+			debug("  VARIABLE INIT %lld",
+			      (long long)v->initial.as_integer);
+		}
 	}
 
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {

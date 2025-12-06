@@ -10,6 +10,7 @@
 	F("long", TOKEN_KEYWORD_LONG)                                          \
 	F("signed", TOKEN_KEYWORD_SIGNED)                                      \
 	F("unsigned", TOKEN_KEYWORD_UNSIGNED)                                  \
+	F("double", TOKEN_KEYWORD_DOUBLE)                                      \
 	F("if", TOKEN_KEYWORD_IF)                                              \
 	F("else", TOKEN_KEYWORD_ELSE)                                          \
 	F("do", TOKEN_KEYWORD_DO)                                              \
@@ -90,5 +91,8 @@ struct token {
 	struct string_view val;
 	struct token *next;
 };
+
+extern const char DECIMAL_POINT;
+extern const char E_NOTATION_CHAR;
 
 #endif

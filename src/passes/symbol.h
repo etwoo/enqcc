@@ -14,7 +14,8 @@
 	F(INT)                                                                 \
 	F(UNSIGNED_INT)                                                        \
 	F(LONG)                                                                \
-	F(UNSIGNED_LONG)
+	F(UNSIGNED_LONG)                                                       \
+	F(DOUBLE)
 
 #define TO_ENUM(t) CTYPE_##t,
 enum ctype { FOREACH_CTYPE(TO_ENUM) };
@@ -23,6 +24,7 @@ enum ctype { FOREACH_CTYPE(TO_ENUM) };
 const char *ctype_to_str(enum ctype c) WARN_UNUSED;
 long long int ctype_to_size_bytes(enum ctype c) WARN_UNUSED;
 bool ctype_is_signed(enum ctype c) WARN_UNUSED;
+bool ctype_is_floating_point(enum ctype c) WARN_UNUSED;
 enum ctype get_common_ctype(enum ctype lhs, enum ctype rhs) WARN_UNUSED;
 
 enum {
@@ -45,6 +47,11 @@ bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
 bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
 bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 
+union constant_value {
+	int128_t as_integer;
+	double as_double;
+};
+
 struct symbol_linkage_state {
 	enum symbol_linkage linkage;
 	enum {
@@ -52,7 +59,7 @@ struct symbol_linkage_state {
 		INITIAL_VALUE_TENTATIVE,
 		INITIAL_VALUE_CONSTANT,
 	} initial;
-	int128_t as_constant;
+	union constant_value as_constant;
 };
 
 // TODO: for typedef support, add tracking for types (like variables)
