@@ -113,19 +113,80 @@ lex_one_token_keyword_maybe(struct string_view *pos)
 	return TOKEN_IDENTIFIER;
 }
 
+static const char DECIMAL_POINT = '.';
+
+static WARN_UNUSED bool
+isdot(char c)
+{
+	return c == DECIMAL_POINT;
+}
+
+static WARN_UNUSED bool
+issign(char c)
+{
+	return c == '+' || c == '-';
+}
+
 static WARN_UNUSED result_t
 lex_one_constant(struct string_view *pos, struct token **tok)
 {
 	struct token *cur = *tok;
+	size_t allow_sign_for = 0;
+
+	struct {
+		const char sep;
+		bool found;
+		const bool allow_sign_next;
+	} sep_chars[] = {
+		{
+			.sep = DECIMAL_POINT,
+			.found = false,
+			.allow_sign_next = false,
+		},
+		{
+			.sep = 'E',
+			.found = false,
+			.allow_sign_next = true,
+		},
+	};
 
 	cur->val.data = pos->data;
-	do {
-		pos->data++;
-		pos->sz--;
-	} while (isdigit(*pos->data));
+	assert(isdigit(cur->val.data[0]) || isdot(cur->val.data[0]));
+
+	while (pos->sz > 0) {
+		const char c = *pos->data;
+
+		bool is_sep = false;
+		for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
+			if (sep_chars[i].sep == toupper(c)) {
+				if (!sep_chars[i].found) {
+					sep_chars[i].found = true;
+					is_sep = true;
+					if (sep_chars[i].allow_sign_next) {
+						allow_sign_for = 2;
+					}
+				}
+				break;
+			}
+		}
+
+		if (isdigit(c) || is_sep || (issign(c) && allow_sign_for > 0)) {
+			pos->data++;
+			pos->sz--;
+			allow_sign_for--;
+			continue;
+		}
+
+		break;
+	}
+
+	bool found_sep = false;
+	for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
+		found_sep = sep_chars[i].found || found_sep;
+	}
 
 	const char allowed[2] = {'L', 'U'};
-	for (size_t i = 0; i < ARRAY_SIZE(allowed); ++i) {
+	for (size_t i = 0; !found_sep && i < ARRAY_SIZE(allowed); ++i) {
 		if (toupper(*pos->data) == allowed[i]) {
 			pos->data++;
 			pos->sz--;
@@ -165,7 +226,7 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 		const size_t ahead = lex_readahead_one_or_two_chars(pos, cur);
 		pos->data += ahead;
 		pos->sz -= ahead;
-	} else if (isdigit(c)) {
+	} else if (isdigit(c) || isdot(c)) {
 		check(lex_one_constant(pos, &cur));
 		check(lex_peek_ok(pos, &cur->val));
 	} else if (isalpha(c) || c == '_') {
