@@ -513,7 +513,7 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 
 	if (is_constant_maybe_double(&(**tok).val)) {
 		double tmp = strtod((**tok).val.data, NULL);
-		if (errno != 0) {
+		if (errno != 0 && errno != ERANGE) {
 			return make_result(ERR_PARSE_CONSTANT_STRTOD,
 			                   errno,
 			                   (**tok).val.data,
