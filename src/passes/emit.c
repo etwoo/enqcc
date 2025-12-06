@@ -174,8 +174,8 @@ emit_asm_operand(const struct asm_operand *o,
 		dprintf(fd,
 		        "%s%s%llu(%s)",
 		        label_prefix,
-			DOUBLE_LABEL_ID,
-			get_double_as_quadword(o->u.dnum),
+		        DOUBLE_LABEL_ID,
+		        get_double_as_quadword(o->u.dnum),
 		        STR_REG_RIP);
 		break;
 	}
@@ -525,9 +525,7 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 
 	const long long int alignment = ctype_to_size_bytes(var->c89type);
 
-	if (var->c89type == CTYPE_DOUBLE) {
-		assert(0 && "TODO: suport var->initial.as_double in emit.c");
-	} else if (var->initial.as_integer != 0) {
+	if (var->initial.as_integer != 0 || var->c89type == CTYPE_DOUBLE) {
 		dprintf(fd, "\t.data\n\t.balign %lld\n", alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
 		if (alignment == 4) {
@@ -535,7 +533,11 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		} else {
 			dprintf(fd, "\t.quad ");
 		}
-		if (var->initial.as_integer > LLONG_MAX) {
+		if (var->c89type == CTYPE_DOUBLE) {
+			dprintf(fd,
+			        "%llu\n",
+			        get_double_as_quadword(var->initial.as_double));
+		} else if (var->initial.as_integer > LLONG_MAX) {
 			dprintf(fd,
 			        "%llu\n",
 			        (long long unsigned)var->initial.as_integer);
