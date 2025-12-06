@@ -11,7 +11,7 @@
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char LINUX_LABEL_PREFIX[] = ".L";
-static const char LINUX_SECTION_RODATA[] = ".rodata";
+static const char LINUX_SECTION_RODATA[] = ".section .rodata";
 static const char MACOS_SYMBOL_WITH_LINKAGE_PREFIX[] = "_";
 static const char MACOS_LABEL_PREFIX[] = "L";
 static const char MACOS_SECTION_LITERAL8[] = ".literal8";
@@ -177,7 +177,6 @@ emit_asm_operand(const struct asm_operand *o,
 			DOUBLE_LABEL_ID,
 			get_double_as_quadword(o->u.dnum),
 		        STR_REG_RIP);
-
 		break;
 	}
 }
@@ -587,7 +586,8 @@ emit_asm_fp_one(double value, enum platform plat, int fd)
 	const char *label_prefix = get_label_prefix(plat);
 	const long long unsigned as_quadword = get_double_as_quadword(value);
 
-	dprintf(fd, "\t.section %s\n", section_fp_constants);
+	dprintf(fd, "\t%s\n", section_fp_constants);
+	dprintf(fd, "\t.balign %lld\n", ctype_to_size_bytes(CTYPE_DOUBLE));
 	dprintf(fd, "%s%s%llu:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
 	dprintf(fd, "\t.quad %llu", as_quadword);
 }
