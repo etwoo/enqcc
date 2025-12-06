@@ -46,6 +46,7 @@ struct asm_operand {
 		ASM_OPERAND_JUMP_TARGET_LABEL,
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
 		ASM_OPERAND_VARIABLE_DATA,
+		ASM_OPERAND_CONSTANT_DATA_DOUBLE,
 	} operand_type;
 	enum {
 		ASM_WORD_32BIT, /* DWORD */
@@ -56,6 +57,7 @@ struct asm_operand {
 		enum asm_register reg;
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
+		double dnum;                 /* CONSTANT_DATA_DOUBLE */
 	} u;
 };
 

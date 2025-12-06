@@ -130,7 +130,7 @@ compile(Arena *arena,
 		;
 	int fd = open(dst, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
 	check_if(fd < 0, ERR_EMIT_FILE_OPEN, errno);
-	emit_asm(cg, platform_choice, fd);
+	check(emit_asm(arena, cg, platform_choice, fd));
 	close(fd);
 
 	return RESULT_OK;

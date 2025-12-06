@@ -6,12 +6,16 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>    /* for memcpy() */
 #include <sys/param.h> /* for MAX() */
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char LINUX_LABEL_PREFIX[] = ".L";
+static const char LINUX_SECTION_RODATA[] = ".rodata";
 static const char MACOS_SYMBOL_WITH_LINKAGE_PREFIX[] = "_";
 static const char MACOS_LABEL_PREFIX[] = "L";
+static const char MACOS_SECTION_LITERAL8[] = ".literal8";
+static const char DOUBLE_LABEL_ID[] = "double_";
 static const char CUSTOM_LABEL_ID[] = "boba_";
 static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_POP_QUAD[] = "popq";
@@ -41,6 +45,21 @@ get_label_prefix(enum platform plat)
 		break;
 	case PLATFORM_LINUX:
 		result = LINUX_LABEL_PREFIX;
+		break;
+	}
+	return result;
+}
+
+static WARN_UNUSED const char *
+get_section_fp_constants(enum platform plat)
+{
+	const char *result = NULL;
+	switch (plat) {
+	case PLATFORM_MACOS:
+		result = MACOS_SECTION_LITERAL8;
+		break;
+	case PLATFORM_LINUX:
+		result = LINUX_SECTION_RODATA;
 		break;
 	}
 	return result;
@@ -140,6 +159,10 @@ emit_asm_operand(const struct asm_operand *o,
 		        (int)o->u.variable.sz,
 		        o->u.variable.data,
 		        STR_REG_RIP);
+		break;
+	case ASM_OPERAND_CONSTANT_DATA_DOUBLE:
+		// TODO: infer name of const variable holding double value
+		// TODO: do initial fn setup in loop before emitting op
 		break;
 	}
 }
@@ -514,20 +537,97 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 	}
 }
 
-void
-emit_asm(const struct assembly *cg, enum platform plat, int fd)
+struct fp_constant {
+	double value;
+	struct fp_constant *next;
+};
+
+static WARN_UNUSED result_t
+emit_asm_fp_check(Arena *arena,
+                  struct fp_constant **emitted,
+                  double value,
+                  bool *do_emit)
+{
+	*do_emit = false;
+
+	for (struct fp_constant *i = *emitted; i != NULL; i = i->next) {
+		if (i->value == value) {
+			return RESULT_OK;
+		}
+	}
+
+	struct fp_constant *node = arena_alloc(arena, sizeof(*node));
+	check_if(node == NULL, ERR_EMIT_ALLOC);
+	node->next = *emitted;
+	*emitted = node;
+
+	*do_emit = true; /* new constant: tell caller to emit */
+	return RESULT_OK;
+}
+
+static void
+emit_asm_fp_one(double value, enum platform plat, int fd)
+{
+	const char *label_prefix = get_label_prefix(plat);
+	const char *section_fp_constants = get_section_fp_constants(plat);
+
+	long long unsigned as_quadword = 0;
+	static_assert(sizeof(value) <= sizeof(as_quadword),
+	              "destination must be large enough to hold 64-bit double");
+	memcpy(&as_quadword, &value, sizeof(value));
+
+	dprintf(fd, "\t.section %s\n", section_fp_constants);
+	dprintf(fd, "%s%s%llu:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
+	dprintf(fd, "\t.quad %llu", as_quadword);
+}
+
+static WARN_UNUSED result_t
+emit_asm_fp_constants(Arena *arena,
+                      const struct asm_function *f,
+                      enum platform plat,
+                      int fd)
+{
+	struct fp_constant *emitted = NULL;
+	for (; f != NULL; f = f->next) {
+		for (struct asm_op *op = f->ops; op != NULL; op = op->next) {
+			for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+				if (op->args[i].operand_type !=
+				    ASM_OPERAND_CONSTANT_DATA_DOUBLE) {
+					continue;
+				}
+				bool do_emit = false;
+				check(emit_asm_fp_check(arena,
+				                        &emitted,
+				                        op->args[i].u.dnum,
+				                        &do_emit));
+				if (do_emit) {
+					emit_asm_fp_one(op->args[i].u.dnum,
+					                plat,
+					                fd);
+				}
+			}
+		}
+	}
+	return RESULT_OK;
+}
+
+result_t
+emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
 {
 	if (cg == NULL) {
-		return;
+		return RESULT_OK;
 	}
 
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
 		emit_asm_var(v, plat, fd);
 	}
 
+	check(emit_asm_fp_constants(arena, cg->functions, plat, fd));
+
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		emit_asm_fn(f, plat, fd);
 	}
 
 	emit_asm_footer(plat, fd);
+	return RESULT_OK;
 }

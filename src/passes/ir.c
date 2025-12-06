@@ -911,7 +911,7 @@ ir_logical_op(Arena *arena,
 	struct ir_op *foot_pos = footer;
 
 	foot_pos->opcode = IR_OP_COPY;
-	foot_pos->args[0].subtype = IR_VAL_CONSTANT_INT;
+	foot_pos->args[0].subtype = IR_VAL_CONSTANT;
 	foot_pos->args[0].num = jz ? 1 : 0;
 	foot_pos->args[1].subtype = return_value->subtype;
 	foot_pos->args[1].num = return_value->num;
@@ -934,7 +934,7 @@ ir_logical_op(Arena *arena,
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_COPY;
-	foot_pos->args[0].subtype = IR_VAL_CONSTANT_INT;
+	foot_pos->args[0].subtype = IR_VAL_CONSTANT;
 	foot_pos->args[0].num = jz ? 0 : 1;
 	foot_pos->args[1].subtype = return_value->subtype;
 	foot_pos->args[1].num = return_value->num;
@@ -1015,8 +1015,18 @@ ir_expr(Arena *arena,
 	switch (a->node_type) {
 	case NODE_CONSTANT:
 		assert(return_value->subtype == IR_VAL_NONE);
-		return_value->subtype = IR_VAL_CONSTANT_INT;
-		return_value->num = a->u.num;
+		return_value->subtype = IR_VAL_CONSTANT;
+		switch (a->expr_type) {
+		case CTYPE_INT:
+		case CTYPE_UNSIGNED_INT:
+		case CTYPE_LONG:
+		case CTYPE_UNSIGNED_LONG:
+			return_value->num = a->u.num;
+			break;
+		case CTYPE_DOUBLE:
+			return_value->dnum = a->u.double_;
+			break;
+		}
 		return_value->c89type = a->expr_type;
 		assert(*dst == NULL); /* does not create new dst op */
 		break;
@@ -1176,7 +1186,7 @@ ir_func(Arena *arena,
 		check(ir_alloc_op(arena, return_0));
 		assert(*return_0 != NULL);
 		(**return_0).opcode = IR_OP_RET;
-		(**return_0).args[0].subtype = IR_VAL_CONSTANT_INT;
+		(**return_0).args[0].subtype = IR_VAL_CONSTANT;
 		(**return_0).args[0].num = 0;
 	}
 
@@ -1310,8 +1320,13 @@ ir_debug_print_one(const struct ir_op *op)
 			assert(i >= required_args &&
 			       "op lacks required operand");
 			continue;
-		case IR_VAL_CONSTANT_INT:
-			debug("  CONSTANT %lld", (long long)op->args[i].num);
+		case IR_VAL_CONSTANT:
+			if (op->args[i].c89type == CTYPE_DOUBLE) {
+				debug("  CONSTANT %f", op->args[i].dnum);
+			} else {
+				debug("  CONSTANT %lld",
+				      (long long)op->args[i].num);
+			}
 			break;
 		case IR_VAL_TEMPORARY_VARIABLE:
 			debug("  VAR tmp.%lld", (long long)op->args[i].num);

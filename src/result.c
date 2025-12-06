@@ -125,6 +125,9 @@ result_to_str(result_t r)
 		                r.msg,
 		                my_strerror(r));
 		break;
+	case ERR_EMIT_ALLOC:
+		s = strdup("Cannot allocate emit tracking datastructure");
+		break;
 	case ERR_IR_ALLOC:
 		s = strdup("Cannot allocate intermediate representation");
 		break;

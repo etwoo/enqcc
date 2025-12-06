@@ -151,9 +151,20 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 	case IR_VAL_NONE:
 		assert(0 && "unset operand in 2-arg/3-arg op");
 		break;
-	case IR_VAL_CONSTANT_INT:
-		dst->operand_type = ASM_OPERAND_IMMEDIATE;
-		dst->u.num = src->num;
+	case IR_VAL_CONSTANT:
+		switch (src->c89type) {
+		case CTYPE_INT:
+		case CTYPE_UNSIGNED_INT:
+		case CTYPE_LONG:
+		case CTYPE_UNSIGNED_LONG:
+			dst->operand_type = ASM_OPERAND_IMMEDIATE;
+			dst->u.num = src->num;
+			break;
+		case CTYPE_DOUBLE:
+			dst->operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+			dst->u.dnum = src->dnum;
+			break;
+		}
 		break;
 	case IR_VAL_TEMPORARY_VARIABLE:
 		dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
@@ -255,7 +266,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	for (size_t i = n_args; i > CODEGEN_REGISTER_ARGS; --i) {
 		size_t pos = i - 1;
 		check(codegen_alloc_op(arena, dst));
-		if (src->args[pos].subtype == IR_VAL_CONSTANT_INT ||
+		if (src->args[pos].subtype == IR_VAL_CONSTANT ||
 		    src->args[pos].c89type == CTYPE_LONG) {
 			(**dst).opcode = ASM_OP_PUSH;
 			codegen_map_operand(&src->args[pos], &(**dst).args[0]);
@@ -1338,6 +1349,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  DATA %.*s",
 		      (int)operand->u.variable.sz,
 		      operand->u.variable.data);
+		break;
+	case ASM_OPERAND_CONSTANT_DATA_DOUBLE:
+		debug("  CONSTANT DOUBLE %f", operand->u.dnum);
 		break;
 	}
 

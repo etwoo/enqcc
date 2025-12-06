@@ -9,12 +9,13 @@
 struct ir_val {
 	enum {
 		IR_VAL_NONE,
-		IR_VAL_CONSTANT_INT,
+		IR_VAL_CONSTANT,
 		IR_VAL_TEMPORARY_VARIABLE,
 		IR_VAL_JUMP_TARGET_LABEL,
 		IR_VAL_VARIABLE_DATA,
 	} subtype;
 	int128_t num;               /* numeric value, variable ID, etc */
+	double dnum;                /* ... or numeric value as floating point */
 	struct string_view varname; /* symbol name, if linkage */
 	enum ctype c89type;
 };

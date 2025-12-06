@@ -1622,8 +1622,6 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	ops.node_enter = sema_double;
 	check(sema_walk(a, &ops, NULL));
 
-	// TODO: add pass to convert *_IMMEDIATE doubles to *_VARIABLE_DATA
-
 	debug("Inserting cast expressions");
 	ops.node_enter = sema_implicit_cast;
 	{
