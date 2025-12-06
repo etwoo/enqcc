@@ -132,21 +132,25 @@ lex_one_constant(struct string_view *pos, struct token **tok)
 {
 	struct token *cur = *tok;
 	size_t allow_sign_for = 0;
+	size_t sep_latest = SIZE_MAX;
 
 	struct {
 		const char sep;
-		bool found;
 		const bool allow_sign_next;
+		bool found;
+		bool needs_digit; /* must have digit somewhere in remainder */
 	} sep_chars[] = {
 		{
 			.sep = DECIMAL_POINT,
-			.found = false,
 			.allow_sign_next = false,
+			.found = false,
+			.needs_digit = false,
 		},
 		{
 			.sep = 'E',
-			.found = false,
 			.allow_sign_next = true,
+			.found = false,
+			.needs_digit = true,
 		},
 	};
 
@@ -162,6 +166,7 @@ lex_one_constant(struct string_view *pos, struct token **tok)
 				if (!sep_chars[i].found) {
 					sep_chars[i].found = true;
 					is_sep = true;
+					sep_latest = i;
 					if (sep_chars[i].allow_sign_next) {
 						allow_sign_for = 2;
 					}
@@ -174,6 +179,10 @@ lex_one_constant(struct string_view *pos, struct token **tok)
 			pos->data++;
 			pos->sz--;
 			allow_sign_for--;
+			if (sep_latest != SIZE_MAX && isdigit(c)) {
+				assert(sep_latest < ARRAY_SIZE(sep_chars));
+				sep_chars[sep_latest].needs_digit = false;
+			}
 			continue;
 		}
 
@@ -181,8 +190,16 @@ lex_one_constant(struct string_view *pos, struct token **tok)
 	}
 
 	bool found_sep = false;
+	bool malformed = false;
 	for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
 		found_sep = sep_chars[i].found || found_sep;
+		malformed = sep_chars[i].needs_digit || malformed;
+	}
+
+	if (found_sep && malformed) {
+		return make_result(ERR_LEX_FLOAT_EXPONENT_NO_DIGITS,
+		                   cur->val.data,
+		                   pos->data - cur->val.data);
 	}
 
 	const char allowed[2] = {'L', 'U'};

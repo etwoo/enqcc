@@ -141,6 +141,10 @@ result_to_str(result_t r)
 	case ERR_LEX_ALLOC:
 		s = strdup("Cannot allocate token during lex");
 		break;
+	case ERR_LEX_FLOAT_EXPONENT_NO_DIGITS:
+		s = my_asprintf("Floating point exponent has no digits: %s",
+		                r.msg);
+		break;
 	case ERR_LEX_NO_MATCH:
 		s = my_asprintf("No matching expression to lex: %s", r.msg);
 		break;
