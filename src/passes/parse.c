@@ -512,7 +512,7 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	errno = 0;
 
 	if (is_constant_maybe_double(&(**tok).val)) {
-		double tmp = strtod((**tok).val.data, NULL);
+		const double tmp = strtod((**tok).val.data, NULL);
 		if (errno != 0 && errno != ERANGE) {
 			return make_result(ERR_PARSE_CONSTANT_STRTOD,
 			                   errno,
@@ -525,7 +525,7 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 		return RESULT_OK;
 	}
 
-	long long unsigned tmp = strtoull((**tok).val.data, NULL, 0);
+	const long long unsigned tmp = strtoull((**tok).val.data, NULL, 0);
 	if (errno != 0) {
 		return make_result(ERR_PARSE_CONSTANT_STRTOULL,
 		                   errno,
