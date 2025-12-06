@@ -31,7 +31,7 @@ static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 static void
 map_numeric_type(const struct ast *init,
                  enum ctype dst_type,
-		 union constant_value *val)
+                 union constant_value *val)
 {
 	const struct ast *a = unpack_constant(init);
 	assert(a != NULL);
@@ -242,6 +242,8 @@ guess(const struct ast *a, enum ctype expected_type)
 {
 	int128_t value = 0;
 	union constant_value tmp = {0};
+	int128_t l_tmp = 0;
+	int128_t r_tmp = 0;
 
 	switch (a->node_type) {
 	case NODE_CONSTANT:
@@ -252,7 +254,9 @@ guess(const struct ast *a, enum ctype expected_type)
 		value = guess(a->u.op_unary.operand, expected_type);
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-		value = ~guess(a->u.op_unary.operand, expected_type);
+		value = guess(a->u.op_unary.operand, expected_type);
+		assert(value <= ULLONG_MAX);
+		value = ~(long long unsigned)value;
 		break;
 	case NODE_EXPRESSION_UNARY_NEGATE:
 		value = -1 * guess(a->u.op_unary.operand, expected_type);
@@ -294,20 +298,33 @@ guess(const struct ast *a, enum ctype expected_type)
 		}
 		break;
 	case NODE_EXPRESSION_BITWISE_AND:
-		value = guess(a->u.op_binary.lhs, expected_type) &
-		        guess(a->u.op_binary.rhs, expected_type);
-		break;
 	case NODE_EXPRESSION_BITWISE_OR:
-		value = guess(a->u.op_binary.lhs, expected_type) |
-		        guess(a->u.op_binary.rhs, expected_type);
-		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
-		value = guess(a->u.op_binary.lhs, expected_type)
-		        << guess(a->u.op_binary.rhs, expected_type);
-		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-		value = guess(a->u.op_binary.lhs, expected_type) >>
-		        guess(a->u.op_binary.rhs, expected_type);
+		l_tmp = guess(a->u.op_binary.lhs, expected_type);
+		r_tmp = guess(a->u.op_binary.rhs, expected_type);
+		assert(l_tmp <= ULLONG_MAX && r_tmp <= ULLONG_MAX);
+		switch (a->node_type) {
+		case NODE_EXPRESSION_BITWISE_AND:
+			value = (long long unsigned)l_tmp &
+			        (long long unsigned)r_tmp;
+			break;
+		case NODE_EXPRESSION_BITWISE_OR:
+			value = (long long unsigned)l_tmp |
+			        (long long unsigned)r_tmp;
+			break;
+		case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+			value = (long long unsigned)l_tmp
+			        << (long long unsigned)r_tmp;
+			break;
+		case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+			value = (long long unsigned)l_tmp >>
+			        (long long unsigned)r_tmp;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		break;
 	case NODE_EXPRESSION_LOGICAL_AND:
 		value = guess(a->u.op_binary.lhs, expected_type) &&
@@ -392,8 +409,7 @@ case_prepend(Arena *arena,
 
 	enum ctype control_type =
 		containing_switch->u.switch_.control->expr_type;
-	const int128_t new_value =
-		guess_case_value(new_case, control_type);
+	const int128_t new_value = guess_case_value(new_case, control_type);
 
 	struct flat *head = containing_switch->u.switch_.label_cases;
 	for (; head != NULL; head = head->cdr) {
@@ -805,12 +821,7 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_SWITCH:
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
-	case NODE_EXPRESSION_NULL:
 		break; /* expr_type has no meaning in this context */
-	case NODE_EXPRESSION_VARIABLE_USAGE:
-	case NODE_EXPRESSION_FUNCTION_CALL:
-	case NODE_CONSTANT:
-		break; /* resolve_expr() in parse.c handles leaf nodes */
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -896,6 +907,11 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_CAST:
 		a->expr_type = a->u.cast.to_type;
 		break;
+	case NODE_EXPRESSION_NULL:
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+	case NODE_EXPRESSION_FUNCTION_CALL:
+	case NODE_CONSTANT:
+		break; /* resolve_expr() in parse.c handles leaf nodes */
 	}
 
 	if (a->expr_type == CTYPE_DOUBLE) {
