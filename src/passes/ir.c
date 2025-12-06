@@ -640,6 +640,27 @@ ir_unary_op(Arena *arena,
 			               ir,
 			               dst,
 			               return_value);
+		} else if (ctype_is_floating_point(a->u.cast.expr->expr_type) !=
+		           ctype_is_floating_point(a->u.cast.to_type)) {
+			const bool src_fp = ctype_is_floating_point(
+				a->u.cast.expr->expr_type);
+			const bool src_signed =
+				ctype_is_signed(a->u.cast.expr->expr_type);
+			const bool dst_fp =
+				ctype_is_floating_point(a->u.cast.to_type);
+			const bool dst_signed =
+				ctype_is_signed(a->u.cast.to_type);
+			if (src_fp && dst_signed) {
+				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_INT;
+			} else if (src_fp && !dst_signed) {
+				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_UINT;
+			} else if (src_signed && dst_fp) {
+				unary->opcode = IR_OP_CTYPE_INT_TO_DOUBLE;
+			} else if (!src_signed && dst_fp) {
+				unary->opcode = IR_OP_CTYPE_UINT_TO_DOUBLE;
+			} else {
+				assert(0); /* mistake in truth table above */
+			}
 		} else if (ctype_to_size_bytes(a->u.cast.expr->expr_type) ==
 		           ctype_to_size_bytes(a->u.cast.to_type)) {
 			unary->opcode = IR_OP_COPY;

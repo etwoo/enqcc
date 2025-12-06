@@ -53,6 +53,12 @@ ctype_is_signed(enum ctype c)
 	return b;
 }
 
+bool
+ctype_is_floating_point(enum ctype c)
+{
+	return c == CTYPE_DOUBLE;
+}
+
 enum ctype
 get_common_ctype(enum ctype lhs, enum ctype rhs)
 {

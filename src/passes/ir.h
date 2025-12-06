@@ -24,6 +24,10 @@ struct ir_val {
 	F(CTYPE_SIGN_EXTEND, 1)                                                \
 	F(CTYPE_TRUNCATE, 1)                                                   \
 	F(CTYPE_ZERO_EXTEND, 1)                                                \
+	F(CTYPE_DOUBLE_TO_INT, 2)                                              \
+	F(CTYPE_DOUBLE_TO_UINT, 2)                                             \
+	F(CTYPE_INT_TO_DOUBLE, 2)                                              \
+	F(CTYPE_UINT_TO_DOUBLE, 2)                                             \
 	F(UNARY_COMPLEMENT, 1)                                                 \
 	F(UNARY_NEGATE, 1)                                                     \
 	F(UNARY_NOT, 1)                                                        \
