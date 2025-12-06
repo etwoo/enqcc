@@ -192,8 +192,10 @@ lex_one_constant(struct string_view *pos, struct token **tok)
 	bool found_sep = false;
 	bool malformed = false;
 	for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
-		found_sep = sep_chars[i].found || found_sep;
-		malformed = sep_chars[i].needs_digit || malformed;
+		if (sep_chars[i].found) {
+			found_sep = true;
+			malformed = sep_chars[i].needs_digit || malformed;
+		}
 	}
 
 	if (found_sep && malformed) {
