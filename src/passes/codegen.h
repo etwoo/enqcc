@@ -1,7 +1,7 @@
 #ifndef COMPILER_PASSES_CODEGEN_H
 #define COMPILER_PASSES_CODEGEN_H
 
-#include "passes/int128_t.h"
+#include "passes/symbol.h"
 #include "sys/string_view.h"
 
 #define FOREACH_CALL_REGISTER(F)                                               \
@@ -12,12 +12,25 @@
 	F(R8, "r8", "r8d", "r8b")                                              \
 	F(R9, "r9", "r9d", "r9b")
 
+#define FOREACH_FP_CALL_REGISTER(F)                                            \
+	F(XMM0, "xmm0", "xmm0", "xmm0")                                        \
+	F(XMM1, "xmm1", "xmm1", "xmm1")                                        \
+	F(XMM2, "xmm2", "xmm2", "xmm2")                                        \
+	F(XMM3, "xmm3", "xmm3", "xmm3")                                        \
+	F(XMM4, "xmm4", "xmm4", "xmm4")                                        \
+	F(XMM5, "xmm5", "xmm5", "xmm5")                                        \
+	F(XMM6, "xmm6", "xmm6", "xmm6")                                        \
+	F(XMM7, "xmm7", "xmm7", "xmm7")
+
 #define FOREACH_ASM_REGISTER(F)                                                \
 	FOREACH_CALL_REGISTER(F)                                               \
 	F(AX, "rax", "eax", "al")                                              \
 	F(R10, "r10", "r10d", "r10b")                                          \
 	F(R11, "r11", "r11d", "r11b")                                          \
-	F(RSP, "rsp", "rsp", "rsp")
+	F(RSP, "rsp", "rsp", "rsp")                                            \
+	FOREACH_FP_CALL_REGISTER(F)                                            \
+	F(XMM14, "xmm14", "xmm14", "xmm14")                                    \
+	F(XMM15, "xmm15", "xmm15", "xmm15")
 
 #define TO_ENUM(register_name, b8, b4, b1) ASM_REGISTER_##register_name,
 enum asm_register { FOREACH_ASM_REGISTER(TO_ENUM) };
@@ -33,6 +46,9 @@ struct asm_operand {
 		ASM_OPERAND_JUMP_TARGET_LABEL,
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
 		ASM_OPERAND_VARIABLE_DATA,
+		ASM_OPERAND_CONSTANT_DATA_DOUBLE,
+		ASM_OPERAND_CONSTANT_DATA_VEC_LONGS,
+		ASM_OPERAND_CONSTANT_DATA_VEC_QUADS,
 	} operand_type;
 	enum {
 		ASM_WORD_32BIT, /* DWORD */
@@ -43,13 +59,20 @@ struct asm_operand {
 		enum asm_register reg;
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
+		double dnum;                 /* CONSTANT_DATA_DOUBLE */
+		long unsigned longs[4];      /* CONSTANT_DATA_VEC_LONGS */
+		long long unsigned quads[2]; /* CONSTANT_DATA_VEC_QUADS */
 	} u;
 };
+
+bool is_xmm_register(const struct asm_operand *o) WARN_UNUSED;
 
 #define FOREACH_ASM_OPCODE(F)                                                  \
 	F(MOV)                                                                 \
 	F(MOV_WITH_SIGN_EXTENSION)                                             \
 	F(MOV_WITH_ZERO_EXTENSION)                                             \
+	F(CVT_DOUBLE_TO_INT)                                                   \
+	F(CVT_INT_TO_DOUBLE)                                                   \
 	F(UNARY_NEG)                                                           \
 	F(UNARY_NOT)                                                           \
 	F(UNARY_DECREMENT)                                                     \
@@ -69,6 +92,15 @@ struct asm_operand {
 	F(DIV)                                                                 \
 	F(CDQ)                                                                 \
 	F(CQO)                                                                 \
+	F(DOUBLE_BINARY_ADD)                                                   \
+	F(DOUBLE_BINARY_SUBTRACT)                                              \
+	F(DOUBLE_BINARY_MULTIPLY)                                              \
+	F(DOUBLE_BINARY_DIVIDE)                                                \
+	F(DOUBLE_BITWISE_XOR)                                                  \
+	F(DOUBLE_COMPARE)                                                      \
+	F(VEC_DOUBLE_BINARY_SUBTRACT)                                          \
+	F(VEC_DOUBLE_UNPACK_INTERLEAVE_HI)                                     \
+	F(VEC_DOUBLE_UNPACK_INTERLEAVE_LO)                                     \
 	F(JMP)                                                                 \
 	F(JMP_IF_EQ)                                                           \
 	F(JMP_IF_NEQ)                                                          \
@@ -90,6 +122,8 @@ struct asm_operand {
 	F(SET_IF_AE)                                                           \
 	F(SET_IF_B)                                                            \
 	F(SET_IF_BE)                                                           \
+	F(SET_IF_P)                                                            \
+	F(SET_IF_NP)                                                           \
 	F(LABEL)                                                               \
 	F(PUSH)                                                                \
 	F(CALL)                                                                \
@@ -120,11 +154,9 @@ struct asm_function {
 
 struct asm_variable {
 	struct string_view identifier;
-	long long int alignment;
+	enum ctype c89type; /* determines alignment */
 	enum asm_linkage linkage;
-	struct {
-		int128_t initial_as_int128;
-	} u;
+	union constant_value initial;
 	struct asm_variable *next;
 };
 

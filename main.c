@@ -1,15 +1,13 @@
-#include "passes.h"
-#include "result.h"
+// NOLINTBEGIN(clang-analyzer-unix.Malloc) /* clang-tidy warns about arena.h */
 
-#pragma GCC diagnostic push
-/* workaround -Wformat-truncation warning in arena_vsprintf() under GCC */
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-#endif
 #define ARENA_IMPLEMENTATION
+#define ARENA_DEFAULT_ALIGNMENT 16
 #include "arena.h"
 #undef ARENA_IMPLEMENTATION
-#pragma GCC diagnostic pop
+#undef ARENA_DEFAULT_ALIGNMENT
+
+#include "passes.h"
+#include "result.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -130,7 +128,7 @@ compile(Arena *arena,
 		;
 	int fd = open(dst, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
 	check_if(fd < 0, ERR_EMIT_FILE_OPEN, errno);
-	emit_asm(cg, platform_choice, fd);
+	check(emit_asm(arena, cg, platform_choice, fd));
 	close(fd);
 
 	return RESULT_OK;
@@ -196,11 +194,11 @@ main(int argc, char *argv[])
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
-			Arena a = {0};
+			Arena *a = arena_create((size_t)32 * 1024 * 1024);
 			const char *src = argv[optind];
 			const char *dst = argv[optind + 1];
-			rc = result_to_status(compile(&a, src, dst, action));
-			arena_free(&a);
+			rc = result_to_status(compile(a, src, dst, action));
+			arena_destroy(a);
 		}
 		break;
 	case ACTION_USAGE_HELP:
@@ -217,3 +215,5 @@ main(int argc, char *argv[])
 
 	return rc;
 }
+
+// NOLINTEND(clang-analyzer-unix.Malloc) /* clang-tidy warns about arena.h */

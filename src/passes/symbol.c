@@ -3,6 +3,9 @@
 #include "sys/array.h"
 #include "sys/debug.h"
 
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
@@ -28,6 +31,7 @@ ctype_to_size_bytes(enum ctype c)
 		break;
 	case CTYPE_LONG:
 	case CTYPE_UNSIGNED_LONG:
+	case CTYPE_DOUBLE:
 		b = 8;
 		break;
 	}
@@ -41,6 +45,7 @@ ctype_is_signed(enum ctype c)
 	switch (c) {
 	case CTYPE_INT:
 	case CTYPE_LONG:
+	case CTYPE_DOUBLE:
 		b = true;
 		break;
 	case CTYPE_UNSIGNED_INT:
@@ -49,6 +54,12 @@ ctype_is_signed(enum ctype c)
 		break;
 	}
 	return b;
+}
+
+bool
+ctype_is_floating_point(enum ctype c)
+{
+	return c == CTYPE_DOUBLE;
 }
 
 enum ctype
@@ -161,14 +172,26 @@ is_mangled(struct symbol *s)
 result_t
 mangle_name(Arena *arena, struct symbol *s)
 {
-	char *mangled_str = arena_sprintf(arena,
-	                                  "%.*s%c%lld",
-	                                  (int)s->name.sz,
-	                                  s->name.data,
-	                                  MANGLE_DELIMITER,
-	                                  s->unique);
-	check_if(mangled_str == NULL, ERR_SYMBOL_ALLOC);
-	s->name.data = mangled_str;
+	char *mangled_str = NULL;
+	int rc = asprintf(&mangled_str,
+	                  "%.*s%c%lld",
+	                  (int)s->name.sz,
+	                  s->name.data,
+	                  MANGLE_DELIMITER,
+	                  s->unique);
+	check_if(rc < 0, ERR_SYMBOL_ALLOC);
+
 	s->name.sz = strlen(mangled_str);
+
+	char *arena_copy = arena_alloc(arena, strlen(mangled_str));
+	if (arena_copy == NULL) {
+		free(mangled_str);
+		return make_result(ERR_SYMBOL_ALLOC);
+	}
+
+	memcpy(arena_copy, mangled_str, s->name.sz); /* exclude NUL */
+	s->name.data = arena_copy;
+
+	free(mangled_str);
 	return RESULT_OK;
 }

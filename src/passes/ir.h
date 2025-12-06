@@ -9,21 +9,19 @@
 struct ir_val {
 	enum {
 		IR_VAL_NONE,
-		IR_VAL_CONSTANT_INT,
+		IR_VAL_CONSTANT,
 		IR_VAL_TEMPORARY_VARIABLE,
 		IR_VAL_JUMP_TARGET_LABEL,
 		IR_VAL_VARIABLE_DATA,
 	} subtype;
 	int128_t num;               /* numeric value, variable ID, etc */
+	double dnum;                /* ... or numeric value as floating point */
 	struct string_view varname; /* symbol name, if linkage */
 	enum ctype c89type;
 };
 
 #define FOREACH_IR_OPCODE(F)                                                   \
 	F(RET, 0)                                                              \
-	F(CTYPE_SIGN_EXTEND, 1)                                                \
-	F(CTYPE_TRUNCATE, 1)                                                   \
-	F(CTYPE_ZERO_EXTEND, 1)                                                \
 	F(UNARY_COMPLEMENT, 1)                                                 \
 	F(UNARY_NEGATE, 1)                                                     \
 	F(UNARY_NOT, 1)                                                        \
@@ -46,6 +44,13 @@ struct ir_val {
 	F(COMPARE_MORE_THAN, 2)                                                \
 	F(COMPARE_MORE_THAN_EQ, 2)                                             \
 	F(COPY, 2)                                                             \
+	F(CTYPE_SIGN_EXTEND, 1)                                                \
+	F(CTYPE_TRUNCATE, 1)                                                   \
+	F(CTYPE_ZERO_EXTEND, 1)                                                \
+	F(CTYPE_DOUBLE_TO_INT, 2)                                              \
+	F(CTYPE_DOUBLE_TO_UINT, 2)                                             \
+	F(CTYPE_INT_TO_DOUBLE, 2)                                              \
+	F(CTYPE_UINT_TO_DOUBLE, 2)                                             \
 	F(JUMP, 1)                                                             \
 	F(JUMP_IF_ZERO, 2)                                                     \
 	F(JUMP_IF_NOT_ZERO, 2)                                                 \
@@ -78,11 +83,9 @@ struct ir_function {
 
 struct ir_variable {
 	struct string_view identifier;
-	enum ctype c89type; /* determines alignment */
+	enum ctype c89type;
 	enum ir_linkage linkage;
-	struct {
-		int128_t initial_as_int128;
-	} u;
+	union constant_value initial;
 	struct ir_variable *next;
 };
 

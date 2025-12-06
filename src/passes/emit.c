@@ -4,14 +4,21 @@
 #include "sys/compiler_features.h"
 
 #include <assert.h>
+#include <math.h> /* for signbit() */
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>    /* for memcpy() */
 #include <sys/param.h> /* for MAX() */
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char LINUX_LABEL_PREFIX[] = ".L";
+static const char LINUX_SECTION_RODATA[] = ".section .rodata";
 static const char MACOS_SYMBOL_WITH_LINKAGE_PREFIX[] = "_";
 static const char MACOS_LABEL_PREFIX[] = "L";
+static const char MACOS_SECTION_LITERAL8[] = ".literal8";
+static const char DOUBLE_LABEL_ID[] = "double_";
+static const char VEC_LONGS_LABEL_ID[] = "vecl_";
+static const char VEC_QUADS_LABEL_ID[] = "vecq_";
 static const char CUSTOM_LABEL_ID[] = "boba_";
 static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_POP_QUAD[] = "popq";
@@ -47,6 +54,21 @@ get_label_prefix(enum platform plat)
 }
 
 static WARN_UNUSED const char *
+get_section_fp_constants(enum platform plat)
+{
+	const char *result = NULL;
+	switch (plat) {
+	case PLATFORM_MACOS:
+		result = MACOS_SECTION_LITERAL8;
+		break;
+	case PLATFORM_LINUX:
+		result = LINUX_SECTION_RODATA;
+		break;
+	}
+	return result;
+}
+
+static WARN_UNUSED const char *
 get_symbol_with_linkage_prefix(enum platform plat)
 {
 	const char *result = NULL;
@@ -67,6 +89,16 @@ emit_asm_footer(enum platform plat, int fd)
 	if (plat == PLATFORM_LINUX) {
 		dprintf(fd, "%s", LINUX_NX);
 	}
+}
+
+static long long unsigned
+get_double_as_quadword(double value)
+{
+	long long unsigned as_quadword = 0;
+	static_assert(sizeof(value) <= sizeof(as_quadword),
+	              "destination must be large enough to hold 64-bit double");
+	memcpy(&as_quadword, &value, sizeof(value));
+	return as_quadword;
 }
 
 static void
@@ -141,6 +173,34 @@ emit_asm_operand(const struct asm_operand *o,
 		        o->u.variable.data,
 		        STR_REG_RIP);
 		break;
+	case ASM_OPERAND_CONSTANT_DATA_DOUBLE:
+		dprintf(fd,
+		        "%s%s%llx(%s)",
+		        label_prefix,
+		        DOUBLE_LABEL_ID,
+		        get_double_as_quadword(o->u.dnum),
+		        STR_REG_RIP);
+		break;
+	case ASM_OPERAND_CONSTANT_DATA_VEC_LONGS:
+		dprintf(fd,
+		        "%s%s%lx%lx%lx%lx(%s)",
+		        label_prefix,
+		        VEC_LONGS_LABEL_ID,
+		        o->u.longs[0],
+		        o->u.longs[1],
+		        o->u.longs[2],
+		        o->u.longs[3],
+		        STR_REG_RIP);
+		break;
+	case ASM_OPERAND_CONSTANT_DATA_VEC_QUADS:
+		dprintf(fd,
+		        "%s%s%llx%llx(%s)",
+		        label_prefix,
+		        VEC_QUADS_LABEL_ID,
+		        o->u.quads[0],
+		        o->u.quads[1],
+		        STR_REG_RIP);
+		break;
 	}
 }
 
@@ -156,6 +216,24 @@ map_wordtype_to_register_alias(const struct asm_operand *o,
 		*dst = REGISTER_ALIAS_8BYTE;
 		break;
 	}
+}
+
+static char
+map_ralias_to_op_suffix(enum register_alias reg)
+{
+	char c = 0;
+	switch (reg) {
+	case REGISTER_ALIAS_8BYTE:
+		c = 'q';
+		break;
+	case REGISTER_ALIAS_4BYTE:
+		c = 'l';
+		break;
+	case REGISTER_ALIAS_1BYTE:
+		c = 'b';
+		break;
+	}
+	return c;
 }
 
 static void
@@ -188,19 +266,14 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	/*
 	 * Choose the overall opcode suffix based on the word_type of the
 	 * destination operand (indicated by the value of ralias_default).
+	 *
+	 * Some instructions override this behavior and set the opcode suffix
+	 * based on the word type of the source operand instead.
+	 *
+	 * Instructions that do not actually require a suffix reset this value
+	 * to 0, aka NUL byte.
 	 */
-	char print_opcode_suffix = 0;
-	switch (ralias_default) {
-	case REGISTER_ALIAS_8BYTE:
-		print_opcode_suffix = 'q';
-		break;
-	case REGISTER_ALIAS_4BYTE:
-		print_opcode_suffix = 'l';
-		break;
-	case REGISTER_ALIAS_1BYTE:
-		print_opcode_suffix = 'b';
-		break;
-	}
+	char print_opcode_suffix = map_ralias_to_op_suffix(ralias_default);
 
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
@@ -212,7 +285,15 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	const char *print_opcode = NULL;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
-		print_opcode = "mov";
+		if ((is_xmm_register(&op->args[0]) &&
+		     op->args[1].operand_type == ASM_OPERAND_STACK) ||
+		    (op->args[0].operand_type == ASM_OPERAND_STACK &&
+		     is_xmm_register(&op->args[1]))) {
+			print_opcode = "movsd";
+			print_opcode_suffix = 0;
+		} else {
+			print_opcode = "mov";
+		}
 		break;
 	case ASM_OP_MOV_WITH_SIGN_EXTENSION:
 		print_opcode = "movslq";
@@ -222,6 +303,20 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
 		assert(0 && "MOV W/ ZEROEXTENSION should have been eliminated");
+		break;
+	case ASM_OP_CVT_DOUBLE_TO_INT:
+		print_opcode = "cvttsd2si";
+		break;
+	case ASM_OP_CVT_INT_TO_DOUBLE:
+		print_opcode = "cvtsi2sd";
+		/*
+		 * For conversion from integer types to double, choose the
+		 * opcode suffix (l vs q) and source register alias (e.g. r10d
+		 * vs r10) based on the width of the source operand, not the
+		 * width of destination operand.
+		 */
+		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
+		print_opcode_suffix = map_ralias_to_op_suffix(ralias[0]);
 		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
@@ -285,6 +380,42 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_CQO:
 		print_opcode = "cqo";
 		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_DOUBLE_BINARY_ADD:
+		print_opcode = "addsd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_DOUBLE_BINARY_SUBTRACT:
+		print_opcode = "subsd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_DOUBLE_BINARY_MULTIPLY:
+		print_opcode = "mulsd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_DOUBLE_BINARY_DIVIDE:
+		print_opcode = "divsd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_DOUBLE_BITWISE_XOR:
+		print_opcode = "xorpd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_DOUBLE_COMPARE:
+		print_opcode = "comisd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT:
+		print_opcode = "subpd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_HI:
+		print_opcode = "unpckhpd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO:
+		print_opcode = "punpckld";
+		/* retain print_opcode_suffix */
 		break;
 	case ASM_OP_JMP:
 		print_opcode = "jmp";
@@ -380,6 +511,16 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
+	case ASM_OP_SET_IF_P:
+		print_opcode = "setp";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_NP:
+		print_opcode = "setnp";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
 	case ASM_OP_LABEL:
 		assert(op->args[0].operand_type ==
 		       ASM_OPERAND_JUMP_TARGET_LABEL);
@@ -471,44 +612,186 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	if (var->u.initial_as_int128 != 0) {
-		dprintf(fd, "\t.data\n\t.balign %lld\n", var->alignment);
+	const long long int alignment = ctype_to_size_bytes(var->c89type);
+
+	if (var->initial.as_integer != 0 || var->c89type == CTYPE_DOUBLE) {
+		dprintf(fd, "\t.data\n\t.balign %lld\n", alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		if (var->alignment == 4) {
+		if (alignment == 4) {
 			dprintf(fd, "\t.long ");
 		} else {
 			dprintf(fd, "\t.quad ");
 		}
-		if (var->u.initial_as_int128 > LLONG_MAX) {
+		if (var->c89type == CTYPE_DOUBLE) {
+			dprintf(fd,
+			        "0x%llx\n",
+			        get_double_as_quadword(var->initial.as_double));
+		} else if (var->initial.as_integer > LLONG_MAX) {
 			dprintf(fd,
 			        "%llu\n",
-			        (long long unsigned)var->u.initial_as_int128);
+			        (long long unsigned)var->initial.as_integer);
 		} else {
 			dprintf(fd,
 			        "%lld\n",
-			        (long long)var->u.initial_as_int128);
+			        (long long)var->initial.as_integer);
 		}
 	} else {
-		dprintf(fd, "\t.bss\n\t.balign %lld\n", var->alignment);
+		dprintf(fd, "\t.bss\n\t.balign %lld\n", alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.zero %lld\n", var->alignment);
+		dprintf(fd, "\t.zero %lld\n", alignment);
 	}
 }
 
-void
-emit_asm(const struct assembly *cg, enum platform plat, int fd)
+/*
+ * This function only handles the magic numbers for IR_OP_CTYPE_UINT_TO_DOUBLE.
+ */
+static WARN_UNUSED result_t
+emit_asm_fp_vector_constants(const struct asm_function *f,
+                             enum platform plat,
+                             int fd)
+{
+	struct asm_operand *got_longs = NULL;
+	struct asm_operand *got_quads = NULL;
+	for (; f != NULL; f = f->next) {
+		for (struct asm_op *op = f->ops; op != NULL; op = op->next) {
+			for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+				switch (op->args[i].operand_type) {
+				case ASM_OPERAND_CONSTANT_DATA_VEC_LONGS:
+					got_longs = &op->args[i];
+					break;
+				case ASM_OPERAND_CONSTANT_DATA_VEC_QUADS:
+					got_quads = &op->args[i];
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	const char *label_prefix = get_label_prefix(plat);
+
+	if (got_longs != NULL) {
+		dprintf(fd,
+		        "%s%s%lx%lx%lx%lx:\n",
+		        label_prefix,
+		        VEC_LONGS_LABEL_ID,
+		        got_longs->u.longs[0],
+		        got_longs->u.longs[1],
+		        got_longs->u.longs[2],
+		        got_longs->u.longs[3]);
+		for (size_t i = 0; i < ARRAY_SIZE(got_longs->u.longs); ++i) {
+			dprintf(fd, "\t.long 0x%lx\n", got_longs->u.longs[i]);
+		}
+	}
+
+	if (got_quads != NULL) {
+		dprintf(fd,
+		        "%s%s%llx%llx:\n",
+		        label_prefix,
+		        VEC_QUADS_LABEL_ID,
+		        got_quads->u.quads[0],
+		        got_quads->u.quads[1]);
+		for (size_t i = 0; i < ARRAY_SIZE(got_quads->u.quads); ++i) {
+			dprintf(fd, "\t.quad 0x%llx\n", got_quads->u.quads[i]);
+		}
+	}
+
+	return RESULT_OK;
+}
+
+struct fp_constant {
+	double value;
+	struct fp_constant *next;
+};
+
+static WARN_UNUSED result_t
+emit_asm_fp_check(Arena *arena,
+                  struct fp_constant **emitted,
+                  double value,
+                  bool *do_emit)
+{
+	*do_emit = false;
+
+	for (struct fp_constant *i = *emitted; i != NULL; i = i->next) {
+		if (i->value == value &&
+		    /* distinguish +0.0 from -0.0 */
+		    ((0 == signbit(i->value)) == (0 == signbit(value)))) {
+			return RESULT_OK;
+		}
+	}
+
+	struct fp_constant *node = arena_alloc(arena, sizeof(*node));
+	check_if(node == NULL, ERR_EMIT_ALLOC);
+	node->next = *emitted;
+	node->value = value;
+	*emitted = node;
+
+	*do_emit = true; /* new constant: tell caller to emit */
+	return RESULT_OK;
+}
+
+static void
+emit_asm_fp_one(const double *value, enum platform plat, int fd)
+{
+	const char *section_fp_constants = get_section_fp_constants(plat);
+	const char *label_prefix = get_label_prefix(plat);
+	const long long unsigned as_quadword = get_double_as_quadword(*value);
+
+	dprintf(fd, "\t%s\n", section_fp_constants);
+	dprintf(fd, "\t.balign %lld\n", ctype_to_size_bytes(CTYPE_DOUBLE));
+	dprintf(fd, "%s%s%llx:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
+	dprintf(fd, "\t.quad 0x%llx\n", as_quadword);
+}
+
+static WARN_UNUSED result_t
+emit_asm_fp_constants(Arena *arena,
+                      const struct asm_function *f,
+                      enum platform plat,
+                      int fd)
+{
+	struct fp_constant *emitted = NULL;
+	for (; f != NULL; f = f->next) {
+		for (struct asm_op *op = f->ops; op != NULL; op = op->next) {
+			for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+				if (op->args[i].operand_type !=
+				    ASM_OPERAND_CONSTANT_DATA_DOUBLE) {
+					continue;
+				}
+				bool do_emit = false;
+				check(emit_asm_fp_check(arena,
+				                        &emitted,
+				                        op->args[i].u.dnum,
+				                        &do_emit));
+				if (do_emit) {
+					emit_asm_fp_one(&op->args[i].u.dnum,
+					                plat,
+					                fd);
+				}
+			}
+		}
+	}
+	return RESULT_OK;
+}
+
+result_t
+emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
 {
 	if (cg == NULL) {
-		return;
+		return RESULT_OK;
 	}
 
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
 		emit_asm_var(v, plat, fd);
 	}
 
+	check(emit_asm_fp_vector_constants(cg->functions, plat, fd));
+	check(emit_asm_fp_constants(arena, cg->functions, plat, fd));
+
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		emit_asm_fn(f, plat, fd);
 	}
 
 	emit_asm_footer(plat, fd);
+	return RESULT_OK;
 }

@@ -5,8 +5,8 @@ include(get_cpm)
 macro(add_external_packages)
 	CPMAddPackage(
 		NAME arena
-		GITHUB_REPOSITORY tsoding/arena
-		GIT_TAG ab625dd3ac0df8c6d82cbbcd1d8fb976ecb8b9c8
+		GITHUB_REPOSITORY ccgargantua/arena-allocator
+		GIT_TAG 5377b1636450a2ec077b9356532ead7422c71c20
 		DOWNLOAD_ONLY YES
 	)
 	if (BUILD_TESTING)

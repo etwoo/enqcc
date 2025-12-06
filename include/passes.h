@@ -57,6 +57,8 @@ enum platform {
 	PLATFORM_LINUX,
 };
 
-void emit_asm(const struct assembly *cg, enum platform plat, int fd);
+result_t
+emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
+	__attribute__((warn_unused_result));
 
 #endif

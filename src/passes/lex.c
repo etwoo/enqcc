@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
@@ -113,6 +114,119 @@ lex_one_token_keyword_maybe(struct string_view *pos)
 	return TOKEN_IDENTIFIER;
 }
 
+const char DECIMAL_POINT = '.';
+const char E_NOTATION_CHAR = 'E';
+
+static WARN_UNUSED bool
+isdot(char c)
+{
+	return c == DECIMAL_POINT;
+}
+
+static WARN_UNUSED bool
+issign(char c)
+{
+	return c == '+' || c == '-';
+}
+
+static WARN_UNUSED result_t
+lex_one_constant(struct string_view *pos, struct token **tok)
+{
+	struct token *cur = *tok;
+	size_t allow_sign_for = 0;
+	size_t sep_latest = SIZE_MAX;
+
+	struct {
+		const char sep;
+		const bool allow_sign_next;
+		bool found;
+		bool needs_digit; /* must have digit somewhere in remainder */
+	} sep_chars[] = {
+		{
+			.sep = DECIMAL_POINT,
+			.allow_sign_next = false,
+			.found = false,
+			.needs_digit = false,
+		},
+		{
+			.sep = E_NOTATION_CHAR,
+			.allow_sign_next = true,
+			.found = false,
+			.needs_digit = true,
+		},
+	};
+
+	cur->val.data = pos->data;
+	assert(isdigit(cur->val.data[0]) || isdot(cur->val.data[0]));
+
+	while (pos->sz > 0) {
+		const char c = *pos->data;
+
+		bool is_sep = false;
+		for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
+			if (sep_chars[i].sep == toupper(c)) {
+				if (!sep_chars[i].found) {
+					sep_chars[i].found = true;
+					is_sep = true;
+					sep_latest = i;
+					if (sep_chars[i].allow_sign_next) {
+						allow_sign_for = 2;
+					}
+				}
+				break;
+			}
+		}
+
+		if (isdigit(c) || is_sep || (issign(c) && allow_sign_for > 0)) {
+			pos->data++;
+			pos->sz--;
+			if (allow_sign_for > 0) {
+				allow_sign_for--;
+			}
+			if (sep_latest != SIZE_MAX && isdigit(c)) {
+				assert(sep_latest < ARRAY_SIZE(sep_chars));
+				sep_chars[sep_latest].needs_digit = false;
+			}
+			continue;
+		}
+
+		break;
+	}
+
+	bool found_sep = false;
+	bool malformed = false;
+	for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
+		if (sep_chars[i].found) {
+			found_sep = true;
+			malformed = sep_chars[i].needs_digit || malformed;
+		}
+	}
+
+	if (found_sep && malformed) {
+		return make_result(ERR_LEX_FLOAT_EXPONENT_NO_DIGITS,
+		                   cur->val.data,
+		                   pos->data - cur->val.data);
+	}
+
+	const char allowed[2] = {'L', 'U'};
+	for (size_t i = 0; !found_sep && i < ARRAY_SIZE(allowed); ++i) {
+		if (toupper(*pos->data) == allowed[i]) {
+			pos->data++;
+			pos->sz--;
+			const size_t other = ARRAY_SIZE(allowed) - (i + 1);
+			if (toupper(*pos->data) == allowed[other]) {
+				pos->data++;
+				pos->sz--;
+			}
+			break;
+		}
+	}
+
+	cur->val.sz = pos->data - cur->val.data;
+	cur->token_type = TOKEN_CONSTANT;
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 {
@@ -135,28 +249,8 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 		const size_t ahead = lex_readahead_one_or_two_chars(pos, cur);
 		pos->data += ahead;
 		pos->sz -= ahead;
-	} else if (isdigit(c)) {
-		cur->val.data = pos->data;
-		do {
-			pos->data++;
-			pos->sz--;
-		} while (isdigit(*pos->data));
-		const char allowed[2] = {'L', 'U'};
-		for (size_t i = 0; i < ARRAY_SIZE(allowed); ++i) {
-			if (toupper(*pos->data) == allowed[i]) {
-				pos->data++;
-				pos->sz--;
-				const size_t other =
-					ARRAY_SIZE(allowed) - (i + 1);
-				if (toupper(*pos->data) == allowed[other]) {
-					pos->data++;
-					pos->sz--;
-				}
-				break;
-			}
-		}
-		cur->val.sz = pos->data - cur->val.data;
-		cur->token_type = TOKEN_CONSTANT;
+	} else if (isdigit(c) || isdot(c)) {
+		check(lex_one_constant(pos, &cur));
 		check(lex_peek_ok(pos, &cur->val));
 	} else if (isalpha(c) || c == '_') {
 		cur->val.data = pos->data;
