@@ -28,6 +28,7 @@ ctype_to_size_bytes(enum ctype c)
 		break;
 	case CTYPE_LONG:
 	case CTYPE_UNSIGNED_LONG:
+	case CTYPE_DOUBLE:
 		b = 8;
 		break;
 	}
@@ -41,6 +42,7 @@ ctype_is_signed(enum ctype c)
 	switch (c) {
 	case CTYPE_INT:
 	case CTYPE_LONG:
+	case CTYPE_DOUBLE:
 		b = true;
 		break;
 	case CTYPE_UNSIGNED_INT:

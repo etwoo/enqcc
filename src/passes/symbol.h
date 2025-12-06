@@ -14,7 +14,8 @@
 	F(INT)                                                                 \
 	F(UNSIGNED_INT)                                                        \
 	F(LONG)                                                                \
-	F(UNSIGNED_LONG)
+	F(UNSIGNED_LONG)                                                       \
+	F(DOUBLE)
 
 #define TO_ENUM(t) CTYPE_##t,
 enum ctype { FOREACH_CTYPE(TO_ENUM) };

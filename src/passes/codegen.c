@@ -57,13 +57,14 @@ codegen_set_operand_immediate_zero(struct asm_operand *dst)
 static void
 codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
-	switch (src->c89type) {
+	switch (ctype_to_size_bytes(src->c89type)) {
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
 		break;
 	case CTYPE_LONG:
 	case CTYPE_UNSIGNED_LONG:
+	case CTYPE_DOUBLE:
 		dst->word_type = ASM_WORD_64BIT;
 		break;
 	}
@@ -479,6 +480,9 @@ codegen_statement_one(Arena *arena,
 			(**dst).opcode = ASM_OP_MOV;
 			codegen_set_operand_immediate_zero(&(**dst).args[0]);
 			(**dst).args[1] = OPERAND_RDX_64BIT;
+			break;
+		case CTYPE_DOUBLE:
+			assert(0 && "TODO: double division doesn't need SX?");
 			break;
 		}
 		dst = &(**dst).next;

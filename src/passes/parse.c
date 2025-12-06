@@ -474,6 +474,7 @@ is_token_variable_type(const struct token *tok)
 	case TOKEN_KEYWORD_LONG:
 	case TOKEN_KEYWORD_SIGNED:
 	case TOKEN_KEYWORD_UNSIGNED:
+	case TOKEN_KEYWORD_DOUBLE:
 		return true;
 	default:
 		break;
@@ -489,16 +490,40 @@ is_token_maybe_function_prefix(const struct token *tok)
 	       is_token_type(tok, TOKEN_KEYWORD_EXTERN);
 }
 
+static WARN_UNUSED bool
+is_constant_maybe_double(const struct string_view *val)
+{
+	assert(0 != isupper(E_NOTATION_CHAR));
+	return NULL != memchr(val->data, DECIMAL_POINT, val->sz) ||
+	       NULL != memchr(val->data, E_NOTATION_CHAR, val->sz) ||
+	       NULL != memchr(val->data, tolower(E_NOTATION_CHAR), val->sz);
+}
+
 static WARN_UNUSED result_t
 parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_CONSTANT));
+	check(parse_alloc(arena, dst, NODE_CONSTANT));
 
 	/*
 	 * strtoull() does not update errno on success, so we must clear it
 	 * explicitly if we want a predictable value.
 	 */
 	errno = 0;
+
+	if (is_constant_maybe_double(&(**tok).val)) {
+		double tmp = strtod((**tok).val.data, NULL);
+		if (errno != 0) {
+			return make_result(ERR_PARSE_CONSTANT_STRTOD,
+			                   errno,
+			                   (**tok).val.data,
+			                   (**tok).val.sz);
+		}
+		(**dst).expr_type = CTYPE_DOUBLE;
+		(**dst).u.double_ = tmp;
+		token_consume(tok);
+		return RESULT_OK;
+	}
 
 	long long unsigned tmp = strtoull((**tok).val.data, NULL, 0);
 	if (errno != 0) {
@@ -524,8 +549,6 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	bool too_large = false;
-
-	check(parse_alloc(arena, dst, NODE_CONSTANT));
 	if (suffix_unsigned && (tmp > UINT_MAX || suffix_long)) {
 		(**dst).expr_type = CTYPE_UNSIGNED_LONG;
 		too_large = (tmp > ULONG_MAX);
@@ -945,6 +968,7 @@ struct parse_type_signature_state {
 	size_t n_long;
 	size_t n_signed;
 	size_t n_unsigned;
+	size_t n_double;
 };
 
 static void
@@ -969,6 +993,9 @@ parse_type_signature_impl_accumulate(const struct token **tok,
 	case TOKEN_KEYWORD_UNSIGNED:
 		state->n_unsigned++;
 		break;
+	case TOKEN_KEYWORD_DOUBLE:
+		state->n_double++;
+		break;
 	default:
 		assert(0); /* logic error in caller */
 		break;
@@ -984,6 +1011,7 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 	    state->n_long > 1 ||     /* long long -- unsupported           */
 	    state->n_signed > 1 ||   /* signed signed -- invalid           */
 	    state->n_unsigned > 1 || /* unsigned unsigned -- invalid       */
+	    state->n_double > 1 ||   /* double double -- invalid           */
 	    (state->n_signed > 0 &&  /* signed/unsigned mutually exclusive */
 	     state->n_unsigned > 0)) {
 		return make_result(
@@ -991,13 +1019,28 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 				   : ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
 	}
 
-	if (state->n_int == 0 &&    /* Any particular type may occur zero   */
-	    state->n_long == 0 &&   /* times, but there must exist at least */
-	    state->n_signed == 0 && /* one non-zero option keyword count.   */
-	    state->n_unsigned == 0) {
+	if (state->n_int == 0 &&      /* Any particular type may occur zero   */
+	    state->n_long == 0 &&     /* times, but there must exist at least */
+	    state->n_signed == 0 &&   /* one non-zero count, from the valid   */
+	    state->n_unsigned == 0 && /* options available.                   */
+	    state->n_double == 0) {
 		return make_result(expect_var
 		                           ? ERR_PARSE_DECL_EXPECT_TYPE
 		                           : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE);
+	}
+
+	if (state->n_double > 0) {
+		if (state->n_int > 0 ||      /* int double -- invalid      */
+		    state->n_long > 0 ||     /* long double -- unsupported */
+		    state->n_signed > 0 ||   /* signed double -- invalid   */
+		    state->n_unsigned > 0) { /* unsigned double -- invalid */
+			return make_result(
+				expect_var
+				? ERR_PARSE_DECL_TYPE_DOUBLE_INVALID
+				: ERR_PARSE_FUNC_RETURN_TYPE_DOUBLE_INVALID);
+		}
+		*var_type = CTYPE_DOUBLE;
+		return RESULT_OK;
 	}
 
 	switch (state->n_long) {
@@ -1926,10 +1969,14 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT:
-		debug("%*sVALUE %lld",
-		      (int)indent + 1,
-		      "",
-		      (long long)a->u.num);
+		if (a->expr_type == CTYPE_DOUBLE) {
+			debug("%*sVALUE %f", (int)indent + 1, "", a->u.double_);
+		} else {
+			debug("%*sVALUE %lld",
+			      (int)indent + 1,
+			      "",
+			      (long long)a->u.num);
+		}
 		break;
 	}
 }

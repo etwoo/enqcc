@@ -158,6 +158,12 @@ result_to_str(result_t r)
 	case ERR_PARSE_ALLOC:
 		s = strdup("Cannot allocate ast node during parse");
 		break;
+	case ERR_PARSE_CONSTANT_STRTOD:
+		s = my_asprintf(
+			"Parsing constant expr %s with strtod() failed: %s",
+			r.msg,
+			my_strerror(r));
+		break;
 	case ERR_PARSE_CONSTANT_STRTOULL:
 		s = my_asprintf(
 			"Parsing constant expr %s with strtoull() failed: %s",
@@ -175,6 +181,10 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_EXPECT_TYPE:
 		s = strdup("Parsing variable declaration expects valid type in "
 		           "type position");
+		break;
+	case ERR_PARSE_DECL_TYPE_DOUBLE_INVALID:
+		s = strdup("Variable type 'double' cannot be combined with "
+		           "int/long/signed/unsigned");
 		break;
 	case ERR_PARSE_DECL_TYPE_DUPLICATE:
 		s = strdup("Duplicate variable type");
@@ -206,6 +216,10 @@ result_to_str(result_t r)
 	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE:
 		s = strdup("Parsing function expects valid type in return type "
 		           "position");
+		break;
+	case ERR_PARSE_FUNC_RETURN_TYPE_DOUBLE_INVALID:
+		s = strdup("Function return type 'double' cannot be combined "
+		           "with int/long/signed/unsigned");
 		break;
 	case ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE:
 		s = strdup("Duplicate function return type");

@@ -92,4 +92,7 @@ struct token {
 	struct token *next;
 };
 
+extern const char DECIMAL_POINT;
+extern const char E_NOTATION_CHAR;
+
 #endif

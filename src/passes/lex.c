@@ -113,7 +113,8 @@ lex_one_token_keyword_maybe(struct string_view *pos)
 	return TOKEN_IDENTIFIER;
 }
 
-static const char DECIMAL_POINT = '.';
+const char DECIMAL_POINT = '.';
+const char E_NOTATION_CHAR = 'E';
 
 static WARN_UNUSED bool
 isdot(char c)
@@ -147,7 +148,7 @@ lex_one_constant(struct string_view *pos, struct token **tok)
 			.needs_digit = false,
 		},
 		{
-			.sep = 'E',
+			.sep = E_NOTATION_CHAR,
 			.allow_sign_next = true,
 			.found = false,
 			.needs_digit = true,
