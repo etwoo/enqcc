@@ -12,12 +12,25 @@
 	F(R8, "r8", "r8d", "r8b")                                              \
 	F(R9, "r9", "r9d", "r9b")
 
+#define FOREACH_DOUBLE_CALL_REGISTER(F)                                        \
+	F(XMM0, "xmm0", "xmm0", "xmm0")                                        \
+	F(XMM1, "xmm1", "xmm1", "xmm1")                                        \
+	F(XMM2, "xmm2", "xmm2", "xmm2")                                        \
+	F(XMM3, "xmm3", "xmm3", "xmm3")                                        \
+	F(XMM4, "xmm4", "xmm4", "xmm4")                                        \
+	F(XMM5, "xmm5", "xmm5", "xmm5")                                        \
+	F(XMM6, "xmm6", "xmm6", "xmm6")                                        \
+	F(XMM7, "xmm7", "xmm7", "xmm7")
+
 #define FOREACH_ASM_REGISTER(F)                                                \
 	FOREACH_CALL_REGISTER(F)                                               \
 	F(AX, "rax", "eax", "al")                                              \
 	F(R10, "r10", "r10d", "r10b")                                          \
 	F(R11, "r11", "r11d", "r11b")                                          \
-	F(RSP, "rsp", "rsp", "rsp")
+	F(RSP, "rsp", "rsp", "rsp")                                            \
+	FOREACH_DOUBLE_CALL_REGISTER(F)                                        \
+	F(XMM14, "xmm14", "xmm14", "xmm14")                                    \
+	F(XMM15, "xmm15", "xmm15", "xmm15")
 
 #define TO_ENUM(register_name, b8, b4, b1) ASM_REGISTER_##register_name,
 enum asm_register { FOREACH_ASM_REGISTER(TO_ENUM) };
