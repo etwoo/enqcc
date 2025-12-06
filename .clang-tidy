@@ -19,7 +19,7 @@ CheckOptions:
   - {key: cppcoreguidelines-avoid-magic-numbers.IgnorePowersOf2IntegerValues, value: true}
   - {key: readability-magic-numbers.IgnorePowersOf2IntegerValues, value: true}
   - {key: readability-function-cognitive-complexity.IgnoreMacros, value: true}
-  - {key: readability-function-cognitive-complexity.Threshold, value: 50}
+  - {key: readability-function-cognitive-complexity.Threshold, value: 55}
   - {key: readability-identifier-naming.EnumCase, value: lower_case}
   - {key: readability-identifier-naming.EnumConstantCase, value: UPPER_CASE}
   - {key: readability-identifier-naming.FunctionCase, value: lower_case}

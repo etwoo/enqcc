@@ -50,6 +50,10 @@ struct asm_operand {
 	F(MOV)                                                                 \
 	F(MOV_WITH_SIGN_EXTENSION)                                             \
 	F(MOV_WITH_ZERO_EXTENSION)                                             \
+	F(CVT_DOUBLE_TO_INT)                                                   \
+	F(CVT_DOUBLE_TO_UINT)                                                  \
+	F(CVT_INT_TO_DOUBLE)                                                   \
+	F(CVT_UINT_TO_DOUBLE)                                                  \
 	F(UNARY_NEG)                                                           \
 	F(UNARY_NOT)                                                           \
 	F(UNARY_DECREMENT)                                                     \
@@ -67,6 +71,7 @@ struct asm_operand {
 	F(COMPARE)                                                             \
 	F(IDIV)                                                                \
 	F(DIV)                                                                 \
+	F(DDIV)                                                                \
 	F(CDQ)                                                                 \
 	F(CQO)                                                                 \
 	F(JMP)                                                                 \

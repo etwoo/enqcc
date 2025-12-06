@@ -223,6 +223,18 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
 		assert(0 && "MOV W/ ZEROEXTENSION should have been eliminated");
 		break;
+	case ASM_OP_CVT_DOUBLE_TO_INT:
+		print_opcode = "vcvttsd2si";
+		break;
+	case ASM_OP_CVT_DOUBLE_TO_UINT:
+		print_opcode = "vcvttsd2usi"; /* AVX-512 */
+		break;
+	case ASM_OP_CVT_INT_TO_DOUBLE:
+		print_opcode = "vcvtsi2sd";
+		break;
+	case ASM_OP_CVT_UINT_TO_DOUBLE:
+		print_opcode = "vcvtusi2sd"; /* AVX-512 */
+		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
 		break;
@@ -236,13 +248,13 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode = "inc";
 		break;
 	case ASM_OP_BINARY_ADD:
-		print_opcode = "add";
+		print_opcode = "add"; // TODO: double addsd
 		break;
 	case ASM_OP_BINARY_SUBTRACT:
-		print_opcode = "sub";
+		print_opcode = "sub"; // TODO double subsd
 		break;
 	case ASM_OP_BINARY_MULTIPLY:
-		print_opcode = "imul";
+		print_opcode = "imul"; // TODO double mulsd
 		break;
 	case ASM_OP_BITWISE_AND:
 		print_opcode = "and";
@@ -270,13 +282,16 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
 		break;
 	case ASM_OP_COMPARE:
-		print_opcode = "cmp";
+		print_opcode = "cmp"; // TODO: double comisd
 		break;
 	case ASM_OP_IDIV:
 		print_opcode = "idiv";
 		break;
 	case ASM_OP_DIV:
 		print_opcode = "div";
+		break;
+	case ASM_OP_DDIV:
+		print_opcode = "divsd";
 		break;
 	case ASM_OP_CDQ:
 		print_opcode = "cdq";

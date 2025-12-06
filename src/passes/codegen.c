@@ -329,6 +329,11 @@ codegen_statement_one(Arena *arena,
 	/* guess overall op signedness ahead of time */
 	const bool a_signed = ctype_is_signed(src->args[0].c89type);
 
+	if (src->opcode == IR_OP_BINARY_DIVIDE &&
+	    ctype_is_floating_point(src->args[0].c89type)) {
+		goto consider_binary_op;
+	}
+
 	switch (src->opcode) {
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
@@ -364,6 +369,31 @@ codegen_statement_one(Arena *arena,
 		}
 		/* to truncate, only move CTYPE_INT's worth of source */
 		(**dst).args[0].word_type = ASM_WORD_32BIT;
+		break;
+	case IR_OP_CTYPE_DOUBLE_TO_INT:
+	case IR_OP_CTYPE_DOUBLE_TO_UINT:
+	case IR_OP_CTYPE_INT_TO_DOUBLE:
+	case IR_OP_CTYPE_UINT_TO_DOUBLE:
+		switch (src->opcode) {
+		case IR_OP_CTYPE_DOUBLE_TO_INT:
+			(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+			break;
+		case IR_OP_CTYPE_DOUBLE_TO_UINT:
+			(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_UINT;
+			break;
+		case IR_OP_CTYPE_INT_TO_DOUBLE:
+			(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
+			break;
+		case IR_OP_CTYPE_UINT_TO_DOUBLE:
+			(**dst).opcode = ASM_OP_CVT_UINT_TO_DOUBLE;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
+			codegen_map_operand(&src->args[i], &(**dst).args[i]);
+		}
 		break;
 	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:
@@ -410,6 +440,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BITWISE_XOR:
 	case IR_OP_BITWISE_SHIFT_LEFT:
 	case IR_OP_BITWISE_SHIFT_RIGHT:
+	consider_binary_op:
 		if (!in_place_update(src, 2)) {
 			(**dst).opcode = ASM_OP_MOV;
 			codegen_map_operand(&src->args[0], &(**dst).args[0]);
@@ -426,6 +457,12 @@ codegen_statement_one(Arena *arena,
 			break;
 		case IR_OP_BINARY_MULTIPLY:
 			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+			break;
+		case IR_OP_BINARY_DIVIDE:
+			/* double division only! integers handled elsewhere */
+			assert(ctype_is_floating_point(src->args[0].c89type));
+			assert(ctype_is_floating_point(src->args[1].c89type));
+			(**dst).opcode = ASM_OP_DDIV;
 			break;
 		case IR_OP_BITWISE_AND:
 			(**dst).opcode = ASM_OP_BITWISE_AND;
@@ -476,7 +513,7 @@ codegen_statement_one(Arena *arena,
 			(**dst).args[1] = OPERAND_RDX_64BIT;
 			break;
 		case CTYPE_DOUBLE:
-			assert(0 && "TODO: double division doesn't need SX?");
+			assert(0 && "double div/rem should lead elsewhere");
 			break;
 		}
 		dst = &(**dst).next;
