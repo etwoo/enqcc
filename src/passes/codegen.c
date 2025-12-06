@@ -143,6 +143,11 @@ static const struct asm_operand OPERAND_R11_32BIT = {
 	ASM_WORD_32BIT,
 	.u.reg = ASM_REGISTER_R11,
 };
+static const struct asm_operand OPERAND_XMM14 = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_XMM14,
+};
 
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
@@ -337,11 +342,12 @@ codegen_statement_one(Arena *arena,
 	assert(*dst == NULL);
 	check(codegen_alloc_op(arena, dst));
 
-	/* guess overall op signedness ahead of time */
+	/* guess overall op signedness and fp-ness ahead of time */
 	const bool a_signed = ctype_is_signed(src->args[0].c89type);
+	const bool a_floating_point =
+		ctype_is_floating_point(src->args[0].c89type);
 
-	if (src->opcode == IR_OP_BINARY_DIVIDE &&
-	    ctype_is_floating_point(src->args[0].c89type)) {
+	if (src->opcode == IR_OP_BINARY_DIVIDE && a_floating_point) {
 		goto consider_binary_op;
 	}
 
@@ -416,16 +422,46 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		switch (src->opcode) {
 		case IR_OP_UNARY_NEGATE:
-			(**dst).opcode = ASM_OP_UNARY_NEG;
+			if (!a_floating_point) {
+				(**dst).opcode = ASM_OP_UNARY_NEG;
+			} else {
+				/*
+				 * Based on Agner Fog's optimization guide for
+				 * x86, 17.7, "Manipulating the sign bit":
+				 *
+				 *  cmpeqq %xmm1, %xmm1 ; generate all 1's
+				 *  psllq $31, %xmm1    ; 1 in leftmost bit only
+				 *  xorpd %xmm1, %xmm8  ; change sign of xmm8
+				 */
+				(**dst).opcode = ASM_OP_VEC_COMPARE;
+				(**dst).args[0] = OPERAND_XMM14;
+				(**dst).args[1] = OPERAND_XMM14;
+				dst = &(**dst).next;
+				check(codegen_alloc_op(arena, dst));
+				(**dst).opcode = ASM_OP_VEC_UNSIGNED_SHIFT_LEFT;
+				(**dst).args[0].operand_type =
+					ASM_OPERAND_IMMEDIATE;
+				(**dst).args[0].u.num = 64 - 1;
+				(**dst).args[1] = OPERAND_XMM14;
+				dst = &(**dst).next;
+				check(codegen_alloc_op(arena, dst));
+				(**dst).opcode = ASM_OP_BITWISE_XOR;
+				(**dst).args[0] = OPERAND_XMM14;
+				codegen_map_operand(&src->args[1],
+				                    &(**dst).args[1]);
+			}
 			break;
 		case IR_OP_UNARY_COMPLEMENT:
+			assert(!a_floating_point); /* rejected by sema.c */
 			(**dst).opcode = ASM_OP_UNARY_NOT;
 			break;
 		default:
 			assert(0); /* logic error in caller */
 			break;
 		}
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		if (!a_floating_point) {
+			codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		}
 		break;
 	case IR_OP_UNARY_DECREMENT:
 	case IR_OP_UNARY_INCREMENT:
@@ -471,7 +507,7 @@ codegen_statement_one(Arena *arena,
 			break;
 		case IR_OP_BINARY_DIVIDE:
 			/* double division only! integers handled elsewhere */
-			assert(ctype_is_floating_point(src->args[0].c89type));
+			assert(a_floating_point);
 			assert(ctype_is_floating_point(src->args[1].c89type));
 			(**dst).opcode = ASM_OP_DDIV;
 			break;

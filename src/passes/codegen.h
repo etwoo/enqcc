@@ -89,6 +89,8 @@ struct asm_operand {
 	F(DDIV)                                                                \
 	F(CDQ)                                                                 \
 	F(CQO)                                                                 \
+	F(VEC_COMPARE)                                                         \
+	F(VEC_UNSIGNED_SHIFT_LEFT)                                             \
 	F(JMP)                                                                 \
 	F(JMP_IF_EQ)                                                           \
 	F(JMP_IF_NEQ)                                                          \
