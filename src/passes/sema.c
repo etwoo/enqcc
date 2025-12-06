@@ -1076,7 +1076,6 @@ ast_contains(const struct flat *haystack, const struct ast *needle)
 }
 
 static WARN_UNUSED result_t
-// NOLINTNEXTLINE(*-cognitive-complexity) // TODO rm
 sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;

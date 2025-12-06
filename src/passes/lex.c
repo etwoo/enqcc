@@ -129,7 +129,6 @@ issign(char c)
 }
 
 static WARN_UNUSED result_t
-// NOLINTNEXTLINE(*-cognitive-complexity) // TODO rm
 lex_one_constant(struct string_view *pos, struct token **tok)
 {
 	struct token *cur = *tok;

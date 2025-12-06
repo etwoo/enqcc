@@ -319,7 +319,6 @@ in_place_update(const struct ir_op *src, size_t result_pos)
 }
 
 static WARN_UNUSED result_t
-// NOLINTNEXTLINE(*-cognitive-complexity) // TODO rm
 codegen_statement_one(Arena *arena,
                       const struct ir_op *src,
                       struct asm_op **dst)
@@ -765,7 +764,7 @@ round_up_to_multiple_of(long long int n, long long int base)
 static WARN_UNUSED result_t
 codegen_replace_pseudoregisters_fn(struct asm_function *cg,
                                    long long int range[2],
-                                   long long int *offsets,
+                                   int128_t *offsets,
                                    bool preflight)
 {
 	long long int cursor = 0;
@@ -785,7 +784,7 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			assert(arg->u.num >= range[0]);
 			assert(arg->u.num <= range[1]);
 			assert(range[0] >= 0);
-			const long long int idx = arg->u.num - range[0];
+			const int128_t idx = arg->u.num - range[0];
 
 			assert(offsets != NULL);
 			if (offsets[idx] == 0) {
@@ -827,7 +826,7 @@ codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
 		assert(size > 0);
 		assert(size <= 4096); /* if exceeded, refactor */
 
-		long long int *off = arena_alloc(arena, sizeof(*off) * size);
+		int128_t *off = arena_alloc(arena, sizeof(*off) * size);
 		check(codegen_replace_pseudoregisters_fn(f, range, off, false));
 
 		assert(f->stack_usage == 0);
