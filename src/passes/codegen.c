@@ -429,9 +429,9 @@ codegen_statement_one(Arena *arena,
 				 * Based on Agner Fog's optimization guide for
 				 * x86, 17.7, "Manipulating the sign bit":
 				 *
-				 *  cmpeqq %xmm1, %xmm1 ; generate all 1's
-				 *  psllq $31, %xmm1    ; 1 in leftmost bit only
-				 *  xorpd %xmm1, %xmm8  ; change sign of xmm8
+				 * pcmpeqq %xmm1, %xmm1 ; generate all 1's
+				 * psllq $63, %xmm1     ; 1 in leftmost bit only
+				 * xorpd %xmm1, %xmm8   ; change sign of xmm8
 				 */
 				(**dst).opcode = ASM_OP_VEC_COMPARE;
 				(**dst).args[0] = OPERAND_XMM14;
