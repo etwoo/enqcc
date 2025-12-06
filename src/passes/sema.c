@@ -864,6 +864,13 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		a->expr_type = a->u.cast.to_type;
 		break;
 	}
+
+	if (a->expr_type == CTYPE_DOUBLE &&
+	    (a->node_type == NODE_EXPRESSION_UNARY_COMPLEMENT ||
+	     a->node_type == NODE_EXPRESSION_BINARY_REMAINDER)) {
+		return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
+	}
+
 	return RESULT_OK;
 }
 

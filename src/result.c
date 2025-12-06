@@ -373,6 +373,10 @@ result_to_str(result_t r)
 		                "non-static declaration",
 		                r.msg);
 		break;
+	case ERR_SEMA_OPERAND_DOUBLE_INVALID:
+		s = strdup("Complement ~ and remainder % cannot take "
+		           "arguments of type 'double'");
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;
