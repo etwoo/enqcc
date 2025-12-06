@@ -248,6 +248,7 @@ guess(const struct ast *a, enum ctype expected_type)
 	switch (a->node_type) {
 	case NODE_CONSTANT:
 		map_numeric_type(a, expected_type, &tmp);
+		/* double values ignored here get rejected by sema_double() */
 		value = tmp.as_integer;
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
@@ -914,27 +915,46 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		break; /* resolve_expr() in parse.c handles leaf nodes */
 	}
 
-	if (a->expr_type == CTYPE_DOUBLE) {
-		switch (a->node_type) {
-		case NODE_EXPRESSION_UNARY_COMPLEMENT:
-		case NODE_EXPRESSION_BINARY_REMAINDER:
-		case NODE_EXPRESSION_BITWISE_AND:
-		case NODE_EXPRESSION_BITWISE_OR:
-		case NODE_EXPRESSION_BITWISE_XOR:
-		case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
-		case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-		case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-		case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-		case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-		case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-		case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-		case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
-			return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
-		default:
-			break;
-		}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	bool valid = true;
+
+	switch (a->node_type) {
+	case NODE_SWITCH:
+		valid = (a->u.switch_.control->expr_type != CTYPE_DOUBLE);
+		break;
+	case NODE_CASE:
+		valid = (a->u.case_.constant->expr_type != CTYPE_DOUBLE);
+		break;
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		valid = (a->expr_type != CTYPE_DOUBLE);
+		break;
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+		valid = (a->u.op_binary.lhs->expr_type != CTYPE_DOUBLE) &&
+		        (a->u.op_binary.rhs->expr_type != CTYPE_DOUBLE);
+		break;
+	default:
+		break;
 	}
 
+	if (!valid) {
+		return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
+	}
 	return RESULT_OK;
 }
 
@@ -1597,6 +1617,10 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	ops.node_exit = sema_expr_types;
 	check(sema_walk(a, &ops, NULL));
 	ops.node_exit = NULL;
+
+	debug("Checking for invalid double usage");
+	ops.node_enter = sema_double;
+	check(sema_walk(a, &ops, NULL));
 
 	debug("Inserting cast expressions");
 	ops.node_enter = sema_implicit_cast;
