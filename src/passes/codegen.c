@@ -57,7 +57,7 @@ codegen_set_operand_immediate_zero(struct asm_operand *dst)
 static void
 codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
-	switch (ctype_to_size_bytes(src->c89type)) {
+	switch (src->c89type) {
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
