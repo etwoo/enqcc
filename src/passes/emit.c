@@ -88,6 +88,16 @@ emit_asm_footer(enum platform plat, int fd)
 	}
 }
 
+static long long unsigned
+get_double_as_quadword(double value)
+{
+	long long unsigned as_quadword = 0;
+	static_assert(sizeof(value) <= sizeof(as_quadword),
+	              "destination must be large enough to hold 64-bit double");
+	memcpy(&as_quadword, &value, sizeof(value));
+	return as_quadword;
+}
+
 static void
 emit_asm_operand(const struct asm_operand *o,
                  enum platform plat,
@@ -161,8 +171,13 @@ emit_asm_operand(const struct asm_operand *o,
 		        STR_REG_RIP);
 		break;
 	case ASM_OPERAND_CONSTANT_DATA_DOUBLE:
-		// TODO: infer name of const variable holding double value
-		// TODO: do initial fn setup in loop before emitting op
+		dprintf(fd,
+		        "%s%s%llu(%s)",
+		        label_prefix,
+			DOUBLE_LABEL_ID,
+			get_double_as_quadword(o->u.dnum),
+		        STR_REG_RIP);
+
 		break;
 	}
 }
@@ -568,13 +583,9 @@ emit_asm_fp_check(Arena *arena,
 static void
 emit_asm_fp_one(double value, enum platform plat, int fd)
 {
-	const char *label_prefix = get_label_prefix(plat);
 	const char *section_fp_constants = get_section_fp_constants(plat);
-
-	long long unsigned as_quadword = 0;
-	static_assert(sizeof(value) <= sizeof(as_quadword),
-	              "destination must be large enough to hold 64-bit double");
-	memcpy(&as_quadword, &value, sizeof(value));
+	const char *label_prefix = get_label_prefix(plat);
+	const long long unsigned as_quadword = get_double_as_quadword(value);
 
 	dprintf(fd, "\t.section %s\n", section_fp_constants);
 	dprintf(fd, "%s%s%llu:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
