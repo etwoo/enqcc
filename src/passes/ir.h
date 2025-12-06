@@ -78,11 +78,9 @@ struct ir_function {
 
 struct ir_variable {
 	struct string_view identifier;
-	enum ctype c89type; /* determines alignment */
+	enum ctype c89type;
 	enum ir_linkage linkage;
-	struct {
-		int128_t initial_as_int128;
-	} u;
+	union constant_value initial;
 	struct ir_variable *next;
 };
 

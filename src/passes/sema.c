@@ -28,19 +28,48 @@ is_node_constant(const struct ast *a)
 
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
-static WARN_UNUSED int128_t
-map_numeric_type(const struct ast *init, enum ctype dst_type)
+static void
+map_numeric_type(const struct ast *init,
+                 enum ctype dst_type,
+		 union constant_value *val)
 {
 	const struct ast *a = unpack_constant(init);
 	assert(a != NULL);
 
-	int128_t x = a->u.num;
+	if (dst_type == CTYPE_DOUBLE) {
+		switch (a->expr_type) {
+		case CTYPE_INT:
+		case CTYPE_UNSIGNED_INT:
+		case CTYPE_LONG:
+		case CTYPE_UNSIGNED_LONG:
+			val->as_double = (double)a->u.num;
+			break;
+		case CTYPE_DOUBLE:
+			val->as_double = a->u.double_;
+			break;
+		}
+		return;
+	}
+
+	int128_t x = 0;
+	switch (a->expr_type) {
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+		x = a->u.num;
+		break;
+	case CTYPE_DOUBLE:
+		x = (int128_t)a->u.double_;
+		break;
+	}
+
 	if ((dst_type == CTYPE_INT && x > INT_MAX) ||
 	    (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
 		x %= LONG_TO_INT_TRUNCATOR;
 	}
 
-	return x;
+	val->as_integer = x;
 }
 
 struct sema_ops {
@@ -208,13 +237,16 @@ has_container(struct sema_label_loops_state *state,
 	return NULL;
 }
 
-static WARN_UNUSED long long int
+static WARN_UNUSED int128_t
 guess(const struct ast *a, enum ctype expected_type)
 {
-	long long int value = 0;
+	int128_t value = 0;
+	union constant_value tmp = {0};
+
 	switch (a->node_type) {
 	case NODE_CONSTANT:
-		value = map_numeric_type(a, expected_type);
+		map_numeric_type(a, expected_type, &tmp);
+		value = tmp.as_integer;
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		value = guess(a->u.op_unary.operand, expected_type);
@@ -313,10 +345,11 @@ guess(const struct ast *a, enum ctype expected_type)
 	default:
 		break;
 	}
+
 	return value;
 }
 
-static WARN_UNUSED long long int
+static WARN_UNUSED int128_t
 guess_case_value(const struct ast *containing_case, enum ctype expected_type)
 {
 	assert(containing_case->node_type == NODE_CASE);
@@ -326,7 +359,7 @@ guess_case_value(const struct ast *containing_case, enum ctype expected_type)
 static WARN_UNUSED result_t
 make_case(Arena *arena,
           enum ctype control_type,
-          long long int new_value,
+          int128_t new_value,
           long long int existing_unique,
           struct ast **dst)
 {
@@ -359,13 +392,13 @@ case_prepend(Arena *arena,
 
 	enum ctype control_type =
 		containing_switch->u.switch_.control->expr_type;
-	const long long int new_value =
+	const int128_t new_value =
 		guess_case_value(new_case, control_type);
 
 	struct flat *head = containing_switch->u.switch_.label_cases;
 	for (; head != NULL; head = head->cdr) {
 		assert(head->car->node_type == NODE_CASE);
-		const long long int existing_value =
+		const int128_t existing_value =
 			guess_case_value(head->car, control_type);
 		if (new_value == existing_value) {
 			return make_result(ERR_SEMA_CASE_DUPLICATE,
@@ -865,10 +898,25 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		break;
 	}
 
-	if (a->expr_type == CTYPE_DOUBLE &&
-	    (a->node_type == NODE_EXPRESSION_UNARY_COMPLEMENT ||
-	     a->node_type == NODE_EXPRESSION_BINARY_REMAINDER)) {
-		return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
+	if (a->expr_type == CTYPE_DOUBLE) {
+		switch (a->node_type) {
+		case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		case NODE_EXPRESSION_BINARY_REMAINDER:
+		case NODE_EXPRESSION_BITWISE_AND:
+		case NODE_EXPRESSION_BITWISE_OR:
+		case NODE_EXPRESSION_BITWISE_XOR:
+		case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+		case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+		case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+		case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+		case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+		case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+		case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+		case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+			return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
+		default:
+			break;
+		}
 	}
 
 	return RESULT_OK;
@@ -1028,6 +1076,7 @@ ast_contains(const struct flat *haystack, const struct ast *needle)
 }
 
 static WARN_UNUSED result_t
+// NOLINTNEXTLINE(*-cognitive-complexity) // TODO rm
 sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
@@ -1203,9 +1252,9 @@ sema_declare_file_scope(struct ast *a,
 	if (a->u.declare.init != NULL) {
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant =
-				map_numeric_type(a->u.declare.init,
-			                         a->u.declare.var_type);
+			map_numeric_type(a->u.declare.init,
+			                 a->u.declare.var_type,
+			                 &linkage_state->as_constant);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1347,12 +1396,12 @@ sema_declare_block_scope(struct ast *a,
 
 		if (a->u.declare.init == NULL) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant = 0;
+			linkage_state->as_constant.as_integer = 0;
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant =
-				map_numeric_type(a->u.declare.init,
-			                         a->u.declare.var_type);
+			map_numeric_type(a->u.declare.init,
+			                 a->u.declare.var_type,
+			                 &linkage_state->as_constant);
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.

@@ -1179,10 +1179,10 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 		assert(0); /* logic error in caller */
 		break;
 	case INITIAL_VALUE_TENTATIVE:
-		(**dst).u.initial_as_int128 = 0;
+		(**dst).initial.as_integer = 0;
 		break;
 	case INITIAL_VALUE_CONSTANT:
-		(**dst).u.initial_as_int128 = s->linkage.as_constant;
+		(**dst).initial = s->linkage.as_constant;
 		break;
 	}
 
@@ -1335,8 +1335,12 @@ ir_debug_print(const struct intermediate *ir)
 			debug("  VARIABLE LINKAGE EXTERNAL");
 			break;
 		}
-		debug("  VARIABLE INIT %lld",
-		      (long long)v->u.initial_as_int128);
+		if (v->c89type == CTYPE_DOUBLE) {
+			debug("  VARIABLE INIT %f", v->initial.as_double);
+		} else {
+			debug("  VARIABLE INIT %lld",
+			      (long long)v->initial.as_integer);
+		}
 	}
 
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {

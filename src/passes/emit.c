@@ -471,27 +471,31 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	if (var->u.initial_as_int128 != 0) {
-		dprintf(fd, "\t.data\n\t.balign %lld\n", var->alignment);
+	const long long int alignment = ctype_to_size_bytes(var->c89type);
+
+	if (var->c89type == CTYPE_DOUBLE) {
+		assert(0 && "TODO: suport var->initial.as_double in emit.c");
+	} else if (var->initial.as_integer != 0) {
+		dprintf(fd, "\t.data\n\t.balign %lld\n", alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		if (var->alignment == 4) {
+		if (alignment == 4) {
 			dprintf(fd, "\t.long ");
 		} else {
 			dprintf(fd, "\t.quad ");
 		}
-		if (var->u.initial_as_int128 > LLONG_MAX) {
+		if (var->initial.as_integer > LLONG_MAX) {
 			dprintf(fd,
 			        "%llu\n",
-			        (long long unsigned)var->u.initial_as_int128);
+			        (long long unsigned)var->initial.as_integer);
 		} else {
 			dprintf(fd,
 			        "%lld\n",
-			        (long long)var->u.initial_as_int128);
+			        (long long)var->initial.as_integer);
 		}
 	} else {
-		dprintf(fd, "\t.bss\n\t.balign %lld\n", var->alignment);
+		dprintf(fd, "\t.bss\n\t.balign %lld\n", alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.zero %lld\n", var->alignment);
+		dprintf(fd, "\t.zero %lld\n", alignment);
 	}
 }
 

@@ -1,7 +1,7 @@
 #ifndef COMPILER_PASSES_CODEGEN_H
 #define COMPILER_PASSES_CODEGEN_H
 
-#include "passes/int128_t.h"
+#include "passes/symbol.h"
 #include "sys/string_view.h"
 
 #define FOREACH_CALL_REGISTER(F)                                               \
@@ -120,11 +120,9 @@ struct asm_function {
 
 struct asm_variable {
 	struct string_view identifier;
-	long long int alignment;
+	enum ctype c89type; /* determines alignment */
 	enum asm_linkage linkage;
-	struct {
-		int128_t initial_as_int128;
-	} u;
+	union constant_value initial;
 	struct asm_variable *next;
 };
 

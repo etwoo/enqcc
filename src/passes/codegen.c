@@ -70,12 +70,6 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 	}
 }
 
-static WARN_UNUSED long long int
-codegen_get_alignment(const struct ir_variable *ir)
-{
-	return ctype_to_size_bytes(ir->c89type);
-}
-
 static void
 codegen_set_operand_register(const struct ir_val *basis,
                              enum asm_register reg,
@@ -325,6 +319,7 @@ in_place_update(const struct ir_op *src, size_t result_pos)
 }
 
 static WARN_UNUSED result_t
+// NOLINTNEXTLINE(*-cognitive-complexity) // TODO rm
 codegen_statement_one(Arena *arena,
                       const struct ir_op *src,
                       struct asm_op **dst)
@@ -721,9 +716,9 @@ codegen_variable(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
-	(**dst).alignment = codegen_get_alignment(ir);
+	(**dst).c89type = ir->c89type;
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
-	(**dst).u.initial_as_int128 = ir->u.initial_as_int128;
+	(**dst).initial = ir->initial;
 	return RESULT_OK;
 }
 
@@ -1341,12 +1336,16 @@ codegen_debug_print(const struct assembly *cg)
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		debug("  ALIGNMENT %lld", v->alignment);
+		debug("  TYPE %s", ctype_to_str(v->c89type));
 		debug("  LINKAGE %s",
 		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
 		                                         : "INTERNAL");
-		debug("  INITIAL VALUE %lld",
-		      (long long)v->u.initial_as_int128);
+		if (v->c89type == CTYPE_DOUBLE) {
+			debug("  INITIAL VALUE %f", v->initial.as_double);
+		} else {
+			debug("  INITIAL VALUE %lld",
+			      (long long)v->initial.as_integer);
+		}
 	}
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
