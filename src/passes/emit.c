@@ -339,7 +339,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_VEC_COMPARE:
-		print_opcode = "cmpeq";
+		print_opcode = "pcmpeq";
 		break;
 	case ASM_OP_VEC_UNSIGNED_SHIFT_LEFT:
 		print_opcode = "psll";
