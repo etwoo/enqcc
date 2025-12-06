@@ -114,6 +114,36 @@ lex_one_token_keyword_maybe(struct string_view *pos)
 }
 
 static WARN_UNUSED result_t
+lex_one_constant(struct string_view *pos, struct token **tok)
+{
+	struct token *cur = *tok;
+
+	cur->val.data = pos->data;
+	do {
+		pos->data++;
+		pos->sz--;
+	} while (isdigit(*pos->data));
+
+	const char allowed[2] = {'L', 'U'};
+	for (size_t i = 0; i < ARRAY_SIZE(allowed); ++i) {
+		if (toupper(*pos->data) == allowed[i]) {
+			pos->data++;
+			pos->sz--;
+			const size_t other = ARRAY_SIZE(allowed) - (i + 1);
+			if (toupper(*pos->data) == allowed[other]) {
+				pos->data++;
+				pos->sz--;
+			}
+			break;
+		}
+	}
+
+	cur->val.sz = pos->data - cur->val.data;
+	cur->token_type = TOKEN_CONSTANT;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 {
 	check(lex_alloc(arena, tok));
@@ -136,27 +166,7 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 		pos->data += ahead;
 		pos->sz -= ahead;
 	} else if (isdigit(c)) {
-		cur->val.data = pos->data;
-		do {
-			pos->data++;
-			pos->sz--;
-		} while (isdigit(*pos->data));
-		const char allowed[2] = {'L', 'U'};
-		for (size_t i = 0; i < ARRAY_SIZE(allowed); ++i) {
-			if (toupper(*pos->data) == allowed[i]) {
-				pos->data++;
-				pos->sz--;
-				const size_t other =
-					ARRAY_SIZE(allowed) - (i + 1);
-				if (toupper(*pos->data) == allowed[other]) {
-					pos->data++;
-					pos->sz--;
-				}
-				break;
-			}
-		}
-		cur->val.sz = pos->data - cur->val.data;
-		cur->token_type = TOKEN_CONSTANT;
+		check(lex_one_constant(pos, &cur));
 		check(lex_peek_ok(pos, &cur->val));
 	} else if (isalpha(c) || c == '_') {
 		cur->val.data = pos->data;
