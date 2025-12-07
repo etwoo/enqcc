@@ -189,6 +189,14 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 }
 
 static void
+codegen_map_all_operands(const struct ir_op *src, struct asm_op *dst)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(dst->args); ++i) {
+		codegen_map_operand(&src->args[i], &dst->args[i]);
+	}
+}
+
+static void
 codegen_copy_operand(const struct asm_operand *src, struct asm_operand *dst)
 {
 	memcpy(dst, src, sizeof(*dst));
@@ -361,121 +369,91 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
+		(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+		codegen_map_all_operands(src, *dst);
+		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
+		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
+		break;
 	case IR_OP_CTYPE_ZERO_EXTEND:
-		switch (src->opcode) {
-		case IR_OP_CTYPE_SIGN_EXTEND:
-			(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
-			break;
-		case IR_OP_CTYPE_ZERO_EXTEND:
-			(**dst).opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
-			codegen_map_operand(&src->args[i], &(**dst).args[i]);
-		}
+		(**dst).opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
+		codegen_map_all_operands(src, *dst);
 		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
 		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
 		break;
 	case IR_OP_CTYPE_TRUNCATE:
 		(**dst).opcode = ASM_OP_MOV;
-		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
-			codegen_map_operand(&src->args[i], &(**dst).args[i]);
-		}
+		codegen_map_all_operands(src, *dst);
 		/* to truncate, only move CTYPE_INT's worth of source */
 		(**dst).args[0].word_type = ASM_WORD_32BIT;
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+		codegen_map_all_operands(src, *dst);
+		break;
 	case IR_OP_CTYPE_DOUBLE_TO_UINT:
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_UINT;
+		codegen_map_all_operands(src, *dst);
+		break;
 	case IR_OP_CTYPE_INT_TO_DOUBLE:
+		(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
+		codegen_map_all_operands(src, *dst);
+		break;
 	case IR_OP_CTYPE_UINT_TO_DOUBLE:
-		switch (src->opcode) {
-		case IR_OP_CTYPE_DOUBLE_TO_INT:
-			(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
-			break;
-		case IR_OP_CTYPE_DOUBLE_TO_UINT:
-			(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_UINT;
-			break;
-		case IR_OP_CTYPE_INT_TO_DOUBLE:
-			(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
-			break;
-		case IR_OP_CTYPE_UINT_TO_DOUBLE:
-			(**dst).opcode = ASM_OP_CVT_UINT_TO_DOUBLE;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
-			codegen_map_operand(&src->args[i], &(**dst).args[i]);
-		}
+		(**dst).opcode = ASM_OP_CVT_UINT_TO_DOUBLE;
+		codegen_map_all_operands(src, *dst);
 		break;
 	case IR_OP_UNARY_NEGATE:
-	case IR_OP_UNARY_COMPLEMENT:
 		(**dst).opcode = ASM_OP_MOV;
-		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
-			codegen_map_operand(&src->args[i], &(**dst).args[i]);
-		}
+		codegen_map_all_operands(src, *dst);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		switch (src->opcode) {
-		case IR_OP_UNARY_NEGATE:
-			if (!a_floating_point) {
-				(**dst).opcode = ASM_OP_UNARY_NEG;
-			} else {
-				/*
-				 * Based on Agner Fog's optimization guide for
-				 * x86, 17.7, "Manipulating the sign bit":
-				 *
-				 * pcmpeqq %xmm1, %xmm1 ; generate all 1's
-				 * psllq $63, %xmm1     ; 1 in leftmost bit only
-				 * xorpd %xmm1, %xmm8   ; change sign of xmm8
-				 */
-				(**dst).opcode = ASM_OP_VEC_COMPARE;
-				(**dst).args[0] = OPERAND_XMM14;
-				(**dst).args[1] = OPERAND_XMM14;
-				dst = &(**dst).next;
-				check(codegen_alloc_op(arena, dst));
-				(**dst).opcode = ASM_OP_VEC_UNSIGNED_SHIFT_LEFT;
-				(**dst).args[0].operand_type =
-					ASM_OPERAND_IMMEDIATE;
-				(**dst).args[0].u.num = 64 - 1;
-				(**dst).args[1] = OPERAND_XMM14;
-				dst = &(**dst).next;
-				check(codegen_alloc_op(arena, dst));
-				(**dst).opcode = ASM_OP_BITWISE_XOR;
-				(**dst).args[0] = OPERAND_XMM14;
-				codegen_map_operand(&src->args[1],
-				                    &(**dst).args[1]);
-			}
-			break;
-		case IR_OP_UNARY_COMPLEMENT:
-			assert(!a_floating_point); /* rejected by sema.c */
-			(**dst).opcode = ASM_OP_UNARY_NOT;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		if (!a_floating_point) {
+		if (a_floating_point) {
+			/*
+			 * Based on Agner Fog's optimization guide for
+			 * x86, 17.7, "Manipulating the sign bit":
+			 *
+			 * pcmpeqq %xmm1, %xmm1 ; generate all 1's
+			 * psllq $63, %xmm1     ; 1 in leftmost bit only
+			 * xorpd %xmm1, %xmm8   ; change sign of xmm8
+			 */
+			(**dst).opcode = ASM_OP_VEC_COMPARE;
+			(**dst).args[0] = OPERAND_XMM14;
+			(**dst).args[1] = OPERAND_XMM14;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_VEC_UNSIGNED_SHIFT_LEFT;
+			(**dst).args[0].operand_type =
+				ASM_OPERAND_IMMEDIATE;
+			(**dst).args[0].u.num = 64 - 1;
+			(**dst).args[1] = OPERAND_XMM14;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_BITWISE_XOR;
+			(**dst).args[0] = OPERAND_XMM14;
+			codegen_map_operand(&src->args[1],
+				            &(**dst).args[1]);
+		} else {
+			(**dst).opcode = ASM_OP_UNARY_NEG;
+			/* similar to IR_OP_UNARY_COMPLEMENT for integers */
 			codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		}
 		break;
+	case IR_OP_UNARY_COMPLEMENT:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_all_operands(src, *dst);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_UNARY_NOT;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		assert(!a_floating_point); /* should be rejected by sema.c */
+		break;
 	case IR_OP_UNARY_DECREMENT:
+		(**dst).opcode = ASM_OP_UNARY_DECREMENT;
+		assert(in_place_update(src, 1));
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		break;
 	case IR_OP_UNARY_INCREMENT:
-		switch (src->opcode) {
-		case IR_OP_UNARY_DECREMENT:
-			(**dst).opcode = ASM_OP_UNARY_DECREMENT;
-			break;
-		case IR_OP_UNARY_INCREMENT:
-			(**dst).opcode = ASM_OP_UNARY_INCREMENT;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
+		(**dst).opcode = ASM_OP_UNARY_INCREMENT;
 		assert(in_place_update(src, 1));
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		break;
@@ -651,9 +629,7 @@ codegen_statement_one(Arena *arena,
 		break;
 	case IR_OP_COPY:
 		(**dst).opcode = ASM_OP_MOV;
-		for (size_t i = 0; i < ARRAY_SIZE((**dst).args); ++i) {
-			codegen_map_operand(&src->args[i], &(**dst).args[i]);
-		}
+		codegen_map_all_operands(src, *dst);
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
