@@ -1445,7 +1445,8 @@ fix_arithmetic_on_double(struct asm_op *cur, struct fix *trampoline)
 	       cur->opcode == ASM_OP_DOUBLE_BINARY_ADD ||
 	       cur->opcode == ASM_OP_DOUBLE_BINARY_SUBTRACT ||
 	       cur->opcode == ASM_OP_DOUBLE_BINARY_MULTIPLY ||
-	       cur->opcode == ASM_OP_DOUBLE_BINARY_DIVIDE) &&
+	       cur->opcode == ASM_OP_DOUBLE_BINARY_DIVIDE ||
+	       cur->opcode == ASM_OP_DOUBLE_BITWISE_XOR) &&
 	      in_memory(&cur->args[1]))) {
 		return false;
 	}

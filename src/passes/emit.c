@@ -254,6 +254,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	 * Customize the final opcode prefix/suffix, register aliases, etc.
 	 */
 	const char *print_opcode = NULL;
+	bool repeat_certain_args = false;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		if ((is_xmm_register(&op->args[0]) &&
@@ -276,16 +277,18 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		assert(0 && "MOV W/ ZEROEXTENSION should have been eliminated");
 		break;
 	case ASM_OP_CVT_DOUBLE_TO_INT:
-		print_opcode = "vcvttsd2si";
+		print_opcode = "cvttsd2si";
 		break;
 	case ASM_OP_CVT_DOUBLE_TO_UINT:
 		print_opcode = "vcvttsd2usi"; /* AVX-512 */
+		repeat_certain_args = true;
 		break;
 	case ASM_OP_CVT_INT_TO_DOUBLE:
-		print_opcode = "vcvtsi2sd";
+		print_opcode = "cvtsi2sd";
 		break;
 	case ASM_OP_CVT_UINT_TO_DOUBLE:
 		print_opcode = "vcvtusi2sd"; /* AVX-512 */
+		repeat_certain_args = true;
 		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
@@ -523,6 +526,10 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 			dprintf(fd, ", ");
 		}
 		emit_asm_operand(&op->args[i], plat, ralias[i], fd);
+		if (repeat_certain_args && i > 0) {
+			dprintf(fd, ", ");
+			emit_asm_operand(&op->args[i], plat, ralias[i], fd);
+		}
 	}
 
 	dprintf(fd, "\n");
