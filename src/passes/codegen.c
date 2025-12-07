@@ -1451,7 +1451,7 @@ fix_arithmetic_on_double(struct asm_op *cur, struct fix *trampoline)
 		return false;
 	}
 
-	trampoline->sz = 3;
+	trampoline->sz = 2;
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
@@ -1461,9 +1461,13 @@ fix_arithmetic_on_double(struct asm_op *cur, struct fix *trampoline)
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[1]->args[0]);
 	trampoline->ops[1]->args[1] = OPERAND_XMM15;
 
-	trampoline->ops[2]->opcode = ASM_OP_MOV;
-	trampoline->ops[2]->args[0] = OPERAND_XMM15;
-	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
+	if (cur->opcode != ASM_OP_DOUBLE_COMPARE) {
+		trampoline->sz++;
+		trampoline->ops[2]->opcode = ASM_OP_MOV;
+		trampoline->ops[2]->args[0] = OPERAND_XMM15;
+		codegen_copy_operand(&cur->args[1],
+		                     &trampoline->ops[2]->args[1]);
+	}
 
 	return true;
 }
