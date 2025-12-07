@@ -1066,14 +1066,15 @@ codegen_fixup_apply(Arena *arena,
 static WARN_UNUSED bool
 fix_s2s(struct asm_op *cur, struct fix *trampoline)
 {
-	const bool candidate_opcode =
-		cur->opcode == ASM_OP_MOV || /* see block comment above */
-		cur->opcode == ASM_OP_BINARY_ADD ||
-		cur->opcode == ASM_OP_BINARY_SUBTRACT ||
-		cur->opcode == ASM_OP_BITWISE_AND ||
-		cur->opcode == ASM_OP_BITWISE_OR ||
-		cur->opcode == ASM_OP_BITWISE_XOR ||
-		cur->opcode == ASM_OP_COMPARE;
+	const bool binary_ish_opcode = cur->opcode == ASM_OP_BINARY_ADD ||
+	                               cur->opcode == ASM_OP_BINARY_SUBTRACT ||
+	                               cur->opcode == ASM_OP_BITWISE_AND ||
+	                               cur->opcode == ASM_OP_BITWISE_OR ||
+	                               cur->opcode == ASM_OP_BITWISE_XOR ||
+	                               cur->opcode == ASM_OP_COMPARE;
+	const bool candidate_opcode = cur->opcode == ASM_OP_MOV ||
+	                              cur->opcode == ASM_OP_DOUBLE_MOV ||
+	                              binary_ish_opcode;
 	const bool candidate_operand_0 =
 		cur->args[0].operand_type == ASM_OPERAND_STACK ||
 		cur->args[0].operand_type == ASM_OPERAND_VARIABLE_DATA;
@@ -1089,11 +1090,18 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 		memcpy(trampoline->ops[i], cur, sizeof(*cur));
 		trampoline->ops[i]->next = NULL;
 	}
-	if (cur->opcode != ASM_OP_MOV) {
+	if (binary_ish_opcode) {
 		trampoline->ops[0]->opcode = ASM_OP_MOV;
 	}
-	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[0]->args[1]);
-	codegen_set_operand_r10(&cur->args[1], &trampoline->ops[1]->args[0]);
+	if (cur->opcode == ASM_OP_DOUBLE_MOV) {
+		trampoline->ops[0]->args[1] = OPERAND_XMM15;
+		trampoline->ops[1]->args[0] = OPERAND_XMM15;
+	} else {
+		codegen_set_operand_r10(&cur->args[0],
+		                        &trampoline->ops[0]->args[1]);
+		codegen_set_operand_r10(&cur->args[1],
+		                        &trampoline->ops[1]->args[0]);
+	}
 
 	return true;
 }
