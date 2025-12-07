@@ -195,6 +195,13 @@ map_wordtype_to_register_alias(const struct asm_operand *o,
 	}
 }
 
+static WARN_UNUSED bool
+is_xmm_register(const struct asm_operand *o)
+{
+	return o->operand_type == ASM_OPERAND_REGISTER &&
+	       o->u.reg >= ASM_REGISTER_XMM0 && o->u.reg <= ASM_REGISTER_XMM15;
+}
+
 static void
 emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
@@ -249,7 +256,10 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	const char *print_opcode = NULL;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
-		if (false) { // TODO
+		if ((is_xmm_register(&op->args[0]) &&
+		     op->args[1].operand_type == ASM_OPERAND_STACK) ||
+		    (op->args[0].operand_type == ASM_OPERAND_STACK &&
+		     is_xmm_register(&op->args[1]))) {
 			print_opcode = "movsd";
 			print_opcode_suffix = 0;
 		} else {
