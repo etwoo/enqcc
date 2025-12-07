@@ -610,20 +610,24 @@ codegen_statement_one(Arena *arena,
 			(**dst).opcode = ASM_OP_SET_IF_NEQ;
 			break;
 		case IR_OP_COMPARE_LESS_THAN:
-			(**dst).opcode =
-				a_signed ? ASM_OP_SET_IF_LT : ASM_OP_SET_IF_B;
+			(**dst).opcode = a_signed && !a_floating_point
+			                         ? ASM_OP_SET_IF_LT
+			                         : ASM_OP_SET_IF_B;
 			break;
 		case IR_OP_COMPARE_LESS_THAN_EQ:
-			(**dst).opcode =
-				a_signed ? ASM_OP_SET_IF_LTE : ASM_OP_SET_IF_BE;
+			(**dst).opcode = a_signed && !a_floating_point
+			                         ? ASM_OP_SET_IF_LTE
+			                         : ASM_OP_SET_IF_BE;
 			break;
 		case IR_OP_COMPARE_MORE_THAN:
-			(**dst).opcode =
-				a_signed ? ASM_OP_SET_IF_GT : ASM_OP_SET_IF_A;
+			(**dst).opcode = a_signed && !a_floating_point
+			                         ? ASM_OP_SET_IF_GT
+			                         : ASM_OP_SET_IF_A;
 			break;
 		case IR_OP_COMPARE_MORE_THAN_EQ:
-			(**dst).opcode =
-				a_signed ? ASM_OP_SET_IF_GTE : ASM_OP_SET_IF_AE;
+			(**dst).opcode = a_signed && !a_floating_point
+			                         ? ASM_OP_SET_IF_GTE
+			                         : ASM_OP_SET_IF_AE;
 			break;
 		default:
 			assert(0); /* logic error in caller */
