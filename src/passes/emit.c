@@ -240,10 +240,22 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	}
 
 	/*
-	 * Estimate whether this op applies to a floating point operand.
+	 * Infer whether this op applies to a floating point operand.
 	 */
-	const bool a_floating_point =
-		ctype_is_floating_point(op->args[0].c89type);
+	bool a_floating_point = false;
+	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+		if (op->args[i].operand_type ==
+		    ASM_OPERAND_CONSTANT_DATA_DOUBLE) {
+			a_floating_point = true;
+			break;
+		}
+		if (op->args[i].operand_type == ASM_OPERAND_REGISTER &&
+		    op->args[i].u.reg >= ASM_REGISTER_XMM0 &&
+		    op->args[i].u.reg <= ASM_REGISTER_XMM15) {
+			a_floating_point = true;
+			break;
+		}
+	}
 
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
