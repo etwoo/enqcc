@@ -336,9 +336,9 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	if (ctype_is_floating_point(src->args[n_args].c89type)) {
-		codegen_set_operand_eax(&src->args[n_args], &(**dst).args[0]);
-	} else {
 		(**dst).args[0] = OPERAND_XMM0;
+	} else {
+		codegen_set_operand_eax(&src->args[n_args], &(**dst).args[0]);
 	}
 	codegen_map_operand(&src->args[n_args], &(**dst).args[1]);
 	return RESULT_OK;
@@ -386,7 +386,12 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_RET:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
+		if (ctype_is_floating_point(src->args[0].c89type)) {
+			(**dst).args[1] = OPERAND_XMM0;
+		} else {
+			codegen_set_operand_eax(&src->args[0],
+			                        &(**dst).args[1]);
+		}
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
