@@ -337,21 +337,27 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_DOUBLE_MOV:
 		print_opcode = "movsd";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_DOUBLE_BINARY_ADD:
 		print_opcode = "addsd";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_DOUBLE_BINARY_SUBTRACT:
 		print_opcode = "subsd";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_DOUBLE_BINARY_MULTIPLY:
 		print_opcode = "mulsd";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_DOUBLE_BINARY_DIVIDE:
 		print_opcode = "divsd";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_DOUBLE_COMPARE:
 		print_opcode = "comisd";
+		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_VEC_COMPARE:
 		print_opcode = "pcmpeq";
@@ -596,6 +602,7 @@ emit_asm_fp_check(Arena *arena,
 	struct fp_constant *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_EMIT_ALLOC);
 	node->next = *emitted;
+	node->value = value;
 	*emitted = node;
 
 	*do_emit = true; /* new constant: tell caller to emit */
@@ -612,7 +619,7 @@ emit_asm_fp_one(double value, enum platform plat, int fd)
 	dprintf(fd, "\t%s\n", section_fp_constants);
 	dprintf(fd, "\t.balign %lld\n", ctype_to_size_bytes(CTYPE_DOUBLE));
 	dprintf(fd, "%s%s%llu:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
-	dprintf(fd, "\t.quad %llu", as_quadword);
+	dprintf(fd, "\t.quad %llu\n", as_quadword);
 }
 
 static WARN_UNUSED result_t
