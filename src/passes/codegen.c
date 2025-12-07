@@ -143,10 +143,10 @@ static const struct asm_operand OPERAND_R11_32BIT = {
 	ASM_WORD_32BIT,
 	.u.reg = ASM_REGISTER_R11,
 };
-static const struct asm_operand OPERAND_XMM14 = {
+static const struct asm_operand OPERAND_XMM0 = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
-	.u.reg = ASM_REGISTER_XMM14,
+	.u.reg = ASM_REGISTER_XMM0,
 };
 
 static void
@@ -383,19 +383,19 @@ codegen_statement_one(Arena *arena,
 			 * xorpd %xmm1, %xmm8   ; change sign of xmm8
 			 */
 			(**dst).opcode = ASM_OP_VEC_COMPARE;
-			(**dst).args[0] = OPERAND_XMM14;
-			(**dst).args[1] = OPERAND_XMM14;
+			(**dst).args[0] = OPERAND_XMM0;
+			(**dst).args[1] = OPERAND_XMM0;
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_VEC_UNSIGNED_SHIFT_LEFT;
 			(**dst).args[0].operand_type =
 				ASM_OPERAND_IMMEDIATE;
 			(**dst).args[0].u.num = 64 - 1;
-			(**dst).args[1] = OPERAND_XMM14;
+			(**dst).args[1] = OPERAND_XMM0;
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_BITWISE_XOR;
-			(**dst).args[0] = OPERAND_XMM14;
+			(**dst).args[0] = OPERAND_XMM0;
 			codegen_map_operand(&src->args[1],
 				            &(**dst).args[1]);
 		} else {
