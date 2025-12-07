@@ -367,7 +367,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_DOUBLE_BITWISE_XOR:
-		print_opcode = "xorsd";
+		print_opcode = "xorpd";
 		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_DOUBLE_COMPARE:
