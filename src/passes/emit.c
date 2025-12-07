@@ -195,6 +195,24 @@ map_wordtype_to_register_alias(const struct asm_operand *o,
 	}
 }
 
+static char
+map_ralias_to_op_suffix(enum register_alias reg)
+{
+	char c = 0;
+	switch (reg) {
+	case REGISTER_ALIAS_8BYTE:
+		c = 'q';
+		break;
+	case REGISTER_ALIAS_4BYTE:
+		c = 'l';
+		break;
+	case REGISTER_ALIAS_1BYTE:
+		c = 'b';
+		break;
+	}
+	return c;
+}
+
 static WARN_UNUSED bool
 is_xmm_register(const struct asm_operand *o)
 {
@@ -232,19 +250,14 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	/*
 	 * Choose the overall opcode suffix based on the word_type of the
 	 * destination operand (indicated by the value of ralias_default).
+	 *
+	 * Some instructions override this behavior and set the opcode suffix
+	 * based on the word type of the source operand instead.
+	 *
+	 * Instructions that do not actually require a suffix reset this value
+	 * to 0, aka NUL byte.
 	 */
-	char print_opcode_suffix = 0;
-	switch (ralias_default) {
-	case REGISTER_ALIAS_8BYTE:
-		print_opcode_suffix = 'q';
-		break;
-	case REGISTER_ALIAS_4BYTE:
-		print_opcode_suffix = 'l';
-		break;
-	case REGISTER_ALIAS_1BYTE:
-		print_opcode_suffix = 'b';
-		break;
-	}
+	char print_opcode_suffix = map_ralias_to_op_suffix(ralias_default);
 
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
@@ -285,9 +298,19 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_CVT_INT_TO_DOUBLE:
 		print_opcode = "cvtsi2sd";
+		/*
+		 * For conversion from integer types to double, choose the
+		 * opcode suffix (l vs q) and source register alias (e.g. r10d
+		 * vs r10) based on the width of the source operand, not the
+		 * width of destination operand.
+		 */
+		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
+		print_opcode_suffix = map_ralias_to_op_suffix(ralias[0]);
 		break;
 	case ASM_OP_CVT_UINT_TO_DOUBLE:
 		print_opcode = "vcvtusi2sd"; /* AVX-512 */
+		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
+		print_opcode_suffix = map_ralias_to_op_suffix(ralias[0]);
 		repeat_certain_args = true;
 		break;
 	case ASM_OP_UNARY_NEG:
