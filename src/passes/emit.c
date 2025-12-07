@@ -239,6 +239,12 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	}
 
+	/*
+	 * Estimate whether this op applies to a floating point operand.
+	 */
+	const bool a_floating_point =
+		ctype_is_floating_point(op->args[0].c89type);
+
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
 	}
@@ -285,13 +291,13 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode = "inc";
 		break;
 	case ASM_OP_BINARY_ADD:
-		print_opcode = "add"; // TODO: double addsd
+		print_opcode = a_floating_point ? "addsd" : "add";
 		break;
 	case ASM_OP_BINARY_SUBTRACT:
-		print_opcode = "sub"; // TODO double subsd
+		print_opcode = a_floating_point ? "subsd" : "sub";
 		break;
 	case ASM_OP_BINARY_MULTIPLY:
-		print_opcode = "imul"; // TODO double mulsd
+		print_opcode = a_floating_point ? "mulsd" : "imul";
 		break;
 	case ASM_OP_BITWISE_AND:
 		print_opcode = "and";
@@ -319,7 +325,7 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
 		break;
 	case ASM_OP_COMPARE:
-		print_opcode = "cmp"; // TODO: double comisd
+		print_opcode = a_floating_point ? "comisd" : "cmp";
 		break;
 	case ASM_OP_IDIV:
 		print_opcode = "idiv";
