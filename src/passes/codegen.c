@@ -1048,6 +1048,14 @@ codegen_fixup_apply(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+in_memory(struct asm_operand *o)
+{
+	return o->operand_type == ASM_OPERAND_STACK ||
+	       o->operand_type == ASM_OPERAND_VARIABLE_DATA ||
+	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+}
+
 /*
  * Prepare a trampoline by memcpy()-ing invalid instructions where both
  * operands are ASM_OPERAND_STACK:
@@ -1073,12 +1081,8 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 	                               cur->opcode == ASM_OP_COMPARE;
 	const bool candidate_opcode =
 		cur->opcode == ASM_OP_MOV || binary_ish_opcode;
-	const bool candidate_operand_0 =
-		cur->args[0].operand_type == ASM_OPERAND_STACK ||
-		cur->args[0].operand_type == ASM_OPERAND_VARIABLE_DATA;
-	const bool candidate_operand_1 =
-		cur->args[1].operand_type == ASM_OPERAND_STACK ||
-		cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA;
+	const bool candidate_operand_0 = in_memory(&cur->args[0]);
+	const bool candidate_operand_1 = in_memory(&cur->args[1]);
 	if (!(candidate_opcode && candidate_operand_0 && candidate_operand_1)) {
 		return false;
 	}
@@ -1123,9 +1127,7 @@ fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 	       cur->args[0].u.num > INT_MAX) ||
 	      (cur->opcode == ASM_OP_MOV &&
 	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
-	       cur->args[0].u.num > INT_MAX &&
-	       (cur->args[1].operand_type == ASM_OPERAND_STACK ||
-	        cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA)))) {
+	       cur->args[0].u.num > INT_MAX && in_memory(&cur->args[1])))) {
 		return false;
 	}
 
@@ -1217,8 +1219,7 @@ static WARN_UNUSED bool
 fix_mul(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!(cur->opcode == ASM_OP_BINARY_MULTIPLY &&
-	      (cur->args[1].operand_type == ASM_OPERAND_STACK ||
-	       cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA))) {
+	      in_memory(&cur->args[1]))) {
 		return false;
 	}
 
@@ -1289,8 +1290,7 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!(cur->opcode == ASM_OP_MOV_WITH_SIGN_EXTENSION &&
 	      (cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE ||
-	       cur->args[1].operand_type == ASM_OPERAND_STACK ||
-	       cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA))) {
+	       in_memory(&cur->args[1])))) {
 		return false;
 	}
 
@@ -1372,8 +1372,7 @@ fix_cvt_double_to_int(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!((cur->opcode == ASM_OP_CVT_DOUBLE_TO_INT ||
 	       cur->opcode == ASM_OP_CVT_DOUBLE_TO_UINT) &&
-	      (cur->args[1].operand_type == ASM_OPERAND_STACK ||
-	       cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA))) {
+	      in_memory(&cur->args[1]))) {
 		return false;
 	}
 
@@ -1406,8 +1405,7 @@ fix_cvt_int_to_double(struct asm_op *cur, struct fix *trampoline)
 	if (!((cur->opcode == ASM_OP_CVT_INT_TO_DOUBLE ||
 	       cur->opcode == ASM_OP_CVT_UINT_TO_DOUBLE) &&
 	      (cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE ||
-	       cur->args[1].operand_type == ASM_OPERAND_STACK ||
-	       cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA))) {
+	       in_memory(&cur->args[1])))) {
 		return false;
 	}
 
