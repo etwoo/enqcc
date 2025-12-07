@@ -472,19 +472,25 @@ codegen_statement_one(Arena *arena,
 		}
 		switch (src->opcode) {
 		case IR_OP_BINARY_ADD:
-			(**dst).opcode = ASM_OP_BINARY_ADD;
+			(**dst).opcode = a_floating_point
+			                         ? ASM_OP_BINARY_DOUBLE_ADD
+			                         : ASM_OP_BINARY_ADD;
 			break;
 		case IR_OP_BINARY_SUBTRACT:
-			(**dst).opcode = ASM_OP_BINARY_SUBTRACT;
+			(**dst).opcode = a_floating_point
+			                         ? ASM_OP_BINARY_DOUBLE_SUBTRACT
+			                         : ASM_OP_BINARY_SUBTRACT;
 			break;
 		case IR_OP_BINARY_MULTIPLY:
-			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+			(**dst).opcode = a_floating_point
+			                         ? ASM_OP_BINARY_DOUBLE_MULTIPLY
+			                         : ASM_OP_BINARY_MULTIPLY;
 			break;
 		case IR_OP_BINARY_DIVIDE:
 			/* double division only! integers handled elsewhere */
 			assert(a_floating_point);
 			assert(ctype_is_floating_point(src->args[1].c89type));
-			(**dst).opcode = ASM_OP_DDIV;
+			(**dst).opcode = ASM_OP_BINARY_DOUBLE_DIVIDE;
 			break;
 		case IR_OP_BITWISE_AND:
 			(**dst).opcode = ASM_OP_BITWISE_AND;
@@ -584,7 +590,8 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_COMPARE_LESS_THAN_EQ:
 	case IR_OP_COMPARE_MORE_THAN:
 	case IR_OP_COMPARE_MORE_THAN_EQ:
-		(**dst).opcode = ASM_OP_COMPARE;
+		(**dst).opcode = a_floating_point ? ASM_OP_DOUBLE_COMPARE
+		                                  : ASM_OP_COMPARE;
 		/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
@@ -1091,6 +1098,50 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
 }
 
 /*
+ * An immediate (constant) value that does not fit into an int needs to bounce
+ * through a register before an arithmetic op can use it as an operand.
+ *
+ * Ditto for ASM_OP_MOV op with a large immediate value as a source and an
+ * ASM_OPERAND_STACK as a destination.
+ */
+static WARN_UNUSED bool
+fix_imm_big(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!(((cur->opcode == ASM_OP_BINARY_ADD ||
+	        cur->opcode == ASM_OP_BINARY_SUBTRACT ||
+	        cur->opcode == ASM_OP_BINARY_MULTIPLY ||
+	        cur->opcode == ASM_OP_BITWISE_AND ||
+	        cur->opcode == ASM_OP_BITWISE_OR ||
+	        cur->opcode == ASM_OP_BITWISE_XOR ||
+	        cur->opcode == ASM_OP_COMPARE || /* cmpq  */
+	        cur->opcode == ASM_OP_PUSH) &&   /* pushq */
+	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
+	       /*
+	        * An ASM_WORD_64BIT immediate value can clearly exceed INT_MAX,
+	        * but note: an unsigned value in ASM_WORD_32BIT can, as well!
+	        */
+	       cur->args[0].u.num > INT_MAX) ||
+	      (cur->opcode == ASM_OP_MOV &&
+	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
+	       cur->args[0].u.num > INT_MAX &&
+	       (cur->args[1].operand_type == ASM_OPERAND_STACK ||
+	        cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA)))) {
+		return false;
+	}
+
+	trampoline->sz = 2;
+	for (size_t i = 0; i < trampoline->sz; ++i) {
+		memcpy(trampoline->ops[i], cur, sizeof(*cur));
+		trampoline->ops[i]->next = NULL;
+	}
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	trampoline->ops[0]->args[1] = OPERAND_R10_64BIT;
+	trampoline->ops[1]->args[0] = OPERAND_R10_64BIT;
+
+	return true;
+}
+
+/*
  * Translate:
  *
  *     cmpl %eax, $5
@@ -1378,45 +1429,38 @@ fix_cvt_int_to_double(struct asm_op *cur, struct fix *trampoline)
 }
 
 /*
- * An immediate (constant) value that does not fit into an int needs to bounce
- * through a register before an arithmetic op can use it as an operand.
+ * Translate:
  *
- * Ditto for ASM_OP_MOV op with a large immediate value as a source and an
- * ASM_OPERAND_STACK as a destination.
+ *     comisd -8(%rbp), -16(%rbp)
+ *
+ * ... into:
+ *
+ *     movq   -16(%rbp), %xmm15
+ *     comisd -8(%rbp), %xmm15
+ *
+ * Ditto for addsd, subsd, mulsd, and divsd.
  */
 static WARN_UNUSED bool
-fix_imm_big(struct asm_op *cur, struct fix *trampoline)
+fix_arithmetic_on_double(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!(((cur->opcode == ASM_OP_BINARY_ADD ||
-	        cur->opcode == ASM_OP_BINARY_SUBTRACT ||
-	        cur->opcode == ASM_OP_BINARY_MULTIPLY ||
-	        cur->opcode == ASM_OP_BITWISE_AND ||
-	        cur->opcode == ASM_OP_BITWISE_OR ||
-	        cur->opcode == ASM_OP_BITWISE_XOR ||
-	        cur->opcode == ASM_OP_COMPARE || /* cmpq  */
-	        cur->opcode == ASM_OP_PUSH) &&   /* pushq */
-	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
-	       /*
-	        * An ASM_WORD_64BIT immediate value can clearly exceed INT_MAX,
-	        * but note: an unsigned value in ASM_WORD_32BIT can, as well!
-	        */
-	       cur->args[0].u.num > INT_MAX) ||
-	      (cur->opcode == ASM_OP_MOV &&
-	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
-	       cur->args[0].u.num > INT_MAX &&
-	       (cur->args[1].operand_type == ASM_OPERAND_STACK ||
-	        cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA)))) {
+	if (!((cur->opcode == ASM_OP_DOUBLE_COMPARE ||
+	       cur->opcode == ASM_OP_BINARY_DOUBLE_ADD ||
+	       cur->opcode == ASM_OP_BINARY_DOUBLE_SUBTRACT ||
+	       cur->opcode == ASM_OP_BINARY_DOUBLE_MULTIPLY ||
+	       cur->opcode == ASM_OP_BINARY_DOUBLE_DIVIDE) &&
+	      cur->args[1].operand_type == ASM_OPERAND_REGISTER)) {
 		return false;
 	}
 
 	trampoline->sz = 2;
-	for (size_t i = 0; i < trampoline->sz; ++i) {
-		memcpy(trampoline->ops[i], cur, sizeof(*cur));
-		trampoline->ops[i]->next = NULL;
-	}
+
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
-	trampoline->ops[0]->args[1] = OPERAND_R10_64BIT;
-	trampoline->ops[1]->args[0] = OPERAND_R10_64BIT;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
+	trampoline->ops[0]->args[1] = OPERAND_XMM15;
+
+	trampoline->ops[1]->opcode = cur->opcode;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[1]->args[0]);
+	trampoline->ops[1]->args[1] = OPERAND_XMM15;
 
 	return true;
 }
@@ -1454,6 +1498,7 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 		fix_movzx,
 		fix_cvt_double_to_int,
 		fix_cvt_int_to_double,
+		fix_arithmetic_on_double,
 	};
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		check(codegen_fixup_alloc_stack(arena, f));

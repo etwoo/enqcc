@@ -239,24 +239,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	}
 
-	/*
-	 * Infer whether this op applies to a floating point operand.
-	 */
-	bool a_floating_point = false;
-	for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
-		if (op->args[i].operand_type ==
-		    ASM_OPERAND_CONSTANT_DATA_DOUBLE) {
-			a_floating_point = true;
-			break;
-		}
-		if (op->args[i].operand_type == ASM_OPERAND_REGISTER &&
-		    op->args[i].u.reg >= ASM_REGISTER_XMM0 &&
-		    op->args[i].u.reg <= ASM_REGISTER_XMM15) {
-			a_floating_point = true;
-			break;
-		}
-	}
-
 	if (op->opcode != ASM_OP_LABEL) {
 		dprintf(fd, "\t");
 	}
@@ -303,13 +285,25 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode = "inc";
 		break;
 	case ASM_OP_BINARY_ADD:
-		print_opcode = a_floating_point ? "addsd" : "add";
+		print_opcode = "add";
 		break;
 	case ASM_OP_BINARY_SUBTRACT:
-		print_opcode = a_floating_point ? "subsd" : "sub";
+		print_opcode = "sub";
 		break;
 	case ASM_OP_BINARY_MULTIPLY:
-		print_opcode = a_floating_point ? "mulsd" : "imul";
+		print_opcode = "imul";
+		break;
+	case ASM_OP_BINARY_DOUBLE_ADD:
+		print_opcode = "addsd";
+		break;
+	case ASM_OP_BINARY_DOUBLE_SUBTRACT:
+		print_opcode = "subsd";
+		break;
+	case ASM_OP_BINARY_DOUBLE_MULTIPLY:
+		print_opcode = "mulsd";
+		break;
+	case ASM_OP_BINARY_DOUBLE_DIVIDE:
+		print_opcode = "divsd";
 		break;
 	case ASM_OP_BITWISE_AND:
 		print_opcode = "and";
@@ -337,16 +331,16 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		ralias[0] = REGISTER_ALIAS_1BYTE; /* %ecx -> %cl */
 		break;
 	case ASM_OP_COMPARE:
-		print_opcode = a_floating_point ? "comisd" : "cmp";
+		print_opcode = "cmp";
+		break;
+	case ASM_OP_DOUBLE_COMPARE:
+		print_opcode = "comisd";
 		break;
 	case ASM_OP_IDIV:
 		print_opcode = "idiv";
 		break;
 	case ASM_OP_DIV:
 		print_opcode = "div";
-		break;
-	case ASM_OP_DDIV:
-		print_opcode = "divsd";
 		break;
 	case ASM_OP_CDQ:
 		print_opcode = "cdq";
