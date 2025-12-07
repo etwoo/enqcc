@@ -382,6 +382,7 @@ codegen_statement_one(Arena *arena,
 	const bool a_signed = ctype_is_signed(src->args[0].c89type);
 	const bool a_floating_point =
 		ctype_is_floating_point(src->args[0].c89type);
+	enum asm_opcode mov = a_floating_point ? ASM_OP_DOUBLE_MOV : ASM_OP_MOV;
 
 	if (src->opcode == IR_OP_BINARY_DIVIDE && a_floating_point) {
 		goto consider_binary_op;
@@ -389,9 +390,9 @@ codegen_statement_one(Arena *arena,
 
 	switch (src->opcode) {
 	case IR_OP_RET:
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		if (ctype_is_floating_point(src->args[0].c89type)) {
+		if (a_floating_point) {
 			(**dst).args[1] = OPERAND_XMM0;
 		} else {
 			codegen_set_operand_eax(&src->args[0],
@@ -402,7 +403,7 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_UNARY_NEGATE:
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		codegen_map_operands_all(src, *dst);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
@@ -436,7 +437,7 @@ codegen_statement_one(Arena *arena,
 		}
 		break;
 	case IR_OP_UNARY_COMPLEMENT:
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		codegen_map_operands_all(src, *dst);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
@@ -464,7 +465,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BITWISE_SHIFT_RIGHT:
 	consider_binary_op:
 		if (!in_place_update(src, 2)) {
-			(**dst).opcode = ASM_OP_MOV;
+			(**dst).opcode = mov;
 			codegen_map_operand(&src->args[0], &(**dst).args[0]);
 			codegen_map_operand(&src->args[2], &(**dst).args[1]);
 			dst = &(**dst).next;
@@ -473,24 +474,24 @@ codegen_statement_one(Arena *arena,
 		switch (src->opcode) {
 		case IR_OP_BINARY_ADD:
 			(**dst).opcode = a_floating_point
-			                         ? ASM_OP_BINARY_DOUBLE_ADD
+			                         ? ASM_OP_DOUBLE_BINARY_ADD
 			                         : ASM_OP_BINARY_ADD;
 			break;
 		case IR_OP_BINARY_SUBTRACT:
 			(**dst).opcode = a_floating_point
-			                         ? ASM_OP_BINARY_DOUBLE_SUBTRACT
+			                         ? ASM_OP_DOUBLE_BINARY_SUBTRACT
 			                         : ASM_OP_BINARY_SUBTRACT;
 			break;
 		case IR_OP_BINARY_MULTIPLY:
 			(**dst).opcode = a_floating_point
-			                         ? ASM_OP_BINARY_DOUBLE_MULTIPLY
+			                         ? ASM_OP_DOUBLE_BINARY_MULTIPLY
 			                         : ASM_OP_BINARY_MULTIPLY;
 			break;
 		case IR_OP_BINARY_DIVIDE:
 			/* double division only! integers handled elsewhere */
 			assert(a_floating_point);
 			assert(ctype_is_floating_point(src->args[1].c89type));
-			(**dst).opcode = ASM_OP_BINARY_DOUBLE_DIVIDE;
+			(**dst).opcode = ASM_OP_DOUBLE_BINARY_DIVIDE;
 			break;
 		case IR_OP_BITWISE_AND:
 			(**dst).opcode = ASM_OP_BITWISE_AND;
@@ -521,7 +522,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BINARY_DIVIDE:
 	case IR_OP_BINARY_REMAINDER:
 		/* copy dividend to eax */
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
@@ -536,7 +537,7 @@ codegen_statement_one(Arena *arena,
 			break;
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_UNSIGNED_LONG:
-			(**dst).opcode = ASM_OP_MOV;
+			(**dst).opcode = mov;
 			codegen_set_operand_immediate_zero(&(**dst).args[0]);
 			(**dst).args[1] = OPERAND_RDX_64BIT;
 			break;
@@ -553,7 +554,7 @@ codegen_statement_one(Arena *arena,
 		dst = &(**dst).next;
 		/* copy result from eax (quotient) or edx (remainder) */
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		switch (src->opcode) {
 		case IR_OP_BINARY_DIVIDE:
 			codegen_set_operand_eax(&src->args[0],
@@ -576,7 +577,7 @@ codegen_statement_one(Arena *arena,
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		codegen_set_operand_immediate_zero(&(**dst).args[0]);
 		codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		dst = &(**dst).next;
@@ -597,7 +598,7 @@ codegen_statement_one(Arena *arena,
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		codegen_set_operand_immediate_zero(&(**dst).args[0]);
 		codegen_map_operand(&src->args[2], &(**dst).args[1]);
 		dst = &(**dst).next;
@@ -632,7 +633,7 @@ codegen_statement_one(Arena *arena,
 		codegen_map_operand(&src->args[2], &(**dst).args[0]);
 		break;
 	case IR_OP_COPY:
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		codegen_map_operands_all(src, *dst);
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
@@ -648,7 +649,7 @@ codegen_statement_one(Arena *arena,
 		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
 		break;
 	case IR_OP_CTYPE_TRUNCATE:
-		(**dst).opcode = ASM_OP_MOV;
+		(**dst).opcode = mov;
 		codegen_map_operands_all(src, *dst);
 		/* to truncate, only move CTYPE_INT's worth of source */
 		(**dst).args[0].word_type = ASM_WORD_32BIT;
@@ -1398,7 +1399,7 @@ fix_cvt_double_to_int(struct asm_op *cur, struct fix *trampoline)
  *
  *     movq       $10, %r10
  *     vcvtsi2sdq %r10, %xmm15
- *     movq       %xmm15, -16(%rbp)
+ *     movsd      %xmm15, -16(%rbp)
  */
 static WARN_UNUSED bool
 fix_cvt_int_to_double(struct asm_op *cur, struct fix *trampoline)
@@ -1421,7 +1422,7 @@ fix_cvt_int_to_double(struct asm_op *cur, struct fix *trampoline)
 	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[1]->args[0]);
 	trampoline->ops[1]->args[1] = OPERAND_XMM15;
 
-	trampoline->ops[2]->opcode = ASM_OP_MOV;
+	trampoline->ops[2]->opcode = ASM_OP_DOUBLE_MOV;
 	trampoline->ops[2]->args[0] = OPERAND_XMM15;
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
 
@@ -1435,7 +1436,7 @@ fix_cvt_int_to_double(struct asm_op *cur, struct fix *trampoline)
  *
  * ... into:
  *
- *     movq   -16(%rbp), %xmm15
+ *     movsd  -16(%rbp), %xmm15
  *     comisd -8(%rbp), %xmm15
  *
  * Ditto for addsd, subsd, mulsd, and divsd.
@@ -1444,17 +1445,17 @@ static WARN_UNUSED bool
 fix_arithmetic_on_double(struct asm_op *cur, struct fix *trampoline)
 {
 	if (!((cur->opcode == ASM_OP_DOUBLE_COMPARE ||
-	       cur->opcode == ASM_OP_BINARY_DOUBLE_ADD ||
-	       cur->opcode == ASM_OP_BINARY_DOUBLE_SUBTRACT ||
-	       cur->opcode == ASM_OP_BINARY_DOUBLE_MULTIPLY ||
-	       cur->opcode == ASM_OP_BINARY_DOUBLE_DIVIDE) &&
+	       cur->opcode == ASM_OP_DOUBLE_BINARY_ADD ||
+	       cur->opcode == ASM_OP_DOUBLE_BINARY_SUBTRACT ||
+	       cur->opcode == ASM_OP_DOUBLE_BINARY_MULTIPLY ||
+	       cur->opcode == ASM_OP_DOUBLE_BINARY_DIVIDE) &&
 	      cur->args[1].operand_type == ASM_OPERAND_REGISTER)) {
 		return false;
 	}
 
 	trampoline->sz = 2;
 
-	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	trampoline->ops[0]->opcode = ASM_OP_DOUBLE_MOV;
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[0]->args[0]);
 	trampoline->ops[0]->args[1] = OPERAND_XMM15;
 

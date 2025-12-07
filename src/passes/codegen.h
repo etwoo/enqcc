@@ -76,10 +76,6 @@ struct asm_operand {
 	F(BINARY_ADD)                                                          \
 	F(BINARY_SUBTRACT)                                                     \
 	F(BINARY_MULTIPLY)                                                     \
-	F(BINARY_DOUBLE_ADD)                                                   \
-	F(BINARY_DOUBLE_SUBTRACT)                                              \
-	F(BINARY_DOUBLE_MULTIPLY)                                              \
-	F(BINARY_DOUBLE_DIVIDE)                                                \
 	F(BITWISE_AND)                                                         \
 	F(BITWISE_OR)                                                          \
 	F(BITWISE_XOR)                                                         \
@@ -88,11 +84,16 @@ struct asm_operand {
 	F(BITWISE_UNSIGNED_SHIFT_LEFT)                                         \
 	F(BITWISE_UNSIGNED_SHIFT_RIGHT)                                        \
 	F(COMPARE)                                                             \
-	F(DOUBLE_COMPARE)                                                      \
 	F(IDIV)                                                                \
 	F(DIV)                                                                 \
 	F(CDQ)                                                                 \
 	F(CQO)                                                                 \
+	F(DOUBLE_MOV)                                                          \
+	F(DOUBLE_BINARY_ADD)                                                   \
+	F(DOUBLE_BINARY_SUBTRACT)                                              \
+	F(DOUBLE_BINARY_MULTIPLY)                                              \
+	F(DOUBLE_BINARY_DIVIDE)                                                \
+	F(DOUBLE_COMPARE)                                                      \
 	F(VEC_COMPARE)                                                         \
 	F(VEC_UNSIGNED_SHIFT_LEFT)                                             \
 	F(JMP)                                                                 \

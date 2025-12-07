@@ -293,18 +293,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_BINARY_MULTIPLY:
 		print_opcode = "imul";
 		break;
-	case ASM_OP_BINARY_DOUBLE_ADD:
-		print_opcode = "addsd";
-		break;
-	case ASM_OP_BINARY_DOUBLE_SUBTRACT:
-		print_opcode = "subsd";
-		break;
-	case ASM_OP_BINARY_DOUBLE_MULTIPLY:
-		print_opcode = "mulsd";
-		break;
-	case ASM_OP_BINARY_DOUBLE_DIVIDE:
-		print_opcode = "divsd";
-		break;
 	case ASM_OP_BITWISE_AND:
 		print_opcode = "and";
 		break;
@@ -333,9 +321,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_COMPARE:
 		print_opcode = "cmp";
 		break;
-	case ASM_OP_DOUBLE_COMPARE:
-		print_opcode = "comisd";
-		break;
 	case ASM_OP_IDIV:
 		print_opcode = "idiv";
 		break;
@@ -349,6 +334,24 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_CQO:
 		print_opcode = "cqo";
 		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_DOUBLE_MOV:
+		print_opcode = "movsd";
+		break;
+	case ASM_OP_DOUBLE_BINARY_ADD:
+		print_opcode = "addsd";
+		break;
+	case ASM_OP_DOUBLE_BINARY_SUBTRACT:
+		print_opcode = "subsd";
+		break;
+	case ASM_OP_DOUBLE_BINARY_MULTIPLY:
+		print_opcode = "mulsd";
+		break;
+	case ASM_OP_DOUBLE_BINARY_DIVIDE:
+		print_opcode = "divsd";
+		break;
+	case ASM_OP_DOUBLE_COMPARE:
+		print_opcode = "comisd";
 		break;
 	case ASM_OP_VEC_COMPARE:
 		print_opcode = "pcmpeq";
