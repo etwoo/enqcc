@@ -781,7 +781,7 @@ codegen_function_params(Arena *arena,
 			                                 dst));
 		} else {
 			check(codegen_copy_stack_to_pseudo(arena,
-			                                   ir,
+			                                   &ir[i],
 			                                   n_stack++,
 			                                   dst));
 		}
