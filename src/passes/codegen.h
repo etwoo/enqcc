@@ -88,7 +88,6 @@ struct asm_operand {
 	F(DIV)                                                                 \
 	F(CDQ)                                                                 \
 	F(CQO)                                                                 \
-	F(DOUBLE_MOV)                                                          \
 	F(DOUBLE_BINARY_ADD)                                                   \
 	F(DOUBLE_BINARY_SUBTRACT)                                              \
 	F(DOUBLE_BINARY_MULTIPLY)                                              \

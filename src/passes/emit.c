@@ -249,7 +249,12 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	const char *print_opcode = NULL;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
-		print_opcode = "mov";
+		if (false) { // TODO
+			print_opcode = "movsd";
+			print_opcode_suffix = 0;
+		} else {
+			print_opcode = "mov";
+		}
 		break;
 	case ASM_OP_MOV_WITH_SIGN_EXTENSION:
 		print_opcode = "movslq";
@@ -333,10 +338,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_CQO:
 		print_opcode = "cqo";
-		print_opcode_suffix = 0;
-		break;
-	case ASM_OP_DOUBLE_MOV:
-		print_opcode = "movsd";
 		print_opcode_suffix = 0;
 		break;
 	case ASM_OP_DOUBLE_BINARY_ADD:
