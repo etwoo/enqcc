@@ -92,6 +92,7 @@ struct asm_operand {
 	F(DOUBLE_BINARY_SUBTRACT)                                              \
 	F(DOUBLE_BINARY_MULTIPLY)                                              \
 	F(DOUBLE_BINARY_DIVIDE)                                                \
+	F(DOUBLE_BITWISE_XOR)                                                  \
 	F(DOUBLE_COMPARE)                                                      \
 	F(VEC_COMPARE)                                                         \
 	F(VEC_UNSIGNED_SHIFT_LEFT)                                             \
