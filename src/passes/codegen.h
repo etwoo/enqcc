@@ -12,7 +12,7 @@
 	F(R8, "r8", "r8d", "r8b")                                              \
 	F(R9, "r9", "r9d", "r9b")
 
-#define FOREACH_DOUBLE_CALL_REGISTER(F)                                        \
+#define FOREACH_FP_CALL_REGISTER(F)                                            \
 	F(XMM0, "xmm0", "xmm0", "xmm0")                                        \
 	F(XMM1, "xmm1", "xmm1", "xmm1")                                        \
 	F(XMM2, "xmm2", "xmm2", "xmm2")                                        \
@@ -28,7 +28,7 @@
 	F(R10, "r10", "r10d", "r10b")                                          \
 	F(R11, "r11", "r11d", "r11b")                                          \
 	F(RSP, "rsp", "rsp", "rsp")                                            \
-	FOREACH_DOUBLE_CALL_REGISTER(F)                                        \
+	FOREACH_FP_CALL_REGISTER(F)                                            \
 	F(XMM14, "xmm14", "xmm14", "xmm14")                                    \
 	F(XMM15, "xmm15", "xmm15", "xmm15")
 
