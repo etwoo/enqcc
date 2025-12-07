@@ -22,13 +22,6 @@ struct ir_val {
 
 #define FOREACH_IR_OPCODE(F)                                                   \
 	F(RET, 0)                                                              \
-	F(CTYPE_SIGN_EXTEND, 1)                                                \
-	F(CTYPE_TRUNCATE, 1)                                                   \
-	F(CTYPE_ZERO_EXTEND, 1)                                                \
-	F(CTYPE_DOUBLE_TO_INT, 2)                                              \
-	F(CTYPE_DOUBLE_TO_UINT, 2)                                             \
-	F(CTYPE_INT_TO_DOUBLE, 2)                                              \
-	F(CTYPE_UINT_TO_DOUBLE, 2)                                             \
 	F(UNARY_COMPLEMENT, 1)                                                 \
 	F(UNARY_NEGATE, 1)                                                     \
 	F(UNARY_NOT, 1)                                                        \
@@ -51,6 +44,13 @@ struct ir_val {
 	F(COMPARE_MORE_THAN, 2)                                                \
 	F(COMPARE_MORE_THAN_EQ, 2)                                             \
 	F(COPY, 2)                                                             \
+	F(CTYPE_SIGN_EXTEND, 1)                                                \
+	F(CTYPE_TRUNCATE, 1)                                                   \
+	F(CTYPE_ZERO_EXTEND, 1)                                                \
+	F(CTYPE_DOUBLE_TO_INT, 2)                                              \
+	F(CTYPE_DOUBLE_TO_UINT, 2)                                             \
+	F(CTYPE_INT_TO_DOUBLE, 2)                                              \
+	F(CTYPE_UINT_TO_DOUBLE, 2)                                             \
 	F(JUMP, 1)                                                             \
 	F(JUMP_IF_ZERO, 2)                                                     \
 	F(JUMP_IF_NOT_ZERO, 2)                                                 \

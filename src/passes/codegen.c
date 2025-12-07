@@ -368,40 +368,6 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
 		break;
-	case IR_OP_CTYPE_SIGN_EXTEND:
-		(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
-		codegen_map_all_operands(src, *dst);
-		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
-		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
-		break;
-	case IR_OP_CTYPE_ZERO_EXTEND:
-		(**dst).opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
-		codegen_map_all_operands(src, *dst);
-		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
-		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
-		break;
-	case IR_OP_CTYPE_TRUNCATE:
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_all_operands(src, *dst);
-		/* to truncate, only move CTYPE_INT's worth of source */
-		(**dst).args[0].word_type = ASM_WORD_32BIT;
-		break;
-	case IR_OP_CTYPE_DOUBLE_TO_INT:
-		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
-		codegen_map_all_operands(src, *dst);
-		break;
-	case IR_OP_CTYPE_DOUBLE_TO_UINT:
-		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_UINT;
-		codegen_map_all_operands(src, *dst);
-		break;
-	case IR_OP_CTYPE_INT_TO_DOUBLE:
-		(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
-		codegen_map_all_operands(src, *dst);
-		break;
-	case IR_OP_CTYPE_UINT_TO_DOUBLE:
-		(**dst).opcode = ASM_OP_CVT_UINT_TO_DOUBLE;
-		codegen_map_all_operands(src, *dst);
-		break;
 	case IR_OP_UNARY_NEGATE:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_all_operands(src, *dst);
@@ -629,6 +595,40 @@ codegen_statement_one(Arena *arena,
 		break;
 	case IR_OP_COPY:
 		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_all_operands(src, *dst);
+		break;
+	case IR_OP_CTYPE_SIGN_EXTEND:
+		(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+		codegen_map_all_operands(src, *dst);
+		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
+		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
+		break;
+	case IR_OP_CTYPE_ZERO_EXTEND:
+		(**dst).opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
+		codegen_map_all_operands(src, *dst);
+		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
+		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
+		break;
+	case IR_OP_CTYPE_TRUNCATE:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_all_operands(src, *dst);
+		/* to truncate, only move CTYPE_INT's worth of source */
+		(**dst).args[0].word_type = ASM_WORD_32BIT;
+		break;
+	case IR_OP_CTYPE_DOUBLE_TO_INT:
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+		codegen_map_all_operands(src, *dst);
+		break;
+	case IR_OP_CTYPE_DOUBLE_TO_UINT:
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_UINT;
+		codegen_map_all_operands(src, *dst);
+		break;
+	case IR_OP_CTYPE_INT_TO_DOUBLE:
+		(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
+		codegen_map_all_operands(src, *dst);
+		break;
+	case IR_OP_CTYPE_UINT_TO_DOUBLE:
+		(**dst).opcode = ASM_OP_CVT_UINT_TO_DOUBLE;
 		codegen_map_all_operands(src, *dst);
 		break;
 	case IR_OP_JUMP:
