@@ -150,6 +150,11 @@ static const struct asm_operand OPERAND_XMM0 = {
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_XMM0,
 };
+static const struct asm_operand OPERAND_XMM15 = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_XMM15,
+};
 
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
@@ -1224,9 +1229,9 @@ fix_shift(struct asm_op *cur, struct fix *trampoline)
  *
  * ... into:
  *
- *     mov    $10, %r10d
+ *     movl   $10, %r10d
  *     movslq %r10d, %r11 # note: src uses 32-bit alias, dst uses 64-bit alias
- *     mov    %r11, -16(%rbp)
+ *     movq   %r11, -16(%rbp)
  */
 static WARN_UNUSED bool
 fix_movsx(struct asm_op *cur, struct fix *trampoline)
@@ -1257,6 +1262,24 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 	return true;
 }
 
+/*
+ * Translate the simple case:
+ *
+ *     movzx -16(%rbp), %rax
+ *
+ * ... into:
+ *
+ *     movl -16(%rbp), %eax
+ *
+ * Translate the slightly more complicated case:
+ *
+ *     movzx $10, -16(%rbp)
+ *
+ * ... into:
+ *
+ *     movl $10, %r11d
+ *     movq %r11, -16(%rbp)
+ */
 static WARN_UNUSED bool
 fix_movzx(struct asm_op *cur, struct fix *trampoline)
 {
@@ -1279,6 +1302,77 @@ fix_movzx(struct asm_op *cur, struct fix *trampoline)
 		trampoline->ops[0]->args[1] = OPERAND_R11_32BIT;
 		trampoline->ops[1]->args[0] = OPERAND_R11_64BIT;
 	}
+
+	return true;
+}
+
+/*
+ * Translate:
+ *
+ *     vcvttsd2siq -8(%rbp), -16(%rbp)
+ *
+ * ... into:
+ *
+ *     vcvttsd2siq -8(%rbp), %r11
+ *     movq        %r11, -16(%rbp)
+ */
+static WARN_UNUSED bool
+fix_cvt_double_to_int(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!((cur->opcode == ASM_OP_CVT_DOUBLE_TO_INT ||
+	       cur->opcode == ASM_OP_CVT_DOUBLE_TO_UINT) &&
+	      (cur->args[1].operand_type == ASM_OPERAND_STACK ||
+	       cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA))) {
+		return false;
+	}
+
+	trampoline->sz = 2;
+	for (size_t i = 0; i < trampoline->sz; ++i) {
+		memcpy(trampoline->ops[i], cur, sizeof(*cur));
+		trampoline->ops[i]->next = NULL;
+	}
+	codegen_set_operand_r11(&cur->args[0], &trampoline->ops[0]->args[1]);
+	trampoline->ops[1]->opcode = ASM_OP_MOV;
+	codegen_set_operand_r11(&cur->args[1], &trampoline->ops[1]->args[0]);
+
+	return true;
+}
+
+/*
+ * Translate:
+ *
+ *     vcvtsi2sdq $10, -16(%rbp)
+ *
+ * ... into:
+ *
+ *     movq       $10, %r10
+ *     vcvtsi2sdq %r10, %xmm15
+ *     movq       %xmm15, -16(%rbp)
+ */
+static WARN_UNUSED bool
+fix_cvt_int_to_double(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!((cur->opcode == ASM_OP_CVT_INT_TO_DOUBLE ||
+	       cur->opcode == ASM_OP_CVT_UINT_TO_DOUBLE) &&
+	      (cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE ||
+	       cur->args[1].operand_type == ASM_OPERAND_STACK ||
+	       cur->args[1].operand_type == ASM_OPERAND_VARIABLE_DATA))) {
+		return false;
+	}
+
+	trampoline->sz = 3;
+
+	trampoline->ops[0]->opcode = ASM_OP_MOV;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
+	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[0]->args[1]);
+
+	trampoline->ops[1]->opcode = cur->opcode;
+	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[1]->args[0]);
+	trampoline->ops[1]->args[1] = OPERAND_XMM15;
+
+	trampoline->ops[2]->opcode = ASM_OP_MOV;
+	trampoline->ops[2]->args[0] = OPERAND_XMM15;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
 
 	return true;
 }
@@ -1358,6 +1452,8 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 		fix_shift,
 		fix_movsx,
 		fix_movzx,
+		fix_cvt_double_to_int,
+		fix_cvt_int_to_double,
 	};
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		check(codegen_fixup_alloc_stack(arena, f));
