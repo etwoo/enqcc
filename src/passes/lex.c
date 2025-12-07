@@ -179,7 +179,9 @@ lex_one_constant(struct string_view *pos, struct token **tok)
 		if (isdigit(c) || is_sep || (issign(c) && allow_sign_for > 0)) {
 			pos->data++;
 			pos->sz--;
-			allow_sign_for--;
+			if (allow_sign_for > 0) {
+				allow_sign_for--;
+			}
 			if (sep_latest != SIZE_MAX && isdigit(c)) {
 				assert(sep_latest < ARRAY_SIZE(sep_chars));
 				sep_chars[sep_latest].needs_digit = false;
