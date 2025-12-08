@@ -16,6 +16,8 @@ static const char MACOS_SYMBOL_WITH_LINKAGE_PREFIX[] = "_";
 static const char MACOS_LABEL_PREFIX[] = "L";
 static const char MACOS_SECTION_LITERAL8[] = ".literal8";
 static const char DOUBLE_LABEL_ID[] = "double_";
+static const char VEC_LONGS_LABEL_ID[] = "vecl_";
+static const char VEC_QUADS_LABEL_ID[] = "vecq_";
 static const char CUSTOM_LABEL_ID[] = "boba_";
 static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_POP_QUAD[] = "popq";
@@ -176,6 +178,26 @@ emit_asm_operand(const struct asm_operand *o,
 		        label_prefix,
 		        DOUBLE_LABEL_ID,
 		        get_double_as_quadword(o->u.dnum),
+		        STR_REG_RIP);
+		break;
+	case ASM_OPERAND_CONSTANT_DATA_VEC_LONGS:
+		dprintf(fd,
+		        "%s%s%lx%lx%lx%lx(%s)",
+		        label_prefix,
+		        VEC_LONGS_LABEL_ID,
+		        o->u.longs[0],
+		        o->u.longs[1],
+		        o->u.longs[2],
+		        o->u.longs[3],
+		        STR_REG_RIP);
+		break;
+	case ASM_OPERAND_CONSTANT_DATA_VEC_QUADS:
+		dprintf(fd,
+		        "%s%s%llx%llx(%s)",
+		        label_prefix,
+		        VEC_QUADS_LABEL_ID,
+		        o->u.quads[0],
+		        o->u.quads[1],
 		        STR_REG_RIP);
 		break;
 	}
@@ -622,6 +644,64 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 	}
 }
 
+/*
+ * This function only handles the magic numbers for IR_OP_CTYPE_UINT_TO_DOUBLE.
+ */
+static WARN_UNUSED result_t
+emit_asm_fp_vector_constants(const struct asm_function *f,
+                             enum platform plat,
+                             int fd)
+{
+	struct asm_operand *got_longs = NULL;
+	struct asm_operand *got_quads = NULL;
+	for (; f != NULL; f = f->next) {
+		for (struct asm_op *op = f->ops; op != NULL; op = op->next) {
+			for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
+				switch (op->args[i].operand_type) {
+				case ASM_OPERAND_CONSTANT_DATA_VEC_LONGS:
+					got_longs = &op->args[i];
+					break;
+				case ASM_OPERAND_CONSTANT_DATA_VEC_QUADS:
+					got_quads = &op->args[i];
+					break;
+				default:
+					break;
+				}
+			}
+		}
+	}
+
+	const char *label_prefix = get_label_prefix(plat);
+
+	if (got_longs != NULL) {
+		dprintf(fd,
+		        "%s%s%lx%lx%lx%lx:\n",
+		        label_prefix,
+		        VEC_LONGS_LABEL_ID,
+		        got_longs->u.longs[0],
+		        got_longs->u.longs[1],
+		        got_longs->u.longs[2],
+		        got_longs->u.longs[3]);
+		for (size_t i = 0; i < ARRAY_SIZE(got_longs->u.longs); ++i) {
+			dprintf(fd, "\t.long %lx\n", got_longs->u.longs[i]);
+		}
+	}
+
+	if (got_quads != NULL) {
+		dprintf(fd,
+		        "%s%s%llx%llx:\n",
+		        label_prefix,
+		        VEC_QUADS_LABEL_ID,
+		        got_quads->u.quads[0],
+		        got_quads->u.quads[1]);
+		for (size_t i = 0; i < ARRAY_SIZE(got_quads->u.quads); ++i) {
+			dprintf(fd, "\t.quad %llx\n", got_quads->u.quads[i]);
+		}
+	}
+
+	return RESULT_OK;
+}
+
 struct fp_constant {
 	double value;
 	struct fp_constant *next;
@@ -705,6 +785,7 @@ emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
 		emit_asm_var(v, plat, fd);
 	}
 
+	check(emit_asm_fp_vector_constants(cg->functions, plat, fd));
 	check(emit_asm_fp_constants(arena, cg->functions, plat, fd));
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {

@@ -47,6 +47,8 @@ struct asm_operand {
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
 		ASM_OPERAND_VARIABLE_DATA,
 		ASM_OPERAND_CONSTANT_DATA_DOUBLE,
+		ASM_OPERAND_CONSTANT_DATA_VEC_LONGS,
+		ASM_OPERAND_CONSTANT_DATA_VEC_QUADS,
 	} operand_type;
 	enum {
 		ASM_WORD_32BIT, /* DWORD */
@@ -58,6 +60,8 @@ struct asm_operand {
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
 		double dnum;                 /* CONSTANT_DATA_DOUBLE */
+		long unsigned longs[4];      /* CONSTANT_DATA_VEC_LONGS */
+		long long unsigned quads[2]; /* CONSTANT_DATA_VEC_QUADS */
 	} u;
 };
 

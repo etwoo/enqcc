@@ -783,14 +783,18 @@ codegen_statement_one(Arena *arena,
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO;
-		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-		(**dst).args[0].u.num = 0x4530000043300000; // NOLINT // TODO
+		(**dst).args[0].operand_type =
+			ASM_OPERAND_CONSTANT_DATA_VEC_LONGS;
+		(**dst).args[0].u.longs[0] = 0x43300000; // NOLINT
+		(**dst).args[0].u.longs[1] = 0x45300000; // NOLINT
 		(**dst).args[1] = OPERAND_XMM0;
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT;
-		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-		(**dst).args[0].u.num = 0x4330000000000000; // NOLINT // TODO
+		(**dst).args[0].operand_type =
+			ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
+		(**dst).args[0].u.quads[0] = 0x4330000000000000; // NOLINT
+		(**dst).args[0].u.quads[1] = 0x4530000000000000; // NOLINT
 		(**dst).args[1] = OPERAND_XMM0;
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
@@ -1197,7 +1201,9 @@ in_memory(struct asm_operand *o)
 {
 	return o->operand_type == ASM_OPERAND_STACK ||
 	       o->operand_type == ASM_OPERAND_VARIABLE_DATA ||
-	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_DOUBLE ||
+	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_LONGS ||
+	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
 }
 
 /*
@@ -1701,6 +1707,18 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		break;
 	case ASM_OPERAND_CONSTANT_DATA_DOUBLE:
 		debug("  CONSTANT DOUBLE %f", operand->u.dnum);
+		break;
+	case ASM_OPERAND_CONSTANT_DATA_VEC_LONGS:
+		debug("  CONSTANT VEC LONGS %lx %lx %lx %lx",
+		      operand->u.longs[0],
+		      operand->u.longs[1],
+		      operand->u.longs[2],
+		      operand->u.longs[3]);
+		break;
+	case ASM_OPERAND_CONSTANT_DATA_VEC_QUADS:
+		debug("  CONSTANT VEC QUADS %llx %llx",
+		      operand->u.quads[0],
+		      operand->u.quads[1]);
 		break;
 	}
 
