@@ -1,3 +1,5 @@
+// NOLINTBEGIN(clang-analyzer-unix.Malloc) /* clang-tidy warns about arena.h */
+
 #define ARENA_IMPLEMENTATION
 #define ARENA_DEFAULT_ALIGNMENT 16
 #include "arena.h"
@@ -192,7 +194,7 @@ main(int argc, char *argv[])
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
-			Arena *a = arena_create(32 * 1024 * 1024);
+			Arena *a = arena_create((size_t)32 * 1024 * 1024);
 			const char *src = argv[optind];
 			const char *dst = argv[optind + 1];
 			rc = result_to_status(compile(a, src, dst, action));
@@ -213,3 +215,5 @@ main(int argc, char *argv[])
 
 	return rc;
 }
+
+// NOLINTEND(clang-analyzer-unix.Malloc) /* clang-tidy warns about arena.h */
