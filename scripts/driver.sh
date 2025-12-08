@@ -27,7 +27,7 @@ PREPROCESSED_FILE="$OUTPUT_FILE.i"
 ASSEMBLY_FILE="$OUTPUT_FILE.s"
 
 CC=$(which gcc)
-NQCC=$(realpath "$(dirname $0)/../build/enqcc")
+NQCC=$(realpath "$(dirname "$0")/../build/enqcc")
 
 $CC -E -P "$INPUT_FILE" -o "$PREPROCESSED_FILE"
 $NQCC "$DRIVER_MODE" "$PREPROCESSED_FILE" "$ASSEMBLY_FILE"
