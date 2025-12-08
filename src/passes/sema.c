@@ -4,6 +4,7 @@
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
+#include <assert.h>
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 

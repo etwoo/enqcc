@@ -3,6 +3,9 @@
 #include "sys/array.h"
 #include "sys/debug.h"
 
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
@@ -169,14 +172,26 @@ is_mangled(struct symbol *s)
 result_t
 mangle_name(Arena *arena, struct symbol *s)
 {
-	char *mangled_str = arena_sprintf(arena,
-	                                  "%.*s%c%lld",
-	                                  (int)s->name.sz,
-	                                  s->name.data,
-	                                  MANGLE_DELIMITER,
-	                                  s->unique);
-	check_if(mangled_str == NULL, ERR_SYMBOL_ALLOC);
-	s->name.data = mangled_str;
+	char *mangled_str = NULL;
+	int rc = asprintf(&mangled_str,
+	                  "%.*s%c%lld",
+	                  (int)s->name.sz,
+	                  s->name.data,
+	                  MANGLE_DELIMITER,
+	                  s->unique);
+	check_if(rc < 0, ERR_SYMBOL_ALLOC);
+
 	s->name.sz = strlen(mangled_str);
+
+	char *arena_copy = arena_alloc(arena, strlen(mangled_str));
+	if (arena_copy == NULL) {
+		free(mangled_str);
+		return make_result(ERR_SYMBOL_ALLOC);
+	}
+
+	memcpy(arena_copy, mangled_str, s->name.sz); /* exclude NUL */
+	s->name.data = arena_copy;
+
+	free(mangled_str);
 	return RESULT_OK;
 }

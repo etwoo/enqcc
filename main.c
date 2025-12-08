@@ -1,15 +1,11 @@
-#include "passes.h"
-#include "result.h"
-
-#pragma GCC diagnostic push
-/* workaround -Wformat-truncation warning in arena_vsprintf() under GCC */
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-#endif
 #define ARENA_IMPLEMENTATION
+#define ARENA_DEFAULT_ALIGNMENT 16
 #include "arena.h"
 #undef ARENA_IMPLEMENTATION
-#pragma GCC diagnostic pop
+#undef ARENA_DEFAULT_ALIGNMENT
+
+#include "passes.h"
+#include "result.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -196,11 +192,11 @@ main(int argc, char *argv[])
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
-			Arena a = {0};
+			Arena *a = arena_create(32 * 1024 * 1024);
 			const char *src = argv[optind];
 			const char *dst = argv[optind + 1];
-			rc = result_to_status(compile(&a, src, dst, action));
-			arena_free(&a);
+			rc = result_to_status(compile(a, src, dst, action));
+			arena_destroy(a);
 		}
 		break;
 	case ACTION_USAGE_HELP:

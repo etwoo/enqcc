@@ -9,6 +9,7 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 
