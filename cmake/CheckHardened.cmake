@@ -28,7 +28,6 @@ macro(check_hardened lib)
 		_my_msg_hardened(" - Failed")
 		# -fhardened unsupported; set constituent options individually
 		target_compile_options(${lib} INTERFACE
-			-D_FORTIFY_SOURCE=3
 			-D_GLIBCXX_ASSERTIONS
 			-fPIE -pie
 			-Wl,-z,now
@@ -47,5 +46,8 @@ macro(check_hardened lib)
 	#
 	check_target_compile_options(${lib} -mbranch-protection=standard)
 
-	target_compile_options(${lib} INTERFACE -O2) # for _FORTIFY_SOURCE
+	#
+	# disabled: -D_FORTIFY_SOURCE=3 -O2
+	# XXX, arena.h segfaults: https://github.com/tsoding/arena/issues/3
+	#
 endmacro()
