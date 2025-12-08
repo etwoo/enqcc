@@ -1037,8 +1037,8 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 		    state->n_unsigned > 0) { /* unsigned double -- invalid */
 			return make_result(
 				expect_var
-				? ERR_PARSE_DECL_TYPE_DOUBLE_INVALID
-				: ERR_PARSE_FUNC_RETURN_TYPE_DOUBLE_INVALID);
+					? ERR_PARSE_DECL_TYPE_DOUBLE_INVALID
+					: ERR_PARSE_FUNC_RETURN_TYPE_DOUBLE_INVALID);
 		}
 		*var_type = CTYPE_DOUBLE;
 		return RESULT_OK;
