@@ -66,9 +66,7 @@ struct asm_operand {
 	F(MOV_WITH_SIGN_EXTENSION)                                             \
 	F(MOV_WITH_ZERO_EXTENSION)                                             \
 	F(CVT_DOUBLE_TO_INT)                                                   \
-	F(CVT_DOUBLE_TO_UINT)                                                  \
 	F(CVT_INT_TO_DOUBLE)                                                   \
-	F(CVT_UINT_TO_DOUBLE)                                                  \
 	F(UNARY_NEG)                                                           \
 	F(UNARY_NOT)                                                           \
 	F(UNARY_DECREMENT)                                                     \
@@ -96,6 +94,9 @@ struct asm_operand {
 	F(DOUBLE_COMPARE)                                                      \
 	F(VEC_COMPARE)                                                         \
 	F(VEC_UNSIGNED_SHIFT_LEFT)                                             \
+	F(VEC_DOUBLE_BINARY_SUBTRACT)                                          \
+	F(VEC_DOUBLE_UNPACK_INTERLEAVE_HI)                                     \
+	F(VEC_DOUBLE_UNPACK_INTERLEAVE_LO)                                     \
 	F(JMP)                                                                 \
 	F(JMP_IF_EQ)                                                           \
 	F(JMP_IF_NEQ)                                                          \

@@ -267,7 +267,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	 * Customize the final opcode prefix/suffix, register aliases, etc.
 	 */
 	const char *print_opcode = NULL;
-	bool repeat_certain_args = false;
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		if ((is_xmm_register(&op->args[0]) &&
@@ -292,10 +291,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	case ASM_OP_CVT_DOUBLE_TO_INT:
 		print_opcode = "cvttsd2si";
 		break;
-	case ASM_OP_CVT_DOUBLE_TO_UINT:
-		print_opcode = "vcvttsd2usi"; /* AVX-512 */
-		repeat_certain_args = true;
-		break;
 	case ASM_OP_CVT_INT_TO_DOUBLE:
 		print_opcode = "cvtsi2sd";
 		/*
@@ -306,12 +301,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		 */
 		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
 		print_opcode_suffix = map_ralias_to_op_suffix(ralias[0]);
-		break;
-	case ASM_OP_CVT_UINT_TO_DOUBLE:
-		print_opcode = "vcvtusi2sd"; /* AVX-512 */
-		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
-		print_opcode_suffix = map_ralias_to_op_suffix(ralias[0]);
-		repeat_certain_args = true;
 		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
@@ -405,6 +394,18 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		break;
 	case ASM_OP_VEC_UNSIGNED_SHIFT_LEFT:
 		print_opcode = "psll";
+		break;
+	case ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT:
+		print_opcode = "subpd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_HI:
+		print_opcode = "unpckhpd";
+		print_opcode_suffix = 0;
+		break;
+	case ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO:
+		print_opcode = "punpckld";
+		/* retain print_opcode_suffix */
 		break;
 	case ASM_OP_JMP:
 		print_opcode = "jmp";
@@ -549,10 +550,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 			dprintf(fd, ", ");
 		}
 		emit_asm_operand(&op->args[i], plat, ralias[i], fd);
-		if (repeat_certain_args && i > 0) {
-			dprintf(fd, ", ");
-			emit_asm_operand(&op->args[i], plat, ralias[i], fd);
-		}
 	}
 
 	dprintf(fd, "\n");

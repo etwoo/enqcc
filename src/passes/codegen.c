@@ -120,6 +120,11 @@ static const struct asm_operand OPERAND_RAX_64BIT = {
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_AX,
 };
+static const struct asm_operand OPERAND_RCX_64BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_CX,
+};
 static const struct asm_operand OPERAND_RDX_64BIT = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
@@ -149,6 +154,16 @@ static const struct asm_operand OPERAND_XMM0 = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_XMM0,
+};
+static const struct asm_operand OPERAND_XMM1 = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_XMM1,
+};
+static const struct asm_operand OPERAND_XMM2 = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_64BIT,
+	.u.reg = ASM_REGISTER_XMM2,
 };
 static const struct asm_operand OPERAND_XMM15 = {
 	ASM_OPERAND_REGISTER,
@@ -661,17 +676,142 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
 		codegen_map_operands_all(src, *dst);
 		break;
-	case IR_OP_CTYPE_DOUBLE_TO_UINT:
-		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_UINT;
-		codegen_map_operands_all(src, *dst);
+	case IR_OP_CTYPE_DOUBLE_TO_UINT: // TODO: verify w/ non-long unsigned
+		/*
+		 * Mimic output of clang for double -> unsigned long.
+		 *
+		 * With `#pragma STDC FENV_ACCESS ON`, clang seems to produce
+		 * code similar to gcc and Nora Sandler's book. However, since
+		 * we don't currently support compiling code that checks
+		 * floating point status flags or sets non-default floating
+		 * point control modes, we can copy the branchless approach
+		 * clang takes in the optimistic case.
+		 *
+		 * https://github.com/llvm/llvm-project/issues/8472#issuecomment-980888781
+		 * https://github.com/llvm/llvm-project/issues/8472#issuecomment-980888775
+		 * https://github.com/llvm/llvm-project/issues/18060#issuecomment-3580497536
+		 *
+		 * movsd     -8(%rbp), %xmm0    ; source arg at -8(%rbp)
+		 * movsd     .Lfoo(%rip), %xmm2 ; INT_MAX as double constant
+		 * movq      %xmm0, %xmm1       ; ... or movaps
+		 * subsd     %xmm2, %xmm1
+		 * cvttsd2si %xmm1, %rcx
+		 * cvttsd2si %xmm0, %rax
+		 * movq      %rax, %rdx
+		 * sarq      $63, %rdx
+		 * andq      %rdx, %rcx
+		 * orq       %rcx, %rax
+		 * movq      %rax, -16(%rbp)    ; result at -16(%rbp)
+		 */
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0].operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+		(**dst).args[0].u.dnum = (double)INT_MAX;
+		(**dst).args[1] = OPERAND_XMM2;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_XMM1;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_DOUBLE_BINARY_SUBTRACT;
+		(**dst).args[0] = OPERAND_XMM2;
+		(**dst).args[1] = OPERAND_XMM1;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+		(**dst).args[0] = OPERAND_XMM1;
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_RAX_64BIT;
+		(**dst).args[1] = OPERAND_RDX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT;
+		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+		(**dst).args[0].u.num = 64 - 1;
+		(**dst).args[1] = OPERAND_RDX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_BITWISE_AND;
+		(**dst).args[0] = OPERAND_RDX_64BIT;
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_BITWISE_OR;
+		(**dst).args[0] = OPERAND_RCX_64BIT;
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_RAX_64BIT;
+		codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		break;
 	case IR_OP_CTYPE_INT_TO_DOUBLE:
 		(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
 		codegen_map_operands_all(src, *dst);
 		break;
-	case IR_OP_CTYPE_UINT_TO_DOUBLE:
-		(**dst).opcode = ASM_OP_CVT_UINT_TO_DOUBLE;
-		codegen_map_operands_all(src, *dst);
+	case IR_OP_CTYPE_UINT_TO_DOUBLE: // TODO: verify w/ non-long unsigned
+		/*
+		 * Mimic output of clang for unsigned long -> double.
+		 *
+		 * movq      -8(%rbp), %xmm0   ; source arg at -8(%rbp)
+		 * punpckldq 0x00000000000000004530000043300000, %xmm0
+		 * subpd     0x4330000000000000, %xmm0
+		 * movq      %xmm0, %xmm1      ; ... or movaps
+		 * unpckhpd  %xmm0, %xmm0
+		 * addsd     %xmm1, %xmm0
+		 * movsd     %xmm0, -16(%rbp)  ; result at -16(%rbp)
+		 *
+		 * See block comment on IR_OP_CTYPE_DOUBLE_TO_UINT as well.
+		 */
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO;
+		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+		(**dst).args[0].u.num = 0x4530000043300000; // NOLINT // TODO
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT;
+		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+		(**dst).args[0].u.num = 0x4330000000000000; // NOLINT // TODO
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_XMM1;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_HI;
+		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_DOUBLE_BINARY_ADD;
+		(**dst).args[0] = OPERAND_XMM1;
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_XMM0;
+		codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
@@ -1374,8 +1514,7 @@ fix_movzx(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED bool
 fix_cvt_double_to_int(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!((cur->opcode == ASM_OP_CVT_DOUBLE_TO_INT ||
-	       cur->opcode == ASM_OP_CVT_DOUBLE_TO_UINT) &&
+	if (!(cur->opcode == ASM_OP_CVT_DOUBLE_TO_INT &&
 	      in_memory(&cur->args[1]))) {
 		return false;
 	}
@@ -1406,8 +1545,7 @@ fix_cvt_double_to_int(struct asm_op *cur, struct fix *trampoline)
 static WARN_UNUSED bool
 fix_cvt_int_to_double(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!((cur->opcode == ASM_OP_CVT_INT_TO_DOUBLE ||
-	       cur->opcode == ASM_OP_CVT_UINT_TO_DOUBLE) &&
+	if (!(cur->opcode == ASM_OP_CVT_INT_TO_DOUBLE &&
 	      (cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE ||
 	       in_memory(&cur->args[1])))) {
 		return false;
