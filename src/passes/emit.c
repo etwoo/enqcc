@@ -511,6 +511,16 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode_suffix = 0;
 		ralias[0] = REGISTER_ALIAS_1BYTE;
 		break;
+	case ASM_OP_SET_IF_P:
+		print_opcode = "setp";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
+	case ASM_OP_SET_IF_NP:
+		print_opcode = "setnp";
+		print_opcode_suffix = 0;
+		ralias[0] = REGISTER_ALIAS_1BYTE;
+		break;
 	case ASM_OP_LABEL:
 		assert(op->args[0].operand_type ==
 		       ASM_OPERAND_JUMP_TARGET_LABEL);

@@ -498,28 +498,68 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		check(codegen_alloc_op(arena, dst));
 		switch (src->opcode) {
 		case IR_OP_COMPARE_EQUAL:
-			(**dst).opcode = ASM_OP_SET_IF_EQ;
+		case IR_OP_COMPARE_LESS_THAN:
+		case IR_OP_COMPARE_LESS_THAN_EQ:
+		case IR_OP_COMPARE_MORE_THAN:
+		case IR_OP_COMPARE_MORE_THAN_EQ:
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_set_operand_immediate_zero(&(**dst).args[0]);
+			(**dst).args[1] = OPERAND_RCX_64BIT;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_SET_IF_NP;
+			(**dst).args[0] = OPERAND_RCX_64BIT;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			switch (src->opcode) {
+			case IR_OP_COMPARE_EQUAL:
+				(**dst).opcode = ASM_OP_SET_IF_EQ;
+				break;
+			case IR_OP_COMPARE_LESS_THAN:
+				(**dst).opcode = ASM_OP_SET_IF_B;
+				break;
+			case IR_OP_COMPARE_LESS_THAN_EQ:
+				(**dst).opcode = ASM_OP_SET_IF_BE;
+				break;
+			case IR_OP_COMPARE_MORE_THAN:
+				(**dst).opcode = ASM_OP_SET_IF_A;
+				break;
+			case IR_OP_COMPARE_MORE_THAN_EQ:
+				(**dst).opcode = ASM_OP_SET_IF_AE;
+				break;
+			default:
+				assert(0); /* logic error in caller */
+				break;
+			}
+			codegen_map_operand(&src->args[2], &(**dst).args[0]);
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_BITWISE_AND;
+			(**dst).args[0] = OPERAND_RCX_64BIT;
+			codegen_map_operand(&src->args[2], &(**dst).args[1]);
 			break;
 		case IR_OP_COMPARE_NOT_EQUAL:
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_set_operand_immediate_zero(&(**dst).args[0]);
+			(**dst).args[1] = OPERAND_RCX_64BIT;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_SET_IF_P;
+			(**dst).args[0] = OPERAND_RCX_64BIT;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_SET_IF_NEQ;
-			break;
-		case IR_OP_COMPARE_LESS_THAN:
-			(**dst).opcode = ASM_OP_SET_IF_B;
-			break;
-		case IR_OP_COMPARE_LESS_THAN_EQ:
-			(**dst).opcode = ASM_OP_SET_IF_BE;
-			break;
-		case IR_OP_COMPARE_MORE_THAN:
-			(**dst).opcode = ASM_OP_SET_IF_A;
-			break;
-		case IR_OP_COMPARE_MORE_THAN_EQ:
-			(**dst).opcode = ASM_OP_SET_IF_AE;
+			codegen_map_operand(&src->args[2], &(**dst).args[0]);
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_BITWISE_OR;
+			(**dst).args[0] = OPERAND_RCX_64BIT;
+			codegen_map_operand(&src->args[2], &(**dst).args[1]);
 			break;
 		default:
 			assert(0); /* logic error in caller */
 			break;
 		}
-		codegen_map_operand(&src->args[2], &(**dst).args[0]);
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
 	case IR_OP_CTYPE_INT_TO_DOUBLE:

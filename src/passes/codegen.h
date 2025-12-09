@@ -122,6 +122,8 @@ bool is_xmm_register(const struct asm_operand *o) WARN_UNUSED;
 	F(SET_IF_AE)                                                           \
 	F(SET_IF_B)                                                            \
 	F(SET_IF_BE)                                                           \
+	F(SET_IF_P)                                                            \
+	F(SET_IF_NP)                                                           \
 	F(LABEL)                                                               \
 	F(PUSH)                                                                \
 	F(CALL)                                                                \
