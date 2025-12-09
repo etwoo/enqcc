@@ -770,64 +770,74 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
 		codegen_map_operands_all(src, *dst);
 		break;
-	case IR_OP_CTYPE_UINT_TO_DOUBLE: // TODO: verify w/ non-long unsigned
-		/*
-		 * Mimic output of clang for unsigned long -> double.
-		 *
-		 * movq      -8(%rbp), %xmm0   ; source arg at -8(%rbp)
-		 * punpckldq 0x00000000000000004530000043300000, %xmm0
-		 * subpd     0x4330000000000000, %xmm0
-		 * movq      %xmm0, %xmm1      ; ... or movaps
-		 * unpckhpd  %xmm0, %xmm0
-		 * addsd     %xmm1, %xmm0
-		 * movsd     %xmm0, -16(%rbp)  ; result at -16(%rbp)
-		 *
-		 * See block comment on IR_OP_CTYPE_DOUBLE_TO_UINT as well.
-		 */
-		(**dst).opcode = ASM_OP_DOUBLE_BITWISE_XOR;
-		(**dst).args[0] = OPERAND_XMM0; /* zero out XMM0, in case of */
-		(**dst).args[1] = OPERAND_XMM0; /* 32-bit arg (long vs quad) */
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		(**dst).args[1] = OPERAND_XMM0;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO;
-		(**dst).args[0].operand_type =
-			ASM_OPERAND_CONSTANT_DATA_VEC_LONGS;
-		(**dst).args[0].u.longs[0] = 0x43300000; // NOLINT
-		(**dst).args[0].u.longs[1] = 0x45300000; // NOLINT
-		(**dst).args[1] = OPERAND_XMM0;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT;
-		(**dst).args[0].operand_type =
-			ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
-		(**dst).args[0].u.quads[0] = 0x4330000000000000; // NOLINT
-		(**dst).args[0].u.quads[1] = 0x4530000000000000; // NOLINT
-		(**dst).args[1] = OPERAND_XMM0;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		(**dst).args[0] = OPERAND_XMM0;
-		(**dst).args[1] = OPERAND_XMM1;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_HI;
-		(**dst).args[0] = OPERAND_XMM0;
-		(**dst).args[1] = OPERAND_XMM0;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_DOUBLE_BINARY_ADD;
-		(**dst).args[0] = OPERAND_XMM1;
-		(**dst).args[1] = OPERAND_XMM0;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		(**dst).args[0] = OPERAND_XMM0;
-		codegen_map_operand(&src->args[1], &(**dst).args[1]);
+	case IR_OP_CTYPE_UINT_TO_DOUBLE:
+		if (src->args[0].c89type == CTYPE_UNSIGNED_INT) {
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			codegen_set_operand_eax(&src->args[0],
+			                        &(**dst).args[1]);
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
+			codegen_set_operand_eax(&src->args[0],
+			                        &(**dst).args[0]);
+			codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		} else {
+			/*
+			 * Mimic output of clang for unsigned long -> double.
+			 *
+			 * movq      -8(%rbp), %xmm0   ; source arg at -8(%rbp)
+			 * punpckldq 0x00000000000000004530000043300000, %xmm0
+			 * subpd     0x4330000000000000, %xmm0
+			 * movq      %xmm0, %xmm1      ; ... or movaps
+			 * unpckhpd  %xmm0, %xmm0
+			 * addsd     %xmm1, %xmm0
+			 * movsd     %xmm0, -16(%rbp)  ; result at -16(%rbp)
+			 *
+			 * See comment on IR_OP_CTYPE_DOUBLE_TO_UINT as well.
+			 */
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO;
+			(**dst).args[0].operand_type =
+				ASM_OPERAND_CONSTANT_DATA_VEC_LONGS;
+			(**dst).args[0].u.longs[0] = 0x43300000; // NOLINT
+			(**dst).args[0].u.longs[1] = 0x45300000; // NOLINT
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT;
+			(**dst).args[0].operand_type =
+				ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
+			// NOLINTBEGIN // TODO rm
+			(**dst).args[0].u.quads[0] = 0x4330000000000000;
+			(**dst).args[0].u.quads[1] = 0x4530000000000000;
+			(**dst).args[1] = OPERAND_XMM0;
+			// NOLINTEND // TODO rm
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_MOV;
+			(**dst).args[0] = OPERAND_XMM0;
+			(**dst).args[1] = OPERAND_XMM1;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_HI;
+			(**dst).args[0] = OPERAND_XMM0;
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_DOUBLE_BINARY_ADD;
+			(**dst).args[0] = OPERAND_XMM1;
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_MOV;
+			(**dst).args[0] = OPERAND_XMM0;
+			codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		}
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
