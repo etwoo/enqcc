@@ -65,6 +65,8 @@ struct asm_operand {
 	} u;
 };
 
+bool is_xmm_register(const struct asm_operand *o) WARN_UNUSED;
+
 #define FOREACH_ASM_OPCODE(F)                                                  \
 	F(MOV)                                                                 \
 	F(MOV_WITH_SIGN_EXTENSION)                                             \

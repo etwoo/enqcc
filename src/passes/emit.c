@@ -235,13 +235,6 @@ map_ralias_to_op_suffix(enum register_alias reg)
 	return c;
 }
 
-static WARN_UNUSED bool
-is_xmm_register(const struct asm_operand *o)
-{
-	return o->operand_type == ASM_OPERAND_REGISTER &&
-	       o->u.reg >= ASM_REGISTER_XMM0 && o->u.reg <= ASM_REGISTER_XMM15;
-}
-
 static void
 emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 {
@@ -683,7 +676,7 @@ emit_asm_fp_vector_constants(const struct asm_function *f,
 		        got_longs->u.longs[2],
 		        got_longs->u.longs[3]);
 		for (size_t i = 0; i < ARRAY_SIZE(got_longs->u.longs); ++i) {
-			dprintf(fd, "\t.long %lx\n", got_longs->u.longs[i]);
+			dprintf(fd, "\t.long 0x%lx\n", got_longs->u.longs[i]);
 		}
 	}
 
@@ -695,7 +688,7 @@ emit_asm_fp_vector_constants(const struct asm_function *f,
 		        got_quads->u.quads[0],
 		        got_quads->u.quads[1]);
 		for (size_t i = 0; i < ARRAY_SIZE(got_quads->u.quads); ++i) {
-			dprintf(fd, "\t.quad %llx\n", got_quads->u.quads[i]);
+			dprintf(fd, "\t.quad 0x%llx\n", got_quads->u.quads[i]);
 		}
 	}
 

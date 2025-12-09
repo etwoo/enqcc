@@ -49,6 +49,13 @@ codegen_op_list_prepend(struct asm_op *new_head, struct asm_op **head)
 	*head = new_head;
 }
 
+bool
+is_xmm_register(const struct asm_operand *o)
+{
+	return o->operand_type == ASM_OPERAND_REGISTER &&
+	       o->u.reg >= ASM_REGISTER_XMM0 && o->u.reg <= ASM_REGISTER_XMM15;
+}
+
 static void
 codegen_set_operand_immediate_zero(struct asm_operand *dst)
 {
@@ -1257,6 +1264,10 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
  *
  * Ditto for ASM_OP_MOV op with a large immediate value as a source and an
  * ASM_OPERAND_STACK as a destination.
+ *
+ * Loading an immediate value into an XMM* register typically uses a global
+ * constant as a source, but if necessary, bouncing through a general purpose
+ * register seems to work as well.
  */
 static WARN_UNUSED bool
 fix_imm_big(struct asm_op *cur, struct fix *trampoline)
@@ -1277,7 +1288,10 @@ fix_imm_big(struct asm_op *cur, struct fix *trampoline)
 	       cur->args[0].u.num > INT_MAX) ||
 	      (cur->opcode == ASM_OP_MOV &&
 	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
-	       cur->args[0].u.num > INT_MAX && in_memory(&cur->args[1])))) {
+	       cur->args[0].u.num > INT_MAX && in_memory(&cur->args[1])) ||
+	      (cur->opcode == ASM_OP_MOV &&
+	       cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE &&
+	       is_xmm_register(&cur->args[1])))) {
 		return false;
 	}
 
@@ -1709,14 +1723,14 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  CONSTANT DOUBLE %f", operand->u.dnum);
 		break;
 	case ASM_OPERAND_CONSTANT_DATA_VEC_LONGS:
-		debug("  CONSTANT VEC LONGS %lx %lx %lx %lx",
+		debug("  CONSTANT VEC LONGS 0x%lx 0x%lx 0x%lx 0x%lx",
 		      operand->u.longs[0],
 		      operand->u.longs[1],
 		      operand->u.longs[2],
 		      operand->u.longs[3]);
 		break;
 	case ASM_OPERAND_CONSTANT_DATA_VEC_QUADS:
-		debug("  CONSTANT VEC QUADS %llx %llx",
+		debug("  CONSTANT VEC QUADS 0x%llx 0x%llx",
 		      operand->u.quads[0],
 		      operand->u.quads[1]);
 		break;
