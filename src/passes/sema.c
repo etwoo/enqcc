@@ -985,6 +985,13 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              a->u.declare.var_type,
 		              &a->u.declare.init));
 		break;
+	case NODE_IF_ELSE:
+		check(cast_if(arena, CTYPE_INT, &a->u.if_.condition));
+		break;
+	case NODE_LOOP:
+		check(cast_if(arena, CTYPE_INT, &a->u.loop.precond));
+		check(cast_if(arena, CTYPE_INT, &a->u.loop.postcond));
+		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -993,14 +1000,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BITWISE_AND:
 	case NODE_EXPRESSION_BITWISE_OR:
 	case NODE_EXPRESSION_BITWISE_XOR:
-	case NODE_EXPRESSION_LOGICAL_AND:
-	case NODE_EXPRESSION_LOGICAL_OR:
-	case NODE_EXPRESSION_COMPARE_EQUAL:
-	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
-	case NODE_EXPRESSION_COMPARE_LESS_THAN:
-	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
-	case NODE_EXPRESSION_COMPARE_MORE_THAN:
-	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD: /* See [TYPE1] comment in  */
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB: /* sema_expr_types() re:   */
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL: /* compound assignment ops */
@@ -1022,6 +1021,18 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		check(cast_if(arena,
 		              a->u.op_binary.lhs->expr_type,
 		              &a->u.op_binary.rhs));
+		break;
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		assert(a->expr_type == CTYPE_INT);
+		check(cast_if(arena, CTYPE_INT, &a->u.op_binary.lhs));
+		check(cast_if(arena, CTYPE_INT, &a->u.op_binary.rhs));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		common = get_common_ctype(a->u.op_ternary.then_expr->expr_type,
