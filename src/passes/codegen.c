@@ -21,8 +21,10 @@ static const long long int CODEGEN_FP_REGISTER_ARGS = ARRAY_SIZE(CALL_FP);
 static const long long int CODEGEN_BYTES_PER_VALUE = 4;
 static const long long int CODEGEN_BYTES_PER_PUSH = 8;
 static const long long int CODEGEN_BYTES_ARG_FIRST = 16;
-static const long long unsigned UINT_TO_DBL_MAGIC1 = 0x43300000;
-static const long long unsigned UINT_TO_DBL_MAGIC2 = 0x45300000;
+static const long unsigned UINT_TO_DOUBLE_MAGIC_L1 = 0x43300000;
+static const long unsigned UINT_TO_DOUBLE_MAGIC_L2 = 0x45300000;
+static const long long unsigned UINT_TO_DOUBLE_MAGIC_Q1 = 0x4330000000000000;
+static const long long unsigned UINT_TO_DOUBLE_MAGIC_Q2 = 0x4530000000000000;
 
 static WARN_UNUSED result_t
 codegen_alloc_op(Arena *arena, struct asm_op **dst)
@@ -654,16 +656,16 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO;
 			(**dst).args[0].operand_type =
 				ASM_OPERAND_CONSTANT_DATA_VEC_LONGS;
-			(**dst).args[0].u.longs[0] = UINT_TO_DBL_MAGIC1;
-			(**dst).args[0].u.longs[1] = UINT_TO_DBL_MAGIC2;
+			(**dst).args[0].u.longs[0] = UINT_TO_DOUBLE_MAGIC_L1;
+			(**dst).args[0].u.longs[1] = UINT_TO_DOUBLE_MAGIC_L2;
 			(**dst).args[1] = OPERAND_XMM0;
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT;
 			(**dst).args[0].operand_type =
 				ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
-			(**dst).args[0].u.quads[0] = UINT_TO_DBL_MAGIC1 << 8U;
-			(**dst).args[0].u.quads[1] = UINT_TO_DBL_MAGIC2 << 8U;
+			(**dst).args[0].u.quads[0] = UINT_TO_DOUBLE_MAGIC_Q1;
+			(**dst).args[0].u.quads[1] = UINT_TO_DOUBLE_MAGIC_Q2;
 			(**dst).args[1] = OPERAND_XMM0;
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
