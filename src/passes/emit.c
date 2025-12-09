@@ -174,7 +174,7 @@ emit_asm_operand(const struct asm_operand *o,
 		break;
 	case ASM_OPERAND_CONSTANT_DATA_DOUBLE:
 		dprintf(fd,
-		        "%s%s%llu(%s)",
+		        "%s%s%llx(%s)",
 		        label_prefix,
 		        DOUBLE_LABEL_ID,
 		        get_double_as_quadword(o->u.dnum),
@@ -619,7 +619,7 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		}
 		if (var->c89type == CTYPE_DOUBLE) {
 			dprintf(fd,
-			        "%llu\n",
+			        "0x%llx\n",
 			        get_double_as_quadword(var->initial.as_double));
 		} else if (var->initial.as_integer > LLONG_MAX) {
 			dprintf(fd,
@@ -733,8 +733,8 @@ emit_asm_fp_one(const double *value, enum platform plat, int fd)
 
 	dprintf(fd, "\t%s\n", section_fp_constants);
 	dprintf(fd, "\t.balign %lld\n", ctype_to_size_bytes(CTYPE_DOUBLE));
-	dprintf(fd, "%s%s%llu:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
-	dprintf(fd, "\t.quad %llu\n", as_quadword);
+	dprintf(fd, "%s%s%llx:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
+	dprintf(fd, "\t.quad 0x%llx\n", as_quadword);
 }
 
 static WARN_UNUSED result_t

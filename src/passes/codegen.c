@@ -467,14 +467,27 @@ codegen_statement_one(Arena *arena,
 		assert(!a_floating_point); /* should be guaranteed by sema.c */
 		break;
 	case IR_OP_UNARY_DECREMENT:
-		(**dst).opcode = ASM_OP_UNARY_DECREMENT;
-		assert(in_place_update(src, 1));
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		break;
 	case IR_OP_UNARY_INCREMENT:
-		(**dst).opcode = ASM_OP_UNARY_INCREMENT;
-		assert(in_place_update(src, 1));
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		if (a_floating_point) {
+			(**dst).opcode = ASM_OP_MOV;
+			(**dst).args[0].operand_type =
+				ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+			(**dst).args[0].u.dnum = 1.0;
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = src->opcode == IR_OP_UNARY_DECREMENT
+			                         ? ASM_OP_DOUBLE_BINARY_SUBTRACT
+			                         : ASM_OP_DOUBLE_BINARY_ADD;
+			(**dst).args[0] = OPERAND_XMM0;
+			codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		} else {
+			(**dst).opcode = src->opcode == IR_OP_UNARY_DECREMENT
+			                         ? ASM_OP_UNARY_DECREMENT
+			                         : ASM_OP_UNARY_INCREMENT;
+			assert(in_place_update(src, 1));
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		}
 		break;
 	case IR_OP_BINARY_ADD:
 	case IR_OP_BINARY_SUBTRACT:
