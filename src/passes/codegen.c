@@ -682,6 +682,28 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		}
 		break;
+	case IR_OP_JUMP_IF_ZERO:
+	case IR_OP_JUMP_IF_NOT_ZERO:
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_DOUBLE_COMPARE;
+		(**dst).args[0].operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+		(**dst).args[0].u.dnum = 0.0;
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		switch (src->opcode) {
+		case IR_OP_JUMP_IF_ZERO:
+			(**dst).opcode = ASM_OP_JMP_IF_EQ;
+			break;
+		case IR_OP_JUMP_IF_NOT_ZERO:
+			(**dst).opcode = ASM_OP_JMP_IF_NEQ;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
 	default:
 		break; /* fallback to common handling in caller */
 	}
