@@ -710,6 +710,11 @@ codegen_statement_one(Arena *arena,
 		 * orq       %rcx, %rax
 		 * movq      %rax, -16(%rbp)    ; result at -16(%rbp)
 		 */
+		(**dst).opcode = ASM_OP_BITWISE_XOR;
+		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		(**dst).args[1] = OPERAND_XMM0;
