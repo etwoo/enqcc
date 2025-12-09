@@ -529,7 +529,7 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
 		codegen_map_operands_all(src, *dst);
 		break;
-	case IR_OP_CTYPE_DOUBLE_TO_UINT: // TODO: verify w/ non-long unsigned
+	case IR_OP_CTYPE_DOUBLE_TO_UINT:
 		/*
 		 * Mimic output of clang for double -> unsigned long.
 		 *
