@@ -98,8 +98,6 @@ bool is_xmm_register(const struct asm_operand *o) WARN_UNUSED;
 	F(DOUBLE_BINARY_DIVIDE)                                                \
 	F(DOUBLE_BITWISE_XOR)                                                  \
 	F(DOUBLE_COMPARE)                                                      \
-	F(VEC_COMPARE)                                                         \
-	F(VEC_UNSIGNED_SHIFT_LEFT)                                             \
 	F(VEC_DOUBLE_BINARY_SUBTRACT)                                          \
 	F(VEC_DOUBLE_UNPACK_INTERLEAVE_HI)                                     \
 	F(VEC_DOUBLE_UNPACK_INTERLEAVE_LO)                                     \

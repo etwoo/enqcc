@@ -4,6 +4,7 @@
 #include "sys/compiler_features.h"
 
 #include <assert.h>
+#include <math.h> /* for signbit() */
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>    /* for memcpy() */
@@ -404,12 +405,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		print_opcode = "comisd";
 		print_opcode_suffix = 0;
 		break;
-	case ASM_OP_VEC_COMPARE:
-		print_opcode = "pcmpeq";
-		break;
-	case ASM_OP_VEC_UNSIGNED_SHIFT_LEFT:
-		print_opcode = "psll";
-		break;
 	case ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT:
 		print_opcode = "subpd";
 		print_opcode_suffix = 0;
@@ -709,7 +704,9 @@ emit_asm_fp_check(Arena *arena,
 	*do_emit = false;
 
 	for (struct fp_constant *i = *emitted; i != NULL; i = i->next) {
-		if (i->value == value) {
+		if (i->value == value &&
+		    /* distinguish +0.0 from -0.0 */
+		    ((0 == signbit(i->value)) == (0 == signbit(value)))) {
 			return RESULT_OK;
 		}
 	}

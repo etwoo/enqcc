@@ -412,30 +412,23 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_UNARY_NEGATE:
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operands_all(src, *dst);
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_XMM1;
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		/*
-		 * Based on Agner Fog's optimization guide for
-		 * x86, 17.7, "Manipulating the sign bit":
-		 *
-		 * pcmpeqq %xmm1, %xmm1 ; generate all 1's
-		 * psllq $63, %xmm1     ; 1 in leftmost bit only
-		 * xorpd %xmm1, %xmm8   ; change sign of xmm8
-		 */
-		(**dst).opcode = ASM_OP_VEC_COMPARE;
-		(**dst).args[0] = OPERAND_XMM0;
-		(**dst).args[1] = OPERAND_XMM0;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_VEC_UNSIGNED_SHIFT_LEFT;
-		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-		(**dst).args[0].u.num = 64 - 1;
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0].operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+		(**dst).args[0].u.dnum = -0.0;
 		(**dst).args[1] = OPERAND_XMM0;
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_DOUBLE_BITWISE_XOR;
 		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_XMM1;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_XMM1;
 		codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		break;
 	case IR_OP_UNARY_DECREMENT:
