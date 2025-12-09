@@ -693,6 +693,65 @@ sema_label_gotos(Arena *arena, struct ast *a, long long int *generator)
 	return RESULT_OK;
 }
 
+struct sema_compound_assignment_state {
+	Arena *arena;
+};
+
+static WARN_UNUSED result_t
+sema_compound_assignment(struct ast *a, void *userdata)
+{
+	struct sema_compound_assignment_state *state = userdata;
+	Arena *arena = state->arena;
+
+	enum ast_nodetype new_type = 0;
+	switch (a->node_type) {
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+		new_type = NODE_EXPRESSION_BINARY_ADD;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+		new_type = NODE_EXPRESSION_BINARY_SUBTRACT;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+		new_type = NODE_EXPRESSION_BINARY_MULTIPLY;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+		new_type = NODE_EXPRESSION_BINARY_DIVIDE;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+		new_type = NODE_EXPRESSION_BINARY_REMAINDER;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+		new_type = NODE_EXPRESSION_BITWISE_AND;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+		new_type = NODE_EXPRESSION_BITWISE_OR;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+		new_type = NODE_EXPRESSION_BITWISE_XOR;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+		new_type = NODE_EXPRESSION_BITWISE_SHIFT_LEFT;
+		break;
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+		new_type = NODE_EXPRESSION_BITWISE_SHIFT_RIGHT;
+		break;
+	default:
+		return RESULT_OK;
+	}
+
+	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	check_if(new_node == NULL, ERR_SEMA_ALLOC);
+	new_node->node_type = new_type;
+	new_node->expr_type = a->expr_type;
+	new_node->u.op_binary = a->u.op_binary;
+
+	a->node_type = NODE_EXPRESSION_VARIABLE_ASSIGNMENT;
+	a->u.op_binary.rhs = new_node;
+	/* retain existing a->u.op_binary.lhs */
+
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
@@ -1009,18 +1068,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND: /* determining expr_type.  */
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-		// TODO: might need sema to expand compound assignment to
-		// normalized `assignment = LHS +/-/etc RHS`, so that it is
-		// possible to express casting like:
-		//
-		// LHS = (LHS_type)((common_type)LHS + (common_type)RHS)
-		//
-		// ... which is important for doubles
-		//
-		// ir.c could then be updated to assert on compound assignment,
-		// making the assumption that sema.c transforms them all
-		//
-		// motivating testcase: compound_assign_implicit_cast.c
 		common = get_common_ctype(a->u.op_binary.lhs->expr_type,
 		                          a->u.op_binary.rhs->expr_type);
 		check(cast_if(arena, common, &a->u.op_binary.lhs));
@@ -1608,6 +1655,14 @@ result_t
 sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 {
 	struct sema_ops ops = {0};
+
+	debug("Expanding compound assignment statements");
+	ops.node_enter = sema_compound_assignment;
+	{
+		struct sema_compound_assignment_state compound_state = {0};
+		compound_state.arena = arena;
+		check(sema_walk(a, &ops, &compound_state));
+	}
 
 	debug("Checking lvalues");
 	ops.node_enter = sema_lvalue;
