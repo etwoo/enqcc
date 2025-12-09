@@ -758,16 +758,6 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 	struct ast *to_check = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		to_check = a->u.op_binary.lhs;
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
@@ -917,16 +907,6 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		/*
 		 * Shift left/right takes the LHS type, not the common
@@ -937,26 +917,6 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 		 *
 		 * Variable assignment similarly takes the LHS type,
 		 * corresponding to the assigned-to variable.
-		 *
-		 * Compound assignment takes the LHS type, like regular
-		 * variable assignment. That said, lvalue-to-rvalue
-		 * conversion can lead to sign extension when computing
-		 * the new value if the RHS type causes the common type
-		 * to be wider than the LHS type. Truncation will then
-		 * occur when assigning to the lvalue. Note: [TYPE1].
-		 *
-		 * For example, given:
-		 *
-		 *     int x = 0;
-		 *     x += 100l;
-		 *
-		 * ... equivalent to:
-		 *
-		 *     x = x + 100l;
-		 *
-		 * ... we can think of the resulting behavior like:
-		 *
-		 *     x = (int)(((long)x) + 100l);
 		 */
 		a->expr_type = a->u.op_binary.lhs->expr_type;
 		break;
@@ -973,6 +933,18 @@ sema_expr_types(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_CONSTANT:
 		break; /* resolve_expr() in parse.c handles leaf nodes */
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
+	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+		assert(0 && "COMPOUND_ASSIGN_* should have been eliminated");
+		break;
 	}
 
 	return RESULT_OK;
@@ -999,12 +971,6 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_BITWISE_XOR:
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		valid = (a->u.op_binary.lhs->expr_type != CTYPE_DOUBLE) &&
 		        (a->u.op_binary.rhs->expr_type != CTYPE_DOUBLE);
 		break;
@@ -1060,14 +1026,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD: /* See [TYPE1] comment in  */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB: /* sema_expr_types() re:   */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_MUL: /* compound assignment ops */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_DIV: /* requiring casts despite */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_REM: /* LHS lvalue unilaterally */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND: /* determining expr_type.  */
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 		common = get_common_ctype(a->u.op_binary.lhs->expr_type,
 		                          a->u.op_binary.rhs->expr_type);
 		check(cast_if(arena, common, &a->u.op_binary.lhs));
@@ -1075,8 +1033,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
-	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(cast_if(arena,
 		              a->u.op_binary.lhs->expr_type,
