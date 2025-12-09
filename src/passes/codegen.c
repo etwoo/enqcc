@@ -522,8 +522,11 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[2], &(**dst).args[0]);
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
+	case IR_OP_CTYPE_INT_TO_DOUBLE:
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+		(**dst).opcode = src->opcode == IR_OP_CTYPE_DOUBLE_TO_INT
+		                         ? ASM_OP_CVT_DOUBLE_TO_INT
+		                         : ASM_OP_CVT_INT_TO_DOUBLE;
 		codegen_map_operands_all(src, *dst);
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_UINT:
@@ -610,11 +613,6 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		(**dst).args[0] = OPERAND_RAX_64BIT;
 		codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		break;
-	case IR_OP_CTYPE_INT_TO_DOUBLE:
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
-		codegen_map_operands_all(src, *dst);
-		break;
 	case IR_OP_CTYPE_UINT_TO_DOUBLE:
 		check(codegen_alloc_op(arena, dst));
 		if (src->args[0].c89type == CTYPE_UNSIGNED_INT) {
@@ -691,17 +689,9 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		switch (src->opcode) {
-		case IR_OP_JUMP_IF_ZERO:
-			(**dst).opcode = ASM_OP_JMP_IF_EQ;
-			break;
-		case IR_OP_JUMP_IF_NOT_ZERO:
-			(**dst).opcode = ASM_OP_JMP_IF_NEQ;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
+		(**dst).opcode = src->opcode == IR_OP_JUMP_IF_ZERO
+		                         ? ASM_OP_JMP_IF_EQ
+		                         : ASM_OP_JMP_IF_NEQ;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
 	default:
@@ -739,20 +729,14 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_UNARY_NEGATE:
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operands_all(src, *dst);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_UNARY_NEG;
-		/* similar to IR_OP_UNARY_COMPLEMENT for integers */
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		break;
 	case IR_OP_UNARY_COMPLEMENT:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operands_all(src, *dst);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_UNARY_NOT;
+		(**dst).opcode = src->opcode == IR_OP_UNARY_NEGATE
+		                         ? ASM_OP_UNARY_NEG
+		                         : ASM_OP_UNARY_NOT;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
 	case IR_OP_UNARY_DECREMENT:
@@ -931,13 +915,10 @@ codegen_statement_one(Arena *arena,
 		codegen_map_operands_all(src, *dst);
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
-		(**dst).opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
-		codegen_map_operands_all(src, *dst);
-		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
-		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
-		break;
 	case IR_OP_CTYPE_ZERO_EXTEND:
-		(**dst).opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
+		(**dst).opcode = src->opcode == IR_OP_CTYPE_SIGN_EXTEND
+		                         ? ASM_OP_MOV_WITH_SIGN_EXTENSION
+		                         : ASM_OP_MOV_WITH_ZERO_EXTENSION;
 		codegen_map_operands_all(src, *dst);
 		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
 		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
@@ -965,17 +946,9 @@ codegen_statement_one(Arena *arena,
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		switch (src->opcode) {
-		case IR_OP_JUMP_IF_ZERO:
-			(**dst).opcode = ASM_OP_JMP_IF_EQ;
-			break;
-		case IR_OP_JUMP_IF_NOT_ZERO:
-			(**dst).opcode = ASM_OP_JMP_IF_NEQ;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
+		(**dst).opcode = src->opcode == IR_OP_JUMP_IF_ZERO
+		                         ? ASM_OP_JMP_IF_EQ
+		                         : ASM_OP_JMP_IF_NEQ;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
 	case IR_OP_LABEL:
