@@ -779,8 +779,7 @@ codegen_statement_one(Arena *arena,
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
-			codegen_set_operand_eax(&src->args[0],
-			                        &(**dst).args[0]);
+			(**dst).args[0] = OPERAND_RAX_64BIT;
 			codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		} else {
 			/*
