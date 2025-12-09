@@ -393,111 +393,67 @@ in_place_update(const struct ir_op *src, size_t result_pos)
 }
 
 static WARN_UNUSED result_t
-codegen_statement_one(Arena *arena,
-                      const struct ir_op *src,
-                      struct asm_op **dst)
+codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 {
-	assert(*dst == NULL);
-	check(codegen_alloc_op(arena, dst));
-
-	/* guess overall op signedness and fp-ness ahead of time */
-	const bool a_signed = ctype_is_signed(src->args[0].c89type);
-	const bool a_floating_point =
-		ctype_is_floating_point(src->args[0].c89type);
-
-	if (src->opcode == IR_OP_BINARY_DIVIDE && a_floating_point) {
-		goto consider_binary_op;
-	}
-
 	switch (src->opcode) {
 	case IR_OP_RET:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		if (a_floating_point) {
-			(**dst).args[1] = OPERAND_XMM0;
-		} else {
-			codegen_set_operand_eax(&src->args[0],
-			                        &(**dst).args[1]);
-		}
+		(**dst).args[1] = OPERAND_XMM0;
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_UNARY_NEGATE:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operands_all(src, *dst);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		if (a_floating_point) {
-			/*
-			 * Based on Agner Fog's optimization guide for
-			 * x86, 17.7, "Manipulating the sign bit":
-			 *
-			 * pcmpeqq %xmm1, %xmm1 ; generate all 1's
-			 * psllq $63, %xmm1     ; 1 in leftmost bit only
-			 * xorpd %xmm1, %xmm8   ; change sign of xmm8
-			 */
-			(**dst).opcode = ASM_OP_VEC_COMPARE;
-			(**dst).args[0] = OPERAND_XMM0;
-			(**dst).args[1] = OPERAND_XMM0;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_VEC_UNSIGNED_SHIFT_LEFT;
-			(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-			(**dst).args[0].u.num = 64 - 1;
-			(**dst).args[1] = OPERAND_XMM0;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_DOUBLE_BITWISE_XOR;
-			(**dst).args[0] = OPERAND_XMM0;
-			codegen_map_operand(&src->args[1], &(**dst).args[1]);
-		} else {
-			(**dst).opcode = ASM_OP_UNARY_NEG;
-			/* similar to IR_OP_UNARY_COMPLEMENT for integers */
-			codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		}
-		break;
-	case IR_OP_UNARY_COMPLEMENT:
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operands_all(src, *dst);
+		/*
+		 * Based on Agner Fog's optimization guide for
+		 * x86, 17.7, "Manipulating the sign bit":
+		 *
+		 * pcmpeqq %xmm1, %xmm1 ; generate all 1's
+		 * psllq $63, %xmm1     ; 1 in leftmost bit only
+		 * xorpd %xmm1, %xmm8   ; change sign of xmm8
+		 */
+		(**dst).opcode = ASM_OP_VEC_COMPARE;
+		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_XMM0;
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_UNARY_NOT;
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		assert(!a_floating_point); /* should be guaranteed by sema.c */
+		(**dst).opcode = ASM_OP_VEC_UNSIGNED_SHIFT_LEFT;
+		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+		(**dst).args[0].u.num = 64 - 1;
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_DOUBLE_BITWISE_XOR;
+		(**dst).args[0] = OPERAND_XMM0;
+		codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		break;
 	case IR_OP_UNARY_DECREMENT:
 	case IR_OP_UNARY_INCREMENT:
-		if (a_floating_point) {
-			(**dst).opcode = ASM_OP_MOV;
-			(**dst).args[0].operand_type =
-				ASM_OPERAND_CONSTANT_DATA_DOUBLE;
-			(**dst).args[0].u.dnum = 1.0;
-			(**dst).args[1] = OPERAND_XMM0;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = src->opcode == IR_OP_UNARY_DECREMENT
-			                         ? ASM_OP_DOUBLE_BINARY_SUBTRACT
-			                         : ASM_OP_DOUBLE_BINARY_ADD;
-			(**dst).args[0] = OPERAND_XMM0;
-			codegen_map_operand(&src->args[0], &(**dst).args[1]);
-		} else {
-			(**dst).opcode = src->opcode == IR_OP_UNARY_DECREMENT
-			                         ? ASM_OP_UNARY_DECREMENT
-			                         : ASM_OP_UNARY_INCREMENT;
-			assert(in_place_update(src, 1));
-			codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		}
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0].operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+		(**dst).args[0].u.dnum = 1.0;
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = src->opcode == IR_OP_UNARY_DECREMENT
+		                         ? ASM_OP_DOUBLE_BINARY_SUBTRACT
+		                         : ASM_OP_DOUBLE_BINARY_ADD;
+		(**dst).args[0] = OPERAND_XMM0;
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		break;
 	case IR_OP_BINARY_ADD:
 	case IR_OP_BINARY_SUBTRACT:
 	case IR_OP_BINARY_MULTIPLY:
-	case IR_OP_BITWISE_AND:
-	case IR_OP_BITWISE_OR:
-	case IR_OP_BITWISE_XOR:
-	case IR_OP_BITWISE_SHIFT_LEFT:
-	case IR_OP_BITWISE_SHIFT_RIGHT:
-	consider_binary_op:
+	case IR_OP_BINARY_DIVIDE:
+		check(codegen_alloc_op(arena, dst));
 		if (!in_place_update(src, 2)) {
 			(**dst).opcode = ASM_OP_MOV;
 			codegen_map_operand(&src->args[0], &(**dst).args[0]);
@@ -507,25 +463,313 @@ codegen_statement_one(Arena *arena,
 		}
 		switch (src->opcode) {
 		case IR_OP_BINARY_ADD:
-			(**dst).opcode = a_floating_point
-			                         ? ASM_OP_DOUBLE_BINARY_ADD
-			                         : ASM_OP_BINARY_ADD;
+			(**dst).opcode = ASM_OP_DOUBLE_BINARY_ADD;
 			break;
 		case IR_OP_BINARY_SUBTRACT:
-			(**dst).opcode = a_floating_point
-			                         ? ASM_OP_DOUBLE_BINARY_SUBTRACT
-			                         : ASM_OP_BINARY_SUBTRACT;
+			(**dst).opcode = ASM_OP_DOUBLE_BINARY_SUBTRACT;
 			break;
 		case IR_OP_BINARY_MULTIPLY:
-			(**dst).opcode = a_floating_point
-			                         ? ASM_OP_DOUBLE_BINARY_MULTIPLY
-			                         : ASM_OP_BINARY_MULTIPLY;
+			(**dst).opcode = ASM_OP_DOUBLE_BINARY_MULTIPLY;
 			break;
 		case IR_OP_BINARY_DIVIDE:
-			/* double division only! integers handled elsewhere */
-			assert(a_floating_point);
-			assert(ctype_is_floating_point(src->args[1].c89type));
 			(**dst).opcode = ASM_OP_DOUBLE_BINARY_DIVIDE;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		break;
+	case IR_OP_COMPARE_EQUAL:
+	case IR_OP_COMPARE_NOT_EQUAL:
+	case IR_OP_COMPARE_LESS_THAN:
+	case IR_OP_COMPARE_LESS_THAN_EQ:
+	case IR_OP_COMPARE_MORE_THAN:
+	case IR_OP_COMPARE_MORE_THAN_EQ:
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_DOUBLE_COMPARE;
+		/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		switch (src->opcode) {
+		case IR_OP_COMPARE_EQUAL:
+			(**dst).opcode = ASM_OP_SET_IF_EQ;
+			break;
+		case IR_OP_COMPARE_NOT_EQUAL:
+			(**dst).opcode = ASM_OP_SET_IF_NEQ;
+			break;
+		case IR_OP_COMPARE_LESS_THAN:
+			(**dst).opcode = ASM_OP_SET_IF_B;
+			break;
+		case IR_OP_COMPARE_LESS_THAN_EQ:
+			(**dst).opcode = ASM_OP_SET_IF_BE;
+			break;
+		case IR_OP_COMPARE_MORE_THAN:
+			(**dst).opcode = ASM_OP_SET_IF_A;
+			break;
+		case IR_OP_COMPARE_MORE_THAN_EQ:
+			(**dst).opcode = ASM_OP_SET_IF_AE;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[2], &(**dst).args[0]);
+		break;
+	case IR_OP_CTYPE_DOUBLE_TO_INT:
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+		codegen_map_operands_all(src, *dst);
+		break;
+	case IR_OP_CTYPE_DOUBLE_TO_UINT: // TODO: verify w/ non-long unsigned
+		/*
+		 * Mimic output of clang for double -> unsigned long.
+		 *
+		 * With `#pragma STDC FENV_ACCESS ON`, clang seems to produce
+		 * code similar to gcc and Nora Sandler's book. However, since
+		 * we don't currently support compiling code that checks
+		 * floating point status flags or sets non-default floating
+		 * point control modes, we can copy the branchless approach
+		 * clang takes in the optimistic case.
+		 *
+		 * https://github.com/llvm/llvm-project/issues/8472#issuecomment-980888781
+		 * https://github.com/llvm/llvm-project/issues/8472#issuecomment-980888775
+		 * https://github.com/llvm/llvm-project/issues/18060#issuecomment-3580497536
+		 *
+		 * movsd     -8(%rbp), %xmm0    ; source arg at -8(%rbp)
+		 * movsd     .Lfoo(%rip), %xmm2 ; INT_MAX as double constant
+		 * movq      %xmm0, %xmm1       ; ... or movaps
+		 * subsd     %xmm2, %xmm1
+		 * cvttsd2si %xmm1, %rcx
+		 * cvttsd2si %xmm0, %rax
+		 * movq      %rax, %rdx
+		 * sarq      $63, %rdx
+		 * andq      %rdx, %rcx
+		 * orq       %rcx, %rax
+		 * movq      %rax, -16(%rbp)    ; result at -16(%rbp)
+		 */
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_XMM0;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0].operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
+		(**dst).args[0].u.dnum = (double)INT_MAX;
+		(**dst).args[1] = OPERAND_XMM2;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_XMM1;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_DOUBLE_BINARY_SUBTRACT;
+		(**dst).args[0] = OPERAND_XMM2;
+		(**dst).args[1] = OPERAND_XMM1;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+		(**dst).args[0] = OPERAND_XMM1;
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
+		(**dst).args[0] = OPERAND_XMM0;
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_RAX_64BIT;
+		(**dst).args[1] = OPERAND_RDX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT;
+		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
+		(**dst).args[0].u.num = 64 - 1;
+		(**dst).args[1] = OPERAND_RDX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_BITWISE_AND;
+		(**dst).args[0] = OPERAND_RDX_64BIT;
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_BITWISE_OR;
+		(**dst).args[0] = OPERAND_RCX_64BIT;
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0] = OPERAND_RAX_64BIT;
+		codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		break;
+	case IR_OP_CTYPE_INT_TO_DOUBLE:
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
+		codegen_map_operands_all(src, *dst);
+		break;
+	case IR_OP_CTYPE_UINT_TO_DOUBLE:
+		check(codegen_alloc_op(arena, dst));
+		if (src->args[0].c89type == CTYPE_UNSIGNED_INT) {
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			codegen_set_operand_eax(&src->args[0],
+			                        &(**dst).args[1]);
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
+			(**dst).args[0] = OPERAND_RAX_64BIT;
+			codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		} else {
+			/*
+			 * Mimic output of clang for unsigned long -> double.
+			 *
+			 * movq      -8(%rbp), %xmm0   ; source arg at -8(%rbp)
+			 * punpckldq 0x00000000000000004530000043300000, %xmm0
+			 * subpd     0x4330000000000000, %xmm0
+			 * movq      %xmm0, %xmm1      ; ... or movaps
+			 * unpckhpd  %xmm0, %xmm0
+			 * addsd     %xmm1, %xmm0
+			 * movsd     %xmm0, -16(%rbp)  ; result at -16(%rbp)
+			 *
+			 * See comment on IR_OP_CTYPE_DOUBLE_TO_UINT as well.
+			 */
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO;
+			(**dst).args[0].operand_type =
+				ASM_OPERAND_CONSTANT_DATA_VEC_LONGS;
+			(**dst).args[0].u.longs[0] = 0x43300000; // NOLINT
+			(**dst).args[0].u.longs[1] = 0x45300000; // NOLINT
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT;
+			(**dst).args[0].operand_type =
+				ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
+			// NOLINTBEGIN // TODO rm
+			(**dst).args[0].u.quads[0] = 0x4330000000000000;
+			(**dst).args[0].u.quads[1] = 0x4530000000000000;
+			(**dst).args[1] = OPERAND_XMM0;
+			// NOLINTEND // TODO rm
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_MOV;
+			(**dst).args[0] = OPERAND_XMM0;
+			(**dst).args[1] = OPERAND_XMM1;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_HI;
+			(**dst).args[0] = OPERAND_XMM0;
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_DOUBLE_BINARY_ADD;
+			(**dst).args[0] = OPERAND_XMM1;
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_MOV;
+			(**dst).args[0] = OPERAND_XMM0;
+			codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		}
+		break;
+	default:
+		break; /* fallback to common handling in caller */
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_one(Arena *arena,
+                      const struct ir_op *src,
+                      struct asm_op **dst)
+{
+	assert(*dst == NULL);
+	if (ctype_is_floating_point(src->args[0].c89type) ||
+	    ctype_is_floating_point(src->args[1].c89type)) {
+		check(codegen_statement_fp(arena, src, dst));
+		if (*dst != NULL) {
+			return RESULT_OK;
+		} /* else, fallthrough to common handling */
+	}
+
+	check(codegen_alloc_op(arena, dst));
+
+	/* guess overall op signedness ahead of time */
+	const bool a_signed = ctype_is_signed(src->args[0].c89type);
+
+	switch (src->opcode) {
+	case IR_OP_RET:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_RET;
+		break;
+	case IR_OP_UNARY_NEGATE:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operands_all(src, *dst);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_UNARY_NEG;
+		/* similar to IR_OP_UNARY_COMPLEMENT for integers */
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
+	case IR_OP_UNARY_COMPLEMENT:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operands_all(src, *dst);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_UNARY_NOT;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
+	case IR_OP_UNARY_DECREMENT:
+	case IR_OP_UNARY_INCREMENT:
+		(**dst).opcode = src->opcode == IR_OP_UNARY_DECREMENT
+		                         ? ASM_OP_UNARY_DECREMENT
+		                         : ASM_OP_UNARY_INCREMENT;
+		assert(in_place_update(src, 1));
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		break;
+	case IR_OP_BINARY_ADD:
+	case IR_OP_BINARY_SUBTRACT:
+	case IR_OP_BINARY_MULTIPLY:
+	case IR_OP_BITWISE_AND:
+	case IR_OP_BITWISE_OR:
+	case IR_OP_BITWISE_XOR:
+	case IR_OP_BITWISE_SHIFT_LEFT:
+	case IR_OP_BITWISE_SHIFT_RIGHT:
+		if (!in_place_update(src, 2)) {
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			codegen_map_operand(&src->args[2], &(**dst).args[1]);
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+		}
+		switch (src->opcode) {
+		case IR_OP_BINARY_ADD:
+			(**dst).opcode = ASM_OP_BINARY_ADD;
+			break;
+		case IR_OP_BINARY_SUBTRACT:
+			(**dst).opcode = ASM_OP_BINARY_SUBTRACT;
+			break;
+		case IR_OP_BINARY_MULTIPLY:
+			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
 			break;
 		case IR_OP_BITWISE_AND:
 			(**dst).opcode = ASM_OP_BITWISE_AND;
@@ -625,8 +869,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_COMPARE_LESS_THAN_EQ:
 	case IR_OP_COMPARE_MORE_THAN:
 	case IR_OP_COMPARE_MORE_THAN_EQ:
-		(**dst).opcode = a_floating_point ? ASM_OP_DOUBLE_COMPARE
-		                                  : ASM_OP_COMPARE;
+		(**dst).opcode = ASM_OP_COMPARE;
 		/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
@@ -645,24 +888,20 @@ codegen_statement_one(Arena *arena,
 			(**dst).opcode = ASM_OP_SET_IF_NEQ;
 			break;
 		case IR_OP_COMPARE_LESS_THAN:
-			(**dst).opcode = a_signed && !a_floating_point
-			                         ? ASM_OP_SET_IF_LT
-			                         : ASM_OP_SET_IF_B;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_LT : ASM_OP_SET_IF_B;
 			break;
 		case IR_OP_COMPARE_LESS_THAN_EQ:
-			(**dst).opcode = a_signed && !a_floating_point
-			                         ? ASM_OP_SET_IF_LTE
-			                         : ASM_OP_SET_IF_BE;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_LTE : ASM_OP_SET_IF_BE;
 			break;
 		case IR_OP_COMPARE_MORE_THAN:
-			(**dst).opcode = a_signed && !a_floating_point
-			                         ? ASM_OP_SET_IF_GT
-			                         : ASM_OP_SET_IF_A;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_GT : ASM_OP_SET_IF_A;
 			break;
 		case IR_OP_COMPARE_MORE_THAN_EQ:
-			(**dst).opcode = a_signed && !a_floating_point
-			                         ? ASM_OP_SET_IF_GTE
-			                         : ASM_OP_SET_IF_AE;
+			(**dst).opcode =
+				a_signed ? ASM_OP_SET_IF_GTE : ASM_OP_SET_IF_AE;
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -693,163 +932,10 @@ codegen_statement_one(Arena *arena,
 		(**dst).args[0].word_type = ASM_WORD_32BIT;
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
-		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
-		codegen_map_operands_all(src, *dst);
-		break;
-	case IR_OP_CTYPE_DOUBLE_TO_UINT: // TODO: verify w/ non-long unsigned
-		/*
-		 * Mimic output of clang for double -> unsigned long.
-		 *
-		 * With `#pragma STDC FENV_ACCESS ON`, clang seems to produce
-		 * code similar to gcc and Nora Sandler's book. However, since
-		 * we don't currently support compiling code that checks
-		 * floating point status flags or sets non-default floating
-		 * point control modes, we can copy the branchless approach
-		 * clang takes in the optimistic case.
-		 *
-		 * https://github.com/llvm/llvm-project/issues/8472#issuecomment-980888781
-		 * https://github.com/llvm/llvm-project/issues/8472#issuecomment-980888775
-		 * https://github.com/llvm/llvm-project/issues/18060#issuecomment-3580497536
-		 *
-		 * movsd     -8(%rbp), %xmm0    ; source arg at -8(%rbp)
-		 * movsd     .Lfoo(%rip), %xmm2 ; INT_MAX as double constant
-		 * movq      %xmm0, %xmm1       ; ... or movaps
-		 * subsd     %xmm2, %xmm1
-		 * cvttsd2si %xmm1, %rcx
-		 * cvttsd2si %xmm0, %rax
-		 * movq      %rax, %rdx
-		 * sarq      $63, %rdx
-		 * andq      %rdx, %rcx
-		 * orq       %rcx, %rax
-		 * movq      %rax, -16(%rbp)    ; result at -16(%rbp)
-		 */
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		(**dst).args[1] = OPERAND_XMM0;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		(**dst).args[0].operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
-		(**dst).args[0].u.dnum = (double)INT_MAX;
-		(**dst).args[1] = OPERAND_XMM2;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		(**dst).args[0] = OPERAND_XMM0;
-		(**dst).args[1] = OPERAND_XMM1;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_DOUBLE_BINARY_SUBTRACT;
-		(**dst).args[0] = OPERAND_XMM2;
-		(**dst).args[1] = OPERAND_XMM1;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
-		(**dst).args[0] = OPERAND_XMM1;
-		(**dst).args[1] = OPERAND_RCX_64BIT;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_CVT_DOUBLE_TO_INT;
-		(**dst).args[0] = OPERAND_XMM0;
-		(**dst).args[1] = OPERAND_RAX_64BIT;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		(**dst).args[0] = OPERAND_RAX_64BIT;
-		(**dst).args[1] = OPERAND_RDX_64BIT;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT;
-		(**dst).args[0].operand_type = ASM_OPERAND_IMMEDIATE;
-		(**dst).args[0].u.num = 64 - 1;
-		(**dst).args[1] = OPERAND_RDX_64BIT;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_BITWISE_AND;
-		(**dst).args[0] = OPERAND_RDX_64BIT;
-		(**dst).args[1] = OPERAND_RCX_64BIT;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_BITWISE_OR;
-		(**dst).args[0] = OPERAND_RCX_64BIT;
-		(**dst).args[1] = OPERAND_RAX_64BIT;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		(**dst).args[0] = OPERAND_RAX_64BIT;
-		codegen_map_operand(&src->args[1], &(**dst).args[1]);
-		break;
+	case IR_OP_CTYPE_DOUBLE_TO_UINT:
 	case IR_OP_CTYPE_INT_TO_DOUBLE:
-		(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
-		codegen_map_operands_all(src, *dst);
-		break;
 	case IR_OP_CTYPE_UINT_TO_DOUBLE:
-		if (src->args[0].c89type == CTYPE_UNSIGNED_INT) {
-			(**dst).opcode = ASM_OP_MOV;
-			codegen_map_operand(&src->args[0], &(**dst).args[0]);
-			codegen_set_operand_eax(&src->args[0],
-			                        &(**dst).args[1]);
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
-			(**dst).args[0] = OPERAND_RAX_64BIT;
-			codegen_map_operand(&src->args[1], &(**dst).args[1]);
-		} else {
-			/*
-			 * Mimic output of clang for unsigned long -> double.
-			 *
-			 * movq      -8(%rbp), %xmm0   ; source arg at -8(%rbp)
-			 * punpckldq 0x00000000000000004530000043300000, %xmm0
-			 * subpd     0x4330000000000000, %xmm0
-			 * movq      %xmm0, %xmm1      ; ... or movaps
-			 * unpckhpd  %xmm0, %xmm0
-			 * addsd     %xmm1, %xmm0
-			 * movsd     %xmm0, -16(%rbp)  ; result at -16(%rbp)
-			 *
-			 * See comment on IR_OP_CTYPE_DOUBLE_TO_UINT as well.
-			 */
-			(**dst).opcode = ASM_OP_MOV;
-			codegen_map_operand(&src->args[0], &(**dst).args[0]);
-			(**dst).args[1] = OPERAND_XMM0;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_LO;
-			(**dst).args[0].operand_type =
-				ASM_OPERAND_CONSTANT_DATA_VEC_LONGS;
-			(**dst).args[0].u.longs[0] = 0x43300000; // NOLINT
-			(**dst).args[0].u.longs[1] = 0x45300000; // NOLINT
-			(**dst).args[1] = OPERAND_XMM0;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_VEC_DOUBLE_BINARY_SUBTRACT;
-			(**dst).args[0].operand_type =
-				ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
-			// NOLINTBEGIN // TODO rm
-			(**dst).args[0].u.quads[0] = 0x4330000000000000;
-			(**dst).args[0].u.quads[1] = 0x4530000000000000;
-			(**dst).args[1] = OPERAND_XMM0;
-			// NOLINTEND // TODO rm
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_MOV;
-			(**dst).args[0] = OPERAND_XMM0;
-			(**dst).args[1] = OPERAND_XMM1;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_VEC_DOUBLE_UNPACK_INTERLEAVE_HI;
-			(**dst).args[0] = OPERAND_XMM0;
-			(**dst).args[1] = OPERAND_XMM0;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_DOUBLE_BINARY_ADD;
-			(**dst).args[0] = OPERAND_XMM1;
-			(**dst).args[1] = OPERAND_XMM0;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_MOV;
-			(**dst).args[0] = OPERAND_XMM0;
-			codegen_map_operand(&src->args[1], &(**dst).args[1]);
-		}
+		assert(0); /* should be handled by codegen_statement_fp() */
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
