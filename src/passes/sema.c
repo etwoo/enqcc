@@ -1009,6 +1009,18 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_AND: /* determining expr_type.  */
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_OR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
+		// TODO: might need sema to expand compound assignment to
+		// normalized `assignment = LHS +/-/etc RHS`, so that it is
+		// possible to express casting like:
+		//
+		// LHS = (LHS_type)((common_type)LHS + (common_type)RHS)
+		//
+		// ... which is important for doubles
+		//
+		// ir.c could then be updated to assert on compound assignment,
+		// making the assumption that sema.c transforms them all
+		//
+		// motivating testcase: compound_assign_implicit_cast.c
 		common = get_common_ctype(a->u.op_binary.lhs->expr_type,
 		                          a->u.op_binary.rhs->expr_type);
 		check(cast_if(arena, common, &a->u.op_binary.lhs));
