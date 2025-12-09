@@ -14,7 +14,7 @@ Checks: >
   -readability-identifier-length,
 
 CheckOptions:
-  - {key: bugprone-easily-swappable-parameters.MinimumLength, value: 4}
+  - {key: bugprone-easily-swappable-parameters.MinimumLength, value: 3}
   - {key: bugprone-reserved-identifier.AllowedIdentifiers, value: "__llvm_profile_|_GNU_SOURCE"}
   - {key: cppcoreguidelines-avoid-magic-numbers.IgnorePowersOf2IntegerValues, value: true}
   - {key: readability-magic-numbers.IgnorePowersOf2IntegerValues, value: true}

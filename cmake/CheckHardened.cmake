@@ -28,7 +28,7 @@ macro(check_hardened lib)
 		_my_msg_hardened(" - Failed")
 		# -fhardened unsupported; set constituent options individually
 		target_compile_options(${lib} INTERFACE
-			-D_FORTIFY_SOURCE=3 -O2
+			-D_FORTIFY_SOURCE=3
 			-D_GLIBCXX_ASSERTIONS
 			-fPIE -pie
 			-Wl,-z,now

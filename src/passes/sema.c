@@ -377,10 +377,10 @@ guess_case_value(const struct ast *containing_case, enum ctype expected_type)
 
 static WARN_UNUSED result_t
 make_case(Arena *arena,
-          enum ctype control_type,
-          int128_t new_value,
           long long int existing_unique,
-          struct ast **dst)
+          struct ast **dst,
+          enum ctype control_type,
+          int128_t new_value)
 {
 	*dst = arena_alloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_SEMA_ALLOC);
@@ -433,10 +433,10 @@ case_prepend(Arena *arena,
 	 * u.case_.constant replaced with simplified <new_value>.
 	 */
 	check(make_case(arena,
-	                control_type,
-	                new_value,
 	                new_case->u.case_.unique,
-	                &node->car));
+	                &node->car,
+	                control_type,
+	                new_value));
 
 	node->cdr = containing_switch->u.switch_.label_cases;
 	containing_switch->u.switch_.label_cases = node;

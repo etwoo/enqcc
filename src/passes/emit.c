@@ -725,11 +725,11 @@ emit_asm_fp_check(Arena *arena,
 }
 
 static void
-emit_asm_fp_one(double value, enum platform plat, int fd)
+emit_asm_fp_one(const double *value, enum platform plat, int fd)
 {
 	const char *section_fp_constants = get_section_fp_constants(plat);
 	const char *label_prefix = get_label_prefix(plat);
-	const long long unsigned as_quadword = get_double_as_quadword(value);
+	const long long unsigned as_quadword = get_double_as_quadword(*value);
 
 	dprintf(fd, "\t%s\n", section_fp_constants);
 	dprintf(fd, "\t.balign %lld\n", ctype_to_size_bytes(CTYPE_DOUBLE));
@@ -757,7 +757,7 @@ emit_asm_fp_constants(Arena *arena,
 				                        op->args[i].u.dnum,
 				                        &do_emit));
 				if (do_emit) {
-					emit_asm_fp_one(op->args[i].u.dnum,
+					emit_asm_fp_one(&op->args[i].u.dnum,
 					                plat,
 					                fd);
 				}
