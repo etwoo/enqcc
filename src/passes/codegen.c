@@ -29,8 +29,17 @@ static const long long unsigned UINT_TO_DOUBLE_MAGIC_Q2 = 0x4530000000000000;
 static WARN_UNUSED result_t
 codegen_alloc_op(Arena *arena, struct asm_op **dst)
 {
+	static struct asm_op dummy_workaround_clang_analyzer_null_pointer = {0};
+
 	*dst = arena_alloc(arena, sizeof(**dst));
-	check_if((dst) == NULL, ERR_CODEGEN_ALLOC);
+	if (*dst == NULL) {
+		/*
+		 * See parse_init() for an explanation of this workaround.
+		 */
+		*dst = &dummy_workaround_clang_analyzer_null_pointer;
+		return make_result(ERR_CODEGEN_ALLOC);
+	}
+
 	memset(*dst, 0, sizeof(**dst));
 	return RESULT_OK;
 }
