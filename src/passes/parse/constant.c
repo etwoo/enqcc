@@ -3,6 +3,7 @@
 #include "passes/lex.h"
 #include "passes/parse.h"
 #include "passes/parse/alloc.h"
+#include "passes/parse/token.h"
 #include "sys/string_view.h"
 
 #include <assert.h>
@@ -12,13 +13,6 @@
 #include <stdbool.h>
 #include <stdlib.h> /* for strtoll() */
 #include <string.h> /* for memchr() */
-
-static void
-token_consume(const struct token **tok)
-{
-	assert(*tok != NULL);
-	*tok = (**tok).next;
-}
 
 static WARN_UNUSED bool
 is_constant_maybe_double(const struct string_view *val)
