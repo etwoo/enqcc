@@ -1,3 +1,5 @@
+add_subdirectory(parse)
+
 target_sources(compiler PRIVATE
 	codegen.c
 	emit.c
@@ -5,5 +7,4 @@ target_sources(compiler PRIVATE
 	lex.c
 	parse.c
 	sema.c
-	symbol.c
 )

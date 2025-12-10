@@ -24,8 +24,6 @@ static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_POP_QUAD[] = "popq";
 static const char *const STR_OP_PUSH_QUAD = "pushq";
 static const char STR_OP_RET[] = "ret";
-static const char STR_REG_RSP[] = "%rsp"; /* aka frame pointer */
-static const char STR_REG_RBP[] = "%rbp"; /* aka stack pointer */
 static const char STR_REG_RIP[] = "%rip";
 
 enum register_alias {
@@ -37,6 +35,11 @@ enum register_alias {
 #define TO_STR(register_name, b8, b4, b1) {"%" b8, "%" b4, "%" b1},
 static const char *const REGISTER_AS_STR[][3] = {FOREACH_ASM_REGISTER(TO_STR)};
 #undef TO_STR
+
+/* aka frame pointer */
+#define STR_REG_RSP REGISTER_AS_STR[ASM_REGISTER_RSP][REGISTER_ALIAS_4BYTE]
+/* aka stack pointer */
+#define STR_REG_RBP REGISTER_AS_STR[ASM_REGISTER_RBP][REGISTER_ALIAS_4BYTE]
 
 static WARN_UNUSED const char *
 get_label_prefix(enum platform plat)
@@ -128,16 +131,11 @@ emit_asm_operand(const struct asm_operand *o,
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		assert(0 && "PSEUDOREGISTER should have been eliminated");
 		break;
-	case ASM_OPERAND_STACK:
-		if (o->u.num == 0) {
-			dprintf(fd, "(%s)", STR_REG_RBP);
-		} else {
-			assert(o->u.num <= LLONG_MAX);
-			dprintf(fd,
-			        "%lld(%s)",
-			        (long long)o->u.num,
-			        STR_REG_RBP);
-		}
+	case ASM_OPERAND_MEMORY:
+		dprintf(fd,
+		        "%lld(%s)",
+		        o->u.mem.offset,
+		        REGISTER_AS_STR[o->u.mem.reg][REGISTER_ALIAS_8BYTE]);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		assert(o->u.num <= LLONG_MAX);
@@ -215,6 +213,9 @@ map_wordtype_to_register_alias(const struct asm_operand *o,
 	case ASM_WORD_64BIT:
 		*dst = REGISTER_ALIAS_8BYTE;
 		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
 	}
 }
 
@@ -286,8 +287,8 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		if ((is_xmm_register(&op->args[0]) &&
-		     op->args[1].operand_type == ASM_OPERAND_STACK) ||
-		    (op->args[0].operand_type == ASM_OPERAND_STACK &&
+		     op->args[1].operand_type == ASM_OPERAND_MEMORY) ||
+		    (op->args[0].operand_type == ASM_OPERAND_MEMORY &&
 		     is_xmm_register(&op->args[1]))) {
 			print_opcode = "movsd";
 			print_opcode_suffix = 0;
@@ -317,6 +318,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		 */
 		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
 		print_opcode_suffix = map_ralias_to_op_suffix(ralias[0]);
+		break;
+	case ASM_OP_LEA:
+		print_opcode = "lea";
 		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
@@ -612,9 +616,10 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	const long long int alignment = ctype_to_size_bytes(var->c89type);
+	const long long int alignment = ctype_to_size_bytes(&var->c89type);
 
-	if (var->initial.as_integer != 0 || var->c89type == CTYPE_DOUBLE) {
+	if (var->initial.as_integer != 0 ||
+	    ctype_is_floating_point(&var->c89type)) {
 		dprintf(fd, "\t.data\n\t.balign %lld\n", alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
 		if (alignment == 4) {
@@ -622,7 +627,7 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		} else {
 			dprintf(fd, "\t.quad ");
 		}
-		if (var->c89type == CTYPE_DOUBLE) {
+		if (ctype_is_floating_point(&var->c89type)) {
 			dprintf(fd,
 			        "0x%llx\n",
 			        get_double_as_quadword(var->initial.as_double));
@@ -739,7 +744,11 @@ emit_asm_fp_one(const double *value, enum platform plat, int fd)
 	const long long unsigned as_quadword = get_double_as_quadword(*value);
 
 	dprintf(fd, "\t%s\n", section_fp_constants);
-	dprintf(fd, "\t.balign %lld\n", ctype_to_size_bytes(CTYPE_DOUBLE));
+	dprintf(fd,
+	        "\t.balign %lld\n",
+	        ctype_to_size_bytes(&(struct ctype){
+			.t = CTYPE_DOUBLE,
+		}));
 	dprintf(fd, "%s%s%llx:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
 	dprintf(fd, "\t.quad 0x%llx\n", as_quadword);
 }
