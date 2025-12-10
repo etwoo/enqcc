@@ -6,4 +6,5 @@ target_sources(compiler PRIVATE
 	parse.c
 	sema.c
 	symbol.c
+	types.c
 )

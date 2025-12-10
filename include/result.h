@@ -91,6 +91,7 @@ typedef struct {
 		ERR_SEMA_VARIABLE_DECLARATION_TYPE_CONFLICT,
 		ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION,
 		ERR_SYMBOL_ALLOC,
+		ERR_CTYPE_ALLOC,
 	} err;
 	int num; /* may hold errno, CURLcode, CURLUcode, etc */
 	char *msg;

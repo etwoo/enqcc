@@ -63,8 +63,10 @@ ir_unpack_parens(const struct ast *a)
 	return a;
 }
 
-static void
-ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
+static WARN_UNUSED result_t
+ir_val_from_ast_variable_like(Arena *arena,
+                              const struct ast *src,
+                              struct ir_val *dst)
 {
 	const struct ast_symbol *sym = NULL;
 	switch (src->node_type) {
@@ -108,21 +110,29 @@ ir_val_from_ast_variable_like(const struct ast *src, struct ir_val *dst)
 	}
 
 	dst->num = sym->unique;
-	dst->c89type = src->expr_type;
+	check(ctype_copy(arena, &src->expr_type, &dst->c89type));
 }
 
-static void
-ir_val_tmpvar(long long int unique, enum ctype vtype, struct ir_val *dst)
+static WARN_UNUSED result_t
+ir_val_tmpvar(Arena *arena,
+              long long int unique,
+              const struct ctype *vtype,
+              struct ir_val *dst)
 {
 	dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
 	dst->num = unique;
-	dst->c89type = vtype;
+	check(ctype_copy(arena, vtype, &dst->c89type));
+	return RESULT_OK;
 }
 
-static void
-ir_val_tmpvar_gen(struct intermediate *ir, enum ctype vtype, struct ir_val *dst)
+static WARN_UNUSED result_t
+ir_val_tmpvar_gen(Arena *arena,
+                  struct intermediate *ir,
+                  const struct ctype *vtype,
+                  struct ir_val *dst)
 {
-	ir_val_tmpvar(ir->env.generator++, vtype, dst);
+	check(ir_val_tmpvar(arena, ir->env.generator++, vtype, dst));
+	return RESULT_OK;
 }
 
 static WARN_UNUSED enum ir_linkage
@@ -220,7 +230,7 @@ ir_decl_init(Arena *arena,
 	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
 
 	ir_val_copy(&inner_return, &assigner->args[0]);
-	ir_val_from_ast_variable_like(a, &assigner->args[1]);
+	check(ir_val_from_ast_variable_like(arena, a, &assigner->args[1]));
 
 	*dst = ir_op_list_concat(inner, assigner);
 	return RESULT_OK;
@@ -277,9 +287,10 @@ ir_if_else_prepare(Arena *arena,
 		check(ir_alloc_op(arena, &out->assign_result));
 		out->assign_result->opcode = IR_OP_COPY;
 		ir_val_copy(&body_return, &out->assign_result->args[0]);
-		ir_val_tmpvar(assign_result_unique,
-		              ast_clause_returning_value->expr_type,
-		              &out->assign_result->args[1]);
+		check(ir_val_tmpvar(arena,
+		                    assign_result_unique,
+		                    &ast_clause_returning_value->expr_type,
+		                    &out->assign_result->args[1]));
 	}
 
 	check(ir_alloc_op(arena, &out->jump_target));
@@ -345,7 +356,10 @@ ir_if_else(Arena *arena,
 
 	if (assign_result_unique >= 0) {
 		assert(return_value->subtype == IR_VAL_NONE);
-		ir_val_tmpvar(assign_result_unique, a->expr_type, return_value);
+		check(ir_val_tmpvar(arena,
+		                    assign_result_unique,
+		                    &a->expr_type,
+		                    return_value));
 	}
 
 	struct ir_op *collect[] = {
@@ -532,9 +546,13 @@ ir_switch(Arena *arena,
 		case_cmp->opcode = IR_OP_COMPARE_EQUAL;
 		ir_val_copy(&control_return, &case_cmp->args[0]);
 		ir_val_copy(&case_return, &case_cmp->args[1]);
-		ir_val_tmpvar_gen(ir,
-		                  CTYPE_INT, /* effectively cast to bool */
-		                  &case_cmp->args[2]);
+		check(ir_val_tmpvar_gen(
+			arena,
+			ir,
+			(struct ctype){
+				.t = CTYPE_INT, /* effectively cast to bool */
+			},
+			&case_cmp->args[2]));
 
 		struct ir_op *jumper = NULL;
 		check(ir_alloc_op(arena, &jumper));
@@ -623,23 +641,25 @@ ir_unary_op(Arena *arena,
 		ast_inner = a->u.op_binary.rhs;
 		break;
 	case NODE_EXPRESSION_CAST:
-		if (a->u.cast.expr->expr_type == a->u.cast.to_type) {
+		if (ctype_is_equal(&a->u.cast.expr->expr_type,
+		                   &a->u.cast.to_type)) {
 			/* early return if inner expr type makes cast no-op */
 			return ir_expr(arena,
 			               a->u.cast.expr,
 			               ir,
 			               dst,
 			               return_value);
-		} else if (ctype_is_floating_point(a->u.cast.expr->expr_type) !=
-		           ctype_is_floating_point(a->u.cast.to_type)) {
+		} else if (ctype_is_floating_point(
+				   &a->u.cast.expr->expr_type) !=
+		           ctype_is_floating_point(&a->u.cast.to_type)) {
 			const bool src_fp = ctype_is_floating_point(
-				a->u.cast.expr->expr_type);
+				&a->u.cast.expr->expr_type);
 			const bool src_signed =
-				ctype_is_signed(a->u.cast.expr->expr_type);
+				ctype_is_signed(&a->u.cast.expr->expr_type);
 			const bool dst_fp =
-				ctype_is_floating_point(a->u.cast.to_type);
+				ctype_is_floating_point(&a->u.cast.to_type);
 			const bool dst_signed =
-				ctype_is_signed(a->u.cast.to_type);
+				ctype_is_signed(&a->u.cast.to_type);
 			if (src_fp && dst_signed) {
 				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_INT;
 			} else if (src_fp && !dst_signed) {
@@ -651,13 +671,13 @@ ir_unary_op(Arena *arena,
 			} else {
 				assert(0); /* mistake in truth table above */
 			}
-		} else if (ctype_to_size_bytes(a->u.cast.expr->expr_type) ==
-		           ctype_to_size_bytes(a->u.cast.to_type)) {
+		} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) ==
+		           ctype_to_size_bytes(&a->u.cast.to_type)) {
 			unary->opcode = IR_OP_COPY;
-		} else if (ctype_to_size_bytes(a->u.cast.expr->expr_type) >
-		           ctype_to_size_bytes(a->u.cast.to_type)) {
+		} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) >
+		           ctype_to_size_bytes(&a->u.cast.to_type)) {
 			unary->opcode = IR_OP_CTYPE_TRUNCATE;
-		} else if (ctype_is_signed(a->u.cast.expr->expr_type)) {
+		} else if (ctype_is_signed(&a->u.cast.expr->expr_type)) {
 			unary->opcode = IR_OP_CTYPE_SIGN_EXTEND;
 		} else {
 			unary->opcode = IR_OP_CTYPE_ZERO_EXTEND;
@@ -681,14 +701,17 @@ ir_unary_op(Arena *arena,
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_CAST:
-		ir_val_tmpvar_gen(ir, a->expr_type, &unary->args[1]);
+		check(ir_val_tmpvar_gen(arena,
+		                        ir,
+		                        &a->expr_type,
+		                        &unary->args[1]));
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		ir_val_from_ast_variable_like(a, &unary->args[1]);
+		check(ir_val_from_ast_variable_like(arena, a, &unary->args[1]));
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -700,8 +723,13 @@ ir_unary_op(Arena *arena,
 	    a->node_type == NODE_EXPRESSION_POSTINCREMENT) {
 		check(ir_alloc_op(arena, &header));
 		header->opcode = IR_OP_COPY;
-		ir_val_from_ast_variable_like(a, &header->args[0]);
-		ir_val_tmpvar_gen(ir, a->expr_type, &header->args[1]);
+		check(ir_val_from_ast_variable_like(arena,
+		                                    a,
+		                                    &header->args[0]));
+		check(ir_val_tmpvar_gen(arena,
+		                        ir,
+		                        &a->expr_type,
+		                        &header->args[1]));
 		ir_val_copy(&header->args[1], return_value);
 	} else {
 		assert(return_value->subtype == IR_VAL_NONE);
@@ -795,7 +823,7 @@ ir_binary_op(Arena *arena,
 
 	ir_val_copy(&left_return, &binary->args[0]);
 	ir_val_copy(&right_return, &binary->args[1]);
-	ir_val_tmpvar_gen(ir, a->expr_type, &binary->args[2]);
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &binary->args[2]));
 
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&binary->args[2], return_value);
@@ -867,7 +895,7 @@ ir_logical_op(Arena *arena,
 	const long long int label_end = ir->env.labels++;
 
 	assert(return_value->subtype == IR_VAL_NONE);
-	ir_val_tmpvar_gen(ir, a->expr_type, return_value);
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, return_value));
 
 	struct ir_op *footer = NULL;
 	check(ir_alloc_op(arena, &footer));
@@ -959,7 +987,7 @@ ir_call(Arena *arena,
 		check(ir_call_args(arena, args, ir, &inner, caller, &pos));
 	}
 
-	ir_val_tmpvar_gen(ir, a->expr_type, &caller->args[pos]);
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &caller->args[pos]));
 
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&caller->args[pos], return_value);
@@ -990,7 +1018,7 @@ ir_expr(Arena *arena,
 			return_value->dnum = a->u.double_;
 			break;
 		}
-		return_value->c89type = a->expr_type;
+		check(ctype_copy(arena, &a->expr_type, &return_value->c89type));
 		assert(*dst == NULL); /* does not create new dst op */
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
@@ -1031,7 +1059,7 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
-		ir_val_from_ast_variable_like(a, return_value);
+		check(ir_val_from_ast_variable_like(arena, a, return_value));
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
@@ -1105,9 +1133,10 @@ ir_func(Arena *arena,
 
 	size_t i = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-		ir_val_tmpvar(cur->symbol.unique,
-		              cur->parameter_type,
-		              &f->params[i]);
+		check(ir_val_tmpvar(arena,
+		                    cur->symbol.unique,
+		                    cur->parameter_type,
+		                    &f->params[i]));
 		++i;
 	}
 
@@ -1155,7 +1184,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = s->name;
-	(**dst).c89type = s->c89type;
+	check(ctype_copy(arena, &s->c89type, &(**dst).c89type));
 	(**dst).linkage = ir_map_linkage(s->linkage.linkage);
 
 	switch (s->linkage.initial) {
@@ -1274,7 +1303,7 @@ ir_debug_print_one(const struct ir_op *op)
 			       "op lacks required operand");
 			continue;
 		case IR_VAL_CONSTANT:
-			if (op->args[i].c89type == CTYPE_DOUBLE) {
+			if (ctype_is_floating_point(&op->args[i].c89type)) {
 				debug("  CONSTANT %f", op->args[i].dnum);
 			} else {
 				debug("  CONSTANT %lld",
@@ -1294,7 +1323,9 @@ ir_debug_print_one(const struct ir_op *op)
 			break;
 		}
 
-		debug("    TYPE %s", ctype_to_str(op->args[i].c89type));
+		char tmp[128] = {0};
+		debug("    TYPE %s",
+		      ctype_to_str(&op->args[i].c89type, tmp, sizeof(tmp)));
 	}
 }
 
@@ -1315,7 +1346,11 @@ ir_debug_print(const struct intermediate *ir)
 	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		debug("  VARIABLE TYPE %s", ctype_to_str(v->c89type));
+
+		char tmp[128] = {0};
+		debug("  VARIABLE TYPE %s",
+		      ctype_to_str(v->c89type, tmp, sizeof(tmp)));
+
 		switch (v->linkage) {
 		case IR_LINKAGE_INTERNAL:
 			debug("  VARIABLE LINKAGE INTERNAL");
@@ -1324,7 +1359,7 @@ ir_debug_print(const struct intermediate *ir)
 			debug("  VARIABLE LINKAGE EXTERNAL");
 			break;
 		}
-		if (v->c89type == CTYPE_DOUBLE) {
+		if (ctype_is_floating_point(&v->c89type)) {
 			debug("  VARIABLE INIT %f", v->initial.as_double);
 		} else {
 			debug("  VARIABLE INIT %lld",

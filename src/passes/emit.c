@@ -612,9 +612,10 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	const long long int alignment = ctype_to_size_bytes(var->c89type);
+	const long long int alignment = ctype_to_size_bytes(&var->c89type);
 
-	if (var->initial.as_integer != 0 || var->c89type == CTYPE_DOUBLE) {
+	if (var->initial.as_integer != 0 ||
+	    ctype_is_floating_point(&var->c89type)) {
 		dprintf(fd, "\t.data\n\t.balign %lld\n", alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
 		if (alignment == 4) {
@@ -622,7 +623,7 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		} else {
 			dprintf(fd, "\t.quad ");
 		}
-		if (var->c89type == CTYPE_DOUBLE) {
+		if (ctype_is_floating_point(&var->c89type)) {
 			dprintf(fd,
 			        "0x%llx\n",
 			        get_double_as_quadword(var->initial.as_double));

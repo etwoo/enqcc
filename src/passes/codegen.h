@@ -154,7 +154,7 @@ struct asm_function {
 
 struct asm_variable {
 	struct string_view identifier;
-	enum ctype c89type; /* determines alignment */
+	struct ctype c89type; /* determines alignment */
 	enum asm_linkage linkage;
 	union constant_value initial;
 	struct asm_variable *next;

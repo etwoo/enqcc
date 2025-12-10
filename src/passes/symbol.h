@@ -3,29 +3,12 @@
 
 #include "arena.h"
 #include "passes/int128_t.h"
+#include "passes/types.h"
 #include "result.h"
 #include "sys/compiler_features.h"
 #include "sys/string_view.h"
 
 #include <stdbool.h>
-
-/* note: order of values below determines integer conversion rank */
-#define FOREACH_CTYPE(F)                                                       \
-	F(INT)                                                                 \
-	F(UNSIGNED_INT)                                                        \
-	F(LONG)                                                                \
-	F(UNSIGNED_LONG)                                                       \
-	F(DOUBLE)
-
-#define TO_ENUM(t) CTYPE_##t,
-enum ctype { FOREACH_CTYPE(TO_ENUM) };
-#undef TO_ENUM
-
-const char *ctype_to_str(enum ctype c) WARN_UNUSED;
-long long int ctype_to_size_bytes(enum ctype c) WARN_UNUSED;
-bool ctype_is_signed(enum ctype c) WARN_UNUSED;
-bool ctype_is_floating_point(enum ctype c) WARN_UNUSED;
-enum ctype get_common_ctype(enum ctype lhs, enum ctype rhs) WARN_UNUSED;
 
 enum {
 	NOT_YET_UNIQUE = -1,
@@ -62,11 +45,10 @@ struct symbol_linkage_state {
 	union constant_value as_constant;
 };
 
-// TODO: for typedef support, add tracking for types (like variables)
 struct symbol {
 	struct string_view name;
 	enum symbol_type stype;
-	enum ctype c89type;   /* variable type or function return type */
+	struct ctype c89type; /* variable type or function return type */
 	long long int unique; /* unique ID for this symbol */
 	long long int cookie; /* maximum unique ID observed in any node */
 	bool level_delimiter; /* limit between symbols_get_*() contexts */
@@ -106,7 +88,7 @@ result_t symbols_prepend(Arena *arena,
                          struct symbol **head,
                          const struct string_view *name,
                          enum symbol_type stype,
-                         enum ctype c89type) WARN_UNUSED;
+                         struct ctype *c89type) WARN_UNUSED;
 struct symbol *symbols_get_limited(struct symbol *head,
                                    const struct string_view *name) WARN_UNUSED;
 struct symbol *symbols_get_anywhere(struct symbol *head,

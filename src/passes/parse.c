@@ -15,21 +15,22 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
-static void
-map_symbol_members(const struct symbol *src,
+static WARN_UNUSED result_t
+map_symbol_members(Arena *arena,
+                   const struct symbol *src,
                    struct ast_symbol *dst_symbol,
-                   enum ctype *dst_expr_type)
+                   struct ctype *dst_expr_type)
 {
 	dst_symbol->unique = src->unique;
 	dst_symbol->stype = src->stype;
 	dst_symbol->ltype = src->linkage.linkage;
-	*dst_expr_type = src->c89type;
+	check(ctype_copy(arena, &src->c89type, dst_expr_type));
 }
 
 static WARN_UNUSED result_t
 resolve_symbol(struct symbol *head,
                struct ast_symbol *asym,
-               enum ctype *expr_type,
+               struct ctype *expr_type,
                unsigned errtype)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
@@ -40,14 +41,14 @@ resolve_symbol(struct symbol *head,
 		return make_result(errtype, asym->name.data, asym->name.sz);
 	}
 
-	map_symbol_members(resolved, asym, expr_type);
+	check(map_symbol_members(arena, resolved, asym, expr_type));
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 resolve_var_usage(struct symbol *head,
                   struct ast_symbol *var,
-                  enum ctype *expr_type)
+                  struct ctype *expr_type)
 {
 	check(resolve_symbol(head,
 	                     var,
@@ -59,7 +60,7 @@ resolve_var_usage(struct symbol *head,
 static WARN_UNUSED result_t
 resolve_function_call(struct symbol *head,
                       struct ast_symbol *callee,
-                      enum ctype *return_type)
+                      struct ctype *return_type)
 {
 	check(resolve_symbol(head,
 	                     callee,
@@ -261,7 +262,10 @@ resolve_decl(Arena *arena,
 		}
 	}
 
-	map_symbol_members(resolved, &a->u.declare.identifier, &a->expr_type);
+	check(map_symbol_members(arena,
+	                         resolved,
+	                         &a->u.declare.identifier,
+	                         &a->expr_type));
 	/* sema.c detects if a->u.declare.var_type and expr_type conflict */
 
 	if (a->u.declare.init != NULL) {
@@ -352,8 +356,8 @@ resolve_function_params_one(Arena *arena,
 	                      &a->symbol.name,
 	                      SYMBOL_VARIABLE,
 	                      a->parameter_type));
-	enum ctype dummy = CTYPE_INT;
-	map_symbol_members(*sym, &a->symbol, &dummy);
+	struct ctype dummy = {0};
+	check(map_symbol_members(arena, *sym, &a->symbol, &dummy));
 	assert(dummy == a->parameter_type);
 	return RESULT_OK;
 }
@@ -381,8 +385,11 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	                      is_def ? SYMBOL_FUNCTION_DEFINITION
 	                             : SYMBOL_FUNCTION_DECLARATION,
 	                      a->u.function.return_type));
-	enum ctype dummy = CTYPE_INT;
-	map_symbol_members(*sym, &a->u.function.identifier, &dummy);
+	struct ctype dummy = {0};
+	check(map_symbol_members(arena,
+	                         *sym,
+	                         &a->u.function.identifier,
+	                         &dummy));
 	assert(dummy == a->u.function.return_type);
 
 	struct symbol *before_params = *sym;
@@ -580,7 +587,7 @@ static result_t parse_expr(Arena *arena,
                            struct ast **dst,
                            unsigned minimum_precedence) WARN_UNUSED;
 static result_t parse_type_signature(const struct token **tok,
-                                     enum ctype *var_type) WARN_UNUSED;
+                                     struct ctype *var_type) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
@@ -1006,7 +1013,7 @@ parse_type_signature_impl_accumulate(const struct token **tok,
 static WARN_UNUSED result_t
 parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
                                    struct parse_type_signature_state *state,
-                                   enum ctype *var_type)
+                                   struct ctype *var_type)
 {
 	if (state->n_int > 1 ||      /* int int -- invalid                 */
 	    state->n_long > 1 ||     /* long long -- unsupported           */
@@ -1040,24 +1047,24 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 					? ERR_PARSE_DECL_TYPE_DOUBLE_INVALID
 					: ERR_PARSE_FUNC_RETURN_TYPE_DOUBLE_INVALID);
 		}
-		*var_type = CTYPE_DOUBLE;
+		var_type->t = CTYPE_DOUBLE;
 		return RESULT_OK;
 	}
 
 	switch (state->n_long) {
 	case 1:
 		if (state->n_unsigned > 0) {
-			*var_type = CTYPE_UNSIGNED_LONG;
+			var_type->t = CTYPE_UNSIGNED_LONG;
 		} else {
-			*var_type = CTYPE_LONG;
+			var_type->t = CTYPE_LONG;
 		}
 		break;
 	case 0:
 		if (state->n_unsigned > 0) {
-			*var_type = CTYPE_UNSIGNED_INT;
+			var_type->t = CTYPE_UNSIGNED_INT;
 		} else {
 			assert(state->n_int == 1 || state->n_signed == 1);
-			*var_type = CTYPE_INT;
+			var_type->t = CTYPE_INT;
 		}
 		break;
 	default:
@@ -1069,7 +1076,7 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 }
 
 static WARN_UNUSED result_t
-parse_type_signature(const struct token **tok, enum ctype *var_type)
+parse_type_signature(const struct token **tok, struct ctype *var_type)
 {
 	struct parse_type_signature_state state = {0};
 	while (is_token_variable_type(*tok)) {
@@ -1084,7 +1091,7 @@ static WARN_UNUSED result_t
 parse_specifiers(bool expect_var, /* or expect_function */
                  const struct token **tok,
                  enum ast_specifier *dst,
-                 enum ctype *var_type)
+                 struct ctype *var_type)
 {
 	struct parse_type_signature_state state = {0};
 	size_t specifier_count = 0;
@@ -1527,7 +1534,7 @@ parse_function_params_impl(const struct token **tok,
 			token_consume(tok);
 		}
 
-		enum ctype parameter_type = CTYPE_INT;
+		struct ctype parameter_type = {0};
 		check(parse_type_signature(tok, &parameter_type));
 
 		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
@@ -1737,13 +1744,17 @@ static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODE(TO_STR)};
 void
 parse_debug_print(const struct ast *a, size_t indent)
 {
+	char tmp[128] = {0};
+
 	assert(indent <= INT_MAX);
 	debug("%*s%s%s%s%s",
 	      (int)indent,
 	      "",
 	      NODETYPE_NAMES[a->node_type],
 	      a->node_type >= NODE_CONSTANT ? " [" : "",
-	      a->node_type >= NODE_CONSTANT ? ctype_to_str(a->expr_type) : "",
+	      a->node_type >= NODE_CONSTANT
+	              ? ctype_to_str(&a->expr_type, tmp, sizeof(tmp))
+	              : "",
 	      a->node_type >= NODE_CONSTANT ? "]" : "");
 
 	switch (a->node_type) {
@@ -1758,7 +1769,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sRETURNS: %s",
 		      (int)(indent + 1),
 		      "",
-		      ctype_to_str(a->u.function.return_type));
+		      ctype_to_str(&a->u.function.return_type,
+		                   tmp,
+		                   sizeof(tmp)));
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 			parse_debug_print_ast_symbol("PARAMETER",
 			                             &cur->symbol,
@@ -1766,7 +1779,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 			debug("%*sPARAMETER.TYPE: %s",
 			      (int)indent + 2,
 			      "",
-			      ctype_to_str(cur->parameter_type));
+			      ctype_to_str(&cur->parameter_type,
+			                   tmp,
+			                   sizeof(tmp)));
 		}
 		debug("%*sBODY", (int)(indent + 1), "");
 		if (a->u.function.block != NULL) {
@@ -1784,7 +1799,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sVARIABLE.TYPE: %s",
 		      (int)indent + 1,
 		      "",
-		      ctype_to_str(a->u.declare.var_type));
+		      ctype_to_str(&a->u.declare.var_type, tmp, sizeof(tmp)));
 		if (a->u.declare.init != NULL) {
 			debug("%*sINITIALIZER", (int)(indent + 1), "");
 			parse_debug_print(a->u.declare.init, indent + 2);
@@ -1966,7 +1981,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		debug("%*sCAST.TO: %s",
 		      (int)(indent + 1),
 		      "",
-		      ctype_to_str(a->u.cast.to_type));
+		      ctype_to_str(&a->u.cast.to_type, tmp, sizeof(tmp)));
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT:
@@ -1993,16 +2008,16 @@ parse_debug_print_flat(const struct flat *a, size_t indent)
 }
 
 result_t
-cast_if(Arena *arena, enum ctype cast_to, struct ast **a)
+cast_if(Arena *arena, struct ctype *cto, struct ast **a)
 {
-	if (*a == NULL || (**a).expr_type == cast_to) {
+	if (*a == NULL || ctype_is_equal(&(**a).expr_type, cto)) {
 		return RESULT_OK;
 	}
 	struct ast *cast_wrap = NULL;
 	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
-	cast_wrap->u.cast.to_type = cast_to;
+	check(ctype_copy(arena, cto, &cast_wrap->expr_type));
+	check(ctype_copy(arena, cto, &cast_wrap->u.cast.to_type));
 	cast_wrap->u.cast.expr = *a;
-	cast_wrap->expr_type = cast_to;
 	*a = cast_wrap;
 	return RESULT_OK;
 }

@@ -31,13 +31,13 @@ static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
 static void
 map_numeric_type(const struct ast *init,
-                 enum ctype dst_type,
+                 struct ctype *dst_type,
                  union constant_value *val)
 {
 	const struct ast *a = unpack_constant(init);
 	assert(a != NULL);
 
-	if (dst_type == CTYPE_DOUBLE) {
+	if (dst_type->t == CTYPE_DOUBLE) {
 		switch (a->expr_type) {
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
@@ -65,8 +65,8 @@ map_numeric_type(const struct ast *init,
 		break;
 	}
 
-	if ((dst_type == CTYPE_INT && x > INT_MAX) ||
-	    (dst_type == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
+	if ((dst_type->t == CTYPE_INT && x > INT_MAX) ||
+	    (dst_type->t == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
 		x %= LONG_TO_INT_TRUNCATOR;
 	}
 
@@ -239,7 +239,7 @@ has_container(struct sema_label_loops_state *state,
 }
 
 static WARN_UNUSED int128_t
-guess(const struct ast *a, enum ctype expected_type)
+guess(const struct ast *a, struct ctype *expected_type)
 {
 	int128_t value = 0;
 	union constant_value tmp = {0};
@@ -369,7 +369,7 @@ guess(const struct ast *a, enum ctype expected_type)
 }
 
 static WARN_UNUSED int128_t
-guess_case_value(const struct ast *containing_case, enum ctype expected_type)
+guess_case_value(const struct ast *containing_case, struct ctype *expected_type)
 {
 	assert(containing_case->node_type == NODE_CASE);
 	return guess(containing_case->u.case_.constant, expected_type);
@@ -379,7 +379,7 @@ static WARN_UNUSED result_t
 make_case(Arena *arena,
           long long int existing_unique,
           struct ast **dst,
-          enum ctype control_type,
+          struct ctype *control_type,
           int128_t new_value)
 {
 	*dst = arena_alloc(arena, sizeof(**dst));
@@ -395,7 +395,7 @@ make_case(Arena *arena,
 
 	new_node->node_type = NODE_CONSTANT;
 	new_node->u.num = new_value;
-	new_node->expr_type = control_type;
+	check(ctype_copy(arena, control_type, &new_node->expr_type));
 
 	(**dst).u.case_.constant = new_node;
 	return RESULT_OK;
@@ -409,8 +409,8 @@ case_prepend(Arena *arena,
 	assert(containing_switch->node_type == NODE_SWITCH);
 	assert(new_case->node_type == NODE_CASE);
 
-	enum ctype control_type =
-		containing_switch->u.switch_.control->expr_type;
+	struct ctype *control_type =
+		&containing_switch->u.switch_.control->expr_type;
 	const int128_t new_value = guess_case_value(new_case, control_type);
 
 	struct flat *head = containing_switch->u.switch_.label_cases;
@@ -986,7 +986,7 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 
 struct sema_implicit_cast_state {
 	Arena *arena;
-	enum ctype expected_return_type;
+	struct ctype expected_return_type;
 };
 
 static WARN_UNUSED result_t
@@ -994,11 +994,12 @@ sema_implicit_cast(struct ast *a, void *userdata)
 {
 	struct sema_implicit_cast_state *state = userdata;
 	Arena *arena = state->arena;
-	enum ctype common = CTYPE_INT;
+	struct ctype *common = NULL;
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
-		state->expected_return_type = a->u.function.return_type;
+		check(ctype_copy(&a->u.function.return_type,
+		                 &state->expected_return_type));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 		check(cast_if(arena,
@@ -1064,7 +1065,7 @@ enum symbol_declaration_scope {
 
 struct sema_symbol_auxiliary {
 	long long int n_args;
-	enum ctype *p_types; /* array of size n_args */
+	struct ctype *p_types; /* array of size n_args */
 	enum symbol_declaration_scope dscope;
 };
 
@@ -1132,10 +1133,10 @@ sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
 	const struct string_view *fname = NULL;
-	enum ctype return_type = CTYPE_INT;
+	struct ctype return_type = {0};
 	long long int n_args = 0;
 	long long int idx = 0;
-	enum ctype *p_types = NULL;
+	struct ctype *p_types = NULL;
 	bool is_def = false;
 	bool is_def_or_decl = false;
 	enum symbol_linkage linkage = SYMBOL_LINKAGE_EXTERNAL;
@@ -1152,13 +1153,13 @@ sema_fn_signature(struct ast *a, void *userdata)
 		}
 		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-			p_types[idx++] = cur->parameter_type;
+			check(ctype_copy(&cur->parameter_type, p_types[idx++]));
 		}
 		assert(idx == n_args);
 		check(sema_fn_param_names(a->u.function.params));
 		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
-		return_type = a->u.function.return_type;
+		check(ctype_copy(&a->u.function.return_type, &return_type));
 		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
 		                  ? SYMBOL_LINKAGE_EXTERNAL
 		                  : SYMBOL_LINKAGE_INTERNAL;
@@ -1172,7 +1173,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		}
 		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
 		for (struct flat *x = a->u.call.args; x != NULL; x = x->cdr) {
-			p_types[idx++] = x->car->expr_type;
+			check(ctype_copy(&x->car->expr_type, p_types[idx++]));
 		}
 		assert(idx == n_args);
 		break;
@@ -1208,7 +1209,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		                      fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
-		                      return_type));
+		                      &return_type));
 		check(sema_alloc_auxiliary(state->arena, &(**s).auxiliary));
 		sema_get_auxiliary(*s)->n_args = n_args;
 		sema_get_auxiliary(*s)->p_types = p_types;
@@ -1222,7 +1223,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		return make_result(ERR_SEMA_FUNCTION_LINKAGE_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
-	} else if (is_def_or_decl && return_type != dup->c89type) {
+	} else if (is_def_or_decl &&
+	           !ctype_is_equal(return_type, &dup->c89type)) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
@@ -1241,23 +1243,24 @@ sema_fn_signature(struct ast *a, void *userdata)
 
 	bool p_types_match = true;
 	for (long long int i = 0; i < n_args; ++i) {
-		enum ctype to_check = CTYPE_INT;
+		struct ctype *to_check = NULL;
 		if (is_def_or_decl) {
 			/*
 			 * Require exact parameter type match on redeclaration,
 			 * definition of preceding declaration, etc.
 			 */
-			to_check = p_types[i];
+			to_check = &p_types[i];
 		} else {
 			/*
 			 * On function call, allow argument expression type
 			 * to widen or narrow to declared parameter type,
 			 */
 			to_check = get_common_ctype(
-				p_types[i],
-				sema_get_auxiliary(dup)->p_types[i]);
+				&p_types[i],
+				&sema_get_auxiliary(dup)->p_types[i]);
 		}
-		if (to_check != sema_get_auxiliary(dup)->p_types[i]) {
+		if (!ctype_is_equal(to_check,
+		                    &sema_get_auxiliary(dup)->p_types[i])) {
 			p_types_match = false;
 			break;
 		}
@@ -1272,11 +1275,12 @@ sema_fn_signature(struct ast *a, void *userdata)
 	if (!is_def_or_decl) {
 		long long int i = 0;
 		struct flat *actual = a->u.call.args;
-		enum ctype *expected = sema_get_auxiliary(dup)->p_types;
+		struct ctype *expected = sema_get_auxiliary(dup)->p_types;
 		while (actual != NULL && i < sema_get_auxiliary(dup)->n_args) {
-			if (actual->car->expr_type != expected[i]) {
+			if (!ctype_is_equal(&actual->car->expr_type,
+			                    &expected[i])) {
 				check(cast_if(state->arena,
-				              expected[i],
+				              &expected[i],
 				              &actual->car));
 			}
 			++i;

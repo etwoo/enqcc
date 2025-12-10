@@ -9,65 +9,6 @@
 #include <string.h>
 #include <sys/param.h> /* for MAX() */
 
-#define TO_STR(t) #t,
-static const char *const CTYPE_AS_STR[] = {FOREACH_CTYPE(TO_STR)};
-#undef TO_STR
-
-const char *
-ctype_to_str(enum ctype c)
-{
-	assert(c < ARRAY_SIZE(CTYPE_AS_STR));
-	return CTYPE_AS_STR[c];
-}
-
-long long int
-ctype_to_size_bytes(enum ctype c)
-{
-	long long int b = 0;
-	switch (c) {
-	case CTYPE_INT:
-	case CTYPE_UNSIGNED_INT:
-		b = 4;
-		break;
-	case CTYPE_LONG:
-	case CTYPE_UNSIGNED_LONG:
-	case CTYPE_DOUBLE:
-		b = 8;
-		break;
-	}
-	return b;
-}
-
-bool
-ctype_is_signed(enum ctype c)
-{
-	bool b = true;
-	switch (c) {
-	case CTYPE_INT:
-	case CTYPE_LONG:
-	case CTYPE_DOUBLE:
-		b = true;
-		break;
-	case CTYPE_UNSIGNED_INT:
-	case CTYPE_UNSIGNED_LONG:
-		b = false;
-		break;
-	}
-	return b;
-}
-
-bool
-ctype_is_floating_point(enum ctype c)
-{
-	return c == CTYPE_DOUBLE;
-}
-
-enum ctype
-get_common_ctype(enum ctype lhs, enum ctype rhs)
-{
-	return MAX(lhs, rhs);
-}
-
 bool
 is_internal(enum symbol_linkage linkage)
 {
@@ -91,14 +32,14 @@ symbols_prepend(Arena *arena,
                 struct symbol **head,
                 const struct string_view *name,
                 enum symbol_type stype,
-                enum ctype c89type)
+                struct ctype *c89type)
 {
 	struct symbol *node = arena_alloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_SYMBOL_ALLOC);
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
-	node->c89type = c89type;
+	check(ctype_copy(arena, c89type, node->c89type));
 	if (*head != NULL) {
 		long long int base = MAX((**head).unique, (**head).cookie);
 		node->unique = base + 1;

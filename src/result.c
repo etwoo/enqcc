@@ -442,6 +442,9 @@ result_to_str(result_t r)
 	case ERR_SYMBOL_ALLOC:
 		s = strdup("Cannot allocate symbol");
 		break;
+	case ERR_CTYPE_ALLOC:
+		s = strdup("Cannot allocate C type representation");
+		break;
 	}
 
 	return s;

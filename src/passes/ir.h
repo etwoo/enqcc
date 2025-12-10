@@ -17,7 +17,7 @@ struct ir_val {
 	int128_t num;               /* numeric value, variable ID, etc */
 	double dnum;                /* ... or numeric value as floating point */
 	struct string_view varname; /* symbol name, if linkage */
-	enum ctype c89type;
+	struct ctype c89type;
 };
 
 #define FOREACH_IR_OPCODE(F)                                                   \
@@ -83,7 +83,7 @@ struct ir_function {
 
 struct ir_variable {
 	struct string_view identifier;
-	enum ctype c89type;
+	struct ctype c89type;
 	enum ir_linkage linkage;
 	union constant_value initial;
 	struct ir_variable *next;

@@ -79,7 +79,7 @@ codegen_set_operand_immediate_zero(struct asm_operand *dst)
 static void
 codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
-	switch (src->c89type) {
+	switch (src->c89type.t) {
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
@@ -87,6 +87,7 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 	case CTYPE_LONG:
 	case CTYPE_UNSIGNED_LONG:
 	case CTYPE_DOUBLE:
+	case CTYPE_POINTER_TO: /* assuming system with 64-bit pointers */
 		dst->word_type = ASM_WORD_64BIT;
 		break;
 	}
@@ -199,11 +200,12 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		assert(0 && "unset operand in 2-arg/3-arg op");
 		break;
 	case IR_VAL_CONSTANT:
-		switch (src->c89type) {
+		switch (src->c89type.t) {
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
+		case CTYPE_POINTER_TO:
 			dst->operand_type = ASM_OPERAND_IMMEDIATE;
 			dst->u.num = src->num;
 			break;
@@ -313,7 +315,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	long long int n_double = 0;
 
 	for (size_t i = 0; i < n_args; ++i) {
-		bool is_fp = ctype_is_floating_point(src->args[i].c89type);
+		bool is_fp = ctype_is_floating_point(&src->args[i].c89type);
 
 		const enum asm_register *dst_reg = NULL;
 		if (is_fp && n_double < CODEGEN_FP_REGISTER_ARGS) {
@@ -339,7 +341,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		size_t pos = i - 1;
 		check(codegen_alloc_op(arena, dst));
 		if (dummy.args[pos].subtype == IR_VAL_CONSTANT ||
-		    ctype_to_size_bytes(dummy.args[pos].c89type) ==
+		    ctype_to_size_bytes(&dummy.args[pos].c89type) ==
 		            CODEGEN_BYTES_PER_PUSH) {
 			(**dst).opcode = ASM_OP_PUSH;
 			codegen_map_operand(&dummy.args[pos], &(**dst).args[0]);
@@ -375,7 +377,7 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
-	if (ctype_is_floating_point(src->args[n_args].c89type)) {
+	if (ctype_is_floating_point(&src->args[n_args].c89type)) {
 		(**dst).args[0] = OPERAND_XMM0;
 	} else {
 		codegen_set_operand_eax(&src->args[n_args], &(**dst).args[0]);
@@ -664,7 +666,7 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		break;
 	case IR_OP_CTYPE_UINT_TO_DOUBLE:
 		check(codegen_alloc_op(arena, dst));
-		if (src->args[0].c89type == CTYPE_UNSIGNED_INT) {
+		if (src->args[0].c89type.t == CTYPE_UNSIGNED_INT) {
 			(**dst).opcode = ASM_OP_MOV;
 			codegen_map_operand(&src->args[0], &(**dst).args[0]);
 			codegen_set_operand_eax(&src->args[0],
@@ -783,8 +785,8 @@ codegen_statement_one(Arena *arena,
                       struct asm_op **dst)
 {
 	assert(*dst == NULL);
-	if (ctype_is_floating_point(src->args[0].c89type) ||
-	    ctype_is_floating_point(src->args[1].c89type)) {
+	if (ctype_is_floating_point(&src->args[0].c89type) ||
+	    ctype_is_floating_point(&src->args[1].c89type)) {
 		check(codegen_statement_fp(arena, src, dst));
 		if (*dst != NULL) {
 			return RESULT_OK;
@@ -794,7 +796,7 @@ codegen_statement_one(Arena *arena,
 	check(codegen_alloc_op(arena, dst));
 
 	/* guess overall op signedness ahead of time */
-	const bool a_signed = ctype_is_signed(src->args[0].c89type);
+	const bool a_signed = ctype_is_signed(&src->args[0].c89type);
 
 	switch (src->opcode) {
 	case IR_OP_RET:
@@ -884,7 +886,7 @@ codegen_statement_one(Arena *arena,
 		dst = &(**dst).next;
 		/* sign-extend dividend from eax into edx */
 		check(codegen_alloc_op(arena, dst));
-		switch (src->args[0].c89type) {
+		switch (src->args[0].c89type.t) {
 		case CTYPE_INT:
 			(**dst).opcode = ASM_OP_CDQ;
 			break;
@@ -900,13 +902,17 @@ codegen_statement_one(Arena *arena,
 		case CTYPE_DOUBLE:
 			assert(0 && "double div/rem should lead elsewhere");
 			break;
+		case CTYPE_POINTER_TO:
+			assert(0 && "ptr div/rem should have been rejected");
+			break;
 		}
 		dst = &(**dst).next;
 		/* prepare divisor and idiv op */
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = a_signed ? ASM_OP_IDIV : ASM_OP_DIV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		assert(src->args[0].c89type == src->args[1].c89type);
+		assert(ctype_is_equal(&src->args[0].c89type,
+		                      &src->args[1].c89type));
 		dst = &(**dst).next;
 		/* copy result from eax (quotient) or edx (remainder) */
 		check(codegen_alloc_op(arena, dst));
@@ -1103,7 +1109,7 @@ codegen_function_params(Arena *arena,
 			break;
 		}
 
-		const bool is_fp = ctype_is_floating_point(ir[i].c89type);
+		const bool is_fp = ctype_is_floating_point(&ir[i].c89type);
 		if (is_fp && n_double < CODEGEN_FP_REGISTER_ARGS) {
 			check(codegen_copy_reg_to_pseudo(arena,
 			                                 &ir[i],
@@ -1169,7 +1175,7 @@ codegen_variable(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
-	(**dst).c89type = ir->c89type;
+	check(ctype_copy(arena, &ir->c89type, &(**dst).c89type));
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
 	(**dst).initial = ir->initial;
 	return RESULT_OK;
@@ -1944,14 +1950,15 @@ codegen_debug_print(const struct assembly *cg)
 {
 	debug("PROGRAM");
 
+	char tmp[128] = {0};
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		debug("  TYPE %s", ctype_to_str(v->c89type));
+		debug("  TYPE %s", ctype_to_str(&v->c89type, tmp, sizeof(tmp)));
 		debug("  LINKAGE %s",
 		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
 		                                         : "INTERNAL");
-		if (v->c89type == CTYPE_DOUBLE) {
+		if (ctype_is_floating_point(&v->c89type)) {
 			debug("  INITIAL VALUE %f", v->initial.as_double);
 		} else {
 			debug("  INITIAL VALUE %lld",
