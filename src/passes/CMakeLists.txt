@@ -1,3 +1,5 @@
+add_subdirectory(parse)
+
 target_sources(compiler PRIVATE
 	codegen.c
 	emit.c
