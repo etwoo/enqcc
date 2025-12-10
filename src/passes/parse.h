@@ -1,7 +1,7 @@
 #ifndef COMPILER_PASSES_PARSE_H
 #define COMPILER_PASSES_PARSE_H
 
-#include "passes/symbol.h"
+#include "lang/symbol.h"
 #include "sys/compiler_features.h"
 #include "sys/string_view.h"
 
@@ -20,13 +20,15 @@ struct ast_symbol {
 
 struct ast_parameter {
 	struct ast_symbol symbol;
-	enum ctype parameter_type;
+	struct ctype parameter_type;
 };
 
 #define FOREACH_AST_NODE_EXPRESSION_PREFIX_OP(F)                               \
 	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
 	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
 	F(EXPRESSION_UNARY_NOT, TOKEN_EXCLAMATION)                             \
+	F(EXPRESSION_UNARY_DEREFERENCE, TOKEN_ASTERISK)                        \
+	F(EXPRESSION_UNARY_ADDRESS_OF, TOKEN_AMPERSAND)                        \
 	F(EXPRESSION_PREDECREMENT, TOKEN_HYPHEN_HYPHEN)                        \
 	F(EXPRESSION_PREINCREMENT, TOKEN_PLUS_SIGN_PLUS_SIGN)
 
@@ -108,7 +110,7 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
-			enum ctype return_type;
+			struct ctype return_type;
 			struct ast_parameter *params;
 			struct ast *block;
 		} function;
@@ -118,7 +120,7 @@ struct ast {
 		struct {
 			struct ast_symbol identifier;
 			enum ast_specifier specifier;
-			enum ctype var_type;
+			struct ctype var_type;
 			struct ast *init;
 		} declare;
 		struct {
@@ -171,14 +173,18 @@ struct ast {
 			long long int unique;
 		} case_;
 		struct {
-			enum ctype to_type;
+			struct ctype to_type;
 			struct ast *expr;
 		} cast;
 		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
 		int128_t num;          /* NODE_CONSTANT */
 		double double_;        /* NODE_CONSTANT with CTYPE_DOUBLE */
 	} u;
-	enum ctype expr_type;
+	struct ctype expr_type;
+	struct {
+		struct ast *compound_assignment_twin;
+		void *userdata;
+	} kludge;
 };
 
 struct flat {
@@ -195,10 +201,5 @@ struct flat {
 	     (iter) != NULL && (iter)->symbol.name.data != NULL &&             \
 	     (iter)->symbol.name.sz > 0;                                       \
 	     ++(iter))
-
-/*
- * Insert NODE_EXPRESSION_CAST wherever type issues demand it.
- */
-result_t cast_if(Arena *arena, enum ctype cast_to, struct ast **a) WARN_UNUSED;
 
 #endif

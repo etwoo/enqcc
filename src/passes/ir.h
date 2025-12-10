@@ -1,7 +1,7 @@
 #ifndef COMPILER_PASSES_IR_H
 #define COMPILER_PASSES_IR_H
 
-#include "passes/symbol.h"
+#include "lang/symbol.h"
 #include "sys/string_view.h"
 
 #define FUNCTION_PARAMETER_LIMIT 32
@@ -17,7 +17,7 @@ struct ir_val {
 	int128_t num;               /* numeric value, variable ID, etc */
 	double dnum;                /* ... or numeric value as floating point */
 	struct string_view varname; /* symbol name, if linkage */
-	enum ctype c89type;
+	struct ctype c89type;
 };
 
 #define FOREACH_IR_OPCODE(F)                                                   \
@@ -51,6 +51,9 @@ struct ir_val {
 	F(CTYPE_DOUBLE_TO_UINT, 2)                                             \
 	F(CTYPE_INT_TO_DOUBLE, 2)                                              \
 	F(CTYPE_UINT_TO_DOUBLE, 2)                                             \
+	F(GET_ADDRESS, 2)                                                      \
+	F(LOAD, 2)                                                             \
+	F(STORE, 2)                                                            \
 	F(JUMP, 1)                                                             \
 	F(JUMP_IF_ZERO, 2)                                                     \
 	F(JUMP_IF_NOT_ZERO, 2)                                                 \
@@ -83,7 +86,7 @@ struct ir_function {
 
 struct ir_variable {
 	struct string_view identifier;
-	enum ctype c89type;
+	struct ctype c89type;
 	enum ir_linkage linkage;
 	union constant_value initial;
 	struct ir_variable *next;

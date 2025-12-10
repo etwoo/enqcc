@@ -1,0 +1,10 @@
+#ifndef COMPILER_PASSES_PARSE_DEBUG_H
+#define COMPILER_PASSES_PARSE_DEBUG_H
+
+enum {
+	UNSET_LOOP_ID = -1,
+	UNSET_LABEL_ID = -2,
+	UNSET_SWITCH_ID = -3,
+};
+
+#endif
