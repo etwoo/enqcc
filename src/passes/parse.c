@@ -595,8 +595,11 @@ static result_t parse_expr(Arena *arena,
                            const struct token **tok,
                            struct ast **dst,
                            unsigned minimum_precedence) WARN_UNUSED;
+
+static const uint32_t PARSE_DECLARATOR_ABSTRACT = 0x1;
+
 static result_t parse_type(Arena *arena,
-                           bool abstract,
+                           uint32_t flags,
                            const struct token **tok,
                            struct ctype *var_type,
                            struct string_view *identifier) WARN_UNUSED;
@@ -713,7 +716,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
 		check(parse_type(arena,
-		                 true,
+		                 PARSE_DECLARATOR_ABSTRACT,
 		                 tok,
 		                 &(**dst).u.cast.to_type,
 		                 NULL));
@@ -961,43 +964,6 @@ parse_expr(Arena *arena,
 	return RESULT_OK;
 }
 
-// TODO: might need to rm this function and do like book recommended a few
-// chapters ago, just always parse the specifiers+types+declarator -- without
-// knowing whether it's a function or non-function variable declaration -- and
-// then use the parse result itself to dispatch
-//
-// basically, have parse_declarator() and/or `struct declarator` be capable of
-// communicating to caller whether a function or non-function (or neither, just
-// a statement) was found -- similar to what this function already does
-static WARN_UNUSED bool
-parse_peek_ahead_function_maybe(const struct token *tok)
-{
-	bool typed = false;
-	for (; tok != NULL; tok = tok->next) {
-		if (is_token_maybe_function_prefix(tok) ||
-		    is_token_type(tok, TOKEN_ASTERISK)) {
-			/* seek past return type and specifiers */
-			typed = typed || is_token_variable_type(tok);
-		} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
-			/* ... until we reach the first TOKEN_IDENTIFIER  */
-			/* ... and then check if TOKEN_PAREN_OPEN follows */
-			const struct token *next = tok->next;
-			return typed && is_token_type(next, TOKEN_PAREN_OPEN);
-		} else {
-			/* don't try to peek past other token types */
-			break;
-		}
-		// TODO: if we add typedefs, the heuristic above will need to
-		// change to accept custom return types (not just int) *AND* to
-		// seek past those custom return types while looking for the
-		// variable/function name; the crux is that these custom return
-		// types -- created as typedefs earlier in the program -- will
-		// appear as TOKEN_IDENTIFIER from the lexer, i.e. the same
-		// type of token as the function name
-	}
-	return false;
-}
-
 struct parse_basic_type_state {
 	size_t n_int;
 	size_t n_long;
@@ -1038,8 +1004,7 @@ parse_basic_type_accumulate(const struct token **tok,
 }
 
 static WARN_UNUSED result_t
-parse_basic_type_finalize(bool expect_var, /* or expect_function */
-                          struct parse_basic_type_state *state,
+parse_basic_type_finalize(struct parse_basic_type_state *state,
                           struct ctype *var_type)
 {
 	if (state->n_int > 1 ||      /* int int -- invalid                 */
@@ -1049,9 +1014,7 @@ parse_basic_type_finalize(bool expect_var, /* or expect_function */
 	    state->n_double > 1 ||   /* double double -- invalid           */
 	    (state->n_signed > 0 &&  /* signed/unsigned mutually exclusive */
 	     state->n_unsigned > 0)) {
-		return make_result(
-			expect_var ? ERR_PARSE_DECL_TYPE_DUPLICATE
-				   : ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE);
+		return make_result(ERR_PARSE_DECL_TYPE_DUPLICATE);
 	}
 
 	if (state->n_int == 0 &&      /* Any particular type may occur zero   */
@@ -1059,9 +1022,7 @@ parse_basic_type_finalize(bool expect_var, /* or expect_function */
 	    state->n_signed == 0 &&   /* one non-zero count, from the valid   */
 	    state->n_unsigned == 0 && /* options available.                   */
 	    state->n_double == 0) {
-		return make_result(expect_var
-		                           ? ERR_PARSE_DECL_EXPECT_TYPE
-		                           : ERR_PARSE_FUNC_EXPECT_RETURN_TYPE);
+		return make_result(ERR_PARSE_DECL_EXPECT_TYPE);
 	}
 
 	if (state->n_double > 0) {
@@ -1069,10 +1030,7 @@ parse_basic_type_finalize(bool expect_var, /* or expect_function */
 		    state->n_long > 0 ||     /* long double -- unsupported */
 		    state->n_signed > 0 ||   /* signed double -- invalid   */
 		    state->n_unsigned > 0) { /* unsigned double -- invalid */
-			return make_result(
-				expect_var
-					? ERR_PARSE_DECL_TYPE_DOUBLE_INVALID
-					: ERR_PARSE_FUNC_RETURN_TYPE_DOUBLE_INVALID);
+			return make_result(ERR_PARSE_DECL_TYPE_DOUBLE_INVALID);
 		}
 		var_type->t = CTYPE_DOUBLE;
 		return RESULT_OK;
@@ -1103,8 +1061,7 @@ parse_basic_type_finalize(bool expect_var, /* or expect_function */
 }
 
 static WARN_UNUSED result_t
-parse_specifiers(bool expect_var, /* or expect_function */
-                 const struct token **tok,
+parse_specifiers(const struct token **tok,
                  enum ast_specifier *dst,
                  struct ctype *var_type)
 {
@@ -1127,12 +1084,70 @@ parse_specifiers(bool expect_var, /* or expect_function */
 	}
 
 	if (specifier_count > 1) {
-		return make_result(
-			expect_var ? ERR_PARSE_DECL_SPECIFIER_DUPLICATE
-				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
+		return make_result(ERR_PARSE_DECL_SPECIFIER_DUPLICATE);
 	}
 
-	check(parse_basic_type_finalize(expect_var, &state, var_type));
+	check(parse_basic_type_finalize(&state, var_type));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_function_params_impl(Arena *arena,
+                           const struct token **tok,
+                           struct ast_parameter **dst,
+                           long long int *count)
+{
+	const long long int count_in = *count;
+
+	bool first = true;
+	for (*count = 0; true; *count = *count + 1) {
+		if (first) {
+			first = false;
+		} else {
+			if (!is_token_type(*tok, TOKEN_COMMA)) {
+				break;
+			}
+			token_consume(tok);
+		}
+
+		struct ctype parameter_type = {0};
+		struct string_view identifier = {0};
+		check(parse_type(arena, 0, tok, &parameter_type, &identifier));
+
+		if (dst != NULL) {
+			assert(*count <= count_in);
+			(*dst)[*count].symbol.name = identifier;
+			(*dst)[*count].symbol.unique = NOT_YET_UNIQUE;
+			(*dst)[*count].parameter_type = parameter_type;
+		}
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_function_params(Arena *arena,
+                      const struct token **tok,
+                      struct ast_parameter **dst)
+{
+	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
+		token_consume(tok);
+		return RESULT_OK;
+	}
+
+	long long int count = 0;
+	{
+		const struct token *copy = *tok;
+		check(parse_function_params_impl(arena, &copy, NULL, &count));
+	}
+	if (count > 0) {
+		size_t bytes = sizeof(**dst) * (count + 1);
+		*dst = arena_alloc(arena, bytes);
+		check_if(*dst == NULL, ERR_PARSE_ALLOC);
+		memset(*dst, 0, bytes);
+		check(parse_function_params_impl(arena, tok, dst, &count));
+	}
+
 	return RESULT_OK;
 }
 
@@ -1161,54 +1176,85 @@ declarator_alloc(Arena *arena, struct declarator **dst)
 
 static WARN_UNUSED result_t
 parse_declarator(Arena *arena,
-                 bool abstract,
+                 uint32_t flags,
                  const struct token **tok,
                  struct declarator **dst,
-                 struct string_view *identifier)
+                 struct string_view *identifier,
+                 bool *got_function,
+                 struct ast_parameter **params)
 {
 	assert(dst != NULL);
+	bool check_function_next = false;
 
-	if (abstract && is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+	if (0 != (flags & PARSE_DECLARATOR_ABSTRACT) &&
+	    is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_ABSTRACT_BASE;
 		assert(identifier == NULL);
 		/* leave TOKEN_PAREN_CLOSE in place for caller to consume */
-	} else if (!abstract && is_token_type(*tok, TOKEN_IDENTIFIER)) {
+	} else if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
+	           is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_IDENTIFIER;
 		assert(identifier != NULL);
 		*identifier = (**tok).val;
 		token_consume(tok);
+		check_function_next = true;
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		token_consume(tok);
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_PARENTHESIZED;
 		check(parse_declarator(arena,
-		                       abstract,
+		                       flags,
 		                       tok,
 		                       &(**dst).u.in_parens,
-		                       identifier));
+		                       identifier,
+		                       got_function,
+		                       params));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE);
 		}
 		token_consume(tok);
+		check_function_next = true;
 	} else if (is_token_type(*tok, TOKEN_ASTERISK)) {
 		token_consume(tok);
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_POINTER;
 		check(parse_declarator(arena,
-		                       abstract,
+		                       flags,
 		                       tok,
 		                       &(**dst).u.pointee,
-		                       identifier));
+		                       identifier,
+		                       got_function,
+		                       params));
 	} else {
 		return make_result(ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE);
 	}
+
+	if (check_function_next && is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		if (*got_function) {
+			return make_result(ERR_PARSE_DECL_ATOM_PARAMS_NESTING);
+		}
+		token_consume(tok);
+
+		check(parse_function_params(arena, tok, params));
+
+		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			return make_result(
+				ERR_PARSE_DECL_ATOM_PARAMS_EXPECT_PAREN_CLOSE);
+		}
+		token_consume(tok);
+
+		if (got_function != NULL) {
+			*got_function = true;
+		}
+	}
+
 	return RESULT_OK;
 }
 
@@ -1248,17 +1294,24 @@ map_declarator_to_ctype(Arena *arena,
 
 static WARN_UNUSED result_t
 parse_specifiers_and_type(Arena *arena,
-                          bool expect_var,
                           const struct token **tok,
                           enum ast_specifier *dst,
                           struct ctype *var_type,
-                          struct string_view *identifier)
+                          struct string_view *identifier,
+                          bool *got_function,
+                          struct ast_parameter **params)
 {
 	struct ctype basic_type = {0};
-	check(parse_specifiers(expect_var, tok, dst, &basic_type));
+	check(parse_specifiers(tok, dst, &basic_type));
 
 	struct declarator *remainder = NULL;
-	check(parse_declarator(arena, false, tok, &remainder, identifier));
+	check(parse_declarator(arena,
+	                       0,
+	                       tok,
+	                       &remainder,
+	                       identifier,
+	                       got_function,
+	                       params));
 
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, remainder, &tmp));
@@ -1269,7 +1322,7 @@ parse_specifiers_and_type(Arena *arena,
 
 static WARN_UNUSED result_t
 parse_type(Arena *arena,
-           bool abstract,
+           uint32_t flags,
            const struct token **tok,
            struct ctype *var_type,
            struct string_view *identifier)
@@ -1281,10 +1334,21 @@ parse_type(Arena *arena,
 	}
 
 	struct ctype basic_type = {0};
-	check(parse_basic_type_finalize(true, &state, &basic_type));
+	check(parse_basic_type_finalize(&state, &basic_type));
 
 	struct declarator *remainder = NULL;
-	check(parse_declarator(arena, abstract, tok, &remainder, identifier));
+	bool got_function = false;
+	struct ast_parameter *params = NULL;
+	check(parse_declarator(arena,
+	                       flags,
+	                       tok,
+	                       &remainder,
+	                       identifier,
+	                       &got_function,
+	                       &params));
+	if (got_function) {
+		return make_result(ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED);
+	}
 
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, remainder, &tmp));
@@ -1293,33 +1357,83 @@ parse_type(Arena *arena,
 	return RESULT_OK;
 }
 
+static result_t parse_block(Arena *arena,
+                            const struct token **tok,
+                            struct ast **dst_outer) WARN_UNUSED;
+
+static const uint32_t PARSE_DECLARATION_ACCEPT_FUNCTION = 0x100;
+
 static WARN_UNUSED result_t
-parse_declaration(Arena *arena, const struct token **tok, struct ast **dst)
+parse_fn_or_var_declaration(Arena *arena,
+                            uint32_t flags,
+                            const struct token **tok,
+                            struct ast **dst)
 {
-	check(parse_alloc(arena, dst, NODE_DECLARATION));
+	enum ast_specifier fn_or_var_specifier = SPECIFIER_NONE;
+	struct ctype fn_return_or_var_type = {0};
+	struct string_view fn_or_var_name = {0};
+	bool got_function = false;
+	struct ast_parameter *fn_params_maybe = NULL;
+
 	check(parse_specifiers_and_type(arena,
-	                                true,
 	                                tok,
-	                                &(**dst).u.declare.specifier,
-	                                &(**dst).u.declare.var_type,
-	                                &(**dst).u.declare.identifier.name));
+	                                &fn_or_var_specifier,
+	                                &fn_return_or_var_type,
+	                                &fn_or_var_name,
+	                                &got_function,
+	                                &fn_params_maybe));
 
-	if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
+	if (!got_function) {
+		/* handle non-function variable declaration */
+		check(parse_alloc(arena, dst, NODE_DECLARATION));
+		(**dst).u.declare.specifier = fn_or_var_specifier;
+		check(ctype_copy(arena,
+		                 &fn_return_or_var_type,
+		                 &(**dst).u.declare.var_type));
+		(**dst).u.declare.identifier.name = fn_or_var_name;
+
+		if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
+			token_consume(tok);
+			check(parse_expr(arena,
+			                 tok,
+			                 &(**dst).u.declare.init,
+			                 0));
+		}
+
+		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
+			return make_result(
+				ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON);
+		}
 		token_consume(tok);
-		check(parse_expr(arena, tok, &(**dst).u.declare.init, 0));
+
+		return RESULT_OK;
+	} /* else: handle function declaration */
+
+	if (0 == (flags & PARSE_DECLARATION_ACCEPT_FUNCTION)) {
+		return make_result(ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED);
 	}
 
-	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
-		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON);
+	check(parse_alloc(arena, dst, NODE_FUNCTION));
+	(**dst).u.function.specifier = fn_or_var_specifier;
+	check(ctype_copy(arena,
+	                 &fn_return_or_var_type,
+	                 &(**dst).u.function.return_type));
+	(**dst).u.function.identifier.name = fn_or_var_name;
+	(**dst).u.function.params = fn_params_maybe;
+
+	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
+		assert((**dst).u.function.block == NULL);
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		check(parse_block(arena, tok, &(**dst).u.function.block));
+	} else {
+		return make_result(
+			ERR_PARSE_FUNC_EXPECT_TOKEN_SEMICOLON_OR_BRACE_OPEN);
 	}
-	token_consume(tok);
 
 	return RESULT_OK;
 }
 
-static result_t parse_function(Arena *arena,
-                               const struct token **tok,
-                               struct ast **dst) WARN_UNUSED;
 static result_t parse_stmt(Arena *arena,
                            const struct token **tok,
                            struct ast **dst,
@@ -1345,10 +1459,12 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(flat_alloc(arena, dst));
-		if (parse_peek_ahead_function_maybe(*tok)) {
-			check(parse_function(arena, tok, &(**dst).car));
-		} else if (is_token_maybe_function_prefix(*tok)) {
-			check(parse_declaration(arena, tok, &(**dst).car));
+		if (is_token_maybe_function_prefix(*tok)) {
+			check(parse_fn_or_var_declaration(
+				arena,
+				PARSE_DECLARATION_ACCEPT_FUNCTION,
+				tok,
+				&(**dst).car));
 		} else {
 			bool dummy = false;
 			check(parse_stmt(arena, tok, &(**dst).car, &dummy));
@@ -1421,7 +1537,7 @@ parse_loop_for_init(Arena *arena,
 		check(parse_alloc_if_unset(arena, &(**dst).car));
 		token_consume(tok);
 	} else if (is_token_variable_type(*tok)) {
-		check(parse_declaration(arena, tok, &(**dst).car));
+		check(parse_fn_or_var_declaration(arena, 0, tok, &(**dst).car));
 	} else {
 		check(parse_expr(arena, tok, &(**dst).car, 0));
 		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
@@ -1684,106 +1800,6 @@ parse_stmt(Arena *arena,
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-parse_function_params_impl(Arena *arena,
-                           const struct token **tok,
-                           struct ast_parameter **dst,
-                           long long int *count)
-{
-	const long long int count_in = *count;
-
-	bool first = true;
-	for (*count = 0; true; *count = *count + 1) {
-		if (first) {
-			first = false;
-		} else {
-			if (!is_token_type(*tok, TOKEN_COMMA)) {
-				break;
-			}
-			token_consume(tok);
-		}
-
-		struct ctype parameter_type = {0};
-		struct string_view identifier = {0};
-		check(parse_type(arena,
-		                 false,
-		                 tok,
-		                 &parameter_type,
-		                 &identifier));
-
-		if (dst != NULL) {
-			assert(*count <= count_in);
-			(*dst)[*count].symbol.name = identifier;
-			(*dst)[*count].symbol.unique = NOT_YET_UNIQUE;
-			(*dst)[*count].parameter_type = parameter_type;
-		}
-	}
-
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-parse_function_params(Arena *arena,
-                      const struct token **tok,
-                      struct ast_parameter **dst)
-{
-	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
-		token_consume(tok);
-		return RESULT_OK;
-	}
-
-	long long int count = 0;
-	{
-		const struct token *copy = *tok;
-		check(parse_function_params_impl(arena, &copy, NULL, &count));
-	}
-	if (count > 0) {
-		size_t bytes = sizeof(**dst) * (count + 1);
-		*dst = arena_alloc(arena, bytes);
-		check_if(*dst == NULL, ERR_PARSE_ALLOC);
-		memset(*dst, 0, bytes);
-		check(parse_function_params_impl(arena, tok, dst, &count));
-	}
-
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-parse_function(Arena *arena, const struct token **tok, struct ast **dst)
-{
-	check(parse_alloc(arena, dst, NODE_FUNCTION));
-	check(parse_specifiers_and_type(arena,
-	                                false,
-	                                tok,
-	                                &(**dst).u.function.specifier,
-	                                &(**dst).u.function.return_type,
-	                                &(**dst).u.function.identifier.name));
-
-	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN);
-	}
-	token_consume(tok);
-
-	check(parse_function_params(arena, tok, &(**dst).u.function.params));
-
-	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE);
-	}
-	token_consume(tok);
-
-	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
-		assert((**dst).u.function.block == NULL);
-		token_consume(tok);
-	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
-		check(parse_block(arena, tok, &(**dst).u.function.block));
-	} else {
-		return make_result(
-			ERR_PARSE_FUNC_EXPECT_TOKEN_SEMICOLON_OR_BRACE_OPEN);
-	}
-
-	return RESULT_OK;
-}
-
 result_t
 parse_init(Arena *arena,
            const struct token *tok,
@@ -1795,11 +1811,11 @@ parse_init(Arena *arena,
 	struct flat **dst = &(**a).u.program.globals;
 	for (; tok != NULL; dst = &(**dst).cdr) {
 		check(flat_alloc(arena, dst));
-		if (parse_peek_ahead_function_maybe(tok)) {
-			check(parse_function(arena, &tok, &(**dst).car));
-		} else {
-			check(parse_declaration(arena, &tok, &(**dst).car));
-		}
+		check(parse_fn_or_var_declaration(
+			arena,
+			PARSE_DECLARATION_ACCEPT_FUNCTION,
+			&tok,
+			&(**dst).car));
 	}
 
 	struct symbol *symbols = NULL;

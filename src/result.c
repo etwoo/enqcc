@@ -161,6 +161,16 @@ result_to_str(result_t r)
 	case ERR_PARSE_ALLOC:
 		s = strdup("Cannot allocate ast node during parse");
 		break;
+	case ERR_PARSE_CALL_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing function call expects TOKEN_PAREN_CLOSE "
+		           "after function argument list");
+		break;
+	case ERR_PARSE_CASE_EXPECT_CONSTANT:
+		s = strdup("Parsing case expects integer constant");
+		break;
+	case ERR_PARSE_CASE_EXPECT_COLON:
+		s = strdup("Parsing case expects colon after constant");
+		break;
 	case ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing cast expects TOKEN_PAREN_CLOSE after type");
 		break;
@@ -189,23 +199,37 @@ result_to_str(result_t r)
 		s = strdup(
 			"Parsing declarator; encountered unreasonable token");
 		break;
+	case ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED:
+		s = strdup(
+			"Parsing declarator: function pointers not supported");
+		break;
+	case ERR_PARSE_DECL_ATOM_PARAMS_EXPECT_PAREN_CLOSE:
+		s = strdup("Parsing declarator expects TOKEN_PAREN_CLOSE after "
+		           "TOKEN_PAREN_OPEN and function parameters");
+		break;
+	case ERR_PARSE_DECL_ATOM_PARAMS_NESTING:
+		s = strdup("Parsing declarator: encountered multiple levels of "
+		           "function declarations, suggesting use of function "
+		           "pointers, which are not supported");
+		break;
 	case ERR_PARSE_DECL_EXPECT_TYPE:
-		s = strdup("Parsing variable declaration expects valid type in "
-		           "type position");
+		s = strdup("Parsing variable or function declaration expects "
+		           "valid type in type position");
 		break;
 	case ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_SEMICOLON after initializer expression");
 		break;
 	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
-		s = strdup("Duplicate variable specifier");
+		s = strdup("Duplicate variable or function specifier");
 		break;
 	case ERR_PARSE_DECL_TYPE_DOUBLE_INVALID:
-		s = strdup("Variable type 'double' cannot be combined with "
+		s = strdup("Type 'double' cannot be combined with "
 		           "int/long/signed/unsigned");
 		break;
 	case ERR_PARSE_DECL_TYPE_DUPLICATE:
-		s = strdup("Duplicate variable type");
+		s = strdup("Duplicate basic type, like `int int` or "
+		           "`signed unsigned`");
 		break;
 	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing paren-enclosed expression expects "
@@ -220,27 +244,9 @@ result_to_str(result_t r)
 		s = strdup(
 			"Parsing expression; encountered unreasonable token");
 		break;
-	case ERR_PARSE_FUNC_EXPECT_RETURN_TYPE:
-		s = strdup("Parsing function expects valid type in return type "
-		           "position");
-		break;
-	case ERR_PARSE_FUNC_RETURN_TYPE_DOUBLE_INVALID:
-		s = strdup("Function return type 'double' cannot be combined "
-		           "with int/long/signed/unsigned");
-		break;
-	case ERR_PARSE_FUNC_RETURN_TYPE_DUPLICATE:
-		s = strdup("Duplicate function return type");
-		break;
-	case ERR_PARSE_FUNC_SPECIFIER_DUPLICATE:
-		s = strdup("Duplicate function specifier");
-		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing function expects TOKEN_PAREN_OPEN before "
 		           "argument list");
-		break;
-	case ERR_PARSE_FUNC_PARAM_EXPECT_TYPE:
-		s = strdup("Parsing function parameter expects valid type in "
-		           "parameter type position");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing function expects TOKEN_PAREN_CLOSE after "
@@ -257,16 +263,6 @@ result_to_str(result_t r)
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_BRACE_CLOSE:
 		s = strdup("Parsing function expects TOKEN_BRACE_CLOSE after "
 		           "function body statement(s)");
-		break;
-	case ERR_PARSE_CALL_EXPECT_TOKEN_PAREN_CLOSE:
-		s = strdup("Parsing function call expects TOKEN_PAREN_CLOSE "
-		           "after function argument list");
-		break;
-	case ERR_PARSE_CASE_EXPECT_CONSTANT:
-		s = strdup("Parsing case expects integer constant");
-		break;
-	case ERR_PARSE_CASE_EXPECT_COLON:
-		s = strdup("Parsing case expects colon after constant");
 		break;
 	case ERR_PARSE_IF_ELSE_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing if statement expects TOKEN_PAREN_OPEN "
