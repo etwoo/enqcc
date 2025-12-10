@@ -427,7 +427,7 @@ parse_fn_or_var_declaration(Arena *arena,
 
 	if (!got_function) {
 		/* handle non-function variable declaration */
-		checked_alloc(arena, dst, NODE_DECLARATION);
+		check(parse_alloc(arena, dst, NODE_DECLARATION));
 		(**dst).u.declare.specifier = fn_or_var_specifier;
 		check(ctype_copy(arena,
 		                 &fn_return_or_var_type,
@@ -455,7 +455,7 @@ parse_fn_or_var_declaration(Arena *arena,
 		return make_result(ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED);
 	}
 
-	checked_alloc(arena, dst, NODE_FUNCTION);
+	check(parse_alloc(arena, dst, NODE_FUNCTION));
 	(**dst).u.function.specifier = fn_or_var_specifier;
 	check(ctype_copy(arena,
 	                 &fn_return_or_var_type,
