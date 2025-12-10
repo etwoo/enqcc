@@ -12,8 +12,9 @@ struct ast;
  * Common _internal_ entrypoints for parsing, for use within the
  * src/passes/parse/... module.
  *
- * Consumers of the higher-level src/passes/parse.h APIs should not
- * have access to these functions, nor have any reason to call them.
+ * Consumers of the higher-level ./include/passes.h and ./src/passes/parse.h
+ * APIs should have neither access to these functions nor any reason to call
+ * them in the first place.
  */
 result_t parse_block(Arena *arena,
                      const struct token **tok,
