@@ -1250,9 +1250,8 @@ parse_declarator(Arena *arena,
 		}
 		token_consume(tok);
 
-		if (got_function != NULL) {
-			*got_function = true;
-		}
+		assert(got_function != NULL);
+		*got_function = true;
 	}
 
 	return RESULT_OK;
