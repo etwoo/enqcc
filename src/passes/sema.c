@@ -133,6 +133,8 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -893,6 +895,10 @@ sema_expr_types(struct ast *a, void *userdata)
 		check(ctype_copy(arena,
 		                 &a->u.op_unary.operand->expr_type,
 		                 &a->expr_type));
+		break;
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+		assert(0 && "TODO: expr_type propagation for ptr & and *");
 		break;
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_LOGICAL_AND:
