@@ -598,7 +598,8 @@ static result_t parse_expr(Arena *arena,
 static result_t parse_type(Arena *arena,
                            bool abstract,
                            const struct token **tok,
-                           struct ctype *var_type) WARN_UNUSED;
+                           struct ctype *var_type,
+                           struct string_view *identifier) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
@@ -711,7 +712,11 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	           is_token_variable_type((**tok).next)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
-		check(parse_type(arena, true, tok, &(**dst).u.cast.to_type));
+		check(parse_type(arena,
+		                 true,
+		                 tok,
+		                 &(**dst).u.cast.to_type,
+		                 NULL));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE);
@@ -1131,7 +1136,6 @@ struct declarator {
 		DECLARATOR_POINTER,
 	} atom;
 	union {
-		struct string_view identifier;
 		struct declarator *in_parens;
 		struct declarator *pointee;
 	} u;
@@ -1151,20 +1155,24 @@ static WARN_UNUSED result_t
 parse_declarator(Arena *arena,
                  bool abstract,
                  const struct token **tok,
-                 struct declarator **dst)
+                 struct declarator **dst,
+                 struct string_view *identifier)
 {
 	assert(dst != NULL);
+
 	if (abstract && is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_ABSTRACT_BASE;
-		/* leave TOKEN_PAREN_CLOSE in place for caller */
-	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		assert(identifier == NULL);
+		/* leave TOKEN_PAREN_CLOSE in place for caller to consume */
+	} else if (!abstract && is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_IDENTIFIER;
-		(**dst).u.identifier = (**tok).val;
-		/* leave TOKEN_IDENTIFIER in place for caller */
+		assert(identifier != NULL);
+		*identifier = (**tok).val;
+		token_consume(tok);
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		token_consume(tok);
 		check(declarator_alloc(arena, dst));
@@ -1173,7 +1181,8 @@ parse_declarator(Arena *arena,
 		check(parse_declarator(arena,
 		                       abstract,
 		                       tok,
-		                       &(**dst).u.in_parens));
+		                       &(**dst).u.in_parens,
+		                       identifier));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE);
@@ -1187,7 +1196,8 @@ parse_declarator(Arena *arena,
 		check(parse_declarator(arena,
 		                       abstract,
 		                       tok,
-		                       &(**dst).u.pointee));
+		                       &(**dst).u.pointee,
+		                       identifier));
 	} else {
 		return make_result(ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE);
 	}
@@ -1233,13 +1243,14 @@ parse_specifiers_and_type(Arena *arena,
                           bool expect_var,
                           const struct token **tok,
                           enum ast_specifier *dst,
-                          struct ctype *var_type)
+                          struct ctype *var_type,
+                          struct string_view *identifier)
 {
 	struct ctype basic_type = {0};
 	check(parse_specifiers(expect_var, tok, dst, &basic_type));
 
 	struct declarator *remainder = NULL;
-	check(parse_declarator(arena, false, tok, &remainder));
+	check(parse_declarator(arena, false, tok, &remainder, identifier));
 
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, remainder, &tmp));
@@ -1252,7 +1263,8 @@ static WARN_UNUSED result_t
 parse_type(Arena *arena,
            bool abstract,
            const struct token **tok,
-           struct ctype *var_type)
+           struct ctype *var_type,
+           struct string_view *identifier)
 {
 	struct parse_basic_type_state state = {0};
 	while (is_token_variable_type(*tok)) {
@@ -1264,7 +1276,7 @@ parse_type(Arena *arena,
 	check(parse_basic_type_finalize(true, &state, &basic_type));
 
 	struct declarator *remainder = NULL;
-	check(parse_declarator(arena, abstract, tok, &remainder));
+	check(parse_declarator(arena, abstract, tok, &remainder, identifier));
 
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, remainder, &tmp));
@@ -1281,13 +1293,8 @@ parse_declaration(Arena *arena, const struct token **tok, struct ast **dst)
 	                                true,
 	                                tok,
 	                                &(**dst).u.declare.specifier,
-	                                &(**dst).u.declare.var_type));
-
-	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER);
-	}
-	(**dst).u.declare.identifier.name = (**tok).val;
-	token_consume(tok);
+	                                &(**dst).u.declare.var_type,
+	                                &(**dst).u.declare.identifier.name));
 
 	if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
 		token_consume(tok);
@@ -1689,15 +1696,16 @@ parse_function_params_impl(Arena *arena,
 		}
 
 		struct ctype parameter_type = {0};
-		check(parse_type(arena, false, tok, &parameter_type));
+		struct string_view identifier = {0};
+		check(parse_type(arena,
+		                 false,
+		                 tok,
+		                 &parameter_type,
+		                 &identifier));
 
-		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
-			return make_result(
-				ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER);
-		}
 		if (dst != NULL) {
 			assert(*count <= count_in);
-			(*dst)[*count].symbol.name = (**tok).val;
+			(*dst)[*count].symbol.name = identifier;
 			(*dst)[*count].symbol.unique = NOT_YET_UNIQUE;
 			(*dst)[*count].parameter_type = parameter_type;
 		}
@@ -1741,13 +1749,8 @@ parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 	                                false,
 	                                tok,
 	                                &(**dst).u.function.specifier,
-	                                &(**dst).u.function.return_type));
-
-	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
-	}
-	(**dst).u.function.identifier.name = (**tok).val;
-	token_consume(tok);
+	                                &(**dst).u.function.return_type,
+	                                &(**dst).u.function.identifier.name));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		return make_result(ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN);

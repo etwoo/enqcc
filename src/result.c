@@ -193,10 +193,6 @@ result_to_str(result_t r)
 		s = strdup("Parsing variable declaration expects valid type in "
 		           "type position");
 		break;
-	case ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER:
-		s = strdup("Parsing variable declaration expects "
-		           "TOKEN_IDENTIFIER in variable name position");
-		break;
 	case ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_SEMICOLON after initializer expression");
@@ -238,10 +234,6 @@ result_to_str(result_t r)
 	case ERR_PARSE_FUNC_SPECIFIER_DUPLICATE:
 		s = strdup("Duplicate function specifier");
 		break;
-	case ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER:
-		s = strdup("Parsing function expects TOKEN_IDENTIFIER in "
-		           "function name position");
-		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing function expects TOKEN_PAREN_OPEN before "
 		           "argument list");
@@ -249,10 +241,6 @@ result_to_str(result_t r)
 	case ERR_PARSE_FUNC_PARAM_EXPECT_TYPE:
 		s = strdup("Parsing function parameter expects valid type in "
 		           "parameter type position");
-		break;
-	case ERR_PARSE_FUNC_PARAM_EXPECT_TOKEN_IDENTIFIER:
-		s = strdup("Parsing function parameter expects "
-		           "TOKEN_IDENTIFIER in parameter name position");
 		break;
 	case ERR_PARSE_FUNC_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing function expects TOKEN_PAREN_CLOSE after "
