@@ -1132,14 +1132,126 @@ parse_specifiers(bool expect_var, /* or expect_function */
 	return RESULT_OK;
 }
 
+struct declarator {
+	enum {
+		DECLARATOR_IDENTIFIER,
+		DECLARATOR_PARENTHESIZED,
+		DECLARATOR_POINTER,
+	} atom;
+	union {
+		struct string_view identifier;
+		struct declarator *in_parens;
+		struct declarator *pointee;
+	} u;
+};
+
 static WARN_UNUSED result_t
-parse_decl(Arena *arena, const struct token **tok, struct ast **dst)
+declarator_alloc(Arena *arena, struct declarator **dst)
+{
+	assert(dst != NULL && *dst == NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_PARSE_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_declarator(Arena *arena,
+                 const struct token **tok,
+                 struct declarator **dst)
+{
+	assert(dst != NULL);
+	if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		check(declarator_alloc(arena, dst));
+		assert(*dst != NULL);
+		(**dst).atom = DECLARATOR_IDENTIFIER;
+		(**dst).u.identifier = (**tok).val;
+		/* leave TOKEN_IDENTIFIER in place for caller */
+	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+		token_consume(tok);
+		check(declarator_alloc(arena, dst));
+		assert(*dst != NULL);
+		(**dst).atom = DECLARATOR_PARENTHESIZED;
+		check(parse_declarator(arena, tok, &(**dst).u.in_parens));
+		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			return make_result(
+				ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE);
+		}
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_ASTERISK)) {
+		token_consume(tok);
+		check(declarator_alloc(arena, dst));
+		assert(*dst != NULL);
+		(**dst).atom = DECLARATOR_POINTER;
+		check(parse_declarator(arena, tok, &(**dst).u.pointee));
+	} else {
+		return make_result(ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+map_declarator_to_ctype(Arena *arena,
+                        const struct ctype *basic,
+                        const struct declarator *src,
+                        struct ctype **dst)
+{
+	assert(src != NULL);
+	assert(dst != NULL && *dst == NULL);
+
+	switch (src->atom) {
+	case DECLARATOR_IDENTIFIER:
+		check(ctype_alloc(arena, dst));
+		check(ctype_copy(arena, basic, *dst));
+		break;
+	case DECLARATOR_PARENTHESIZED:
+		check(map_declarator_to_ctype(arena,
+		                              basic,
+		                              src->u.in_parens,
+		                              dst));
+		break;
+	case DECLARATOR_POINTER:
+		check(ctype_alloc(arena, dst));
+		(**dst).t = CTYPE_POINTER_TO;
+		check(map_declarator_to_ctype(arena,
+		                              basic,
+		                              src->u.pointee,
+		                              &(**dst).referent));
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_specifiers_and_type(Arena *arena,
+                          bool expect_var,
+                          const struct token **tok,
+                          enum ast_specifier *dst,
+                          struct ctype *var_type)
+{
+	struct ctype basic_type = {0};
+	check(parse_specifiers(expect_var, tok, dst, &basic_type));
+
+	struct declarator *remainder = NULL;
+	check(parse_declarator(arena, tok, &remainder));
+
+	struct ctype *tmp = NULL;
+	check(map_declarator_to_ctype(arena, &basic_type, remainder, &tmp));
+	check(ctype_copy(arena, tmp, var_type));
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_declaration(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_DECLARATION));
-	check(parse_specifiers(true,
-	                       tok,
-	                       &(**dst).u.declare.specifier,
-	                       &(**dst).u.declare.var_type));
+	check(parse_specifiers_and_type(arena,
+	                                true,
+	                                tok,
+	                                &(**dst).u.declare.specifier,
+	                                &(**dst).u.declare.var_type));
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER);
@@ -1191,7 +1303,7 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 		if (parse_peek_ahead_function_maybe(*tok)) {
 			check(parse_function(arena, tok, &(**dst).car));
 		} else if (is_token_maybe_function_prefix(*tok)) {
-			check(parse_decl(arena, tok, &(**dst).car));
+			check(parse_declaration(arena, tok, &(**dst).car));
 		} else {
 			bool dummy = false;
 			check(parse_stmt(arena, tok, &(**dst).car, &dummy));
@@ -1264,7 +1376,7 @@ parse_loop_for_init(Arena *arena,
 		check(parse_alloc_if_unset(arena, &(**dst).car));
 		token_consume(tok);
 	} else if (is_token_variable_type(*tok)) {
-		check(parse_decl(arena, tok, &(**dst).car));
+		check(parse_declaration(arena, tok, &(**dst).car));
 	} else {
 		check(parse_expr(arena, tok, &(**dst).car, 0));
 		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
@@ -1594,10 +1706,11 @@ static WARN_UNUSED result_t
 parse_function(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	check(parse_alloc(arena, dst, NODE_FUNCTION));
-	check(parse_specifiers(false,
-	                       tok,
-	                       &(**dst).u.function.specifier,
-	                       &(**dst).u.function.return_type));
+	check(parse_specifiers_and_type(arena,
+	                                false,
+	                                tok,
+	                                &(**dst).u.function.specifier,
+	                                &(**dst).u.function.return_type));
 
 	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		return make_result(ERR_PARSE_FUNC_NAME_EXPECT_TOKEN_IDENTIFIER);
@@ -1644,7 +1757,7 @@ parse_init(Arena *arena,
 		if (parse_peek_ahead_function_maybe(tok)) {
 			check(parse_function(arena, &tok, &(**dst).car));
 		} else {
-			check(parse_decl(arena, &tok, &(**dst).car));
+			check(parse_declaration(arena, &tok, &(**dst).car));
 		}
 	}
 

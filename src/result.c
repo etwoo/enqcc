@@ -161,6 +161,9 @@ result_to_str(result_t r)
 	case ERR_PARSE_ALLOC:
 		s = strdup("Cannot allocate ast node during parse");
 		break;
+	case ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing cast expects TOKEN_PAREN_CLOSE after type");
+		break;
 	case ERR_PARSE_CONSTANT_STRTOD:
 		s = my_asprintf(
 			"Parsing constant expr %s with strtod() failed: %s",
@@ -178,22 +181,17 @@ result_to_str(result_t r)
 			"Parsing constant expr %s: too large for int or long",
 			r.msg);
 		break;
-	case ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE:
-		s = strdup("Parsing cast expects TOKEN_PAREN_CLOSE after type");
+	case ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE:
+		s = strdup("Parsing declarator expects TOKEN_PAREN_CLOSE after "
+		           "TOKEN_PAREN_OPEN and inner declarator");
+		break;
+	case ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE:
+		s = strdup(
+			"Parsing declarator; encountered unreasonable token");
 		break;
 	case ERR_PARSE_DECL_EXPECT_TYPE:
 		s = strdup("Parsing variable declaration expects valid type in "
 		           "type position");
-		break;
-	case ERR_PARSE_DECL_TYPE_DOUBLE_INVALID:
-		s = strdup("Variable type 'double' cannot be combined with "
-		           "int/long/signed/unsigned");
-		break;
-	case ERR_PARSE_DECL_TYPE_DUPLICATE:
-		s = strdup("Duplicate variable type");
-		break;
-	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
-		s = strdup("Duplicate variable specifier");
 		break;
 	case ERR_PARSE_DECL_EXPECT_TOKEN_IDENTIFIER:
 		s = strdup("Parsing variable declaration expects "
@@ -202,6 +200,16 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_SEMICOLON after initializer expression");
+		break;
+	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
+		s = strdup("Duplicate variable specifier");
+		break;
+	case ERR_PARSE_DECL_TYPE_DOUBLE_INVALID:
+		s = strdup("Variable type 'double' cannot be combined with "
+		           "int/long/signed/unsigned");
+		break;
+	case ERR_PARSE_DECL_TYPE_DUPLICATE:
+		s = strdup("Duplicate variable type");
 		break;
 	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing paren-enclosed expression expects "
