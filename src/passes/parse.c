@@ -1709,7 +1709,6 @@ parse_function_params_impl(Arena *arena,
 			(*dst)[*count].symbol.unique = NOT_YET_UNIQUE;
 			(*dst)[*count].parameter_type = parameter_type;
 		}
-		token_consume(tok);
 	}
 
 	return RESULT_OK;
