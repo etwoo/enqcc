@@ -723,12 +723,46 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_JUMP_IF_ZERO:
 	case IR_OP_JUMP_IF_NOT_ZERO:
 		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+
 		(**dst).opcode = ASM_OP_DOUBLE_COMPARE;
 		(**dst).args[0].operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
 		(**dst).args[0].u.dnum = 0.0;
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
+
+		(**dst).opcode = ASM_OP_SET_IF_NEQ;
+		(**dst).args[0] = OPERAND_RAX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+
+		(**dst).opcode = ASM_OP_SET_IF_P;
+		(**dst).args[0] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+
+		(**dst).opcode = ASM_OP_BITWISE_OR;
+		(**dst).args[0] = OPERAND_RAX_64BIT;
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+
+		(**dst).opcode = ASM_OP_COMPARE;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+
 		(**dst).opcode = src->opcode == IR_OP_JUMP_IF_ZERO
 		                         ? ASM_OP_JMP_IF_EQ
 		                         : ASM_OP_JMP_IF_NEQ;
