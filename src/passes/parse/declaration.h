@@ -2,9 +2,10 @@
 #define COMPILER_PASSES_PARSE_DECLARATION_H
 
 #include "arena.h"
-#include "lang/symbol.h"
+#include "lang/types.h"
 #include "result.h"
 #include "sys/compiler_features.h"
+#include "sys/string_view.h"
 
 #include <inttypes.h>
 

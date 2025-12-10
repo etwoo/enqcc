@@ -19,9 +19,5 @@ struct ast;
 result_t parse_block(Arena *arena,
                      const struct token **tok,
                      struct ast **dst_outer) WARN_UNUSED;
-result_t parse_expr(Arena *arena,
-                    const struct token **tok,
-                    struct ast **dst,
-                    unsigned minimum_precedence) WARN_UNUSED;
 
 #endif

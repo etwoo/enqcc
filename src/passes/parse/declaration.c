@@ -4,6 +4,7 @@
 #include "passes/parse.h"
 #include "passes/parse/alloc.h"
 #include "passes/parse/entrypoint.h"
+#include "passes/parse/expression.h"
 #include "passes/parse/token.h"
 
 #include <assert.h>
