@@ -961,7 +961,8 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 {
 	bool typed = false;
 	for (; tok != NULL; tok = tok->next) {
-		if (is_token_maybe_function_prefix(tok)) {
+		if (is_token_maybe_function_prefix(tok) ||
+		    is_token_type(tok, TOKEN_ASTERISK)) {
 			/* seek past return type and specifiers */
 			typed = typed || is_token_variable_type(tok);
 		} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
