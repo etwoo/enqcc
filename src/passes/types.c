@@ -1,5 +1,9 @@
 #include "passes/types.h"
 
+#include "sys/array.h"
+
+#include <assert.h>
+#include <string.h>    /* for memset */
 #include <sys/param.h> /* for MIN() and MAX() */
 
 result_t
@@ -9,6 +13,7 @@ ctype_alloc(Arena *arena, struct ctype **dst)
 	*dst = arena_alloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_CTYPE_ALLOC);
 	memset(*dst, 0, sizeof(**dst));
+	return RESULT_OK;
 }
 
 result_t
@@ -20,8 +25,10 @@ ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 	assert(dst->referent == NULL);
 	if (src->referent != NULL) {
 		check(ctype_alloc(arena, &dst->referent));
-		ctype_copy(src->referent, dst->referent);
+		check(ctype_copy(arena, src->referent, dst->referent));
 	}
+
+	return RESULT_OK;
 }
 
 #define TO_STR(t) #t,
@@ -29,12 +36,12 @@ static const char *const CTYPE_AS_STR[] = {FOREACH_CTYPE(TO_STR)};
 #undef TO_STR
 
 const char *
-ctype_to_str(struct ctype *c, char *stor, size_t cap)
+ctype_to_str(const struct ctype *c, char *stor, size_t cap)
 {
 	assert(c != NULL);
 	assert(c->t < ARRAY_SIZE(CTYPE_AS_STR));
 
-	const size_t copied = strlcpy(stor, CTYPE_AS_STR[c], cap);
+	size_t copied = strlcpy(stor, CTYPE_AS_STR[c->t], cap);
 
 	if (c->t == CTYPE_POINTER_TO && cap > copied + 1) {
 		stor[copied++] = ' ';
@@ -45,7 +52,7 @@ ctype_to_str(struct ctype *c, char *stor, size_t cap)
 }
 
 long long int
-ctype_to_size_bytes(struct ctype *c)
+ctype_to_size_bytes(const struct ctype *c)
 {
 	long long int b = 0;
 	switch (c->t) {
@@ -64,7 +71,7 @@ ctype_to_size_bytes(struct ctype *c)
 }
 
 bool
-ctype_is_signed(struct ctype *c)
+ctype_is_signed(const struct ctype *c)
 {
 	bool b = true;
 	switch (c->t) {
@@ -83,13 +90,13 @@ ctype_is_signed(struct ctype *c)
 }
 
 bool
-ctype_is_floating_point(enum ctype *c)
+ctype_is_floating_point(const struct ctype *c)
 {
 	return c->t == CTYPE_DOUBLE;
 }
 
-struct ctype *
-get_common_ctype(struct ctype *lhs, struct ctype *rhs)
+const struct ctype *
+get_common_ctype(const struct ctype *lhs, const struct ctype *rhs)
 {
 	assert(lhs != NULL && rhs != NULL);
 	if (lhs->t == CTYPE_POINTER_TO && rhs->t == CTYPE_POINTER_TO) {
@@ -99,7 +106,7 @@ get_common_ctype(struct ctype *lhs, struct ctype *rhs)
 }
 
 bool
-ctype_is_equal(struct ctype *lhs, struct ctype *rhs)
+ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
 {
 	if (lhs->t != rhs->t) {
 		return false;

@@ -3,6 +3,9 @@
 
 #include "arena.h"
 #include "result.h"
+#include "sys/compiler_features.h"
+
+#include <stdbool.h>
 
 /* note: order of values below determines integer conversion rank */
 #define FOREACH_CTYPE(F)                                                       \
@@ -24,11 +27,13 @@ result_t ctype_alloc(Arena *arena, struct ctype **dst) WARN_UNUSED;
 result_t ctype_copy(Arena *arena,
                     const struct ctype *src,
                     struct ctype *dst) WARN_UNUSED;
-const char *ctype_to_str(struct ctype *c, char *stor, size_t cap);
-long long int ctype_to_size_bytes(struct ctype *c) WARN_UNUSED;
-bool ctype_is_signed(struct ctype *c) WARN_UNUSED;
-bool ctype_is_floating_point(struct ctype *c) WARN_UNUSED;
-enum ctype get_common_ctype(struct ctype *lhs, struct ctype *rhs) WARN_UNUSED;
-bool ctype_is_equal(struct ctype *lhs, struct ctype *rhs) WARN_UNUSED;
+const char *ctype_to_str(const struct ctype *c, char *stor, size_t cap);
+long long int ctype_to_size_bytes(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_signed(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_floating_point(const struct ctype *c) WARN_UNUSED;
+const struct ctype *get_common_ctype(const struct ctype *lhs,
+                                     const struct ctype *rhs) WARN_UNUSED;
+bool ctype_is_equal(const struct ctype *lhs,
+                    const struct ctype *rhs) WARN_UNUSED;
 
 #endif

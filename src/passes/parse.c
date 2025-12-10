@@ -25,10 +25,12 @@ map_symbol_members(Arena *arena,
 	dst_symbol->stype = src->stype;
 	dst_symbol->ltype = src->linkage.linkage;
 	check(ctype_copy(arena, &src->c89type, dst_expr_type));
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-resolve_symbol(struct symbol *head,
+resolve_symbol(Arena *arena,
+               struct symbol *head,
                struct ast_symbol *asym,
                struct ctype *expr_type,
                unsigned errtype)
@@ -46,11 +48,13 @@ resolve_symbol(struct symbol *head,
 }
 
 static WARN_UNUSED result_t
-resolve_var_usage(struct symbol *head,
+resolve_var_usage(Arena *arena,
+                  struct symbol *head,
                   struct ast_symbol *var,
                   struct ctype *expr_type)
 {
-	check(resolve_symbol(head,
+	check(resolve_symbol(arena,
+	                     head,
 	                     var,
 	                     expr_type,
 	                     ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION));
@@ -58,11 +62,13 @@ resolve_var_usage(struct symbol *head,
 }
 
 static WARN_UNUSED result_t
-resolve_function_call(struct symbol *head,
+resolve_function_call(Arena *arena,
+                      struct symbol *head,
                       struct ast_symbol *callee,
                       struct ctype *return_type)
 {
-	check(resolve_symbol(head,
+	check(resolve_symbol(arena,
+	                     head,
 	                     callee,
 	                     return_type,
 	                     ERR_SEMA_FUNCTION_CALL_UNDECLARED));
@@ -173,7 +179,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		check(resolve_var_usage(*sym, &a->u.var, &a->expr_type));
+		check(resolve_var_usage(arena, *sym, &a->u.var, &a->expr_type));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
@@ -181,7 +187,8 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		check(resolve_function_call(*sym,
+		check(resolve_function_call(arena,
+		                            *sym,
 		                            &a->u.call.identifier,
 		                            &a->expr_type));
 		for (struct flat *f = a->u.call.args; f != NULL; f = f->cdr) {
@@ -241,7 +248,7 @@ resolve_decl(Arena *arena,
 		                      sym,
 		                      &a->u.declare.identifier.name,
 		                      SYMBOL_VARIABLE,
-		                      a->u.declare.var_type));
+		                      &a->u.declare.var_type));
 		(**sym).linkage.linkage = linkage;
 		resolved = *sym;
 
@@ -355,10 +362,10 @@ resolve_function_params_one(Arena *arena,
 	                      sym,
 	                      &a->symbol.name,
 	                      SYMBOL_VARIABLE,
-	                      a->parameter_type));
+	                      &a->parameter_type));
 	struct ctype dummy = {0};
 	check(map_symbol_members(arena, *sym, &a->symbol, &dummy));
-	assert(dummy == a->parameter_type);
+	assert(ctype_is_equal(&dummy, &a->parameter_type));
 	return RESULT_OK;
 }
 
@@ -384,13 +391,13 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **sym)
 	                      &a->u.function.identifier.name,
 	                      is_def ? SYMBOL_FUNCTION_DEFINITION
 	                             : SYMBOL_FUNCTION_DECLARATION,
-	                      a->u.function.return_type));
+	                      &a->u.function.return_type));
 	struct ctype dummy = {0};
 	check(map_symbol_members(arena,
 	                         *sym,
 	                         &a->u.function.identifier,
 	                         &dummy));
-	assert(dummy == a->u.function.return_type);
+	assert(ctype_is_equal(&dummy, &a->u.function.return_type));
 
 	struct symbol *before_params = *sym;
 	const bool cleanup = level_delimiter_prepare(before_params);
@@ -527,7 +534,7 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 			                   (**tok).val.data,
 			                   (**tok).val.sz);
 		}
-		(**dst).expr_type = CTYPE_DOUBLE;
+		(**dst).expr_type.t = CTYPE_DOUBLE;
 		(**dst).u.double_ = tmp;
 		token_consume(tok);
 		return RESULT_OK;
@@ -558,16 +565,16 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 
 	bool too_large = false;
 	if (suffix_unsigned && (tmp > UINT_MAX || suffix_long)) {
-		(**dst).expr_type = CTYPE_UNSIGNED_LONG;
+		(**dst).expr_type.t = CTYPE_UNSIGNED_LONG;
 		too_large = (tmp > ULONG_MAX);
 	} else if (suffix_unsigned) {
-		(**dst).expr_type = CTYPE_UNSIGNED_INT;
+		(**dst).expr_type.t = CTYPE_UNSIGNED_INT;
 		assert(tmp <= UINT_MAX);
 	} else if (tmp > INT_MAX || suffix_long) {
-		(**dst).expr_type = CTYPE_LONG;
+		(**dst).expr_type.t = CTYPE_LONG;
 		too_large = (tmp > LONG_MAX);
 	} else {
-		(**dst).expr_type = CTYPE_INT;
+		(**dst).expr_type.t = CTYPE_INT;
 		assert(tmp <= INT_MAX);
 	}
 	(**dst).u.num = tmp;
@@ -1985,7 +1992,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		parse_debug_print(a->u.cast.expr, indent + 1);
 		break;
 	case NODE_CONSTANT:
-		if (a->expr_type == CTYPE_DOUBLE) {
+		if (ctype_is_floating_point(&a->expr_type)) {
 			debug("%*sVALUE %f", (int)indent + 1, "", a->u.double_);
 		} else {
 			debug("%*sVALUE %lld",
@@ -2008,15 +2015,15 @@ parse_debug_print_flat(const struct flat *a, size_t indent)
 }
 
 result_t
-cast_if(Arena *arena, struct ctype *cto, struct ast **a)
+cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
 {
-	if (*a == NULL || ctype_is_equal(&(**a).expr_type, cto)) {
+	if (*a == NULL || ctype_is_equal(&(**a).expr_type, cast_to)) {
 		return RESULT_OK;
 	}
 	struct ast *cast_wrap = NULL;
 	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
-	check(ctype_copy(arena, cto, &cast_wrap->expr_type));
-	check(ctype_copy(arena, cto, &cast_wrap->u.cast.to_type));
+	check(ctype_copy(arena, cast_to, &cast_wrap->expr_type));
+	check(ctype_copy(arena, cast_to, &cast_wrap->u.cast.to_type));
 	cast_wrap->u.cast.expr = *a;
 	*a = cast_wrap;
 	return RESULT_OK;

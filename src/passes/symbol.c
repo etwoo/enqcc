@@ -39,7 +39,7 @@ symbols_prepend(Arena *arena,
 	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
-	check(ctype_copy(arena, c89type, node->c89type));
+	check(ctype_copy(arena, c89type, &node->c89type));
 	if (*head != NULL) {
 		long long int base = MAX((**head).unique, (**head).cookie);
 		node->unique = base + 1;

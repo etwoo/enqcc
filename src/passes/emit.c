@@ -740,7 +740,11 @@ emit_asm_fp_one(const double *value, enum platform plat, int fd)
 	const long long unsigned as_quadword = get_double_as_quadword(*value);
 
 	dprintf(fd, "\t%s\n", section_fp_constants);
-	dprintf(fd, "\t.balign %lld\n", ctype_to_size_bytes(CTYPE_DOUBLE));
+	dprintf(fd,
+	        "\t.balign %lld\n",
+	        ctype_to_size_bytes(&(struct ctype){
+			.t = CTYPE_DOUBLE,
+		}));
 	dprintf(fd, "%s%s%llx:\n", label_prefix, DOUBLE_LABEL_ID, as_quadword);
 	dprintf(fd, "\t.quad 0x%llx\n", as_quadword);
 }

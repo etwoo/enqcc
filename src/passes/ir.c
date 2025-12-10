@@ -111,6 +111,7 @@ ir_val_from_ast_variable_like(Arena *arena,
 
 	dst->num = sym->unique;
 	check(ctype_copy(arena, &src->expr_type, &dst->c89type));
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
@@ -549,7 +550,7 @@ ir_switch(Arena *arena,
 		check(ir_val_tmpvar_gen(
 			arena,
 			ir,
-			(struct ctype){
+			&(struct ctype){
 				.t = CTYPE_INT, /* effectively cast to bool */
 			},
 			&case_cmp->args[2]));
@@ -1007,11 +1008,12 @@ ir_expr(Arena *arena,
 	case NODE_CONSTANT:
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_CONSTANT;
-		switch (a->expr_type) {
+		switch (a->expr_type.t) {
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
+		case CTYPE_POINTER_TO:
 			return_value->num = a->u.num;
 			break;
 		case CTYPE_DOUBLE:
@@ -1135,7 +1137,7 @@ ir_func(Arena *arena,
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 		check(ir_val_tmpvar(arena,
 		                    cur->symbol.unique,
-		                    cur->parameter_type,
+		                    &cur->parameter_type,
 		                    &f->params[i]));
 		++i;
 	}
@@ -1349,7 +1351,7 @@ ir_debug_print(const struct intermediate *ir)
 
 		char tmp[128] = {0};
 		debug("  VARIABLE TYPE %s",
-		      ctype_to_str(v->c89type, tmp, sizeof(tmp)));
+		      ctype_to_str(&v->c89type, tmp, sizeof(tmp)));
 
 		switch (v->linkage) {
 		case IR_LINKAGE_INTERNAL:

@@ -1065,7 +1065,7 @@ codegen_copy_reg_to_pseudo(Arena *arena,
                            long long int pos,
                            struct asm_op **dst)
 {
-	const bool is_fp = ctype_is_floating_point(src->c89type);
+	const bool is_fp = ctype_is_floating_point(&src->c89type);
 	const enum asm_register reg = is_fp ? CALL_FP[pos] : CALL_REG[pos];
 
 	check(codegen_alloc_op(arena, dst));

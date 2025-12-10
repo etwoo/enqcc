@@ -27,8 +27,6 @@ struct ast_parameter {
 	F(EXPRESSION_UNARY_COMPLEMENT, TOKEN_TILDE)                            \
 	F(EXPRESSION_UNARY_NEGATE, TOKEN_HYPHEN)                               \
 	F(EXPRESSION_UNARY_NOT, TOKEN_EXCLAMATION)                             \
-	F(EXPRESSION_UNARY_DEREFERENCE, TOKEN_ASTERISK)                        \
-	F(EXPRESSION_UNARY_ADDRESS_OF, TOKEN_AMPERSAND)                        \
 	F(EXPRESSION_PREDECREMENT, TOKEN_HYPHEN_HYPHEN)                        \
 	F(EXPRESSION_PREINCREMENT, TOKEN_PLUS_SIGN_PLUS_SIGN)
 
@@ -201,6 +199,7 @@ struct flat {
 /*
  * Insert NODE_EXPRESSION_CAST wherever type issues demand it.
  */
-result_t cast_if(Arena *arena, struct ctype *cto, struct ast **a) WARN_UNUSED;
+result_t
+cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a) WARN_UNUSED;
 
 #endif
