@@ -32,7 +32,7 @@ static WARN_UNUSED result_t
 parse_alloc_if_unset(Arena *arena, struct ast **dst)
 {
 	if (*dst == NULL) {
-		checked_alloc(arena, dst, NODE_EXPRESSION_NULL);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
 	}
 	return RESULT_OK;
 }
@@ -46,13 +46,13 @@ parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 	token_consume(tok);
 
 	if (!is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-		checked_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_VARIABLE_USAGE));
 		(**dst).u.var.name = str;
 		(**dst).u.var.unique = NOT_YET_UNIQUE;
 		return RESULT_OK;
 	}
 
-	checked_alloc(arena, dst, NODE_EXPRESSION_FUNCTION_CALL);
+	check(parse_alloc(arena, dst, NODE_EXPRESSION_FUNCTION_CALL));
 	(**dst).u.call.identifier.name = str;
 	(**dst).u.call.identifier.unique = NOT_YET_UNIQUE;
 
@@ -136,7 +136,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 
 	if (got_match < SIZE_MAX) {
 		assert(got_match < ARRAY_SIZE(prefix_ops));
-		checked_alloc(arena, dst, prefix_ops[got_match].node_type);
+		check(parse_alloc(arena, dst, prefix_ops[got_match].node_type));
 		token_consume(tok);
 		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
 	} else if (is_token_type(*tok, TOKEN_CONSTANT)) {
@@ -147,7 +147,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	           *tok != NULL && /* avoid NULL dereference on (**tok).next */
 	           is_token_variable_type((**tok).next)) {
 		token_consume(tok);
-		checked_alloc(arena, dst, NODE_EXPRESSION_CAST);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
 		check(parse_type(arena,
 		                 PARSE_DECLARATOR_ABSTRACT,
 		                 tok,
@@ -172,7 +172,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 			*dst = assign_original;
 		}
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-		checked_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_PAREN_ENCLOSED));
 		token_consume(tok);
 		check(parse_expr(arena, tok, &(**dst).u.op_unary.operand, 0));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
@@ -188,10 +188,10 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 
 	struct ast *post = NULL;
 	if (is_token_type(*tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
-		checked_alloc(arena, &post, NODE_EXPRESSION_POSTINCREMENT);
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTINCREMENT));
 		token_consume(tok);
 	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
-		checked_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT);
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT));
 		token_consume(tok);
 	} else {
 		return RESULT_OK;
@@ -218,7 +218,7 @@ parse_expr_check_next_token(Arena *arena,
 #undef TO_CANDIDATE
 	for (size_t i = 0; i < ARRAY_SIZE(infix_ops); ++i) {
 		if (is_token_type(tok, infix_ops[i].token_type)) {
-			checked_alloc(arena, a, infix_ops[i].node_type);
+			check(parse_alloc(arena, a, infix_ops[i].node_type));
 			break;
 		}
 	}
@@ -410,13 +410,13 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 	}
 	token_consume(tok);
 
-	checked_alloc(arena, dst_outer, NODE_BLOCK);
+	check(parse_alloc(arena, dst_outer, NODE_BLOCK));
 	struct flat **dst = &(**dst_outer).u.block.statements;
 
 	if (is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		token_consume(tok);
 		check(flat_alloc(arena, dst));
-		checked_alloc(arena, &(**dst).car, NODE_EXPRESSION_NULL);
+		check(parse_alloc(arena, &(**dst).car, NODE_EXPRESSION_NULL));
 		return RESULT_OK;
 	}
 
@@ -467,7 +467,7 @@ parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	checked_alloc(arena, dst, NODE_IF_ELSE);
+	check(parse_alloc(arena, dst, NODE_IF_ELSE));
 	check(parse_expr(arena, tok, &(**dst).u.if_.condition, 0));
 
 	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
@@ -491,7 +491,7 @@ parse_loop_for_init(Arena *arena,
                     const struct token **tok,
                     struct ast **dst_outer)
 {
-	checked_alloc(arena, dst_outer, NODE_BLOCK);
+	check(parse_alloc(arena, dst_outer, NODE_BLOCK));
 	struct flat **dst = &(**dst_outer).u.block.statements;
 	check(flat_alloc(arena, dst));
 	assert(*dst != NULL);
@@ -584,7 +584,7 @@ parse_loop(Arena *arena, const struct token **tok, struct ast **dst)
 		dst = &(**dst).u.block.statements->cdr->car;
 	}
 
-	checked_alloc(arena, dst, NODE_LOOP);
+	check(parse_alloc(arena, dst, NODE_LOOP));
 	(**dst).u.loop.label_end = UNSET_LOOP_ID;
 	(**dst).u.loop.label_continue = UNSET_LOOP_ID;
 	(**dst).u.loop.label_start = UNSET_LOOP_ID;
@@ -639,7 +639,7 @@ parse_switch(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	token_consume(tok);
 
-	checked_alloc(arena, dst, NODE_SWITCH);
+	check(parse_alloc(arena, dst, NODE_SWITCH));
 	(**dst).u.switch_.label_default = UNSET_SWITCH_ID;
 	(**dst).u.switch_.label_end = UNSET_SWITCH_ID;
 	check(parse_expr(arena, tok, &(**dst).u.switch_.control, 0));
@@ -663,7 +663,7 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 		return make_result(ERR_PARSE_CASE_EXPECT_CONSTANT);
 	}
 
-	checked_alloc(arena, dst, NODE_CASE);
+	check(parse_alloc(arena, dst, NODE_CASE));
 	check(parse_constant(arena, tok, &(**dst).u.case_.constant));
 	(**dst).u.case_.unique = UNSET_SWITCH_ID;
 
@@ -688,12 +688,12 @@ parse_stmt(Arena *arena,
 
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
-		checked_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT);
+		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
 		check(parse_expr(arena, tok, &(**dst).u.op_unary.operand, 0));
 		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		token_consume(tok);
-		checked_alloc(arena, dst, NODE_EXPRESSION_NULL);
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		check(parse_block(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {
@@ -704,17 +704,17 @@ parse_stmt(Arena *arena,
 		check(parse_loop(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_BREAK)) {
 		token_consume(tok);
-		checked_alloc(arena, dst, NODE_BREAK);
+		check(parse_alloc(arena, dst, NODE_BREAK));
 		(**dst).u.num = UNSET_LOOP_ID;
 		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_CONTINUE)) {
 		token_consume(tok);
-		checked_alloc(arena, dst, NODE_CONTINUE);
+		check(parse_alloc(arena, dst, NODE_CONTINUE));
 		(**dst).u.num = UNSET_LOOP_ID;
 		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_GOTO) &&
 	           is_token_type((**tok).next, TOKEN_IDENTIFIER)) {
-		checked_alloc(arena, dst, NODE_GOTO);
+		check(parse_alloc(arena, dst, NODE_GOTO));
 		(**dst).u.goto_.target_label = (**tok).next->val;
 		(**dst).u.goto_.target_unique = UNSET_LABEL_ID;
 		token_consume(tok);
@@ -722,7 +722,7 @@ parse_stmt(Arena *arena,
 		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER) &&
 	           is_token_type((**tok).next, TOKEN_COLON)) {
-		checked_alloc(arena, dst, NODE_LABEL);
+		check(parse_alloc(arena, dst, NODE_LABEL));
 		(**dst).u.label.name = (**tok).val;
 		(**dst).u.label.unique = UNSET_LABEL_ID;
 		token_consume(tok);
@@ -735,7 +735,7 @@ parse_stmt(Arena *arena,
 		*call_again = true;
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_DEFAULT) &&
 	           is_token_type((**tok).next, TOKEN_COLON)) {
-		checked_alloc(arena, dst, NODE_CASE_DEFAULT);
+		check(parse_alloc(arena, dst, NODE_CASE_DEFAULT));
 		(**dst).u.case_.constant = NULL;
 		(**dst).u.case_.unique = UNSET_SWITCH_ID;
 		token_consume(tok);
@@ -763,7 +763,7 @@ parse_init(Arena *arena,
            struct ast **a,
            long long int *generator)
 {
-	checked_alloc(arena, a, NODE_PROGRAM);
+	check(parse_alloc(arena, a, NODE_PROGRAM));
 
 	struct flat **dst = &(**a).u.program.globals;
 	for (; tok != NULL; dst = &(**dst).cdr) {
@@ -809,7 +809,7 @@ cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
 		return RESULT_OK;
 	}
 	struct ast *cast_wrap = NULL;
-	checked_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST);
+	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
 	check(ctype_copy(arena, cast_to, &cast_wrap->expr_type));
 	check(ctype_copy(arena, cast_to, &cast_wrap->u.cast.to_type));
 	cast_wrap->u.cast.expr = *a;
