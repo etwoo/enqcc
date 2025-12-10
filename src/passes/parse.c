@@ -595,8 +595,10 @@ static result_t parse_expr(Arena *arena,
                            const struct token **tok,
                            struct ast **dst,
                            unsigned minimum_precedence) WARN_UNUSED;
-static result_t parse_basic_type(const struct token **tok,
-                                 struct ctype *var_type) WARN_UNUSED;
+static result_t parse_type(Arena *arena,
+                           bool abstract,
+                           const struct token **tok,
+                           struct ctype *var_type) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
@@ -709,8 +711,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	           is_token_variable_type((**tok).next)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
-		// TODO: enable parsing pointers, etc
-		check(parse_basic_type(tok, &(**dst).u.cast.to_type));
+		check(parse_type(arena, true, tok, &(**dst).u.cast.to_type));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE);
@@ -1088,18 +1089,6 @@ parse_basic_type_finalize(bool expect_var, /* or expect_function */
 }
 
 static WARN_UNUSED result_t
-parse_basic_type(const struct token **tok, struct ctype *var_type)
-{
-	struct parse_basic_type_state state = {0};
-	while (is_token_variable_type(*tok)) {
-		parse_basic_type_accumulate(tok, &state);
-		token_consume(tok);
-	}
-	check(parse_basic_type_finalize(true, &state, var_type));
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 parse_specifiers(bool expect_var, /* or expect_function */
                  const struct token **tok,
                  enum ast_specifier *dst,
@@ -1135,6 +1124,7 @@ parse_specifiers(bool expect_var, /* or expect_function */
 
 struct declarator {
 	enum {
+		DECLARATOR_ABSTRACT_BASE,
 		DECLARATOR_IDENTIFIER,
 		DECLARATOR_PARENTHESIZED,
 		DECLARATOR_POINTER,
@@ -1158,11 +1148,17 @@ declarator_alloc(Arena *arena, struct declarator **dst)
 
 static WARN_UNUSED result_t
 parse_declarator(Arena *arena,
+                 bool abstract,
                  const struct token **tok,
                  struct declarator **dst)
 {
 	assert(dst != NULL);
-	if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
+	if (abstract && is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		check(declarator_alloc(arena, dst));
+		assert(*dst != NULL);
+		(**dst).atom = DECLARATOR_ABSTRACT_BASE;
+		/* leave TOKEN_PAREN_CLOSE in place for caller */
+	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_IDENTIFIER;
@@ -1173,7 +1169,10 @@ parse_declarator(Arena *arena,
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_PARENTHESIZED;
-		check(parse_declarator(arena, tok, &(**dst).u.in_parens));
+		check(parse_declarator(arena,
+		                       abstract,
+		                       tok,
+		                       &(**dst).u.in_parens));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE);
@@ -1184,7 +1183,10 @@ parse_declarator(Arena *arena,
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_POINTER;
-		check(parse_declarator(arena, tok, &(**dst).u.pointee));
+		check(parse_declarator(arena,
+		                       abstract,
+		                       tok,
+		                       &(**dst).u.pointee));
 	} else {
 		return make_result(ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE);
 	}
@@ -1201,6 +1203,7 @@ map_declarator_to_ctype(Arena *arena,
 	assert(dst != NULL && *dst == NULL);
 
 	switch (src->atom) {
+	case DECLARATOR_ABSTRACT_BASE:
 	case DECLARATOR_IDENTIFIER:
 		check(ctype_alloc(arena, dst));
 		check(ctype_copy(arena, basic, *dst));
@@ -1235,7 +1238,32 @@ parse_specifiers_and_type(Arena *arena,
 	check(parse_specifiers(expect_var, tok, dst, &basic_type));
 
 	struct declarator *remainder = NULL;
-	check(parse_declarator(arena, tok, &remainder));
+	check(parse_declarator(arena, false, tok, &remainder));
+
+	struct ctype *tmp = NULL;
+	check(map_declarator_to_ctype(arena, &basic_type, remainder, &tmp));
+	check(ctype_copy(arena, tmp, var_type));
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_type(Arena *arena,
+           bool abstract,
+           const struct token **tok,
+           struct ctype *var_type)
+{
+	struct parse_basic_type_state state = {0};
+	while (is_token_variable_type(*tok)) {
+		parse_basic_type_accumulate(tok, &state);
+		token_consume(tok);
+	}
+
+	struct ctype basic_type = {0};
+	check(parse_basic_type_finalize(true, &state, &basic_type));
+
+	struct declarator *remainder = NULL;
+	check(parse_declarator(arena, abstract, tok, &remainder));
 
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, remainder, &tmp));
@@ -1641,7 +1669,8 @@ parse_stmt(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-parse_function_params_impl(const struct token **tok,
+parse_function_params_impl(Arena *arena,
+                           const struct token **tok,
                            struct ast_parameter **dst,
                            long long int *count)
 {
@@ -1659,8 +1688,7 @@ parse_function_params_impl(const struct token **tok,
 		}
 
 		struct ctype parameter_type = {0};
-		// TODO: enable parsing pointers, etc
-		check(parse_basic_type(tok, &parameter_type));
+		check(parse_type(arena, false, tok, &parameter_type));
 
 		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 			return make_result(
@@ -1691,14 +1719,14 @@ parse_function_params(Arena *arena,
 	long long int count = 0;
 	{
 		const struct token *copy = *tok;
-		check(parse_function_params_impl(&copy, NULL, &count));
+		check(parse_function_params_impl(arena, &copy, NULL, &count));
 	}
 	if (count > 0) {
 		size_t bytes = sizeof(**dst) * (count + 1);
 		*dst = arena_alloc(arena, bytes);
 		check_if(*dst == NULL, ERR_PARSE_ALLOC);
 		memset(*dst, 0, bytes);
-		check(parse_function_params_impl(tok, dst, &count));
+		check(parse_function_params_impl(arena, tok, dst, &count));
 	}
 
 	return RESULT_OK;
