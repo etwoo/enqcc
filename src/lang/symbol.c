@@ -1,4 +1,4 @@
-#include "passes/symbol.h"
+#include "lang/symbol.h"
 
 #include "sys/array.h"
 #include "sys/debug.h"

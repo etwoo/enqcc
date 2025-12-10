@@ -1,8 +1,8 @@
 #include "passes/parse.h"
 
+#include "lang/symbol.h"
 #include "passes.h"
 #include "passes/lex.h"
-#include "passes/symbol.h"
 #include "sys/array.h"
 #include "sys/debug.h"
 

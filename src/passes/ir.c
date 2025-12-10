@@ -1,8 +1,8 @@
 #include "passes/ir.h"
 
+#include "lang/symbol.h"
 #include "passes.h"
 #include "passes/parse.h"
-#include "passes/symbol.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"

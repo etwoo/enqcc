@@ -1,3 +1,4 @@
+add_subdirectory(lang)
 add_subdirectory(passes)
 add_subdirectory(sys)
 

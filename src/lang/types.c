@@ -1,4 +1,4 @@
-#include "passes/types.h"
+#include "lang/types.h"
 
 #include "sys/array.h"
 

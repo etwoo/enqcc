@@ -1,7 +1,7 @@
 #ifndef COMPILER_PASSES_IR_H
 #define COMPILER_PASSES_IR_H
 
-#include "passes/symbol.h"
+#include "lang/symbol.h"
 #include "sys/string_view.h"
 
 #define FUNCTION_PARAMETER_LIMIT 32

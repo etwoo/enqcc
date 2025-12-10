@@ -1,7 +1,7 @@
 #ifndef COMPILER_PASSES_PARSE_H
 #define COMPILER_PASSES_PARSE_H
 
-#include "passes/symbol.h"
+#include "lang/symbol.h"
 #include "sys/compiler_features.h"
 #include "sys/string_view.h"
 

@@ -5,6 +5,4 @@ target_sources(compiler PRIVATE
 	lex.c
 	parse.c
 	sema.c
-	symbol.c
-	types.c
 )

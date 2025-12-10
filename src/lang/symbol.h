@@ -2,8 +2,8 @@
 #define COMPILER_SYMBOLS_H
 
 #include "arena.h"
-#include "passes/int128_t.h"
-#include "passes/types.h"
+#include "lang/int128_t.h"
+#include "lang/types.h"
 #include "result.h"
 #include "sys/compiler_features.h"
 #include "sys/string_view.h"

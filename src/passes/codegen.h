@@ -1,7 +1,7 @@
 #ifndef COMPILER_PASSES_CODEGEN_H
 #define COMPILER_PASSES_CODEGEN_H
 
-#include "passes/symbol.h"
+#include "lang/symbol.h"
 #include "sys/string_view.h"
 
 #define FOREACH_CALL_REGISTER(F)                                               \
