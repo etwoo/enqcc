@@ -595,8 +595,8 @@ static result_t parse_expr(Arena *arena,
                            const struct token **tok,
                            struct ast **dst,
                            unsigned minimum_precedence) WARN_UNUSED;
-static result_t parse_type_signature(const struct token **tok,
-                                     struct ctype *var_type) WARN_UNUSED;
+static result_t parse_basic_type(const struct token **tok,
+                                 struct ctype *var_type) WARN_UNUSED;
 
 static WARN_UNUSED result_t
 parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
@@ -709,7 +709,8 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	           is_token_variable_type((**tok).next)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
-		check(parse_type_signature(tok, &(**dst).u.cast.to_type));
+		// TODO: enable parsing pointers, etc
+		check(parse_basic_type(tok, &(**dst).u.cast.to_type));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_CAST_EXPECT_TOKEN_PAREN_CLOSE);
@@ -982,7 +983,7 @@ parse_peek_ahead_function_maybe(const struct token *tok)
 	return false;
 }
 
-struct parse_type_signature_state {
+struct parse_basic_type_state {
 	size_t n_int;
 	size_t n_long;
 	size_t n_signed;
@@ -991,8 +992,8 @@ struct parse_type_signature_state {
 };
 
 static void
-parse_type_signature_impl_accumulate(const struct token **tok,
-                                     struct parse_type_signature_state *state)
+parse_basic_type_accumulate(const struct token **tok,
+                            struct parse_basic_type_state *state)
 {
 	if (!is_token_variable_type(*tok)) {
 		return;
@@ -1022,9 +1023,9 @@ parse_type_signature_impl_accumulate(const struct token **tok,
 }
 
 static WARN_UNUSED result_t
-parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
-                                   struct parse_type_signature_state *state,
-                                   struct ctype *var_type)
+parse_basic_type_finalize(bool expect_var, /* or expect_function */
+                          struct parse_basic_type_state *state,
+                          struct ctype *var_type)
 {
 	if (state->n_int > 1 ||      /* int int -- invalid                 */
 	    state->n_long > 1 ||     /* long long -- unsupported           */
@@ -1087,14 +1088,14 @@ parse_type_signature_impl_finalize(bool expect_var, /* or expect_function */
 }
 
 static WARN_UNUSED result_t
-parse_type_signature(const struct token **tok, struct ctype *var_type)
+parse_basic_type(const struct token **tok, struct ctype *var_type)
 {
-	struct parse_type_signature_state state = {0};
+	struct parse_basic_type_state state = {0};
 	while (is_token_variable_type(*tok)) {
-		parse_type_signature_impl_accumulate(tok, &state);
+		parse_basic_type_accumulate(tok, &state);
 		token_consume(tok);
 	}
-	check(parse_type_signature_impl_finalize(true, &state, var_type));
+	check(parse_basic_type_finalize(true, &state, var_type));
 	return RESULT_OK;
 }
 
@@ -1104,12 +1105,12 @@ parse_specifiers(bool expect_var, /* or expect_function */
                  enum ast_specifier *dst,
                  struct ctype *var_type)
 {
-	struct parse_type_signature_state state = {0};
+	struct parse_basic_type_state state = {0};
 	size_t specifier_count = 0;
 
 	while (is_token_maybe_function_prefix(*tok)) {
 		if (is_token_variable_type(*tok)) {
-			parse_type_signature_impl_accumulate(tok, &state);
+			parse_basic_type_accumulate(tok, &state);
 		} else if (is_token_type(*tok, TOKEN_KEYWORD_STATIC)) {
 			*dst = SPECIFIER_STATIC;
 			++specifier_count;
@@ -1128,7 +1129,7 @@ parse_specifiers(bool expect_var, /* or expect_function */
 				   : ERR_PARSE_FUNC_SPECIFIER_DUPLICATE);
 	}
 
-	check(parse_type_signature_impl_finalize(expect_var, &state, var_type));
+	check(parse_basic_type_finalize(expect_var, &state, var_type));
 	return RESULT_OK;
 }
 
@@ -1658,7 +1659,8 @@ parse_function_params_impl(const struct token **tok,
 		}
 
 		struct ctype parameter_type = {0};
-		check(parse_type_signature(tok, &parameter_type));
+		// TODO: enable parsing pointers, etc
+		check(parse_basic_type(tok, &parameter_type));
 
 		if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
 			return make_result(
