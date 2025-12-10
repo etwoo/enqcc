@@ -961,6 +961,14 @@ parse_expr(Arena *arena,
 	return RESULT_OK;
 }
 
+// TODO: might need to rm this function and do like book recommended a few
+// chapters ago, just always parse the specifiers+types+declarator -- without
+// knowing whether it's a function or non-function variable declaration -- and
+// then use the parse result itself to dispatch
+//
+// basically, have parse_declarator() and/or `struct declarator` be capable of
+// communicating to caller whether a function or non-function (or neither, just
+// a statement) was found -- similar to what this function already does
 static WARN_UNUSED bool
 parse_peek_ahead_function_maybe(const struct token *tok)
 {
