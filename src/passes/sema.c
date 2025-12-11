@@ -1033,9 +1033,9 @@ sema_address_of(struct ast *a, void *userdata MAYBE_UNUSED)
 		return RESULT_OK;
 	}
 
-	const struct ast *inner = sema_unpack_parens(a->u.op_unary.operand);
-	if (inner->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	    inner->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
+	const struct ast *to_check = sema_unpack_parens(a->u.op_unary.operand);
+	if (to_check->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+	    to_check->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
 		return RESULT_OK;
 	}
 
