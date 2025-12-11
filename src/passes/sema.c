@@ -1075,6 +1075,7 @@ sema_pointer(struct ast *a, void *userdata)
 {
 	struct sema_pointer_state *state = userdata;
 	Arena *arena = state->arena;
+	info("%s(): node_type %u", __func__, a->node_type);
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
@@ -1088,9 +1089,11 @@ sema_pointer(struct ast *a, void *userdata)
 			&a->u.op_unary.operand->expr_type));
 		break;
 	case NODE_DECLARATION:
-		check(sema_pointer_as_if_by_assignment(
-			&a->u.declare.var_type,
-			&a->u.declare.init->expr_type));
+		if (a->u.declare.init != NULL) {
+			check(sema_pointer_as_if_by_assignment(
+				&a->u.declare.var_type,
+				&a->u.declare.init->expr_type));
+		}
 		break;
 	case NODE_SWITCH:
 		if (ctype_is_pointer(&a->u.switch_.control->expr_type)) {
