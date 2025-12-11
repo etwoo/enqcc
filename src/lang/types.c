@@ -21,6 +21,7 @@ ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 {
 	assert(src != NULL && dst != NULL);
 	dst->t = src->t;
+	dst->maybe_null_pointer_constant = src->maybe_null_pointer_constant;
 
 	assert(dst->referent == NULL);
 	if (src->referent != NULL) {
@@ -95,6 +96,18 @@ ctype_is_floating_point(const struct ctype *c)
 	return c->t == CTYPE_DOUBLE;
 }
 
+bool
+ctype_is_pointer(const struct ctype *c)
+{
+	return c->t == CTYPE_POINTER_TO;
+}
+
+bool
+ctype_nullptr_ish(const struct ctype *c)
+{
+	return c->maybe_null_pointer_constant;
+}
+
 const struct ctype *
 get_common_ctype(const struct ctype *lhs, const struct ctype *rhs)
 {
@@ -103,6 +116,7 @@ get_common_ctype(const struct ctype *lhs, const struct ctype *rhs)
 		const struct ctype *inner =
 			get_common_ctype(lhs->referent, rhs->referent);
 		return inner == lhs->referent ? lhs : rhs;
+		/* can be optimistic here; sema.c rejects pointer mismatches */
 	}
 	return lhs->t >= rhs->t ? lhs : rhs;
 }

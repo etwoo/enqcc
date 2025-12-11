@@ -88,6 +88,10 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 	(**dst).u.num = tmp;
 
+	if (tmp == 0) {
+		(**dst).expr_type.maybe_null_pointer_constant = true;
+	}
+
 	if (too_large) {
 		return make_result(ERR_PARSE_CONSTANT_TOO_LARGE,
 		                   (**tok).val.data,

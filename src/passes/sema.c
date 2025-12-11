@@ -1043,26 +1043,53 @@ sema_address_of(struct ast *a, void *userdata MAYBE_UNUSED)
 }
 
 static WARN_UNUSED result_t
+sema_pointer_compare(struct ast *lhs, struct ast *rhs)
+{
+	if (ctype_is_equal(&lhs->expr_type, &rhs->expr_type)) {
+		/* given equality, nothing more to check */
+	} else if (ctype_is_pointer(&lhs->expr_type) &&
+	           ctype_is_pointer(&rhs->expr_type)) {
+		return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
+	} else if (ctype_is_pointer(&lhs->expr_type) &&
+	           !ctype_nullptr_ish(&rhs->expr_type)) {
+		return make_result(ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS);
+	} else if (ctype_is_pointer(&rhs->expr_type) &&
+	           !ctype_nullptr_ish(&lhs->expr_type)) {
+		return make_result(ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS);
+	} else {
+		assert(!ctype_is_pointer(&lhs->expr_type) &&
+		       !ctype_nullptr_ish(&rhs->expr_type));
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_pointer(struct ast *a, void *userdata MAYBE_UNUSED)
 {
-	bool valid = true;
-
 	switch (a->node_type) {
 	case NODE_SWITCH:
-		valid = (a->u.switch_.control->expr_type.t != CTYPE_POINTER_TO);
+		if (a->u.switch_.control->expr_type.t == CTYPE_POINTER_TO) {
+			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
+		}
 		break;
 	case NODE_CASE:
-		valid = (a->u.case_.constant->expr_type.t != CTYPE_POINTER_TO);
+		if (a->u.case_.constant->expr_type.t == CTYPE_POINTER_TO) {
+			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
+		}
+		break;
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		check(sema_pointer_compare(a->u.op_binary.lhs,
+		                           a->u.op_binary.rhs));
+		break;
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		check(sema_pointer_compare(a->u.op_ternary.then_expr,
+		                           a->u.op_ternary.else_expr));
 		break;
 	default:
 		break;
 	}
-
-	if (!valid) {
-		return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
-	}
 	return RESULT_OK;
-
 }
 
 struct sema_implicit_cast_state {
