@@ -1042,9 +1042,6 @@ sema_pointer_compare(struct ast *lhs, struct ast *rhs)
 	} else if (ctype_is_pointer(&rhs->expr_type) &&
 	           !ctype_nullptr_ish(&lhs->expr_type)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS);
-	} else {
-		assert(!ctype_is_pointer(&lhs->expr_type) &&
-		       !ctype_nullptr_ish(&rhs->expr_type));
 	}
 	return RESULT_OK;
 }
@@ -1062,6 +1059,11 @@ sema_pointer(struct ast *a, void *userdata MAYBE_UNUSED)
 		if (a->u.case_.constant->expr_type.t == CTYPE_POINTER_TO) {
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
 		}
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		// TODO: like sema_pointer_compare(), but only allowed
+		// nullptr->pointer conversion with nullptr on RHS, pointer type
+		// on LHS, not the other way around
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
