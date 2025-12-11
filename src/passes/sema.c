@@ -1102,6 +1102,12 @@ sema_pointer(struct ast *a, void *userdata)
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
 		}
 		break;
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+	case NODE_EXPRESSION_UNARY_NEGATE:
+		if (ctype_is_pointer(&a->u.op_unary.operand->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
+		}
+		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(sema_pointer_as_if_by_assignment(
 			&a->u.op_binary.lhs->expr_type,
