@@ -1029,7 +1029,7 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 }
 
 static WARN_UNUSED result_t
-sema_pointer_compare(struct ast *lhs, struct ast *rhs)
+sema_pointer_as_if_by_assignment(struct ast *lhs, struct ast *rhs)
 {
 	if (ctype_is_equal(&lhs->expr_type, &rhs->expr_type)) {
 		/* given equality, nothing more to check */
@@ -1039,8 +1039,16 @@ sema_pointer_compare(struct ast *lhs, struct ast *rhs)
 	} else if (ctype_is_pointer(&lhs->expr_type) &&
 	           !ctype_nullptr_ish(&rhs->expr_type)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS);
-	} else if (ctype_is_pointer(&rhs->expr_type) &&
-	           !ctype_nullptr_ish(&lhs->expr_type)) {
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_pointer_compare(struct ast *lhs, struct ast *rhs)
+{
+	check(sema_pointer_as_if_by_assignment(lhs, rhs));
+	if (ctype_is_pointer(&rhs->expr_type) &&
+	    !ctype_nullptr_ish(&lhs->expr_type)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS);
 	}
 	return RESULT_OK;
@@ -1061,9 +1069,8 @@ sema_pointer(struct ast *a, void *userdata MAYBE_UNUSED)
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		// TODO: like sema_pointer_compare(), but only allowed
-		// nullptr->pointer conversion with nullptr on RHS, pointer type
-		// on LHS, not the other way around
+		check(sema_pointer_as_if_by_assignment(a->u.op_binary.lhs,
+		                                       a->u.op_binary.rhs));
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
