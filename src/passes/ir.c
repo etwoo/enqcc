@@ -77,7 +77,7 @@ ir_val_from_ast_variable_like(Arena *arena,
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		// TODO: deal with pointer pointer deref as part of lvalue
+		// TODO: deal with pointer deref as part of lvalue
 		assert(ir_unpack_parens(src->u.op_unary.operand)->node_type ==
 		       NODE_EXPRESSION_VARIABLE_USAGE);
 		sym = &ir_unpack_parens(src->u.op_unary.operand)->u.var;
