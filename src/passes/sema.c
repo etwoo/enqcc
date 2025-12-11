@@ -196,6 +196,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		break;
 	case NODE_EXPRESSION_CAST:
 		check(sema_walk(a->u.cast.expr, ops, u));
+		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT:
@@ -1018,6 +1019,14 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 		valid = (a->u.op_binary.lhs->expr_type.t != CTYPE_DOUBLE) &&
 		        (a->u.op_binary.rhs->expr_type.t != CTYPE_DOUBLE);
 		break;
+	case NODE_EXPRESSION_CAST:
+		if ((ctype_is_floating_point(&a->u.cast.to_type) &&
+		     ctype_is_pointer(&a->u.cast.expr->expr_type)) ||
+		    (ctype_is_floating_point(&a->u.cast.expr->expr_type) &&
+		     ctype_is_pointer(&a->u.cast.to_type))) {
+			valid = false;
+		}
+		break;
 	default:
 		break;
 	}
@@ -1102,6 +1111,11 @@ sema_pointer(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		check(sema_pointer_cmp(&a->u.op_ternary.then_expr->expr_type,
 		                       &a->u.op_ternary.else_expr->expr_type));
+		break;
+	case NODE_EXPRESSION_CAST:
+		check(sema_pointer_as_if_by_assignment(
+			&a->u.cast.to_type,
+			&a->u.cast.expr->expr_type));
 		break;
 	default:
 		break;
