@@ -1114,6 +1114,11 @@ sema_pointer(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
 		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) ||
 		    ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
