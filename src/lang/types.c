@@ -102,7 +102,7 @@ get_common_ctype(const struct ctype *lhs, const struct ctype *rhs)
 	if (lhs->t == CTYPE_POINTER_TO && rhs->t == CTYPE_POINTER_TO) {
 		const struct ctype *inner =
 			get_common_ctype(lhs->referent, rhs->referent);
-		return inner == lhs ? lhs : rhs;
+		return inner == lhs->referent ? lhs : rhs;
 	}
 	return lhs->t >= rhs->t ? lhs : rhs;
 }
