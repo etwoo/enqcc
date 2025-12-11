@@ -1002,13 +1002,15 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 
 	switch (a->node_type) {
 	case NODE_SWITCH:
-		valid = (a->u.switch_.control->expr_type.t != CTYPE_DOUBLE);
+		valid = !ctype_is_floating_point(
+			&a->u.switch_.control->expr_type);
 		break;
 	case NODE_CASE:
-		valid = (a->u.case_.constant->expr_type.t != CTYPE_DOUBLE);
+		valid = !ctype_is_floating_point(
+			&a->u.case_.constant->expr_type);
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-		valid = (a->expr_type.t != CTYPE_DOUBLE);
+		valid = !ctype_is_floating_point(&a->expr_type);
 		break;
 	case NODE_EXPRESSION_BINARY_REMAINDER:
 	case NODE_EXPRESSION_BITWISE_AND:
@@ -1016,8 +1018,10 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_BITWISE_XOR:
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-		valid = (a->u.op_binary.lhs->expr_type.t != CTYPE_DOUBLE) &&
-		        (a->u.op_binary.rhs->expr_type.t != CTYPE_DOUBLE);
+		valid = !ctype_is_floating_point(
+				&a->u.op_binary.lhs->expr_type) &&
+		        !ctype_is_floating_point(
+				&a->u.op_binary.rhs->expr_type);
 		break;
 	case NODE_EXPRESSION_CAST:
 		if ((ctype_is_floating_point(&a->u.cast.to_type) &&
