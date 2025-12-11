@@ -897,8 +897,20 @@ sema_expr_types(struct ast *a, void *userdata)
 		                 &a->expr_type));
 		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+		if (a->u.op_unary.operand->expr_type.t != CTYPE_POINTER_TO) {
+			return make_result(ERR_SEMA_OPERAND_DEREF_INVALID);
+		}
+		check(ctype_copy(arena,
+		                 a->u.op_unary.operand->expr_type.referent,
+		                 &a->expr_type));
+		break;
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
-		assert(0 && "TODO: expr_type propagation for ptr & and *");
+		a->expr_type.t = CTYPE_POINTER_TO;
+		assert(a->expr_type.referent == NULL);
+		check(ctype_alloc(arena, &a->expr_type.referent));
+		check(ctype_copy(arena,
+		                 &a->u.op_unary.operand->expr_type,
+		                 a->expr_type.referent));
 		break;
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_LOGICAL_AND:
@@ -1006,6 +1018,31 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 		return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
 	}
 	return RESULT_OK;
+}
+
+static WARN_UNUSED const struct ast *
+sema_unpack_parens(const struct ast *a)
+{
+	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
+		a = a->u.op_unary.operand;
+	}
+	return a;
+}
+
+static WARN_UNUSED result_t
+sema_address_of(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	if (a->node_type != NODE_EXPRESSION_UNARY_ADDRESS_OF) {
+		return RESULT_OK;
+	}
+
+	const struct ast *inner = sema_unpack_parens(a->u.op_unary.operand);
+	if (inner->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+	    inner->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
+		return RESULT_OK;
+	}
+
+	return make_result(ERR_SEMA_OPERAND_ADDRESS_OF_INVALID);
 }
 
 struct sema_implicit_cast_state {
@@ -1684,6 +1721,10 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 
 	debug("Checking for invalid double usage");
 	ops.node_enter = sema_double;
+	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking for invalid address-of usage");
+	ops.node_enter = sema_address_of;
 	check(sema_walk(a, &ops, NULL));
 
 	debug("Inserting cast expressions");

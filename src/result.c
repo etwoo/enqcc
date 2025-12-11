@@ -368,6 +368,13 @@ result_to_str(result_t r)
 		                "non-static declaration",
 		                r.msg);
 		break;
+	case ERR_SEMA_OPERAND_ADDRESS_OF_INVALID:
+		s = strdup("Address-of operator & requires lvalue argument");
+		break;
+	case ERR_SEMA_OPERAND_DEREF_INVALID:
+		s = strdup("Pointer dereference operator * requires argument "
+		           "of type CTYPE_POINTER_TO");
+		break;
 	case ERR_SEMA_OPERAND_DOUBLE_INVALID:
 		s = strdup("Complement ~, remainder %, and bitwise operations "
 		           "cannot take arguments of type 'double'");
