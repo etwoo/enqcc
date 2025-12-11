@@ -774,6 +774,7 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		to_check = a->u.op_binary.lhs;
 		break;
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
@@ -1023,20 +1024,6 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 	if (!valid) {
 		return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
 	}
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-sema_address_of(struct ast *a, void *userdata MAYBE_UNUSED)
-{
-	if (a->node_type != NODE_EXPRESSION_UNARY_ADDRESS_OF) {
-		return RESULT_OK;
-	}
-
-	if (!is_node_lvalue(a->u.op_unary.operand)) {
-		return make_result(ERR_SEMA_OPERAND_ADDRESS_OF_INVALID);
-	}
-
 	return RESULT_OK;
 }
 
@@ -1766,10 +1753,6 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 
 	debug("Checking for invalid double usage");
 	ops.node_enter = sema_double;
-	check(sema_walk(a, &ops, NULL));
-
-	debug("Checking for invalid address-of usage");
-	ops.node_enter = sema_address_of;
 	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking for invalid pointer usage");
