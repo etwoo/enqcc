@@ -8,13 +8,14 @@
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
-static WARN_UNUSED const struct ast *
-sema_unpack_parens(const struct ast *a)
+static WARN_UNUSED bool
+is_node_lvalue(const struct ast *a)
 {
 	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
 		a = a->u.op_unary.operand;
 	}
-	return a;
+	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE;
 }
 
 static WARN_UNUSED const struct ast *
@@ -783,8 +784,7 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 		return RESULT_OK;
 	}
 
-	to_check = sema_unpack_parens(to_check);
-	if (to_check->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
+	if (!is_node_lvalue(to_check)) {
 		/*
 		 * See related assertions in src/passes/ir.c on u.op_binary.lhs
 		 * and NODE_EXPRESSION_VARIABLE_USAGE.
@@ -1033,13 +1033,11 @@ sema_address_of(struct ast *a, void *userdata MAYBE_UNUSED)
 		return RESULT_OK;
 	}
 
-	const struct ast *to_check = sema_unpack_parens(a->u.op_unary.operand);
-	if (to_check->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	    to_check->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
-		return RESULT_OK;
+	if (!is_node_lvalue(a->u.op_unary.operand)) {
+		return make_result(ERR_SEMA_OPERAND_ADDRESS_OF_INVALID);
 	}
 
-	return make_result(ERR_SEMA_OPERAND_ADDRESS_OF_INVALID);
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
