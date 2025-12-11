@@ -198,10 +198,4 @@ struct flat {
 	     (iter)->symbol.name.sz > 0;                                       \
 	     ++(iter))
 
-/*
- * Insert NODE_EXPRESSION_CAST wherever type issues demand it.
- */
-result_t
-cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a) WARN_UNUSED;
-
 #endif

@@ -1,6 +1,7 @@
 #include "lang/symbol.h"
 #include "passes.h"
 #include "passes/parse.h"
+#include "passes/parse/alloc.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
@@ -1074,6 +1075,21 @@ sema_pointer(struct ast *a, void *userdata MAYBE_UNUSED)
 	default:
 		break;
 	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
+{
+	if (*a == NULL || ctype_is_equal(&(**a).expr_type, cast_to)) {
+		return RESULT_OK;
+	}
+	struct ast *cast_wrap = NULL;
+	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
+	check(ctype_copy(arena, cast_to, &cast_wrap->expr_type));
+	check(ctype_copy(arena, cast_to, &cast_wrap->u.cast.to_type));
+	cast_wrap->u.cast.expr = *a;
+	*a = cast_wrap;
 	return RESULT_OK;
 }
 
