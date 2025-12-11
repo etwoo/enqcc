@@ -376,8 +376,11 @@ result_to_str(result_t r)
 		           "of type CTYPE_POINTER_TO");
 		break;
 	case ERR_SEMA_OPERAND_DOUBLE_INVALID:
-		s = strdup("Complement ~, remainder %, and bitwise operations "
-		           "cannot take arguments of type 'double'");
+		s = strdup(
+			"Complement ~, remainder %, and bitwise operations "
+			"cannot take arguments of type 'double'; also, values "
+		        "of type 'double' cannot be cast to pointer type, and "
+		        "pointer values cannot be cast to type 'double'");
 		break;
 	case ERR_SEMA_OPERAND_POINTER_CONFLICT:
 		s = strdup("Conflicting pointer types");
