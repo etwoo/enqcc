@@ -9,6 +9,15 @@
 #include <sys/param.h> /* for MAX() */
 
 static WARN_UNUSED const struct ast *
+sema_unpack_parens(const struct ast *a)
+{
+	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
+		a = a->u.op_unary.operand;
+	}
+	return a;
+}
+
+static WARN_UNUSED const struct ast *
 unpack_constant(const struct ast *a)
 {
 	if (a->node_type == NODE_EXPRESSION_CAST) {
@@ -759,7 +768,7 @@ sema_compound_assignment(struct ast *a, void *userdata)
 static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
-	struct ast *to_check = NULL;
+	const struct ast *to_check = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		to_check = a->u.op_binary.lhs;
@@ -774,10 +783,7 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 		return RESULT_OK;
 	}
 
-	while (to_check->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
-		to_check = to_check->u.op_unary.operand;
-	}
-
+	to_check = sema_unpack_parens(to_check);
 	if (to_check->node_type != NODE_EXPRESSION_VARIABLE_USAGE) {
 		/*
 		 * See related assertions in src/passes/ir.c on u.op_binary.lhs
@@ -1018,15 +1024,6 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 		return make_result(ERR_SEMA_OPERAND_DOUBLE_INVALID);
 	}
 	return RESULT_OK;
-}
-
-static WARN_UNUSED const struct ast *
-sema_unpack_parens(const struct ast *a)
-{
-	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
-		a = a->u.op_unary.operand;
-	}
-	return a;
 }
 
 static WARN_UNUSED result_t
