@@ -26,6 +26,17 @@ parse_alloc_if_unset(Arena *arena, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
+parse_stmt_multi(Arena *arena, const struct token **tok, struct flat **dst)
+{
+	bool call_again = true;
+	for (; call_again; dst = &(**dst).cdr) {
+		check(flat_alloc(arena, dst));
+		check(parse_stmt_one(arena, tok, &(**dst).car, &call_again));
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_if_else(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_KEYWORD_IF));

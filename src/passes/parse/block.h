@@ -14,9 +14,6 @@ struct flat;
 result_t parse_block(Arena *arena,
                      const struct token **tok,
                      struct ast **dst_outer) WARN_UNUSED;
-result_t parse_stmt_multi(Arena *arena,
-                          const struct token **tok,
-                          struct flat **dst) WARN_UNUSED;
 result_t parse_stmt_one(Arena *arena,
                         const struct token **tok,
                         struct ast **dst,
