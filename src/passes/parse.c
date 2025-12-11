@@ -15,7 +15,6 @@
 #include "sys/debug.h"
 
 #include <assert.h>
-#include <stdbool.h>
 
 static WARN_UNUSED result_t
 parse_alloc_if_unset(Arena *arena, struct ast **dst)
@@ -244,12 +243,6 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 
 	return RESULT_OK;
 }
-
-/* used by block.c */
-result_t parse_stmt(Arena *arena,
-                    const struct token **tok,
-                    struct ast **dst,
-                    bool *call_again) WARN_UNUSED;
 
 result_t
 parse_stmt(Arena *arena,

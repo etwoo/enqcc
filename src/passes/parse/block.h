@@ -5,6 +5,8 @@
 #include "result.h"
 #include "sys/compiler_features.h"
 
+#include <stdbool.h>
+
 struct token;
 struct ast;
 struct flat;
@@ -15,5 +17,9 @@ result_t parse_block(Arena *arena,
 result_t parse_stmt_multi(Arena *arena,
                           const struct token **tok,
                           struct flat **dst) WARN_UNUSED;
+result_t parse_stmt(Arena *arena,
+                    const struct token **tok,
+                    struct ast **dst,
+                    bool *call_again) WARN_UNUSED;
 
 #endif

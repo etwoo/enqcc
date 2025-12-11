@@ -8,9 +8,6 @@
 
 #include <assert.h>
 
-/* defined in parse.c */
-result_t parse_stmt(Arena *, const struct token **, struct ast **, bool *);
-
 result_t
 parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 {
