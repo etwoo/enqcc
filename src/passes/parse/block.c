@@ -36,7 +36,7 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 				&(**dst).car));
 		} else {
 			bool dummy = false;
-			check(parse_stmt(arena, tok, &(**dst).car, &dummy));
+			check(parse_stmt_one(arena, tok, &(**dst).car, &dummy));
 			/* can ignore dummy; we loop unconditionally here */
 		}
 		assert(*dst != NULL);
@@ -57,7 +57,7 @@ parse_stmt_multi(Arena *arena, const struct token **tok, struct flat **dst)
 	bool call_again = true;
 	for (; call_again; dst = &(**dst).cdr) {
 		check(flat_alloc(arena, dst));
-		check(parse_stmt(arena, tok, &(**dst).car, &call_again));
+		check(parse_stmt_one(arena, tok, &(**dst).car, &call_again));
 	}
 	return RESULT_OK;
 }

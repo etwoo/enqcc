@@ -245,10 +245,10 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 result_t
-parse_stmt(Arena *arena,
-           const struct token **tok,
-           struct ast **dst,
-           bool *call_again)
+parse_stmt_one(Arena *arena,
+               const struct token **tok,
+               struct ast **dst,
+               bool *call_again)
 {
 	assert(dst != NULL && *dst == NULL);
 
