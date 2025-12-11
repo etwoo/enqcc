@@ -1029,26 +1029,24 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 }
 
 static WARN_UNUSED result_t
-sema_pointer_as_if_by_assignment(struct ast *lhs, struct ast *rhs)
+sema_pointer_as_if_by_assignment(const struct ctype *lhs,
+                                 const struct ctype *rhs)
 {
-	if (ctype_is_equal(&lhs->expr_type, &rhs->expr_type)) {
+	if (ctype_is_equal(lhs, rhs)) {
 		/* given equality, nothing more to check */
-	} else if (ctype_is_pointer(&lhs->expr_type) &&
-	           ctype_is_pointer(&rhs->expr_type)) {
+	} else if (ctype_is_pointer(lhs) && ctype_is_pointer(rhs)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
-	} else if (ctype_is_pointer(&lhs->expr_type) &&
-	           !ctype_nullptr_ish(&rhs->expr_type)) {
+	} else if (ctype_is_pointer(lhs) && !ctype_nullptr_ish(rhs)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS);
 	}
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
-sema_pointer_compare(struct ast *lhs, struct ast *rhs)
+sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
 {
 	check(sema_pointer_as_if_by_assignment(lhs, rhs));
-	if (ctype_is_pointer(&rhs->expr_type) &&
-	    !ctype_nullptr_ish(&lhs->expr_type)) {
+	if (ctype_is_pointer(rhs) && !ctype_nullptr_ish(lhs)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS);
 	}
 	return RESULT_OK;
@@ -1069,17 +1067,18 @@ sema_pointer(struct ast *a, void *userdata MAYBE_UNUSED)
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		check(sema_pointer_as_if_by_assignment(a->u.op_binary.lhs,
-		                                       a->u.op_binary.rhs));
+		check(sema_pointer_as_if_by_assignment(
+			&a->u.op_binary.lhs->expr_type,
+			&a->u.op_binary.rhs->expr_type));
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
-		check(sema_pointer_compare(a->u.op_binary.lhs,
-		                           a->u.op_binary.rhs));
+		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
+		                       &a->u.op_binary.rhs->expr_type));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-		check(sema_pointer_compare(a->u.op_ternary.then_expr,
-		                           a->u.op_ternary.else_expr));
+		check(sema_pointer_cmp(&a->u.op_ternary.then_expr->expr_type,
+		                       &a->u.op_ternary.else_expr->expr_type));
 		break;
 	default:
 		break;
@@ -1377,13 +1376,15 @@ sema_fn_signature(struct ast *a, void *userdata)
 			 */
 			to_check = &p_types[i];
 		} else {
+			const struct ctype *lhs =
+				&sema_get_auxiliary(dup)->p_types[i];
+			const struct ctype *rhs = &p_types[i];
 			/*
-			 * On function call, allow argument expression type
-			 * to widen or narrow to declared parameter type,
+			 * On function call, try to widen or narrow argument
+			 * expression type to declared parameter type.
 			 */
-			to_check = get_common_ctype(
-				&p_types[i],
-				&sema_get_auxiliary(dup)->p_types[i]);
+			check(sema_pointer_as_if_by_assignment(lhs, rhs));
+			to_check = get_common_ctype(lhs, rhs);
 		}
 		if (!ctype_is_equal(to_check,
 		                    &sema_get_auxiliary(dup)->p_types[i])) {
