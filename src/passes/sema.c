@@ -1052,10 +1052,28 @@ sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
 	return RESULT_OK;
 }
 
+struct sema_pointer_state {
+	Arena *arena;
+	struct ctype expected_return_type;
+};
+
 static WARN_UNUSED result_t
-sema_pointer(struct ast *a, void *userdata MAYBE_UNUSED)
+sema_pointer(struct ast *a, void *userdata)
 {
+	struct sema_pointer_state *state = userdata;
+	Arena *arena = state->arena;
+
 	switch (a->node_type) {
+	case NODE_FUNCTION:
+		check(ctype_copy(arena,
+		                 &a->u.function.return_type,
+		                 &state->expected_return_type));
+		break;
+	case NODE_FUNCTION_RETURN_STATEMENT:
+		check(sema_pointer_as_if_by_assignment(
+			&state->expected_return_type,
+			&a->u.op_unary.operand->expr_type));
+		break;
 	case NODE_DECLARATION:
 		check(sema_pointer_as_if_by_assignment(
 			&a->u.declare.var_type,
@@ -1125,9 +1143,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		                 &state->expected_return_type));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
-		check(sema_pointer_as_if_by_assignment(
-			&state->expected_return_type,
-			&a->u.op_unary.operand->expr_type));
 		check(cast_if(arena,
 		              &state->expected_return_type,
 		              &a->u.op_unary.operand));
@@ -1791,7 +1806,10 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 
 	debug("Checking for invalid pointer usage");
 	ops.node_enter = sema_pointer;
-	check(sema_walk(a, &ops, NULL));
+	{
+		struct sema_pointer_state pointer_state = {0};
+		check(sema_walk(a, &ops, &pointer_state));
+	}
 
 	debug("Inserting cast expressions");
 	ops.node_enter = sema_implicit_cast;
