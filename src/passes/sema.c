@@ -1125,6 +1125,9 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		                 &state->expected_return_type));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
+		check(sema_pointer_as_if_by_assignment(
+			&state->expected_return_type,
+			&a->u.op_unary.operand->expr_type));
 		check(cast_if(arena,
 		              &state->expected_return_type,
 		              &a->u.op_unary.operand));
