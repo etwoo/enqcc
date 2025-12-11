@@ -379,6 +379,10 @@ result_to_str(result_t r)
 		s = strdup("Complement ~, remainder %, and bitwise operations "
 		           "cannot take arguments of type 'double'");
 		break;
+	case ERR_SEMA_OPERAND_POINTER_INVALID:
+		s = strdup("Statement or expression cannot take argument of "
+		           "pointer type");
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;

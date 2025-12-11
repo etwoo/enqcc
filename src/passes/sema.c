@@ -1042,6 +1042,29 @@ sema_address_of(struct ast *a, void *userdata MAYBE_UNUSED)
 	return make_result(ERR_SEMA_OPERAND_ADDRESS_OF_INVALID);
 }
 
+static WARN_UNUSED result_t
+sema_pointer(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	bool valid = true;
+
+	switch (a->node_type) {
+	case NODE_SWITCH:
+		valid = (a->u.switch_.control->expr_type.t != CTYPE_POINTER_TO);
+		break;
+	case NODE_CASE:
+		valid = (a->u.case_.constant->expr_type.t != CTYPE_POINTER_TO);
+		break;
+	default:
+		break;
+	}
+
+	if (!valid) {
+		return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
+	}
+	return RESULT_OK;
+
+}
+
 struct sema_implicit_cast_state {
 	Arena *arena;
 	struct ctype expected_return_type;
@@ -1722,6 +1745,10 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 
 	debug("Checking for invalid address-of usage");
 	ops.node_enter = sema_address_of;
+	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking for invalid pointer usage");
+	ops.node_enter = sema_pointer;
 	check(sema_walk(a, &ops, NULL));
 
 	debug("Inserting cast expressions");
