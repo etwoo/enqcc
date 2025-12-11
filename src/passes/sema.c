@@ -1056,6 +1056,11 @@ static WARN_UNUSED result_t
 sema_pointer(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	switch (a->node_type) {
+	case NODE_DECLARATION:
+		check(sema_pointer_as_if_by_assignment(
+			&a->u.declare.var_type,
+			&a->u.declare.init->expr_type));
+		break;
 	case NODE_SWITCH:
 		if (a->u.switch_.control->expr_type.t == CTYPE_POINTER_TO) {
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
