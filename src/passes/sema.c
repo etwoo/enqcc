@@ -1093,12 +1093,12 @@ sema_pointer(struct ast *a, void *userdata)
 			&a->u.declare.init->expr_type));
 		break;
 	case NODE_SWITCH:
-		if (a->u.switch_.control->expr_type.t == CTYPE_POINTER_TO) {
+		if (ctype_is_pointer(&a->u.switch_.control->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
 		}
 		break;
 	case NODE_CASE:
-		if (a->u.case_.constant->expr_type.t == CTYPE_POINTER_TO) {
+		if (ctype_is_pointer(&a->u.case_.constant->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
 		}
 		break;
