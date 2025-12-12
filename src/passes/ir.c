@@ -63,6 +63,23 @@ ir_unpack_parens(const struct ast *a)
 	return a;
 }
 
+static WARN_UNUSED const struct ast *
+ir_assignment_lvalue_suitable_for_store(const struct ast *a)
+{
+	assert(a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT);
+
+	const struct ast *lhs = ir_unpack_parens(a->u.op_binary.lhs);
+	if (lhs->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
+		const struct ast *inner =
+			ir_unpack_parens(lhs->u.op_unary.operand);
+		if (inner->node_type != NODE_EXPRESSION_UNARY_ADDRESS_OF) {
+			return inner;
+		}
+	}
+
+	return false;
+}
+
 static WARN_UNUSED result_t
 ir_val_from_ast_variable_like(Arena *arena,
                               const struct ast *src,
@@ -86,6 +103,7 @@ ir_val_from_ast_variable_like(Arena *arena,
 		if (src->u.op_binary.lhs->node_type == NODE_EXPRESSION_CAST) {
 			/* unpack nodes inserted by sema_implicit_cast() */
 			const struct ast *cast_envelope = src->u.op_binary.lhs;
+			// TODO: deal with pointer deref as part of lvalue
 			assert(cast_envelope->u.cast.expr->node_type ==
 			       NODE_EXPRESSION_VARIABLE_USAGE);
 			sym = &cast_envelope->u.cast.expr->u.var;
@@ -628,6 +646,14 @@ ir_unary_op(Arena *arena,
 		unary->opcode = IR_OP_UNARY_NOT;
 		ast_inner = a->u.op_unary.operand;
 		break;
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+		unary->opcode = IR_OP_LOAD;
+		ast_inner = a->u.op_unary.operand;
+		break;
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+		unary->opcode = IR_OP_GET_ADDRESS;
+		ast_inner = a->u.op_unary.operand;
+		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 		unary->opcode = IR_OP_UNARY_DECREMENT;
@@ -698,10 +724,13 @@ ir_unary_op(Arena *arena,
 
 	ir_val_copy(&inner_return, &unary->args[0]);
 
+	struct ir_op *footer = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 	case NODE_EXPRESSION_CAST:
 		check(ir_val_tmpvar_gen(arena,
 		                        ir,
@@ -712,8 +741,38 @@ ir_unary_op(Arena *arena,
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(ir_val_from_ast_variable_like(arena, a, &unary->args[1]));
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+			/* in addition to IR_OP_COPY to return_value ... */
+			check(ir_val_tmpvar_gen(arena,
+			                        ir,
+			                        &a->expr_type,
+			                        &unary->args[1]));
+			/* ... also store to pointer location as side effect */
+			check(ir_alloc_op(arena, &footer));
+			footer->opcode = IR_OP_STORE;
+			ir_val_copy(&inner_return, &footer->args[0]);
+			const struct ast *dereferenced =
+				ir_assignment_lvalue_suitable_for_store(a);
+			// TODO: deal with deref of more complex expressions,
+			// like function call, of fn returning pointer?
+			assert(dereferenced->node_type ==
+			       NODE_EXPRESSION_VARIABLE_USAGE);
+			// TODO: consolidate w/ ir_val_from_ast_variable_like()
+			// in order to get edge cases like dereferencing pointer
+			// variable with linkage, which uses
+			// IR_VAL_VARIABLE_DATA, not IR_VAL_TEMPORARY_VARIABLE
+			check(ir_val_tmpvar(arena,
+			                    dereferenced->u.var.unique,
+			                    &dereferenced->expr_type,
+			                    &footer->args[1]));
+		} else {
+			check(ir_val_from_ast_variable_like(arena,
+			                                    a,
+			                                    &unary->args[1]));
+		}
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -745,7 +804,8 @@ ir_unary_op(Arena *arena,
 	 * 2) results of recursive invocation of ir_expr()
 	 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
 	 */
-	*dst = ir_op_list_concat(header, ir_op_list_concat(inner, unary));
+	*dst = ir_op_list_concat(ir_op_list_concat(header, inner),
+	                         ir_op_list_concat(unary, footer));
 	return RESULT_OK;
 }
 
@@ -1076,6 +1136,27 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_CAST:
 		check(ir_unary_op(arena, a, ir, dst, return_value));
+		break;
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+		if ((a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE &&
+		     ir_unpack_parens(a->u.op_unary.operand)->node_type ==
+		             NODE_EXPRESSION_UNARY_ADDRESS_OF) ||
+		    (a->node_type == NODE_EXPRESSION_UNARY_ADDRESS_OF &&
+		     ir_unpack_parens(a->u.op_unary.operand)->node_type ==
+		             NODE_EXPRESSION_UNARY_DEREFERENCE)) {
+			/* treat *& and &* as no-op */
+			struct ast *grandchild =
+				ir_unpack_parens(a->u.op_unary.operand)
+					->u.op_unary.operand;
+			check(ir_expr(arena,
+			              grandchild,
+			              ir,
+			              dst,
+			              return_value));
+		} else {
+			check(ir_unary_op(arena, a, ir, dst, return_value));
+		}
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expr(arena,

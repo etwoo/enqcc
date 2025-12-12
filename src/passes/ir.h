@@ -51,6 +51,9 @@ struct ir_val {
 	F(CTYPE_DOUBLE_TO_UINT, 2)                                             \
 	F(CTYPE_INT_TO_DOUBLE, 2)                                              \
 	F(CTYPE_UINT_TO_DOUBLE, 2)                                             \
+	F(GET_ADDRESS, 2)                                                      \
+	F(LOAD, 2)                                                             \
+	F(STORE, 2)                                                            \
 	F(JUMP, 1)                                                             \
 	F(JUMP_IF_ZERO, 2)                                                     \
 	F(JUMP_IF_NOT_ZERO, 2)                                                 \

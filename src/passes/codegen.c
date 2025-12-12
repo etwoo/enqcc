@@ -1018,6 +1018,11 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_CTYPE_UINT_TO_DOUBLE:
 		assert(0); /* should be handled by codegen_statement_fp() */
 		break;
+	case IR_OP_GET_ADDRESS:
+	case IR_OP_LOAD:
+	case IR_OP_STORE:
+		assert(0 && "TODO impl GET_ADDRESS, LOAD, STORE");
+		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
