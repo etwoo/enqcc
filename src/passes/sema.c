@@ -42,7 +42,7 @@ static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
 static void
 map_numeric_type(const struct ast *init,
-                 struct ctype *dst_type,
+                 const struct ctype *dst_type,
                  union constant_value *val)
 {
 	const struct ast *a = unpack_constant(init);
@@ -255,7 +255,7 @@ has_container(struct sema_label_loops_state *state,
 }
 
 static WARN_UNUSED int128_t
-guess(const struct ast *a, struct ctype *expected_type)
+guess(const struct ast *a, const struct ctype *expected_type)
 {
 	int128_t value = 0;
 	union constant_value tmp = {0};
@@ -385,7 +385,8 @@ guess(const struct ast *a, struct ctype *expected_type)
 }
 
 static WARN_UNUSED int128_t
-guess_case_value(const struct ast *containing_case, struct ctype *expected_type)
+guess_case_value(const struct ast *containing_case,
+                 const struct ctype *expected_type)
 {
 	assert(containing_case->node_type == NODE_CASE);
 	return guess(containing_case->u.case_.constant, expected_type);
@@ -395,7 +396,7 @@ static WARN_UNUSED result_t
 make_case(Arena *arena,
           long long int existing_unique,
           struct ast **dst,
-          struct ctype *control_type,
+          const struct ctype *control_type,
           int128_t new_value)
 {
 	*dst = arena_alloc(arena, sizeof(**dst));
@@ -425,15 +426,16 @@ case_prepend(Arena *arena,
 	assert(containing_switch->node_type == NODE_SWITCH);
 	assert(new_case->node_type == NODE_CASE);
 
-	struct ctype *control_type =
-		&containing_switch->u.switch_.control->expr_type;
-	const int128_t new_value = guess_case_value(new_case, control_type);
+	const struct ctype control_type = {
+		.t = CTYPE_LONG,
+	};
+	const int128_t new_value = guess_case_value(new_case, &control_type);
 
 	struct flat *head = containing_switch->u.switch_.label_cases;
 	for (; head != NULL; head = head->cdr) {
 		assert(head->car->node_type == NODE_CASE);
 		const int128_t existing_value =
-			guess_case_value(head->car, control_type);
+			guess_case_value(head->car, &control_type);
 		if (new_value == existing_value) {
 			return make_result(ERR_SEMA_CASE_DUPLICATE,
 			                   (int)new_value);
@@ -451,7 +453,7 @@ case_prepend(Arena *arena,
 	check(make_case(arena,
 	                new_case->u.case_.unique,
 	                &node->car,
-	                control_type,
+	                &control_type,
 	                new_value));
 
 	node->cdr = containing_switch->u.switch_.label_cases;
