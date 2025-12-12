@@ -1000,15 +1000,19 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 
 	switch (a->node_type) {
 	case NODE_SWITCH:
-		valid = !ctype_is_floating_point(
-			&a->u.switch_.control->expr_type);
+		if (ctype_is_floating_point(&a->u.switch_.control->expr_type)) {
+			valid = false;
+		}
 		break;
 	case NODE_CASE:
-		valid = !ctype_is_floating_point(
-			&a->u.case_.constant->expr_type);
+		if (ctype_is_floating_point(&a->u.case_.constant->expr_type)) {
+			valid = false;
+		}
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-		valid = !ctype_is_floating_point(&a->expr_type);
+		if (ctype_is_floating_point(&a->expr_type)) {
+			valid = false;
+		}
 		break;
 	case NODE_EXPRESSION_BINARY_REMAINDER:
 	case NODE_EXPRESSION_BITWISE_AND:
@@ -1016,10 +1020,10 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_BITWISE_XOR:
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-		valid = !ctype_is_floating_point(
-				&a->u.op_binary.lhs->expr_type) &&
-		        !ctype_is_floating_point(
-				&a->u.op_binary.rhs->expr_type);
+		if (ctype_is_floating_point(&a->u.op_binary.lhs->expr_type) ||
+		    ctype_is_floating_point(&a->u.op_binary.rhs->expr_type)) {
+			valid = false;
+		}
 		break;
 	case NODE_EXPRESSION_CAST:
 		if ((ctype_is_floating_point(&a->u.cast.to_type) &&
