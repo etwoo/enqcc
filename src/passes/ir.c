@@ -66,18 +66,32 @@ ir_unpack_parens(const struct ast *a)
 static WARN_UNUSED const struct ast *
 ir_assignment_lvalue_suitable_for_store(const struct ast *a)
 {
-	assert(a->node_type == NODE_EXPRESSION_VARIABLE_ASSIGNMENT);
+	const struct ast *to_check = NULL;
+	switch (a->node_type) {
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		to_check = a->u.op_unary.operand;
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		to_check = a->u.op_binary.lhs;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
 
-	const struct ast *lhs = ir_unpack_parens(a->u.op_binary.lhs);
-	if (lhs->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
+	const struct ast *unpacked = ir_unpack_parens(to_check);
+	if (unpacked->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
 		const struct ast *inner =
-			ir_unpack_parens(lhs->u.op_unary.operand);
+			ir_unpack_parens(unpacked->u.op_unary.operand);
 		if (inner->node_type != NODE_EXPRESSION_UNARY_ADDRESS_OF) {
 			return inner;
 		}
 	}
 
-	return false;
+	return NULL;
 }
 
 static WARN_UNUSED result_t
@@ -741,8 +755,6 @@ ir_unary_op(Arena *arena,
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		check(ir_val_from_ast_variable_like(arena, a, &unary->args[1]));
-		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 			/* in addition to IR_OP_COPY to return_value ... */
@@ -783,10 +795,15 @@ ir_unary_op(Arena *arena,
 	if (a->node_type == NODE_EXPRESSION_POSTDECREMENT ||
 	    a->node_type == NODE_EXPRESSION_POSTINCREMENT) {
 		check(ir_alloc_op(arena, &header));
-		header->opcode = IR_OP_COPY;
-		check(ir_val_from_ast_variable_like(arena,
-		                                    a,
-		                                    &header->args[0]));
+		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+			header->opcode = IR_OP_LOAD;
+			ir_val_copy(&inner_return, &header->args[0]);
+		} else {
+			header->opcode = IR_OP_COPY;
+			check(ir_val_from_ast_variable_like(arena,
+			                                    a,
+			                                    &header->args[0]));
+		}
 		check(ir_val_tmpvar_gen(arena,
 		                        ir,
 		                        &a->expr_type,
