@@ -738,7 +738,9 @@ ir_unary_op(Arena *arena,
 
 	ir_val_copy(&inner_return, &unary->args[0]);
 
+	struct ir_op *header = NULL;
 	struct ir_op *footer = NULL;
+
 	switch (a->node_type) {
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -757,29 +759,27 @@ ir_unary_op(Arena *arena,
 	case NODE_EXPRESSION_POSTINCREMENT:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
-			/* in addition to IR_OP_COPY to return_value ... */
+			/* In addition to IR_OP_COPY to return_value ... */
 			check(ir_val_tmpvar_gen(arena,
 			                        ir,
 			                        &a->expr_type,
 			                        &unary->args[1]));
-			/* ... also store to pointer location as side effect */
+
+			/* ... compute referent of LHS lvalue */
+			const struct ast *dereferenced =
+				ir_assignment_lvalue_suitable_for_store(a);
+			struct ir_val dereferenced_return = {0};
+			check(ir_expr(arena,
+			              dereferenced,
+			              ir,
+			              &header, /* may remain NULL */
+			              &dereferenced_return));
+
+			/* ... and store to that referred-to variable! */
 			check(ir_alloc_op(arena, &footer));
 			footer->opcode = IR_OP_STORE;
 			ir_val_copy(&inner_return, &footer->args[0]);
-			const struct ast *dereferenced =
-				ir_assignment_lvalue_suitable_for_store(a);
-			// TODO: deal with deref of more complex expressions,
-			// like function call, of fn returning pointer?
-			assert(dereferenced->node_type ==
-			       NODE_EXPRESSION_VARIABLE_USAGE);
-			// TODO: consolidate w/ ir_val_from_ast_variable_like()
-			// in order to get edge cases like dereferencing pointer
-			// variable with linkage, which uses
-			// IR_VAL_VARIABLE_DATA, not IR_VAL_TEMPORARY_VARIABLE
-			check(ir_val_tmpvar(arena,
-			                    dereferenced->u.var.unique,
-			                    &dereferenced->expr_type,
-			                    &footer->args[1]));
+			ir_val_copy(&dereferenced_return, &footer->args[1]);
 		} else {
 			check(ir_val_from_ast_variable_like(arena,
 			                                    a,
@@ -791,9 +791,9 @@ ir_unary_op(Arena *arena,
 		break;
 	}
 
-	struct ir_op *header = NULL;
 	if (a->node_type == NODE_EXPRESSION_POSTDECREMENT ||
 	    a->node_type == NODE_EXPRESSION_POSTINCREMENT) {
+		assert(header == NULL);
 		check(ir_alloc_op(arena, &header));
 		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 			header->opcode = IR_OP_LOAD;
