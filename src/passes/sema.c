@@ -567,10 +567,9 @@ sema_exit_loop_id(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
-result_t
+static WARN_UNUSED result_t
 sema_label_loops(Arena *arena, struct ast *a, long long int *generator)
 {
-	debug("Labeling loops, loop breaks, and continues");
 	struct sema_ops ops = {
 		.node_enter = sema_enter_loop_id,
 		.node_exit = sema_exit_loop_id,
@@ -691,10 +690,9 @@ sema_exit_goto_id(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
-result_t
+static WARN_UNUSED result_t
 sema_label_gotos(Arena *arena, struct ast *a, long long int *generator)
 {
-	debug("Labeling goto statements and labels");
 	struct sema_ops ops = {
 		.node_enter = sema_enter_goto_id,
 		.node_exit = sema_exit_goto_id,
@@ -1784,7 +1782,10 @@ sema_mangle_internal_linkage_names(struct ast *a, void *userdata)
 }
 
 result_t
-sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
+sema_typecheck(Arena *arena,
+               struct ast *a,
+               long long int *label_generator,
+               struct symbol_table *s)
 {
 	struct sema_ops ops = {0};
 
@@ -1833,6 +1834,12 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 		pointer_state.arena = arena;
 		check(sema_walk(a, &ops, &pointer_state));
 	}
+
+	debug("Labeling loops, loop breaks, and continues");
+	check(sema_label_loops(arena, a, label_generator));
+
+	debug("Labeling goto statements and labels");
+	check(sema_label_gotos(arena, a, label_generator));
 
 	debug("Inserting cast expressions");
 	ops.node_enter = sema_implicit_cast;
