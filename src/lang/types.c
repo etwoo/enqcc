@@ -24,6 +24,7 @@ ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 	dst->maybe_null_pointer_constant = src->maybe_null_pointer_constant;
 
 	if (src->referent != NULL) {
+		dst->referent = NULL;
 		check(ctype_alloc(arena, &dst->referent));
 		check(ctype_copy(arena, src->referent, dst->referent));
 	}
