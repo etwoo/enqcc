@@ -1042,8 +1042,7 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 }
 
 static WARN_UNUSED result_t
-sema_pointer_as_if_by_assignment(const struct ctype *lhs,
-                                 const struct ctype *rhs)
+sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
 {
 	if (ctype_is_equal(lhs, rhs)) {
 		/* given equality, nothing more to check */
@@ -1051,15 +1050,7 @@ sema_pointer_as_if_by_assignment(const struct ctype *lhs,
 		return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
 	} else if (ctype_is_pointer(lhs) && !ctype_nullptr_ish(rhs)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS);
-	}
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
-{
-	check(sema_pointer_as_if_by_assignment(lhs, rhs));
-	if (ctype_is_pointer(rhs) && !ctype_nullptr_ish(lhs)) {
+	} else if (ctype_is_pointer(rhs) && !ctype_nullptr_ish(lhs)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS);
 	}
 	return RESULT_OK;
@@ -1075,7 +1066,6 @@ sema_pointer(struct ast *a, void *userdata)
 {
 	struct sema_pointer_state *state = userdata;
 	Arena *arena = state->arena;
-	info("%s(): node_type %u", __func__, a->node_type);
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
@@ -1084,15 +1074,13 @@ sema_pointer(struct ast *a, void *userdata)
 		                 &state->expected_return_type));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
-		check(sema_pointer_as_if_by_assignment(
-			&state->expected_return_type,
-			&a->u.op_unary.operand->expr_type));
+		check(sema_pointer_cmp(&state->expected_return_type,
+		                       &a->u.op_unary.operand->expr_type));
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			check(sema_pointer_as_if_by_assignment(
-				&a->u.declare.var_type,
-				&a->u.declare.init->expr_type));
+			check(sema_pointer_cmp(&a->u.declare.var_type,
+			                       &a->u.declare.init->expr_type));
 		}
 		break;
 	case NODE_SWITCH:
@@ -1125,9 +1113,8 @@ sema_pointer(struct ast *a, void *userdata)
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		check(sema_pointer_as_if_by_assignment(
-			&a->u.op_binary.lhs->expr_type,
-			&a->u.op_binary.rhs->expr_type));
+		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
+		                       &a->u.op_binary.rhs->expr_type));
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
@@ -1137,11 +1124,6 @@ sema_pointer(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		check(sema_pointer_cmp(&a->u.op_ternary.then_expr->expr_type,
 		                       &a->u.op_ternary.else_expr->expr_type));
-		break;
-	case NODE_EXPRESSION_CAST:
-		check(sema_pointer_as_if_by_assignment(
-			&a->u.cast.to_type,
-			&a->u.cast.expr->expr_type));
 		break;
 	default:
 		break;
@@ -1446,7 +1428,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 			 * On function call, try to widen or narrow argument
 			 * expression type to declared parameter type.
 			 */
-			check(sema_pointer_as_if_by_assignment(lhs, rhs));
+			check(sema_pointer_cmp(lhs, rhs));
 			to_check = get_common_ctype(lhs, rhs);
 		}
 		if (!ctype_is_equal(to_check,
@@ -1848,6 +1830,7 @@ sema_typecheck(Arena *arena, struct ast *a, struct symbol_table *s)
 	ops.node_enter = sema_pointer;
 	{
 		struct sema_pointer_state pointer_state = {0};
+		pointer_state.arena = arena;
 		check(sema_walk(a, &ops, &pointer_state));
 	}
 
