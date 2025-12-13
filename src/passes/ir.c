@@ -810,6 +810,7 @@ ir_unary_op(Arena *arena,
 
 	ir_val_copy(&inner_return, &unary->args[0]);
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &unary->args[1]));
+	ir_val_copy(&unary->args[1], return_value);
 
 	/*
 	 * Emit IR in this order:
