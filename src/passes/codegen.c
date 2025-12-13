@@ -1084,7 +1084,7 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_memory(&src->args[1],
+		codegen_set_operand_memory(&src->args[0],
 		                           ASM_REGISTER_AX,
 		                           0,
 		                           &(**dst).args[1]);

@@ -253,22 +253,6 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		if (op->args[i].operand_type == ASM_OPERAND_NONE) {
 			continue;
 		}
-		if (op->args[i].operand_type == ASM_OPERAND_MEMORY &&
-		    // TODO: why is this only needed for non-stack pointers?
-		    // and why does this cause failures if i also apply it to
-		    // stack offsets?
-		    op->args[i].u.mem.reg != ASM_REGISTER_RBP) {
-			if (op->args[i].word_type ==
-			    ASM_WORD_POINTER_TO_32BIT) {
-				ralias_default = REGISTER_ALIAS_4BYTE;
-				continue;
-			}
-			if (op->args[i].word_type ==
-			    ASM_WORD_POINTER_TO_64BIT) {
-				ralias_default = REGISTER_ALIAS_8BYTE;
-				continue;
-			}
-		}
 		/* last operand's mapping wins */
 		map_wordtype_to_register_alias(&op->args[i], &ralias_default);
 	}
