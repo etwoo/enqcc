@@ -95,8 +95,8 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 
 static void
 codegen_set_operand_memory(const struct ir_val *basis,
-                           long long int offset,
                            enum asm_register reg,
+                           long long int offset,
                            struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_MEMORY;
@@ -110,7 +110,7 @@ codegen_set_operand_stack(const struct ir_val *basis,
                           long long int offset,
                           struct asm_operand *dst)
 {
-	codegen_set_operand_memory(basis, offset, ASM_REGISTER_RBP, dst);
+	codegen_set_operand_memory(basis, ASM_REGISTER_RBP, offset, dst);
 }
 
 static void
@@ -1039,9 +1039,34 @@ codegen_statement_one(Arena *arena,
 		assert(0); /* should be handled by codegen_statement_fp() */
 		break;
 	case IR_OP_GET_ADDRESS:
+		assert(0 && "TODO impl GET_ADDRESS");
+		break;
 	case IR_OP_LOAD:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		assert((**dst).args[0].word_type == ASM_WORD_64BIT);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_memory(&src->args[1],
+		                           ASM_REGISTER_AX,
+		                           0,
+		                           &(**dst).args[0]);
+		codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		break;
 	case IR_OP_STORE:
-		assert(0 && "TODO impl GET_ADDRESS, LOAD, STORE");
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		assert((**dst).args[0].word_type == ASM_WORD_64BIT);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		codegen_set_operand_memory(&src->args[0],
+		                           ASM_REGISTER_AX,
+		                           0,
+		                           &(**dst).args[1]);
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
