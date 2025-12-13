@@ -132,16 +132,10 @@ emit_asm_operand(const struct asm_operand *o,
 		assert(0 && "PSEUDOREGISTER should have been eliminated");
 		break;
 	case ASM_OPERAND_MEMORY:
-		if (o->u.mem.offset == 0) {
-			dprintf(fd,
-			        "(%s)",
-			        REGISTER_AS_STR[o->u.mem.reg][ralias]);
-		} else {
-			dprintf(fd,
-			        "%lld(%s)",
-			        o->u.mem.offset,
-			        REGISTER_AS_STR[o->u.mem.reg][ralias]);
-		}
+		dprintf(fd,
+		        "%lld(%s)",
+		        o->u.mem.offset,
+		        REGISTER_AS_STR[o->u.mem.reg][REGISTER_ALIAS_8BYTE]);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		assert(o->u.num <= LLONG_MAX);
