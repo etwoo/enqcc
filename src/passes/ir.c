@@ -644,45 +644,86 @@ ir_assignment(Arena *arena,
 		              &lvalue_addr_for_store_return));
 	}
 
+	struct ir_op *rhs_ops = NULL;
+	struct ir_val rhs_return = {0};
+	check(ir_expr(arena, a->u.op_binary.rhs, ir, &rhs_ops, &rhs_return));
+	assert(rhs_return.subtype != IR_VAL_NONE);
+
+	struct ir_op *assigner = NULL;
+	check(ir_alloc_op(arena, &assigner));
+
+	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+		assigner->opcode = IR_OP_STORE;
+	} else {
+		assigner->opcode = IR_OP_COPY;
+	}
+
+	ir_val_copy(&rhs_return, &assigner->args[0]);
+	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
+	} else {
+		check(ir_val_from_ast_variable_like(arena,
+		                                    a,
+		                                    &assigner->args[1]));
+	}
+
+	assert(return_value->subtype == IR_VAL_NONE);
+	ir_val_copy(&assigner->args[1], return_value);
+
+	struct ir_op *collect[] = {
+		lvalue_addr_for_store,
+		rhs_ops,
+		assigner,
+	};
+	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
+		*dst = ir_op_list_concat(*dst, collect[i]);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_incr_decr(Arena *arena,
+             const struct ast *a,
+             struct intermediate *ir,
+             struct ir_op **dst,
+             struct ir_val *return_value)
+{
+	struct ir_op *lvalue_addr_for_store = NULL;
+	struct ir_val lvalue_addr_for_store_return = {0};
+	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+		/* Compute referent */
+		const struct ast *address_expr =
+			ir_assignment_lvalue_suitable_for_store(a);
+		check(ir_expr(arena,
+		              address_expr,
+		              ir,
+		              &lvalue_addr_for_store, /* may remain NULL */
+		              &lvalue_addr_for_store_return));
+	}
+
 	struct ir_op *unary = NULL;
 	check(ir_alloc_op(arena, &unary));
 
-	struct ast *ast_inner = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 		unary->opcode = IR_OP_UNARY_DECREMENT;
-		ast_inner = a->u.op_unary.operand;
 		break;
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		unary->opcode = IR_OP_UNARY_INCREMENT;
-		ast_inner = a->u.op_unary.operand;
-		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
-			unary->opcode = IR_OP_STORE;
-		} else {
-			unary->opcode = IR_OP_COPY;
-		}
-		ast_inner = a->u.op_binary.rhs;
 		break;
 	default:
 		assert(0); /* logic error in caller */
 		break;
 	}
 
-	struct ir_op *inner = NULL;
-	struct ir_val inner_return = {0};
-	check(ir_expr(arena, ast_inner, ir, &inner, &inner_return));
-	assert(inner_return.subtype != IR_VAL_NONE);
-
-	ir_val_copy(&inner_return, &unary->args[0]);
 	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
-		ir_val_copy(&lvalue_addr_for_store_return, &unary->args[1]);
+		ir_val_copy(&lvalue_addr_for_store_return, &unary->args[0]);
 	} else {
-		check(ir_val_from_ast_variable_like(arena, a, &unary->args[1]));
+		check(ir_val_from_ast_variable_like(arena, a, &unary->args[0]));
 	}
+	ir_val_copy(&unary->args[0], &unary->args[1]);
 
 	struct ir_op *stash_value_before_changes = NULL;
 	switch (a->node_type) {
@@ -708,7 +749,6 @@ ir_assignment(Arena *arena,
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		assert(return_value->subtype == IR_VAL_NONE);
 		ir_val_copy(&unary->args[1], return_value);
 		break;
@@ -720,13 +760,11 @@ ir_assignment(Arena *arena,
 	struct ir_op *collect[] = {
 		lvalue_addr_for_store,
 		stash_value_before_changes,
-		inner,
 		unary,
 	};
 	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
 		*dst = ir_op_list_concat(*dst, collect[i]);
 	}
-
 	return RESULT_OK;
 }
 
@@ -1146,14 +1184,16 @@ ir_expr(Arena *arena,
 		assert(return_value->subtype == IR_VAL_NONE);
 		check(ir_val_from_ast_variable_like(arena, a, return_value));
 		break;
-	case NODE_EXPRESSION_NULL:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		check(ir_assignment(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		check(ir_assignment(arena, a, ir, dst, return_value));
+		check(ir_incr_decr(arena, a, ir, dst, return_value));
+		break;
+	case NODE_EXPRESSION_NULL:
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
