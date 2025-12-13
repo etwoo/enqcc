@@ -1039,7 +1039,8 @@ codegen_statement_one(Arena *arena,
 		assert(0); /* should be handled by codegen_statement_fp() */
 		break;
 	case IR_OP_GET_ADDRESS:
-		assert(0 && "TODO impl GET_ADDRESS");
+		(**dst).opcode = ASM_OP_LEA;
+		codegen_map_operands_all(src, *dst);
 		break;
 	case IR_OP_LOAD:
 		(**dst).opcode = ASM_OP_MOV;

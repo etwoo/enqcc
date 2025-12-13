@@ -323,6 +323,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
 		print_opcode_suffix = map_ralias_to_op_suffix(ralias[0]);
 		break;
+	case ASM_OP_LEA:
+		print_opcode = "lea";
+		break;
 	case ASM_OP_UNARY_NEG:
 		print_opcode = "neg";
 		break;

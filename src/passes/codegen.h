@@ -76,6 +76,7 @@ bool is_xmm_register(const struct asm_operand *o) WARN_UNUSED;
 	F(MOV)                                                                 \
 	F(MOV_WITH_SIGN_EXTENSION)                                             \
 	F(MOV_WITH_ZERO_EXTENSION)                                             \
+	F(LEA)                                                                 \
 	F(CVT_DOUBLE_TO_INT)                                                   \
 	F(CVT_INT_TO_DOUBLE)                                                   \
 	F(UNARY_NEG)                                                           \
