@@ -697,17 +697,17 @@ ir_incr_decr(Arena *arena,
 		              &lvalue_addr_for_store_return));
 	}
 
-	struct ir_op *unary = NULL;
-	check(ir_alloc_op(arena, &unary));
+	struct ir_op *incr = NULL;
+	check(ir_alloc_op(arena, &incr));
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
-		unary->opcode = IR_OP_UNARY_DECREMENT;
+		incr->opcode = IR_OP_UNARY_DECREMENT;
 		break;
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		unary->opcode = IR_OP_UNARY_INCREMENT;
+		incr->opcode = IR_OP_UNARY_INCREMENT;
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -726,11 +726,11 @@ ir_incr_decr(Arena *arena,
 		// IR_OP_UNARY_DECREMENT_PTR, IR_OP_UNARY_INCREMENT_PTR
 		// ... and have codegen responsible for loading the pointer
 		// values into eax and then dereferencing, e.g. incl (%rax)
-		ir_val_copy(&lvalue_addr_for_store_return, &unary->args[0]);
+		ir_val_copy(&lvalue_addr_for_store_return, &incr->args[0]);
 	} else {
-		check(ir_val_from_ast_variable_like(arena, a, &unary->args[0]));
+		check(ir_val_from_ast_variable_like(arena, a, &incr->args[0]));
 	}
-	ir_val_copy(&unary->args[0], &unary->args[1]);
+	ir_val_copy(&incr->args[0], &incr->args[1]);
 
 	struct ir_op *stash_value_before_changes = NULL;
 	switch (a->node_type) {
@@ -757,7 +757,7 @@ ir_incr_decr(Arena *arena,
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 		assert(return_value->subtype == IR_VAL_NONE);
-		ir_val_copy(&unary->args[1], return_value);
+		ir_val_copy(&incr->args[1], return_value);
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -767,7 +767,7 @@ ir_incr_decr(Arena *arena,
 	struct ir_op *collect[] = {
 		lvalue_addr_for_store,
 		stash_value_before_changes,
-		unary,
+		incr,
 	};
 	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
 		*dst = ir_op_list_concat(*dst, collect[i]);
