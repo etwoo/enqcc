@@ -66,14 +66,25 @@ ir_unpack_parens(const struct ast *a)
 static WARN_UNUSED const struct ast *
 ir_assignment_lvalue_suitable_for_store(const struct ast *a)
 {
-	if (a->node_type != NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
-		return NULL;
+	const struct ast *candidate = NULL;
+	switch (a->node_type) {
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		candidate = ir_unpack_parens(a->u.op_binary.lhs);
+		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		candidate = ir_unpack_parens(a->u.op_unary.operand);
+		break;
+	default:
+		break;
 	}
 
-	const struct ast *unpacked = ir_unpack_parens(a->u.op_binary.lhs);
-	if (unpacked->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
+	if (candidate != NULL &&
+	    candidate->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
 		const struct ast *inner =
-			ir_unpack_parens(unpacked->u.op_unary.operand);
+			ir_unpack_parens(candidate->u.op_unary.operand);
 		if (inner->node_type != NODE_EXPRESSION_UNARY_ADDRESS_OF) {
 			return inner;
 		}
@@ -686,8 +697,11 @@ ir_incr_decr(Arena *arena,
 {
 	struct ir_op *lvalue_addr_for_store = NULL;
 	struct ir_val lvalue_addr_for_store_return = {0};
+
+	struct ir_op *load_working_copy = NULL;
+	struct ir_val load_working_copy_return = {0};
+
 	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
-		/* Compute referent */
 		const struct ast *address_expr =
 			ir_assignment_lvalue_suitable_for_store(a);
 		check(ir_expr(arena,
@@ -695,6 +709,18 @@ ir_incr_decr(Arena *arena,
 		              ir,
 		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
+
+		check(ir_alloc_op(arena, &load_working_copy));
+		load_working_copy->opcode = IR_OP_LOAD;
+		ir_val_copy(&lvalue_addr_for_store_return,
+		            &load_working_copy->args[0]);
+		assert(ctype_is_pointer(&address_expr->expr_type));
+		check(ir_val_tmpvar_gen(arena,
+		                        ir,
+		                        address_expr->expr_type.referent,
+		                        &load_working_copy->args[1]));
+		ir_val_copy(&load_working_copy->args[1],
+		            &load_working_copy_return);
 	}
 
 	struct ir_op *incr = NULL;
@@ -714,19 +740,17 @@ ir_incr_decr(Arena *arena,
 		break;
 	}
 
+	struct ir_op *store_updated_value = NULL;
+
 	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
-		// TODO: passing pointer value directly to incr/decr doesn't
-		// currently work, even though underlying ASM supports it,
-		// because i don't currently have a way to encode in the IR that
-		// a given argument should be dereferenced when used as an ASM
-		// operand; for now, just generate IR for load/store around the
-		// core incr/decr operations, as a header/footer pair of ops
-		//
-		// alternatively, add pointer variants of ops like
-		// IR_OP_UNARY_DECREMENT_PTR, IR_OP_UNARY_INCREMENT_PTR
-		// ... and have codegen responsible for loading the pointer
-		// values into eax and then dereferencing, e.g. incl (%rax)
-		ir_val_copy(&lvalue_addr_for_store_return, &incr->args[0]);
+		ir_val_copy(&load_working_copy_return, &incr->args[0]);
+
+		check(ir_alloc_op(arena, &store_updated_value));
+		store_updated_value->opcode = IR_OP_STORE;
+		ir_val_copy(&load_working_copy_return,
+		            &store_updated_value->args[0]);
+		ir_val_copy(&lvalue_addr_for_store_return,
+		            &store_updated_value->args[1]);
 	} else {
 		check(ir_val_from_ast_variable_like(arena, a, &incr->args[0]));
 	}
@@ -767,7 +791,9 @@ ir_incr_decr(Arena *arena,
 	struct ir_op *collect[] = {
 		lvalue_addr_for_store,
 		stash_value_before_changes,
+		load_working_copy,
 		incr,
+		store_updated_value,
 	};
 	for (size_t i = 0; i < ARRAY_SIZE(collect); ++i) {
 		*dst = ir_op_list_concat(*dst, collect[i]);
