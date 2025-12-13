@@ -28,6 +28,7 @@
 	F(R10, "r10", "r10d", "r10b")                                          \
 	F(R11, "r11", "r11d", "r11b")                                          \
 	F(RSP, "rsp", "rsp", "rsp")                                            \
+	F(RBP, "rbp", "rbp", "rbp")                                            \
 	FOREACH_FP_CALL_REGISTER(F)                                            \
 	F(XMM14, "xmm14", "xmm14", "xmm14")                                    \
 	F(XMM15, "xmm15", "xmm15", "xmm15")
@@ -42,7 +43,7 @@ struct asm_operand {
 		ASM_OPERAND_IMMEDIATE,
 		ASM_OPERAND_REGISTER,
 		ASM_OPERAND_PSEUDO_REGISTER,
-		ASM_OPERAND_STACK,
+		ASM_OPERAND_MEMORY,
 		ASM_OPERAND_JUMP_TARGET_LABEL,
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
 		ASM_OPERAND_VARIABLE_DATA,
@@ -57,6 +58,10 @@ struct asm_operand {
 	union {
 		int128_t num;
 		enum asm_register reg;
+		struct {
+			long long int offset;
+			enum asm_register reg;
+		} mem;                       /* MEMORY */
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
 		double dnum;                 /* CONSTANT_DATA_DOUBLE */

@@ -94,6 +94,26 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 }
 
 static void
+codegen_set_operand_memory(const struct ir_val *basis,
+                           long long int offset,
+                           enum asm_register reg,
+                           struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_MEMORY;
+	dst->u.mem.offset = offset;
+	dst->u.mem.reg = reg;
+	codegen_map_ctype(basis, dst);
+}
+
+static void
+codegen_set_operand_stack(const struct ir_val *basis,
+                          long long int offset,
+                          struct asm_operand *dst)
+{
+	codegen_set_operand_memory(basis, offset, ASM_REGISTER_RBP, dst);
+}
+
+static void
 codegen_set_operand_register(const struct ir_val *basis,
                              enum asm_register reg,
                              struct asm_operand *dst)
@@ -1093,9 +1113,7 @@ codegen_copy_stack_to_pseudo(Arena *arena,
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
-	(**dst).args[0].operand_type = ASM_OPERAND_STACK;
-	(**dst).args[0].u.num = stack_offset;
-	codegen_map_ctype(src, &(**dst).args[0]);
+	codegen_set_operand_stack(src, stack_offset, &(**dst).args[0]);
 	codegen_set_operand_pseudo(src, &(**dst).args[1]);
 
 	return RESULT_OK;
@@ -1229,7 +1247,7 @@ round_up_to_multiple_of(long long int n, long long int base)
 static WARN_UNUSED result_t
 codegen_replace_pseudoregisters_fn(struct asm_function *cg,
                                    long long int range[2],
-                                   int128_t *offsets,
+                                   long long int *offsets,
                                    bool preflight)
 {
 	long long int cursor = 0;
@@ -1267,8 +1285,10 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 				offsets[idx] = cursor;
 			}
 
-			arg->operand_type = ASM_OPERAND_STACK;
-			arg->u.num = -1 * offsets[idx];
+			arg->operand_type = ASM_OPERAND_MEMORY;
+			arg->u.mem.offset = -1 * offsets[idx];
+			arg->u.mem.reg = ASM_REGISTER_RBP;
+			/* leave arg->word_type as-is */
 		}
 	}
 	return RESULT_OK;
@@ -1291,7 +1311,7 @@ codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
 		assert(size > 0);
 		assert(size <= 4096); /* if exceeded, refactor */
 
-		int128_t *off = arena_alloc(arena, sizeof(*off) * size);
+		long long int *off = arena_alloc(arena, sizeof(*off) * size);
 		check(codegen_replace_pseudoregisters_fn(f, range, off, false));
 
 		assert(f->stack_usage == 0);
@@ -1397,7 +1417,7 @@ codegen_fixup_apply(Arena *arena,
 static WARN_UNUSED bool
 in_memory(struct asm_operand *o)
 {
-	return o->operand_type == ASM_OPERAND_STACK ||
+	return o->operand_type == ASM_OPERAND_MEMORY ||
 	       o->operand_type == ASM_OPERAND_VARIABLE_DATA ||
 	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_DOUBLE ||
 	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_LONGS ||
@@ -1406,7 +1426,7 @@ in_memory(struct asm_operand *o)
 
 /*
  * Prepare a trampoline by memcpy()-ing invalid instructions where both
- * operands are ASM_OPERAND_STACK:
+ * operands are ASM_OPERAND_MEMORY:
  *
  *     movl -4(%rbp), -8(%rbp)
  *
@@ -1454,7 +1474,7 @@ fix_s2s(struct asm_op *cur, struct fix *trampoline)
  * through a register before an arithmetic op can use it as an operand.
  *
  * Ditto for ASM_OP_MOV op with a large immediate value as a source and an
- * ASM_OPERAND_STACK as a destination.
+ * ASM_OPERAND_MEMORY as a destination.
  *
  * Loading an immediate value into an XMM* register typically uses a global
  * constant as a source, but if necessary, bouncing through a general purpose
@@ -1894,8 +1914,10 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		debug("  PSEUDO %lld", (long long)operand->u.num);
 		break;
-	case ASM_OPERAND_STACK:
-		debug("  STACK %lld", (long long)operand->u.num);
+	case ASM_OPERAND_MEMORY:
+		debug("  MEMORY %lld(%s)",
+		      operand->u.mem.offset,
+		      REGISTER_NAMES[operand->u.mem.reg]);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		debug("  LABEL %lld", (long long)operand->u.num);

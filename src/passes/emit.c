@@ -24,8 +24,6 @@ static const char STR_OP_MOV_QUAD[] = "movq";
 static const char STR_OP_POP_QUAD[] = "popq";
 static const char *const STR_OP_PUSH_QUAD = "pushq";
 static const char STR_OP_RET[] = "ret";
-static const char STR_REG_RSP[] = "%rsp"; /* aka frame pointer */
-static const char STR_REG_RBP[] = "%rbp"; /* aka stack pointer */
 static const char STR_REG_RIP[] = "%rip";
 
 enum register_alias {
@@ -37,6 +35,11 @@ enum register_alias {
 #define TO_STR(register_name, b8, b4, b1) {"%" b8, "%" b4, "%" b1},
 static const char *const REGISTER_AS_STR[][3] = {FOREACH_ASM_REGISTER(TO_STR)};
 #undef TO_STR
+
+/* aka frame pointer */
+#define STR_REG_RSP REGISTER_AS_STR[ASM_REGISTER_RSP][REGISTER_ALIAS_4BYTE]
+/* aka stack pointer */
+#define STR_REG_RBP REGISTER_AS_STR[ASM_REGISTER_RBP][REGISTER_ALIAS_4BYTE]
 
 static WARN_UNUSED const char *
 get_label_prefix(enum platform plat)
@@ -128,15 +131,17 @@ emit_asm_operand(const struct asm_operand *o,
 	case ASM_OPERAND_PSEUDO_REGISTER:
 		assert(0 && "PSEUDOREGISTER should have been eliminated");
 		break;
-	case ASM_OPERAND_STACK:
-		if (o->u.num == 0) {
-			dprintf(fd, "(%s)", STR_REG_RBP);
+	case ASM_OPERAND_MEMORY:
+		if (o->u.mem.offset == 0) {
+			dprintf(fd,
+			        "(%s)",
+			        REGISTER_AS_STR[o->u.mem.reg][ralias]);
 		} else {
 			assert(o->u.num <= LLONG_MAX);
 			dprintf(fd,
 			        "%lld(%s)",
-			        (long long)o->u.num,
-			        STR_REG_RBP);
+			        o->u.mem.offset,
+			        REGISTER_AS_STR[o->u.mem.reg][ralias]);
 		}
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
@@ -286,8 +291,8 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	switch (op->opcode) {
 	case ASM_OP_MOV:
 		if ((is_xmm_register(&op->args[0]) &&
-		     op->args[1].operand_type == ASM_OPERAND_STACK) ||
-		    (op->args[0].operand_type == ASM_OPERAND_STACK &&
+		     op->args[1].operand_type == ASM_OPERAND_MEMORY) ||
+		    (op->args[0].operand_type == ASM_OPERAND_MEMORY &&
 		     is_xmm_register(&op->args[1]))) {
 			print_opcode = "movsd";
 			print_opcode_suffix = 0;
