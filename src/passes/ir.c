@@ -660,6 +660,9 @@ ir_assignment(Arena *arena,
 	check(ir_expr(arena, a->u.op_binary.rhs, ir, &rhs_ops, &rhs_return));
 	assert(rhs_return.subtype != IR_VAL_NONE);
 
+	assert(return_value->subtype == IR_VAL_NONE);
+	ir_val_copy(&rhs_return, return_value);
+
 	struct ir_op *assigner = NULL;
 	check(ir_alloc_op(arena, &assigner));
 	ir_val_copy(&rhs_return, &assigner->args[0]);
@@ -673,9 +676,6 @@ ir_assignment(Arena *arena,
 		                                    a,
 		                                    &assigner->args[1]));
 	}
-
-	assert(return_value->subtype == IR_VAL_NONE);
-	ir_val_copy(&assigner->args[1], return_value);
 
 	struct ir_op *collect[] = {
 		lvalue_addr_for_store,
