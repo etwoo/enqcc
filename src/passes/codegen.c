@@ -1871,6 +1871,35 @@ fix_arithmetic_on_double(struct asm_op *cur, struct fix *trampoline)
 	return true;
 }
 
+/*
+ * Translate:
+ *
+ *     leaq -4(%rbp), -8(%rbp)
+ *
+ * ... into:
+ *
+ *     leaq -4(%rbp), %r10d
+ *     movq %r10d, -8(%rbp)
+ */
+static WARN_UNUSED bool
+fix_lea(struct asm_op *cur, struct fix *trampoline)
+{
+	if (!(cur->opcode == ASM_OP_LEA && in_memory(&cur->args[1]))) {
+		return false;
+	}
+
+	trampoline->sz = 2;
+	for (size_t i = 0; i < trampoline->sz; ++i) {
+		memcpy(trampoline->ops[i], cur, sizeof(*cur));
+		trampoline->ops[i]->next = NULL;
+	}
+	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[0]->args[1]);
+	trampoline->ops[1]->opcode = ASM_OP_MOV;
+	codegen_set_operand_r10(&cur->args[1], &trampoline->ops[1]->args[0]);
+
+	return true;
+}
+
 static WARN_UNUSED result_t
 codegen_fixup_function(Arena *arena, struct asm_function *cg, fixer fix_init)
 {
@@ -1905,6 +1934,7 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 		fix_cvt_double_to_int,
 		fix_cvt_int_to_double,
 		fix_arithmetic_on_double,
+		fix_lea,
 	};
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		check(codegen_fixup_alloc_stack(arena, f));
