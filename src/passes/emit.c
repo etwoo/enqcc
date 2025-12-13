@@ -137,7 +137,6 @@ emit_asm_operand(const struct asm_operand *o,
 			        "(%s)",
 			        REGISTER_AS_STR[o->u.mem.reg][ralias]);
 		} else {
-			assert(o->u.num <= LLONG_MAX);
 			dprintf(fd,
 			        "%lld(%s)",
 			        o->u.mem.offset,
