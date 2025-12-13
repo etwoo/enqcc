@@ -705,6 +705,10 @@ ir_assignment(Arena *arena,
 		                        &stash_value_before_changes->args[1]));
 		ir_val_copy(&stash_value_before_changes->args[1], return_value);
 	} else {
+		check(ir_val_tmpvar_gen(arena,
+		                        ir,
+		                        &a->expr_type,
+		                        &unary->args[1]));
 		assert(return_value->subtype == IR_VAL_NONE);
 		ir_val_copy(&unary->args[1], return_value);
 	}
