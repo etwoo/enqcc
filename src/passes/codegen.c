@@ -1066,7 +1066,10 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		(**dst).args[1] = OPERAND_RAX_64BIT;
+		codegen_set_operand_memory(&src->args[1],
+		                           ASM_REGISTER_AX,
+		                           0,
+		                           &(**dst).args[1]);
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
