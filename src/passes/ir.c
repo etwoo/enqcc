@@ -651,17 +651,13 @@ ir_assignment(Arena *arena,
 
 	struct ir_op *assigner = NULL;
 	check(ir_alloc_op(arena, &assigner));
+	ir_val_copy(&rhs_return, &assigner->args[0]);
 
 	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 		assigner->opcode = IR_OP_STORE;
-	} else {
-		assigner->opcode = IR_OP_COPY;
-	}
-
-	ir_val_copy(&rhs_return, &assigner->args[0]);
-	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
 	} else {
+		assigner->opcode = IR_OP_COPY;
 		check(ir_val_from_ast_variable_like(arena,
 		                                    a,
 		                                    &assigner->args[1]));
