@@ -1041,6 +1041,7 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_GET_ADDRESS:
 		(**dst).opcode = ASM_OP_LEA;
 		codegen_map_operands_all(src, *dst);
+		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
 		break;
 	case IR_OP_LOAD:
 		(**dst).opcode = ASM_OP_MOV;
@@ -1063,11 +1064,9 @@ codegen_statement_one(Arena *arena,
 		assert((**dst).args[0].word_type == ASM_WORD_64BIT);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_memory(&src->args[0],
-		                           ASM_REGISTER_AX,
-		                           0,
-		                           &(**dst).args[1]);
+		(**dst).args[1] = OPERAND_RAX_64BIT;
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
@@ -1874,12 +1873,12 @@ fix_arithmetic_on_double(struct asm_op *cur, struct fix *trampoline)
 /*
  * Translate:
  *
- *     leaq -4(%rbp), -8(%rbp)
+ *     leaq -4(%rbp), -16(%rbp)
  *
  * ... into:
  *
- *     leaq -4(%rbp), %r10d
- *     movq %r10d, -8(%rbp)
+ *     leaq -4(%rbp), %r10
+ *     movq %r10, -16(%rbp)
  */
 static WARN_UNUSED bool
 fix_lea(struct asm_op *cur, struct fix *trampoline)
@@ -1889,13 +1888,14 @@ fix_lea(struct asm_op *cur, struct fix *trampoline)
 	}
 
 	trampoline->sz = 2;
-	for (size_t i = 0; i < trampoline->sz; ++i) {
-		memcpy(trampoline->ops[i], cur, sizeof(*cur));
-		trampoline->ops[i]->next = NULL;
-	}
-	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[0]->args[1]);
+
+	trampoline->ops[0]->opcode = cur->opcode;
+	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
+	trampoline->ops[0]->args[1] = OPERAND_R10_64BIT;
+
 	trampoline->ops[1]->opcode = ASM_OP_MOV;
-	codegen_set_operand_r10(&cur->args[1], &trampoline->ops[1]->args[0]);
+	trampoline->ops[1]->args[0] = OPERAND_R10_64BIT;
+	codegen_copy_operand(&cur->args[1], &trampoline->ops[1]->args[1]);
 
 	return true;
 }
