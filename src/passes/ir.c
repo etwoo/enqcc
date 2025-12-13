@@ -677,11 +677,10 @@ ir_assignment(Arena *arena,
 	check(ir_expr(arena, ast_inner, ir, &inner, &inner_return));
 	assert(inner_return.subtype != IR_VAL_NONE);
 
-	// TODO: if below loses inner_return, messes up simple cases like *x=10
-	if (false && ir_assignment_lvalue_suitable_for_store(a) != NULL) {
-		ir_val_copy(&lvalue_addr_for_store_return, &unary->args[0]);
+	ir_val_copy(&inner_return, &unary->args[0]);
+	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+		ir_val_copy(&lvalue_addr_for_store_return, &unary->args[1]);
 	} else {
-		ir_val_copy(&inner_return, &unary->args[0]);
 		check(ir_val_from_ast_variable_like(arena, a, &unary->args[1]));
 	}
 
