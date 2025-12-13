@@ -740,6 +740,7 @@ ir_unary_op(Arena *arena,
 
 	struct ir_op *header = NULL;
 	struct ir_op *footer = NULL;
+	struct ir_val dereferenced_return = {0};
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -760,15 +761,11 @@ ir_unary_op(Arena *arena,
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 			/* In addition to IR_OP_COPY to return_value ... */
-			check(ir_val_tmpvar_gen(arena,
-			                        ir,
-			                        &a->expr_type,
-			                        &unary->args[1]));
+			ir_val_copy(&inner_return, &unary->args[1]);
 
 			/* ... compute referent of LHS lvalue */
 			const struct ast *dereferenced =
 				ir_assignment_lvalue_suitable_for_store(a);
-			struct ir_val dereferenced_return = {0};
 			check(ir_expr(arena,
 			              dereferenced,
 			              ir,
@@ -797,7 +794,8 @@ ir_unary_op(Arena *arena,
 		check(ir_alloc_op(arena, &header));
 		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 			header->opcode = IR_OP_LOAD;
-			ir_val_copy(&inner_return, &header->args[0]);
+			ir_val_copy(&dereferenced_return, &header->args[0]);
+			assert(dereferenced_return.subtype != IR_VAL_NONE);
 		} else {
 			header->opcode = IR_OP_COPY;
 			check(ir_val_from_ast_variable_like(arena,
