@@ -211,8 +211,6 @@ map_wordtype_to_register_alias(const struct asm_operand *o,
 		*dst = REGISTER_ALIAS_4BYTE;
 		break;
 	case ASM_WORD_64BIT:
-	case ASM_WORD_POINTER_TO_32BIT: /* assuming CPU w/ 64-bit pointers */
-	case ASM_WORD_POINTER_TO_64BIT: /* assuming CPU w/ 64-bit pointers */
 		*dst = REGISTER_ALIAS_8BYTE;
 		break;
 	default:

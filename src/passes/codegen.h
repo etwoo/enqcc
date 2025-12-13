@@ -54,8 +54,6 @@ struct asm_operand {
 	enum {
 		ASM_WORD_32BIT, /* DWORD */
 		ASM_WORD_64BIT, /* QWORD */
-		ASM_WORD_POINTER_TO_32BIT,
-		ASM_WORD_POINTER_TO_64BIT,
 	} word_type;
 	union {
 		int128_t num;
