@@ -715,6 +715,17 @@ ir_incr_decr(Arena *arena,
 	}
 
 	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+		// TODO: passing pointer value directly to incr/decr doesn't
+		// currently work, even though underlying ASM supports it,
+		// because i don't currently have a way to encode in the IR that
+		// a given argument should be dereferenced when used as an ASM
+		// operand; for now, just generate IR for load/store around the
+		// core incr/decr operations, as a header/footer pair of ops
+		//
+		// alternatively, add pointer variants of ops like
+		// IR_OP_UNARY_DECREMENT_PTR, IR_OP_UNARY_INCREMENT_PTR
+		// ... and have codegen responsible for loading the pointer
+		// values into eax and then dereferencing, e.g. incl (%rax)
 		ir_val_copy(&lvalue_addr_for_store_return, &unary->args[0]);
 	} else {
 		check(ir_val_from_ast_variable_like(arena, a, &unary->args[0]));
