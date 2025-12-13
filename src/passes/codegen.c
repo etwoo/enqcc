@@ -1062,13 +1062,13 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_LOAD:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		(**dst).args[1] = OPERAND_RAX_64BIT;
+		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
 		assert((**dst).args[0].word_type == ASM_WORD_POINTER_TO_32BIT ||
 		       (**dst).args[0].word_type == ASM_WORD_POINTER_TO_64BIT);
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
-		codegen_set_operand_memory(&src->args[1],
+		codegen_set_operand_memory(&src->args[0],
 		                           ASM_REGISTER_AX,
 		                           0,
 		                           &(**dst).args[0]);
@@ -1916,10 +1916,10 @@ fix_lea(struct asm_op *cur, struct fix *trampoline)
 
 	trampoline->ops[0]->opcode = cur->opcode;
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
-	trampoline->ops[0]->args[1] = OPERAND_R10_64BIT;
+	codegen_set_operand_r10(&cur->args[1], &trampoline->ops[0]->args[1]);
 
 	trampoline->ops[1]->opcode = ASM_OP_MOV;
-	trampoline->ops[1]->args[0] = OPERAND_R10_64BIT;
+	codegen_set_operand_r10(&cur->args[1], &trampoline->ops[1]->args[0]);
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[1]->args[1]);
 
 	return true;
