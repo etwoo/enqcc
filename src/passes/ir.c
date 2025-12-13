@@ -682,11 +682,13 @@ ir_assignment(Arena *arena,
 		ir_val_copy(&lvalue_addr_for_store_return, &unary->args[0]);
 	} else {
 		ir_val_copy(&inner_return, &unary->args[0]);
+		check(ir_val_from_ast_variable_like(arena, a, &unary->args[1]));
 	}
 
 	struct ir_op *stash_value_before_changes = NULL;
-	if (a->node_type == NODE_EXPRESSION_POSTDECREMENT ||
-	    a->node_type == NODE_EXPRESSION_POSTINCREMENT) {
+	switch (a->node_type) {
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
 		check(ir_alloc_op(arena, &stash_value_before_changes));
 		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 			stash_value_before_changes->opcode = IR_OP_LOAD;
@@ -704,10 +706,16 @@ ir_assignment(Arena *arena,
 		                        &a->expr_type,
 		                        &stash_value_before_changes->args[1]));
 		ir_val_copy(&stash_value_before_changes->args[1], return_value);
-	} else {
-		check(ir_val_from_ast_variable_like(arena, a, &unary->args[1]));
+		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		assert(return_value->subtype == IR_VAL_NONE);
 		ir_val_copy(&unary->args[1], return_value);
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
 	}
 
 	struct ir_op *collect[] = {
