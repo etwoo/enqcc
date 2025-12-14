@@ -176,6 +176,23 @@ ir_map_linkage(enum symbol_linkage linkage)
 	return IR_LINKAGE_INTERNAL;
 }
 
+static WARN_UNUSED result_t
+ir_assignment_lvalue_load_before_store(Arena *arena,
+                                       struct intermediate *ir,
+                                       const struct ir_val *ptr_to_load,
+                                       const struct ctype *referent_type,
+                                       struct ir_op **dst,
+                                       struct ir_val *return_value)
+{
+	check(ir_alloc_op(arena, dst));
+	assert(*dst != NULL);
+	(**dst).opcode = IR_OP_LOAD;
+	ir_val_copy(ptr_to_load, &(**dst).args[0]);
+	check(ir_val_tmpvar_gen(arena, ir, referent_type, &(**dst).args[1]));
+	ir_val_copy(&(**dst).args[1], return_value);
+	return RESULT_OK;
+}
+
 static result_t ir_expr(Arena *arena,
                         const struct ast *a,
                         struct intermediate *ir,
@@ -666,18 +683,20 @@ ir_assignment(Arena *arena,
 			 * LHS of compound assignment expressions expanded by
 			 * sema_compound_assignment().
 			 */
-			check(ir_alloc_op(arena, &compound_assign_glue));
-			compound_assign_glue->opcode = IR_OP_LOAD;
-			ir_val_copy(&lvalue_addr_for_store_return,
-			            &compound_assign_glue->args[0]);
-			check(ir_val_tmpvar_gen(
+			struct ir_val compound_assign_glue_return = {0};
+			check(ir_assignment_lvalue_load_before_store(
 				arena,
 				ir,
+				&lvalue_addr_for_store_return,
 				&a->expr_type,
-				&compound_assign_glue->args[1]));
+				&compound_assign_glue,
+				&compound_assign_glue_return));
+			/*
+			 * Use opaque kludge.userdata pointer in AST node.
+			 */
 			struct ir_val *ud = arena_alloc(arena, sizeof(*ud));
 			check_if(ud == NULL, ERR_IR_ALLOC);
-			memcpy(ud, &compound_assign_glue->args[1], sizeof(*ud));
+			memcpy(ud, &compound_assign_glue_return, sizeof(*ud));
 			assert(a->u.op_binary.lhs->kludge.userdata == NULL);
 			a->u.op_binary.lhs->kludge.userdata = ud;
 		}
@@ -741,20 +760,13 @@ ir_incr_decr(Arena *arena,
 		              ir,
 		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
-
-		// TODO: consolidate IR_OP_LOAD below with similar (but
-		// slightly different) load in ir_assignment() ...?
-		check(ir_alloc_op(arena, &load_working_copy));
-		load_working_copy->opcode = IR_OP_LOAD;
-		ir_val_copy(&lvalue_addr_for_store_return,
-		            &load_working_copy->args[0]);
-		assert(ctype_is_pointer(&address_expr->expr_type));
-		check(ir_val_tmpvar_gen(arena,
-		                        ir,
-		                        address_expr->expr_type.referent,
-		                        &load_working_copy->args[1]));
-		ir_val_copy(&load_working_copy->args[1],
-		            &load_working_copy_return);
+		check(ir_assignment_lvalue_load_before_store(
+			arena,
+			ir,
+			&lvalue_addr_for_store_return,
+			address_expr->expr_type.referent,
+			&load_working_copy,
+			&load_working_copy_return));
 	}
 
 	struct ir_op *incr = NULL;
