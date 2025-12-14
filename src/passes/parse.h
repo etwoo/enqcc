@@ -182,9 +182,9 @@ struct ast {
 	} u;
 	struct ctype expr_type;
 	struct {
-		struct ast *twin;
+		struct ast *compound_assignment_twin;
 		void *userdata;
-	} compound_assignment_expansion;
+	} kludge;
 };
 
 struct flat {

@@ -658,9 +658,8 @@ ir_assignment(Arena *arena,
 		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
 
-		if (a->u.op_binary.lhs->compound_assignment_expansion.twin) {
-			assert(a->u.op_binary.lhs->compound_assignment_expansion
-			               .userdata == NULL);
+		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
+			assert(a->u.op_binary.lhs->kludge.userdata == NULL);
 			check(ir_alloc_op(arena,
 			                  &early_lvalue_to_rvalue_kludge));
 			early_lvalue_to_rvalue_kludge->opcode = IR_OP_LOAD;
@@ -677,8 +676,7 @@ ir_assignment(Arena *arena,
 			memcpy(ud,
 			       &early_lvalue_to_rvalue_kludge->args[1],
 			       sizeof(*ud));
-			a->u.op_binary.lhs->compound_assignment_expansion
-				.userdata = ud;
+			a->u.op_binary.lhs->kludge.userdata = ud;
 		}
 	}
 
@@ -1186,10 +1184,8 @@ ir_expr(Arena *arena,
         struct ir_op **dst,
         struct ir_val *return_value)
 {
-	if (a->compound_assignment_expansion.twin &&
-	    a->compound_assignment_expansion.userdata) {
-		ir_val_copy(a->compound_assignment_expansion.userdata,
-		            return_value);
+	if (a->kludge.compound_assignment_twin && a->kludge.userdata) {
+		ir_val_copy(a->kludge.userdata, return_value);
 		return RESULT_OK;
 	}
 
