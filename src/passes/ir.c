@@ -646,7 +646,7 @@ ir_assignment(Arena *arena,
 	struct ir_val lvalue_addr_for_store_return = {0};
 
 	/* kludge for compound assignment expansion */
-	struct ir_op *early_lvalue_to_rvalue_kludge = NULL;
+	struct ir_op *compound_assign_glue = NULL;
 
 	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 		/* Compute referent of LHS lvalue */
@@ -659,23 +659,19 @@ ir_assignment(Arena *arena,
 		              &lvalue_addr_for_store_return));
 
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
-			assert(a->u.op_binary.lhs->kludge.userdata == NULL);
-			check(ir_alloc_op(arena,
-			                  &early_lvalue_to_rvalue_kludge));
-			early_lvalue_to_rvalue_kludge->opcode = IR_OP_LOAD;
+			check(ir_alloc_op(arena, &compound_assign_glue));
+			compound_assign_glue->opcode = IR_OP_LOAD;
 			ir_val_copy(&lvalue_addr_for_store_return,
-			            &early_lvalue_to_rvalue_kludge->args[0]);
+			            &compound_assign_glue->args[0]);
 			check(ir_val_tmpvar_gen(
 				arena,
 				ir,
 				&a->expr_type,
-				&early_lvalue_to_rvalue_kludge->args[1]));
-
+				&compound_assign_glue->args[1]));
 			struct ir_val *ud = arena_alloc(arena, sizeof(*ud));
 			check_if(ud == NULL, ERR_IR_ALLOC);
-			memcpy(ud,
-			       &early_lvalue_to_rvalue_kludge->args[1],
-			       sizeof(*ud));
+			memcpy(ud, &compound_assign_glue->args[1], sizeof(*ud));
+			assert(a->u.op_binary.lhs->kludge.userdata == NULL);
 			a->u.op_binary.lhs->kludge.userdata = ud;
 		}
 	}
@@ -704,7 +700,7 @@ ir_assignment(Arena *arena,
 
 	struct ir_op *collect[] = {
 		lvalue_addr_for_store,
-		early_lvalue_to_rvalue_kludge,
+		compound_assign_glue,
 		rhs_ops,
 		assigner,
 	};
