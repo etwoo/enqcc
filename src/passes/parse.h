@@ -181,6 +181,10 @@ struct ast {
 		double double_;        /* NODE_CONSTANT with CTYPE_DOUBLE */
 	} u;
 	struct ctype expr_type;
+	struct {
+		struct ast *twin;
+		void *userdata;
+	} compound_assignment_expansion;
 };
 
 struct flat {

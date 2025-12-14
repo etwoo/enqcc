@@ -653,6 +653,16 @@ ir_assignment(Arena *arena,
 		              ir,
 		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
+
+		if (a->u.op_binary.lhs->compound_assignment_expansion.twin) {
+			struct ir_val *ud = arena_alloc(
+				arena,
+				sizeof(lvalue_addr_for_store_return));
+			check_if(ud == NULL, ERR_IR_ALLOC);
+			memcpy(ud, &lvalue_addr_for_store_return, sizeof(*ud));
+			a->u.op_binary.lhs->compound_assignment_expansion
+				.userdata = ud;
+		}
 	}
 
 	struct ir_op *rhs_ops = NULL;
@@ -1158,6 +1168,21 @@ ir_expr(Arena *arena,
         struct ir_op **dst,
         struct ir_val *return_value)
 {
+	if (a->compound_assignment_expansion.twin &&
+	    a->compound_assignment_expansion.userdata) {
+		check(ir_alloc_op(arena, dst));
+		assert(*dst != NULL);
+		(**dst).opcode = IR_OP_LOAD;
+		ir_val_copy(a->compound_assignment_expansion.userdata,
+		            &(**dst).args[0]);
+		check(ir_val_tmpvar_gen(arena,
+		                        ir,
+		                        &a->expr_type,
+		                        &(**dst).args[1]));
+		ir_val_copy(&(**dst).args[1], return_value);
+		return RESULT_OK;
+	}
+
 	switch (a->node_type) {
 	case NODE_CONSTANT:
 		assert(return_value->subtype == IR_VAL_NONE);

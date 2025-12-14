@@ -763,6 +763,12 @@ sema_compound_assignment(struct ast *a, void *userdata)
 	a->u.op_binary.rhs = new_node;
 	/* retain existing a->u.op_binary.lhs */
 
+	/* doubly-link compound assignment nodes to one another */
+	new_node->u.op_binary.lhs->compound_assignment_expansion.twin =
+		a->u.op_binary.lhs;
+	a->u.op_binary.lhs->compound_assignment_expansion.twin =
+		new_node->u.op_binary.lhs;
+
 	return RESULT_OK;
 }
 
