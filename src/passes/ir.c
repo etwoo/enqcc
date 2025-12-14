@@ -742,6 +742,8 @@ ir_incr_decr(Arena *arena,
 		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
 
+		// TODO: consolidate IR_OP_LOAD below with similar (but
+		// slightly different) load in ir_assignment() ...?
 		check(ir_alloc_op(arena, &load_working_copy));
 		load_working_copy->opcode = IR_OP_LOAD;
 		ir_val_copy(&lvalue_addr_for_store_return,
