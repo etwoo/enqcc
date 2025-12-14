@@ -107,7 +107,6 @@ ir_val_from_ast_variable_like(Arena *arena,
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		// TODO: deal with pointer deref as part of lvalue
 		assert(ir_unpack_parens(src->u.op_unary.operand)->node_type ==
 		       NODE_EXPRESSION_VARIABLE_USAGE);
 		sym = &ir_unpack_parens(src->u.op_unary.operand)->u.var;
@@ -116,7 +115,6 @@ ir_val_from_ast_variable_like(Arena *arena,
 		if (src->u.op_binary.lhs->node_type == NODE_EXPRESSION_CAST) {
 			/* unpack nodes inserted by sema_implicit_cast() */
 			const struct ast *cast_envelope = src->u.op_binary.lhs;
-			// TODO: deal with pointer deref as part of lvalue
 			assert(cast_envelope->u.cast.expr->node_type ==
 			       NODE_EXPRESSION_VARIABLE_USAGE);
 			sym = &cast_envelope->u.cast.expr->u.var;
@@ -642,14 +640,17 @@ ir_assignment(Arena *arena,
               struct ir_op **dst,
               struct ir_val *return_value)
 {
+	const bool lvalue_involves_pointer_dereference =
+		(ir_assignment_lvalue_suitable_for_store(a) != NULL);
+
 	struct ir_op *lvalue_addr_for_store = NULL;
 	struct ir_val lvalue_addr_for_store_return = {0};
 
 	/* kludge for compound assignment expansion */
 	struct ir_op *compound_assign_glue = NULL;
 
-	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
-		/* Compute referent of LHS lvalue */
+	if (lvalue_involves_pointer_dereference) {
+		/* compute referent of LHS lvalue */
 		const struct ast *address_expr =
 			ir_assignment_lvalue_suitable_for_store(a);
 		check(ir_expr(arena,
@@ -659,6 +660,12 @@ ir_assignment(Arena *arena,
 		              &lvalue_addr_for_store_return));
 
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
+			/*
+			 * Cache lvalue-to-rvalue conversion for ir_expr() on
+			 * RHS to reuse. This avoids double-evaluation of the
+			 * LHS of compound assignment expressions expanded by
+			 * sema_compound_assignment().
+			 */
 			check(ir_alloc_op(arena, &compound_assign_glue));
 			compound_assign_glue->opcode = IR_OP_LOAD;
 			ir_val_copy(&lvalue_addr_for_store_return,
@@ -688,7 +695,7 @@ ir_assignment(Arena *arena,
 	check(ir_alloc_op(arena, &assigner));
 	ir_val_copy(&rhs_return, &assigner->args[0]);
 
-	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+	if (lvalue_involves_pointer_dereference) {
 		assigner->opcode = IR_OP_STORE;
 		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
 	} else {
@@ -717,13 +724,16 @@ ir_incr_decr(Arena *arena,
              struct ir_op **dst,
              struct ir_val *return_value)
 {
+	const bool lvalue_involves_pointer_dereference =
+		(ir_assignment_lvalue_suitable_for_store(a) != NULL);
+
 	struct ir_op *lvalue_addr_for_store = NULL;
 	struct ir_val lvalue_addr_for_store_return = {0};
 
 	struct ir_op *load_working_copy = NULL;
 	struct ir_val load_working_copy_return = {0};
 
-	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+	if (lvalue_involves_pointer_dereference) {
 		const struct ast *address_expr =
 			ir_assignment_lvalue_suitable_for_store(a);
 		check(ir_expr(arena,
@@ -764,7 +774,7 @@ ir_incr_decr(Arena *arena,
 
 	struct ir_op *store_updated_value = NULL;
 
-	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+	if (lvalue_involves_pointer_dereference) {
 		ir_val_copy(&load_working_copy_return, &incr->args[0]);
 
 		check(ir_alloc_op(arena, &store_updated_value));
@@ -783,7 +793,7 @@ ir_incr_decr(Arena *arena,
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		check(ir_alloc_op(arena, &stash_value_before_changes));
-		if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
+		if (lvalue_involves_pointer_dereference) {
 			stash_value_before_changes->opcode = IR_OP_LOAD;
 			ir_val_copy(&lvalue_addr_for_store_return,
 			            &stash_value_before_changes->args[0]);

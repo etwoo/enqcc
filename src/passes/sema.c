@@ -763,7 +763,10 @@ sema_compound_assignment(struct ast *a, void *userdata)
 	a->u.op_binary.rhs = new_node;
 	/* retain existing a->u.op_binary.lhs */
 
-	/* doubly-link compound assignment nodes to one another */
+	/*
+	 * Doubly-link compound assignment nodes to one another, in
+	 * preparation for kludge in ir_assignment().
+	 */
 	new_node->u.op_binary.lhs->kludge.compound_assignment_twin =
 		a->u.op_binary.lhs;
 	a->u.op_binary.lhs->kludge.compound_assignment_twin =
