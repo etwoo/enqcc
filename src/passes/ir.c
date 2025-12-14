@@ -85,19 +85,25 @@ ir_unpack_parens(const struct ast *a)
 	return a;
 }
 
-static WARN_UNUSED const struct ast *
-ir_assignment_lvalue_suitable_for_store(const struct ast *a)
+static WARN_UNUSED result_t
+ir_assignment_lvalue(Arena *arena,
+                     const struct ast *src,
+                     const struct ast **lvalue_indirect,
+                     struct ir_val *lvalue_direct)
 {
+	*lvalue_indirect = NULL;
+	memset(lvalue_direct, 0, sizeof(*lvalue_direct));
+
 	const struct ast *candidate = NULL;
-	switch (a->node_type) {
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		candidate = ir_unpack_parens(a->u.op_binary.lhs);
-		break;
+	switch (src->node_type) {
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		candidate = ir_unpack_parens(a->u.op_unary.operand);
+		candidate = ir_unpack_parens(src->u.op_unary.operand);
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		candidate = ir_unpack_parens(src->u.op_binary.lhs);
 		break;
 	default:
 		break;
@@ -108,11 +114,56 @@ ir_assignment_lvalue_suitable_for_store(const struct ast *a)
 		const struct ast *inner =
 			ir_unpack_parens(candidate->u.op_unary.operand);
 		if (inner->node_type != NODE_EXPRESSION_UNARY_ADDRESS_OF) {
-			return inner;
+			*lvalue_indirect = inner;
+			return RESULT_OK;
 		}
 	}
 
-	return NULL;
+	const struct ast_symbol *direct = NULL;
+	switch (src->node_type) {
+	case NODE_DECLARATION:
+		direct = &src->u.declare.identifier;
+		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		assert(candidate != NULL);
+		assert(candidate->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
+		direct = &candidate->u.var;
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		assert(candidate != NULL);
+		if (candidate->node_type == NODE_EXPRESSION_CAST) {
+			/* unpack nodes inserted by sema_implicit_cast() */
+			const struct ast *inner = candidate->u.cast.expr;
+			assert(inner->node_type ==
+			       NODE_EXPRESSION_VARIABLE_USAGE);
+			direct = &inner->u.var;
+		} else {
+			assert(candidate->node_type ==
+			       NODE_EXPRESSION_VARIABLE_USAGE);
+			direct = &candidate->u.var;
+		}
+		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+		direct = &src->u.var;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	if (some_linkage(direct->ltype)) {
+		lvalue_direct->subtype = IR_VAL_VARIABLE_DATA;
+		lvalue_direct->varname = direct->name;
+	} else {
+		lvalue_direct->subtype = IR_VAL_TEMPORARY_VARIABLE;
+	}
+
+	lvalue_direct->num = direct->unique;
+	check(ctype_copy(arena, &src->expr_type, &lvalue_direct->c89type));
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
@@ -129,57 +180,6 @@ ir_assignment_lvalue_load_before_store(Arena *arena,
 	ir_val_copy(ptr_to_load, &(**dst).args[0]);
 	check(ir_val_tmpvar_gen(arena, ir, referent_type, &(**dst).args[1]));
 	ir_val_copy(&(**dst).args[1], return_value);
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-ir_val_from_ast_variable_like(Arena *arena,
-                              const struct ast *src,
-                              struct ir_val *dst)
-{
-	const struct ast_symbol *sym = NULL;
-	switch (src->node_type) {
-	case NODE_DECLARATION:
-		sym = &src->u.declare.identifier;
-		break;
-	case NODE_EXPRESSION_PREDECREMENT:
-	case NODE_EXPRESSION_POSTDECREMENT:
-	case NODE_EXPRESSION_PREINCREMENT:
-	case NODE_EXPRESSION_POSTINCREMENT:
-		assert(ir_unpack_parens(src->u.op_unary.operand)->node_type ==
-		       NODE_EXPRESSION_VARIABLE_USAGE);
-		sym = &ir_unpack_parens(src->u.op_unary.operand)->u.var;
-		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		if (src->u.op_binary.lhs->node_type == NODE_EXPRESSION_CAST) {
-			/* unpack nodes inserted by sema_implicit_cast() */
-			const struct ast *cast_envelope = src->u.op_binary.lhs;
-			assert(cast_envelope->u.cast.expr->node_type ==
-			       NODE_EXPRESSION_VARIABLE_USAGE);
-			sym = &cast_envelope->u.cast.expr->u.var;
-		} else {
-			assert(src->u.op_binary.lhs->node_type ==
-			       NODE_EXPRESSION_VARIABLE_USAGE);
-			sym = &src->u.op_binary.lhs->u.var;
-		}
-		break;
-	case NODE_EXPRESSION_VARIABLE_USAGE:
-		sym = &src->u.var;
-		break;
-	default:
-		assert(0); /* logic error in caller */
-		break;
-	}
-
-	if (some_linkage(sym->ltype)) {
-		dst->subtype = IR_VAL_VARIABLE_DATA;
-		dst->varname = sym->name;
-	} else {
-		dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
-	}
-
-	dst->num = sym->unique;
-	check(ctype_copy(arena, &src->expr_type, &dst->c89type));
 	return RESULT_OK;
 }
 
@@ -278,7 +278,15 @@ ir_decl_init(Arena *arena,
 	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
 
 	ir_val_copy(&inner_return, &assigner->args[0]);
-	check(ir_val_from_ast_variable_like(arena, a, &assigner->args[1]));
+	{
+		const struct ast *dummy = NULL;
+		check(ir_assignment_lvalue(arena,
+		                           a,
+		                           &dummy,
+		                           &assigner->args[1]));
+		assert(dummy == NULL);
+	}
+	assert(assigner->args[1].subtype != IR_VAL_NONE);
 
 	*dst = ir_op_list_concat(inner, assigner);
 	return RESULT_OK;
@@ -657,24 +665,31 @@ ir_assignment(Arena *arena,
               struct ir_op **dst,
               struct ir_val *return_value)
 {
-	const bool lvalue_involves_pointer_dereference =
-		(ir_assignment_lvalue_suitable_for_store(a) != NULL);
+	struct ir_op *assigner = NULL;
+	check(ir_alloc_op(arena, &assigner));
+
+	const struct ast *lvalue_indirect = NULL;
+	struct ir_val lvalue_direct = {0};
+	check(ir_assignment_lvalue(arena, a, &lvalue_indirect, &lvalue_direct));
 
 	struct ir_op *lvalue_addr_for_store = NULL;
 	struct ir_val lvalue_addr_for_store_return = {0};
-
-	/* kludge for compound assignment expansion */
 	struct ir_op *compound_assign_glue = NULL;
 
-	if (lvalue_involves_pointer_dereference) {
+	if (lvalue_direct.subtype != IR_VAL_NONE) {
+		assigner->opcode = IR_OP_COPY;
+		ir_val_copy(&lvalue_direct, &assigner->args[1]);
+	} else if (lvalue_indirect != NULL) {
+		assigner->opcode = IR_OP_STORE;
+
 		/* compute referent of LHS lvalue */
-		const struct ast *address_expr =
-			ir_assignment_lvalue_suitable_for_store(a);
 		check(ir_expr(arena,
-		              address_expr,
+		              lvalue_indirect,
 		              ir,
 		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
+
+		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
 
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
 			/*
@@ -688,7 +703,7 @@ ir_assignment(Arena *arena,
 				arena,
 				ir,
 				&lvalue_addr_for_store_return,
-				&a->expr_type,
+				lvalue_indirect->expr_type.referent,
 				&compound_assign_glue,
 				&compound_assign_glue_return));
 			/*
@@ -700,6 +715,8 @@ ir_assignment(Arena *arena,
 			assert(a->u.op_binary.lhs->kludge.userdata == NULL);
 			a->u.op_binary.lhs->kludge.userdata = ud;
 		}
+	} else {
+		assert(0 && "no lvalue() found for ir_assignment()");
 	}
 
 	struct ir_op *rhs_expr = NULL;
@@ -707,22 +724,8 @@ ir_assignment(Arena *arena,
 	check(ir_expr(arena, a->u.op_binary.rhs, ir, &rhs_expr, &rhs_return));
 	assert(rhs_return.subtype != IR_VAL_NONE);
 
-	assert(return_value->subtype == IR_VAL_NONE);
-	ir_val_copy(&rhs_return, return_value);
-
-	struct ir_op *assigner = NULL;
-	check(ir_alloc_op(arena, &assigner));
 	ir_val_copy(&rhs_return, &assigner->args[0]);
-
-	if (lvalue_involves_pointer_dereference) {
-		assigner->opcode = IR_OP_STORE;
-		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
-	} else {
-		assigner->opcode = IR_OP_COPY;
-		check(ir_val_from_ast_variable_like(arena,
-		                                    a,
-		                                    &assigner->args[1]));
-	}
+	ir_val_copy(&rhs_return, return_value);
 
 	struct ir_op *collect[] = {
 		lvalue_addr_for_store,
@@ -743,8 +746,9 @@ ir_incr_decr(Arena *arena,
              struct ir_op **dst,
              struct ir_val *return_value)
 {
-	const bool lvalue_involves_pointer_dereference =
-		(ir_assignment_lvalue_suitable_for_store(a) != NULL);
+	const struct ast *lvalue_indirect = NULL;
+	struct ir_val lvalue_direct = {0};
+	check(ir_assignment_lvalue(arena, a, &lvalue_indirect, &lvalue_direct));
 
 	struct ir_op *lvalue_addr_for_store = NULL;
 	struct ir_val lvalue_addr_for_store_return = {0};
@@ -752,11 +756,9 @@ ir_incr_decr(Arena *arena,
 	struct ir_op *load_working_copy = NULL;
 	struct ir_val load_working_copy_return = {0};
 
-	if (lvalue_involves_pointer_dereference) {
-		const struct ast *address_expr =
-			ir_assignment_lvalue_suitable_for_store(a);
+	if (lvalue_indirect != NULL) {
 		check(ir_expr(arena,
-		              address_expr,
+		              lvalue_indirect,
 		              ir,
 		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
@@ -764,7 +766,7 @@ ir_incr_decr(Arena *arena,
 			arena,
 			ir,
 			&lvalue_addr_for_store_return,
-			address_expr->expr_type.referent,
+			lvalue_indirect->expr_type.referent,
 			&load_working_copy,
 			&load_working_copy_return));
 	}
@@ -788,9 +790,10 @@ ir_incr_decr(Arena *arena,
 
 	struct ir_op *store_updated_value = NULL;
 
-	if (lvalue_involves_pointer_dereference) {
+	if (lvalue_direct.subtype != IR_VAL_NONE) {
+		ir_val_copy(&lvalue_direct, &incr->args[0]);
+	} else if (lvalue_indirect != NULL) {
 		ir_val_copy(&load_working_copy_return, &incr->args[0]);
-
 		check(ir_alloc_op(arena, &store_updated_value));
 		store_updated_value->opcode = IR_OP_STORE;
 		ir_val_copy(&load_working_copy_return,
@@ -798,8 +801,9 @@ ir_incr_decr(Arena *arena,
 		ir_val_copy(&lvalue_addr_for_store_return,
 		            &store_updated_value->args[1]);
 	} else {
-		check(ir_val_from_ast_variable_like(arena, a, &incr->args[0]));
+		assert(0 && "no lvalue found for ir_incr_decr()");
 	}
+
 	ir_val_copy(&incr->args[0], &incr->args[1]);
 
 	struct ir_op *stash_value_before_changes = NULL;
@@ -807,16 +811,14 @@ ir_incr_decr(Arena *arena,
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		check(ir_alloc_op(arena, &stash_value_before_changes));
-		if (lvalue_involves_pointer_dereference) {
+		if (lvalue_direct.subtype != IR_VAL_NONE) {
+			stash_value_before_changes->opcode = IR_OP_COPY;
+			ir_val_copy(&lvalue_direct,
+			            &stash_value_before_changes->args[0]);
+		} else if (lvalue_indirect != NULL) {
 			stash_value_before_changes->opcode = IR_OP_LOAD;
 			ir_val_copy(&lvalue_addr_for_store_return,
 			            &stash_value_before_changes->args[0]);
-		} else {
-			stash_value_before_changes->opcode = IR_OP_COPY;
-			check(ir_val_from_ast_variable_like(
-				arena,
-				a,
-				&stash_value_before_changes->args[0]));
 		}
 		check(ir_val_tmpvar_gen(arena,
 		                        ir,
@@ -1266,7 +1268,15 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
-		check(ir_val_from_ast_variable_like(arena, a, return_value));
+		{
+			const struct ast *dummy = NULL;
+			check(ir_assignment_lvalue(arena,
+			                           a,
+			                           &dummy,
+			                           return_value));
+			assert(dummy == NULL);
+		}
+		assert(return_value->subtype != IR_VAL_NONE);
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(ir_assignment(arena, a, ir, dst, return_value));
