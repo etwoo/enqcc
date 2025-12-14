@@ -144,8 +144,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      "",
 		      ctype_to_str(&a->u.declare.var_type, tmp, sizeof(tmp)));
 		if (a->u.declare.init != NULL) {
-			debug("%*sINITIALIZER", (int)(indent + 1), "");
-			parse_debug_print(a->u.declare.init, indent + 2);
+			parse_debug_print(a->u.declare.init, indent + 1);
 		}
 		break;
 	case NODE_IF_ELSE:
@@ -256,6 +255,15 @@ parse_debug_print(const struct ast *a, size_t indent)
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
+	case NODE_EXPRESSION_INITIALIZER:
+		if (a->u.init.single != NULL) {
+			assert(a->u.init.multi == NULL);
+			parse_debug_print(a->u.init.single, indent + 1);
+		} else if (a->u.init.multi != NULL) {
+			assert(a->u.init.single == NULL);
+			parse_debug_print_flat(a->u.init.multi, indent + 1);
+		}
+		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -298,11 +306,12 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+	case NODE_EXPRESSION_SUBSCRIPT:
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		parse_debug_print_ast_symbol(NULL, &a->u.var, indent);
+		parse_debug_print_ast_symbol(NULL, &a->u.var, indent + 1);
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		debug("%*sCONDITION", (int)indent + 1, "");

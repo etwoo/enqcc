@@ -66,9 +66,11 @@ struct ast_parameter {
 
 #define FOREACH_AST_NODE_EXPRESSION(F)                                         \
 	F(EXPRESSION_NULL)                                                     \
+	F(EXPRESSION_INITIALIZER)                                              \
 	F(EXPRESSION_PAREN_ENCLOSED)                                           \
 	F(EXPRESSION_POSTDECREMENT)                                            \
 	F(EXPRESSION_POSTINCREMENT)                                            \
+	F(EXPRESSION_SUBSCRIPT)                                                \
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_FUNCTION_CALL)                                            \
 	F(EXPRESSION_CAST)                                                     \
@@ -123,6 +125,10 @@ struct ast {
 			struct ctype var_type;
 			struct ast *init;
 		} declare;
+		struct {
+			struct ast *single;
+			struct flat *multi;
+		} init;
 		struct {
 			struct ast *condition;
 			struct flat *then_clause;

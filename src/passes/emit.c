@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>    /* for memcpy() */
-#include <sys/param.h> /* for MAX() */
+#include <sys/param.h> /* for MIN() */
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
 static const char LINUX_LABEL_PREFIX[] = ".L";
@@ -94,16 +94,6 @@ emit_asm_footer(enum platform plat, int fd)
 	}
 }
 
-static long long unsigned
-get_double_as_quadword(double value)
-{
-	long long unsigned as_quadword = 0;
-	static_assert(sizeof(value) <= sizeof(as_quadword),
-	              "destination must be large enough to hold 64-bit double");
-	memcpy(&as_quadword, &value, sizeof(value));
-	return as_quadword;
-}
-
 static void
 emit_asm_operand(const struct asm_operand *o,
                  enum platform plat,
@@ -136,6 +126,16 @@ emit_asm_operand(const struct asm_operand *o,
 		        "%lld(%s)",
 		        o->u.mem.offset,
 		        REGISTER_AS_STR[o->u.mem.reg][REGISTER_ALIAS_8BYTE]);
+		break;
+	case ASM_OPERAND_PSEUDO_MEMORY:
+		assert(0 && "PSEUDOMEMORY should have been eliminated");
+		break;
+	case ASM_OPERAND_INDEXED:
+		dprintf(fd,
+		        "(%s, %s, %lld)",
+		        REGISTER_AS_STR[o->u.idx.base][REGISTER_ALIAS_8BYTE],
+		        REGISTER_AS_STR[o->u.idx.index][REGISTER_ALIAS_8BYTE],
+		        o->u.idx.scale);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		assert(o->u.num <= LLONG_MAX);
@@ -599,13 +599,15 @@ emit_asm_fn(const struct asm_function *fn, enum platform plat, int fd)
 	}
 }
 
+static const long long unsigned MAX_ALIGNMENT = 16;
+
 static void
-emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
+emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 {
 	const char *vprefix = get_symbol_with_linkage_prefix(plat);
-	const struct string_view *vname = &var->identifier;
+	const struct string_view *vname = &v->identifier;
 
-	if (var->linkage == ASM_LINKAGE_EXTERNAL) {
+	if (v->linkage == ASM_LINKAGE_EXTERNAL) {
 		dprintf(fd,
 		        "\t.globl %s%.*s\n",
 		        vprefix,
@@ -613,34 +615,30 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	const long long int alignment = ctype_to_size_bytes(&var->c89type);
+	const long long unsigned byte_count =
+		constant_byte_count(v->initializer);
+	const long long unsigned alignment =
+		byte_count >= MAX_ALIGNMENT
+			? MAX_ALIGNMENT
+			: v->initializer->elements[0].byte_count;
 
-	if (var->initial.as_integer != 0 ||
-	    ctype_is_floating_point(&var->c89type)) {
-		dprintf(fd, "\t.data\n\t.balign %lld\n", alignment);
+	if (constant_is_zero(v->initializer)) {
+		dprintf(fd, "\t.bss\n\t.balign %llu\n", alignment);
 		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		if (alignment == 4) {
-			dprintf(fd, "\t.long ");
-		} else {
-			dprintf(fd, "\t.quad ");
-		}
-		if (ctype_is_floating_point(&var->c89type)) {
+		dprintf(fd, "\t.zero %llu\n", byte_count);
+	} else {
+		dprintf(fd, "\t.data\n\t.balign %llu\n", alignment);
+		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
+		for (long long unsigned i = 0; i < v->initializer->count; ++i) {
+			if (v->initializer->elements[i].byte_count == 4) {
+				dprintf(fd, "\t.long ");
+			} else {
+				dprintf(fd, "\t.quad ");
+			}
 			dprintf(fd,
 			        "0x%llx\n",
-			        get_double_as_quadword(var->initial.as_double));
-		} else if (var->initial.as_integer > LLONG_MAX) {
-			dprintf(fd,
-			        "%llu\n",
-			        (long long unsigned)var->initial.as_integer);
-		} else {
-			dprintf(fd,
-			        "%lld\n",
-			        (long long)var->initial.as_integer);
+			        v->initializer->elements[i].byte_value);
 		}
-	} else {
-		dprintf(fd, "\t.bss\n\t.balign %lld\n", alignment);
-		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.zero %lld\n", alignment);
 	}
 }
 
@@ -674,6 +672,7 @@ emit_asm_fp_vector_constants(const struct asm_function *f,
 	const char *label_prefix = get_label_prefix(plat);
 
 	if (got_longs != NULL) {
+		dprintf(fd, "\t.data\n");
 		dprintf(fd,
 		        "%s%s%lx%lx%lx%lx:\n",
 		        label_prefix,
@@ -688,6 +687,7 @@ emit_asm_fp_vector_constants(const struct asm_function *f,
 	}
 
 	if (got_quads != NULL) {
+		dprintf(fd, "\t.data\n");
 		dprintf(fd,
 		        "%s%s%llx%llx:\n",
 		        label_prefix,

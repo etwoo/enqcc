@@ -30,6 +30,8 @@
 	F(')', TOKEN_PAREN_CLOSE)                                              \
 	F('{', TOKEN_BRACE_OPEN)                                               \
 	F('}', TOKEN_BRACE_CLOSE)                                              \
+	F('[', TOKEN_SQUARE_BRACKET_OPEN)                                      \
+	F(']', TOKEN_SQUARE_BRACKET_CLOSE)                                     \
 	F(';', TOKEN_SEMICOLON)                                                \
 	F('~', TOKEN_TILDE)                                                    \
 	F('-', TOKEN_HYPHEN)                                                   \

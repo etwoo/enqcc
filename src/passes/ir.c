@@ -262,6 +262,58 @@ ir_block(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_decl_init_multi(Arena *arena,
+                   const struct ast *a,
+                   struct intermediate *ir,
+                   const struct ir_val *lvalue_base,
+                   long long int *pos,
+                   struct ir_op **dst)
+{
+	bool single_within = false;
+	{
+		const struct ast *unpack = a;
+		while (unpack->node_type == NODE_EXPRESSION_CAST) {
+			/* unpack nodes inserted by sema_implicit_cast() */
+			unpack = unpack->u.cast.expr;
+		}
+		assert(unpack->node_type == NODE_EXPRESSION_INITIALIZER);
+		single_within = (unpack->u.init.single != NULL);
+	}
+
+	if (single_within) {
+		struct ir_op *element = NULL;
+		struct ir_val element_return = {0};
+		check(ir_expr(arena, a, ir, &element, &element_return));
+
+		struct ir_op *copier = NULL;
+		check(ir_alloc_op(arena, &copier));
+		copier->opcode = IR_OP_COPY;
+		ir_val_copy(&element_return, &copier->args[0]);
+		ir_val_copy(lvalue_base, &copier->args[1]);
+		copier->args[1].offset = *pos;
+
+		*dst = ir_op_list_concat(element, copier);
+		*pos += ctype_to_size_bytes(&a->expr_type);
+		return RESULT_OK;
+	}
+
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+	assert(a->u.init.multi != NULL);
+
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		struct ir_op *tmp = NULL;
+		check(ir_decl_init_multi(arena,
+		                         f->car,
+		                         ir,
+		                         lvalue_base,
+		                         pos,
+		                         &tmp));
+		*dst = ir_op_list_concat(*dst, tmp);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_decl_init(Arena *arena,
              const struct ast *a,
              struct intermediate *ir,
@@ -269,26 +321,38 @@ ir_decl_init(Arena *arena,
 {
 	assert(a->node_type == NODE_DECLARATION);
 
-	struct ir_op *assigner = NULL;
-	check(ir_alloc_op(arena, &assigner));
-	assigner->opcode = IR_OP_COPY;
+	const struct ast *dummy_indirect = NULL;
+	struct ir_val lvalue_direct = {0};
+	check(ir_assignment_lvalue(arena, a, &dummy_indirect, &lvalue_direct));
+	assert(dummy_indirect == NULL);
+	assert(lvalue_direct.subtype != IR_VAL_NONE);
 
-	struct ir_op *inner = NULL;
-	struct ir_val inner_return = {0};
-	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
+	if (a->u.declare.init->u.init.single != NULL) {
+		struct ir_op *inner = NULL;
+		struct ir_val inner_return = {0};
+		check(ir_expr(arena,
+		              a->u.declare.init,
+		              ir,
+		              &inner,
+		              &inner_return));
 
-	ir_val_copy(&inner_return, &assigner->args[0]);
-	{
-		const struct ast *dummy = NULL;
-		check(ir_assignment_lvalue(arena,
-		                           a,
-		                           &dummy,
-		                           &assigner->args[1]));
-		assert(dummy == NULL);
+		struct ir_op *assigner = NULL;
+		check(ir_alloc_op(arena, &assigner));
+		assigner->opcode = IR_OP_COPY;
+		ir_val_copy(&inner_return, &assigner->args[0]);
+		ir_val_copy(&lvalue_direct, &assigner->args[1]);
+
+		*dst = ir_op_list_concat(inner, assigner);
+		return RESULT_OK;
 	}
-	assert(assigner->args[1].subtype != IR_VAL_NONE);
 
-	*dst = ir_op_list_concat(inner, assigner);
+	long long int pos = 0;
+	check(ir_decl_init_multi(arena,
+	                         a->u.declare.init,
+	                         ir,
+	                         &lvalue_direct,
+	                         &pos,
+	                         dst));
 	return RESULT_OK;
 }
 
@@ -688,7 +752,6 @@ ir_assignment(Arena *arena,
 		              ir,
 		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
-
 		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
 
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
@@ -771,17 +834,29 @@ ir_incr_decr(Arena *arena,
 			&load_working_copy_return));
 	}
 
+	int pointer_index = 0;
+
 	struct ir_op *incr = NULL;
 	check(ir_alloc_op(arena, &incr));
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
-		incr->opcode = IR_OP_UNARY_DECREMENT;
+		if (!ctype_is_pointer(&a->expr_type)) {
+			incr->opcode = IR_OP_UNARY_DECREMENT;
+		} else {
+			incr->opcode = IR_OP_POINTER_ADD;
+			pointer_index = -1;
+		}
 		break;
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		incr->opcode = IR_OP_UNARY_INCREMENT;
+		if (!ctype_is_pointer(&a->expr_type)) {
+			incr->opcode = IR_OP_UNARY_INCREMENT;
+		} else {
+			incr->opcode = IR_OP_POINTER_ADD;
+			pointer_index = 1;
+		}
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -804,7 +879,17 @@ ir_incr_decr(Arena *arena,
 		assert(0 && "no lvalue found for ir_incr_decr()");
 	}
 
-	ir_val_copy(&incr->args[0], &incr->args[1]);
+	if (!ctype_is_pointer(&a->expr_type)) {
+		ir_val_copy(&incr->args[0], &incr->args[1]);
+	} else {
+		incr->args[1].subtype = IR_VAL_CONSTANT;
+		incr->args[1].num = pointer_index;
+		incr->args[1].c89type.t = CTYPE_LONG; /* LIKE_PTRDIFF_T */
+		incr->args[2].subtype = IR_VAL_CONSTANT;
+		incr->args[2].num = ctype_to_size_bytes(a->expr_type.referent);
+		incr->args[2].c89type.t = CTYPE_LONG; /* LIKE_PTRDIFF_T */
+		ir_val_copy(&incr->args[0], &incr->args[3]);
+	}
 
 	struct ir_op *stash_value_before_changes = NULL;
 	switch (a->node_type) {
@@ -829,7 +914,11 @@ ir_incr_decr(Arena *arena,
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 		assert(return_value->subtype == IR_VAL_NONE);
-		ir_val_copy(&incr->args[1], return_value);
+		if (!ctype_is_pointer(&a->expr_type)) {
+			ir_val_copy(&incr->args[1], return_value);
+		} else {
+			ir_val_copy(&incr->args[3], return_value);
+		}
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -874,7 +963,11 @@ ir_unary_op(Arena *arena,
 		ast_inner = a->u.op_unary.operand;
 		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
-		unary->opcode = IR_OP_LOAD;
+		if (ctype_is_array(&a->expr_type)) {
+			unary->opcode = IR_OP_COPY;
+		} else {
+			unary->opcode = IR_OP_LOAD;
+		}
 		ast_inner = a->u.op_unary.operand;
 		break;
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
@@ -912,8 +1005,10 @@ ir_unary_op(Arena *arena,
 			} else {
 				assert(0); /* mistake in truth table above */
 			}
-		} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) ==
-		           ctype_to_size_bytes(&a->u.cast.to_type)) {
+		} else if ((ctype_to_size_bytes(&a->u.cast.expr->expr_type) ==
+		            ctype_to_size_bytes(&a->u.cast.to_type)) ||
+		           (ctype_is_pointer(&a->u.cast.expr->expr_type) &&
+		            ctype_is_pointer(&a->u.cast.to_type))) {
 			unary->opcode = IR_OP_COPY;
 		} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) >
 		           ctype_to_size_bytes(&a->u.cast.to_type)) {
@@ -935,8 +1030,20 @@ ir_unary_op(Arena *arena,
 	check(ir_expr(arena, ast_inner, ir, &inner, &inner_return));
 	assert(inner_return.subtype != IR_VAL_NONE);
 
+	if (unary->opcode == IR_OP_GET_ADDRESS &&
+	    ctype_is_array(&ast_inner->expr_type)) {
+		/*
+		 * ir_expr_get_addr_implicit() already adds IR_OP_GET_ADDRESS
+		 * for arrays automatically. Avoid duplicate on explicit &-op.
+		 */
+		*dst = inner;
+		ir_val_copy(&inner_return, return_value);
+		return RESULT_OK;
+	}
+
 	ir_val_copy(&inner_return, &unary->args[0]);
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &unary->args[1]));
+	ctype_array_decay_to_pointer(&unary->args[1].c89type);
 	ir_val_copy(&unary->args[1], return_value);
 
 	/*
@@ -947,6 +1054,140 @@ ir_unary_op(Arena *arena,
 	 * 3) the present UNARY_OP(opcode, ..., TMPVAR)
 	 */
 	*dst = ir_op_list_concat(inner, unary);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_ptr_ptr_math(Arena *arena,
+                const struct ast *a,
+                struct intermediate *ir,
+                struct ir_op **dst,
+                struct ir_val *return_value)
+{
+	assert(a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT &&
+	       ctype_is_integer(&a->expr_type) &&
+	       ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+	       ctype_is_pointer(&a->u.op_binary.rhs->expr_type));
+
+	struct ir_op *left = NULL;
+	struct ir_val left_return = {0};
+	check(ir_expr(arena, a->u.op_binary.lhs, ir, &left, &left_return));
+	assert(left_return.subtype != IR_VAL_NONE);
+
+	struct ir_op *right = NULL;
+	struct ir_val right_return = {0};
+	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
+	assert(right_return.subtype != IR_VAL_NONE);
+
+	struct ir_op *binary = NULL;
+	check(ir_alloc_op(arena, &binary));
+	binary->opcode = IR_OP_BINARY_SUBTRACT;
+	ir_val_copy(&left_return, &binary->args[0]);
+	ir_val_copy(&right_return, &binary->args[1]);
+
+	struct ir_val binary_return = {0};
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &binary_return));
+	ir_val_copy(&binary_return, &binary->args[2]);
+
+	struct ir_op *divide = NULL;
+	check(ir_alloc_op(arena, &divide));
+	divide->opcode = IR_OP_BINARY_DIVIDE;
+	ir_val_copy(&binary_return, &divide->args[0]);
+
+	const long long int scale =
+		ctype_to_size_bytes(a->u.op_binary.lhs->expr_type.referent);
+	assert(scale > 0);
+	divide->args[1].subtype = IR_VAL_CONSTANT;
+	divide->args[1].num = scale;
+	check(ctype_copy(arena,
+	                 &binary_return.c89type,
+	                 &divide->args[1].c89type));
+
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &divide->args[2]));
+	ir_val_copy(&divide->args[2], return_value);
+
+	*dst = ir_op_list_concat(ir_op_list_concat(left, right),
+	                         ir_op_list_concat(binary, divide));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_ptr_math(Arena *arena,
+            const struct ast *a,
+            struct intermediate *ir,
+            struct ir_op **dst,
+            struct ir_val *return_value)
+{
+	struct ast *pointer = NULL;
+	bool negate_rhs = false;
+	bool swap_lhs_rhs = false;
+
+	switch (a->node_type) {
+	case NODE_EXPRESSION_BINARY_ADD:
+		pointer = ctype_is_pointer(&a->u.op_binary.lhs->expr_type)
+		                  ? a->u.op_binary.lhs
+		                  : a->u.op_binary.rhs;
+		swap_lhs_rhs = (pointer == a->u.op_binary.rhs);
+		break;
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		pointer = a->u.op_binary.lhs;
+		negate_rhs = true;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	struct ir_op *left = NULL;
+	struct ir_val left_return = {0};
+	check(ir_expr(arena, a->u.op_binary.lhs, ir, &left, &left_return));
+	assert(left_return.subtype != IR_VAL_NONE);
+
+	struct ir_op *right = NULL;
+	struct ir_val right_return = {0};
+	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
+	assert(right_return.subtype != IR_VAL_NONE);
+
+	if (negate_rhs) {
+		assert(!swap_lhs_rhs);
+		struct ir_op *negate = NULL;
+		check(ir_alloc_op(arena, &negate));
+		negate->opcode = IR_OP_UNARY_NEGATE;
+		ir_val_copy(&right_return, &negate->args[0]);
+		check(ir_val_tmpvar_gen(arena,
+		                        ir,
+		                        &a->u.op_binary.rhs->expr_type,
+		                        &negate->args[1]));
+		ir_val_copy(&negate->args[1], &right_return);
+		right = ir_op_list_concat(right, negate);
+	}
+
+	struct ir_op *ptr_plus = NULL;
+	check(ir_alloc_op(arena, &ptr_plus));
+	ptr_plus->opcode = IR_OP_POINTER_ADD;
+
+	size_t pos = 0;
+	if (swap_lhs_rhs) {
+		ir_val_copy(&right_return, &ptr_plus->args[pos++]);
+		ir_val_copy(&left_return, &ptr_plus->args[pos++]);
+	} else {
+		ir_val_copy(&left_return, &ptr_plus->args[pos++]);
+		ir_val_copy(&right_return, &ptr_plus->args[pos++]);
+	}
+	assert(pos == 2);
+
+	long long int scale = ctype_to_size_bytes(pointer->expr_type.referent);
+	assert(scale > 0);
+	ptr_plus->args[2].subtype = IR_VAL_CONSTANT;
+	ptr_plus->args[2].num = scale;
+
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &ptr_plus->args[3]));
+	ctype_array_decay_to_pointer(&ptr_plus->args[3].c89type);
+
+	assert(return_value->subtype == IR_VAL_NONE);
+	ir_val_copy(&ptr_plus->args[3], return_value);
+
+	*dst = ir_op_list_concat(left, ir_op_list_concat(right, ptr_plus));
 	return RESULT_OK;
 }
 
@@ -962,9 +1203,22 @@ ir_binary_op(Arena *arena,
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
+		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) ||
+		    ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			check(ir_ptr_math(arena, a, ir, dst, return_value));
+			return RESULT_OK;
+		}
 		binary->opcode = IR_OP_BINARY_ADD;
 		break;
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			check(ir_ptr_ptr_math(arena, a, ir, dst, return_value));
+			return RESULT_OK;
+		} else if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type)) {
+			check(ir_ptr_math(arena, a, ir, dst, return_value));
+			return RESULT_OK;
+		}
 		binary->opcode = IR_OP_BINARY_SUBTRACT;
 		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -1200,6 +1454,58 @@ ir_call(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_expr_get_addr_implicit(Arena *arena,
+                          struct intermediate *ir,
+                          struct ir_op **dst,
+                          struct ir_val *return_value)
+{
+	if (!ctype_is_array(&return_value->c89type)) {
+		return RESULT_OK;
+	}
+
+	struct ir_op *prev = NULL;
+	struct ir_op *dst_last = *dst;
+	while (dst_last != NULL && dst_last->next != NULL) {
+		prev = dst_last;
+		dst_last = dst_last->next;
+	}
+
+	if (prev != NULL && dst_last->opcode == IR_OP_LOAD) {
+		assert(prev->next == dst_last);
+		assert(dst_last->next == NULL);
+		/*
+		 * IR_OP_LOAD + IR_OP_GET_ADDRESS == noop
+		 */
+		prev->next = NULL;
+		/*
+		 * Redirect <return_value> to dst ir_val of remaining <prev>.
+		 */
+		for (size_t i = 0; i < ARRAY_SIZE(prev->args); ++i) {
+			if (prev->args[i].subtype != IR_VAL_NONE) {
+				ir_val_copy(&prev->args[i], return_value);
+			}
+		}
+		return RESULT_OK;
+	}
+
+	struct ir_op *get_addr = NULL;
+	check(ir_alloc_op(arena, &get_addr));
+	get_addr->opcode = IR_OP_GET_ADDRESS;
+
+	ir_val_copy(return_value, &get_addr->args[0]);
+	check(ir_val_tmpvar_gen(arena,
+	                        ir,
+	                        &return_value->c89type,
+	                        &get_addr->args[1]));
+
+	ctype_array_decay_to_pointer(&get_addr->args[1].c89type);
+	ir_val_copy(&get_addr->args[1], return_value);
+
+	*dst = ir_op_list_concat(*dst, get_addr);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_expr(Arena *arena,
         const struct ast *a,
         struct intermediate *ir,
@@ -1221,6 +1527,7 @@ ir_expr(Arena *arena,
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
 		case CTYPE_POINTER_TO:
+		case CTYPE_ARRAY_OF:
 			return_value->num = a->u.num;
 			break;
 		case CTYPE_DOUBLE:
@@ -1289,6 +1596,10 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_NULL:
 		break;
+	case NODE_EXPRESSION_INITIALIZER:
+		assert(a->u.init.single != NULL && a->u.init.multi == NULL);
+		check(ir_expr(arena, a->u.init.single, ir, dst, return_value));
+		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -1354,6 +1665,8 @@ ir_expr(Arena *arena,
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
 		                   (int)a->node_type);
 	}
+
+	check(ir_expr_get_addr_implicit(arena, ir, dst, return_value));
 	return RESULT_OK;
 }
 
@@ -1426,7 +1739,6 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = s->name;
-	check(ctype_copy(arena, &s->c89type, &(**dst).c89type));
 	(**dst).linkage = ir_map_linkage(s->linkage.linkage);
 
 	switch (s->linkage.initial) {
@@ -1434,10 +1746,12 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 		assert(0); /* logic error in caller */
 		break;
 	case INITIAL_VALUE_TENTATIVE:
-		(**dst).initial.as_integer = 0;
+		check(constant_make_zero(arena,
+		                         &s->c89type,
+		                         &(**dst).initializer));
 		break;
 	case INITIAL_VALUE_CONSTANT:
-		(**dst).initial = s->linkage.as_constant;
+		(**dst).initializer = &s->linkage.initializer;
 		break;
 	}
 
@@ -1568,6 +1882,10 @@ ir_debug_print_one(const struct ir_op *op)
 		char tmp[128] = {0};
 		debug("    TYPE %s",
 		      ctype_to_str(&op->args[i].c89type, tmp, sizeof(tmp)));
+
+		if (ctype_is_array(&op->args[i].c89type)) {
+			debug("    OFFSET %lld", op->args[i].offset);
+		}
 	}
 }
 
@@ -1588,38 +1906,19 @@ ir_debug_print(const struct intermediate *ir)
 	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-
-		char tmp[128] = {0};
-		debug("  VARIABLE TYPE %s",
-		      ctype_to_str(&v->c89type, tmp, sizeof(tmp)));
-
-		switch (v->linkage) {
-		case IR_LINKAGE_INTERNAL:
-			debug("  VARIABLE LINKAGE INTERNAL");
-			break;
-		case IR_LINKAGE_EXTERNAL:
-			debug("  VARIABLE LINKAGE EXTERNAL");
-			break;
-		}
-		if (ctype_is_floating_point(&v->c89type)) {
-			debug("  VARIABLE INIT %f", v->initial.as_double);
-		} else {
-			debug("  VARIABLE INIT %lld",
-			      (long long)v->initial.as_integer);
-		}
+		debug("  LINKAGE %s",
+		      v->linkage == IR_LINKAGE_INTERNAL ? "EXTERNAL"
+		                                        : "INTERNAL");
+		debug("  INITIALIZER");
+		constant_debug_print(v->initializer, 4);
 	}
 
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
-		switch (f->linkage) {
-		case IR_LINKAGE_INTERNAL:
-			debug("  FUNCTION LINKAGE INTERNAL");
-			break;
-		case IR_LINKAGE_EXTERNAL:
-			debug("  FUNCTION LINKAGE EXTERNAL");
-			break;
-		}
+		debug("  LINKAGE %s",
+		      f->linkage == IR_LINKAGE_INTERNAL ? "EXTERNAL"
+		                                        : "INTERNAL");
 		ir_debug_print_list(f->ops);
 	}
 }
