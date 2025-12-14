@@ -644,6 +644,10 @@ ir_assignment(Arena *arena,
 {
 	struct ir_op *lvalue_addr_for_store = NULL;
 	struct ir_val lvalue_addr_for_store_return = {0};
+
+	/* kludge for compound assignment expansion */
+	struct ir_op *early_lvalue_to_rvalue_kludge = NULL;
+
 	if (ir_assignment_lvalue_suitable_for_store(a) != NULL) {
 		/* Compute referent of LHS lvalue */
 		const struct ast *address_expr =
@@ -655,11 +659,24 @@ ir_assignment(Arena *arena,
 		              &lvalue_addr_for_store_return));
 
 		if (a->u.op_binary.lhs->compound_assignment_expansion.twin) {
-			struct ir_val *ud = arena_alloc(
+			assert(a->u.op_binary.lhs->compound_assignment_expansion
+			               .userdata == NULL);
+			check(ir_alloc_op(arena,
+			                  &early_lvalue_to_rvalue_kludge));
+			early_lvalue_to_rvalue_kludge->opcode = IR_OP_LOAD;
+			ir_val_copy(&lvalue_addr_for_store_return,
+			            &early_lvalue_to_rvalue_kludge->args[0]);
+			check(ir_val_tmpvar_gen(
 				arena,
-				sizeof(lvalue_addr_for_store_return));
+				ir,
+				&a->expr_type,
+				&early_lvalue_to_rvalue_kludge->args[1]));
+
+			struct ir_val *ud = arena_alloc(arena, sizeof(*ud));
 			check_if(ud == NULL, ERR_IR_ALLOC);
-			memcpy(ud, &lvalue_addr_for_store_return, sizeof(*ud));
+			memcpy(ud,
+			       &early_lvalue_to_rvalue_kludge->args[1],
+			       sizeof(*ud));
 			a->u.op_binary.lhs->compound_assignment_expansion
 				.userdata = ud;
 		}
@@ -689,6 +706,7 @@ ir_assignment(Arena *arena,
 
 	struct ir_op *collect[] = {
 		lvalue_addr_for_store,
+		early_lvalue_to_rvalue_kludge,
 		rhs_ops,
 		assigner,
 	};
@@ -1170,16 +1188,8 @@ ir_expr(Arena *arena,
 {
 	if (a->compound_assignment_expansion.twin &&
 	    a->compound_assignment_expansion.userdata) {
-		check(ir_alloc_op(arena, dst));
-		assert(*dst != NULL);
-		(**dst).opcode = IR_OP_LOAD;
 		ir_val_copy(a->compound_assignment_expansion.userdata,
-		            &(**dst).args[0]);
-		check(ir_val_tmpvar_gen(arena,
-		                        ir,
-		                        &a->expr_type,
-		                        &(**dst).args[1]));
-		ir_val_copy(&(**dst).args[1], return_value);
+		            return_value);
 		return RESULT_OK;
 	}
 
