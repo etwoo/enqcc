@@ -51,6 +51,28 @@ ir_val_copy(const struct ir_val *src, struct ir_val *dst)
 	memcpy(dst, src, sizeof(*dst));
 }
 
+static WARN_UNUSED result_t
+ir_val_tmpvar(Arena *arena,
+              long long int unique,
+              const struct ctype *vtype,
+              struct ir_val *dst)
+{
+	dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
+	dst->num = unique;
+	check(ctype_copy(arena, vtype, &dst->c89type));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_val_tmpvar_gen(Arena *arena,
+                  struct intermediate *ir,
+                  const struct ctype *vtype,
+                  struct ir_val *dst)
+{
+	check(ir_val_tmpvar(arena, ir->env.generator++, vtype, dst));
+	return RESULT_OK;
+}
+
 /*
  * Related: sema_lvalue() in src/passes/sema.c
  */
@@ -91,6 +113,23 @@ ir_assignment_lvalue_suitable_for_store(const struct ast *a)
 	}
 
 	return NULL;
+}
+
+static WARN_UNUSED result_t
+ir_assignment_lvalue_load_before_store(Arena *arena,
+                                       struct intermediate *ir,
+                                       const struct ir_val *ptr_to_load,
+                                       const struct ctype *referent_type,
+                                       struct ir_op **dst,
+                                       struct ir_val *return_value)
+{
+	check(ir_alloc_op(arena, dst));
+	assert(*dst != NULL);
+	(**dst).opcode = IR_OP_LOAD;
+	ir_val_copy(ptr_to_load, &(**dst).args[0]);
+	check(ir_val_tmpvar_gen(arena, ir, referent_type, &(**dst).args[1]));
+	ir_val_copy(&(**dst).args[1], return_value);
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
@@ -144,28 +183,6 @@ ir_val_from_ast_variable_like(Arena *arena,
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-ir_val_tmpvar(Arena *arena,
-              long long int unique,
-              const struct ctype *vtype,
-              struct ir_val *dst)
-{
-	dst->subtype = IR_VAL_TEMPORARY_VARIABLE;
-	dst->num = unique;
-	check(ctype_copy(arena, vtype, &dst->c89type));
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-ir_val_tmpvar_gen(Arena *arena,
-                  struct intermediate *ir,
-                  const struct ctype *vtype,
-                  struct ir_val *dst)
-{
-	check(ir_val_tmpvar(arena, ir->env.generator++, vtype, dst));
-	return RESULT_OK;
-}
-
 static WARN_UNUSED enum ir_linkage
 ir_map_linkage(enum symbol_linkage linkage)
 {
@@ -174,23 +191,6 @@ ir_map_linkage(enum symbol_linkage linkage)
 		return IR_LINKAGE_EXTERNAL;
 	}
 	return IR_LINKAGE_INTERNAL;
-}
-
-static WARN_UNUSED result_t
-ir_assignment_lvalue_load_before_store(Arena *arena,
-                                       struct intermediate *ir,
-                                       const struct ir_val *ptr_to_load,
-                                       const struct ctype *referent_type,
-                                       struct ir_op **dst,
-                                       struct ir_val *return_value)
-{
-	check(ir_alloc_op(arena, dst));
-	assert(*dst != NULL);
-	(**dst).opcode = IR_OP_LOAD;
-	ir_val_copy(ptr_to_load, &(**dst).args[0]);
-	check(ir_val_tmpvar_gen(arena, ir, referent_type, &(**dst).args[1]));
-	ir_val_copy(&(**dst).args[1], return_value);
-	return RESULT_OK;
 }
 
 static result_t ir_expr(Arena *arena,
