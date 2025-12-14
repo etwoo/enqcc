@@ -27,6 +27,102 @@ some_linkage(enum symbol_linkage linkage)
 	return is_external(linkage) || is_internal(linkage);
 }
 
+long long unsigned
+get_double_as_quadword(double value)
+{
+	long long unsigned as_quadword = 0;
+	static_assert(sizeof(value) <= sizeof(as_quadword),
+	              "destination must be large enough to hold 64-bit double");
+	memcpy(&as_quadword, &value, sizeof(value));
+	return as_quadword;
+}
+
+static WARN_UNUSED long long unsigned
+get_initializer_element_count(const struct ctype *c)
+{
+	if (ctype_is_array(c)) {
+		return c->sz * get_initializer_element_count(c->referent);
+	}
+	return 1;
+}
+
+static WARN_UNUSED long long unsigned
+get_initializer_element_size_bytes(const struct ctype *c)
+{
+	if (ctype_is_array(c)) {
+		return get_initializer_element_size_bytes(c->referent);
+	}
+	return ctype_to_size_bytes(c);
+}
+
+result_t
+constant_set_zero(Arena *arena,
+                  const struct ctype *c89type,
+                  struct constant_initializer *ci)
+{
+	ci->count = get_initializer_element_count(c89type);
+	ci->elements = arena_alloc(arena, ci->count * sizeof(*ci->elements));
+	check_if(ci->elements == NULL, ERR_SEMA_ALLOC);
+	memset(ci->elements, 0, ci->count * sizeof(*ci->elements));
+
+	const long long unsigned element_size_bytes =
+		get_initializer_element_size_bytes(c89type);
+
+	for (long long unsigned i = 0; i < ci->count; ++i) {
+		ci->elements[i].byte_count = element_size_bytes;
+		ci->elements[i].byte_value = 0;
+	}
+	return RESULT_OK;
+}
+
+result_t
+constant_make_zero(Arena *arena,
+                   const struct ctype *c89type,
+                   struct constant_initializer **dst)
+{
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_SYMBOL_ALLOC);
+	check(constant_set_zero(arena, c89type, *dst));
+	return RESULT_OK;
+}
+
+bool
+constant_is_zero(const struct constant_initializer *ci)
+{
+	assert(ci->count > 0);
+	for (long long unsigned i = 0; i < ci->count; ++i) {
+		if (ci->elements[i].byte_value != 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+long long unsigned
+constant_byte_count(const struct constant_initializer *ci)
+{
+	long long unsigned byte_count = 0;
+	for (long long unsigned i = 0; i < ci->count; ++i) {
+		byte_count += ci->elements[i].byte_count;
+	}
+	return byte_count;
+}
+
+void
+constant_debug_print(const struct constant_initializer *ci, size_t indent)
+{
+	for (long long unsigned i = 0; i < ci->count; ++i) {
+		debug("%*sSIZE:  %llu",
+		      (int)indent,
+		      "",
+		      ci->elements[i].byte_count);
+		debug("%*sVALUE: 0x%llx",
+		      (int)indent,
+		      "",
+		      ci->elements[i].byte_value);
+	}
+}
+
 result_t
 symbols_prepend(Arena *arena,
                 struct symbol **head,

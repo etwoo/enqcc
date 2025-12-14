@@ -9,6 +9,24 @@
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
+/*
+ * From "Writing a C Compiler" by Nora Sandler, Chapter 15, Section "Type
+ * Checking Pointer Arithmetic":
+ *
+ *   To type check addition involving a pointer and an integer, we first
+ *   convert the integer operand to a long. This will simplify later
+ *   compiler passes, when pointer indices will need to be 8 bytes wide
+ *   so that we can add them to 8-byte memory addresses. This conversion
+ *   doesn't come from the C standard; we're just adding it for our own
+ *   convenience. But it also doesn’t violate the standard; converting a
+ *   valid array index to long won't change its value, so the result of
+ *   the whole expression is the same either way. (If an integer is too
+ *   big to represent as a long, we can safely assume that it's not a
+ *   valid array index, since no hardware supports arrays with anywhere
+ *   close to 263 elements.)
+ */
+static const struct ctype LIKE_PTRDIFF_T = {.t = CTYPE_LONG};
+
 static WARN_UNUSED bool
 is_node_lvalue(const struct ast *a)
 {
@@ -20,47 +38,83 @@ is_node_lvalue(const struct ast *a)
 }
 
 static WARN_UNUSED const struct ast *
-unpack_constant(const struct ast *a)
+unpack_cast(const struct ast *a)
 {
-	if (a->node_type == NODE_EXPRESSION_CAST) {
+	while (a->node_type == NODE_EXPRESSION_CAST) {
 		/* unpack nodes inserted by sema_implicit_cast() */
 		a = a->u.cast.expr;
 	}
-	if (a->node_type == NODE_CONSTANT) {
-		return a;
-	}
-	return NULL;
+	return a;
 }
 
 static WARN_UNUSED bool
 is_node_constant(const struct ast *a)
 {
-	return (unpack_constant(a) != NULL);
+	a = unpack_cast(a);
+	if (a == NULL || a->node_type != NODE_EXPRESSION_INITIALIZER) {
+		return false;
+	}
+
+	if (a->u.init.single != NULL) {
+		return a->u.init.single->node_type == NODE_CONSTANT;
+	}
+	assert(a->u.init.multi != NULL);
+
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		if (!is_node_constant(f->car)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static WARN_UNUSED long long unsigned
+count_initializer_elements(const struct ast *a)
+{
+	a = unpack_cast(a);
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (a->u.init.single != NULL) {
+		return 1;
+	}
+	assert(a->u.init.multi != NULL);
+
+	long long unsigned count = 0;
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		count += count_initializer_elements(f->car);
+	}
+	return count;
 }
 
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
 static void
-map_numeric_type(const struct ast *init,
-                 struct ctype *dst_type,
-                 union constant_value *val)
+map_numeric_type_scalar(const struct ast *a,
+                        struct ctype *dst_type,
+                        struct constant_bytes *out)
 {
-	const struct ast *a = unpack_constant(init);
-	assert(a != NULL);
+	assert(a->node_type == NODE_CONSTANT);
+	assert(!ctype_is_array(dst_type));
+	out->byte_count = ctype_to_size_bytes(dst_type);
 
 	if (dst_type->t == CTYPE_DOUBLE) {
+		double tmp = 0;
 		switch (a->expr_type.t) {
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
 		case CTYPE_POINTER_TO:
-			val->as_double = (double)a->u.num;
+			tmp = (double)a->u.num;
 			break;
 		case CTYPE_DOUBLE:
-			val->as_double = a->u.double_;
+			tmp = a->u.double_;
+			break;
+		case CTYPE_ARRAY_OF:
+			assert(0); /* logic error in caller */
 			break;
 		}
+		out->byte_value = get_double_as_quadword(tmp);
 		return;
 	}
 
@@ -76,6 +130,9 @@ map_numeric_type(const struct ast *init,
 	case CTYPE_DOUBLE:
 		x = (int128_t)a->u.double_;
 		break;
+	case CTYPE_ARRAY_OF:
+		assert(0); /* logic error in caller */
+		break;
 	}
 
 	if ((dst_type->t == CTYPE_INT && x > INT_MAX) ||
@@ -83,7 +140,42 @@ map_numeric_type(const struct ast *init,
 		x %= LONG_TO_INT_TRUNCATOR;
 	}
 
-	val->as_integer = x;
+	assert(x >= 0); /* negative constants currently unsupported */
+	out->byte_value = x;
+}
+
+static void
+populate_initializer_elements(const struct ast *a,
+                              struct ctype *dst_type,
+                              struct constant_bytes **pos)
+{
+	a = unpack_cast(a);
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (a->u.init.single != NULL) {
+		map_numeric_type_scalar(a->u.init.single, dst_type, (*pos)++);
+		return;
+	}
+	assert(a->u.init.multi != NULL);
+
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		populate_initializer_elements(f->car, dst_type->referent, pos);
+	}
+}
+
+static WARN_UNUSED result_t
+map_numeric_type(Arena *arena,
+                 const struct ast *init,
+                 struct ctype *dst_type,
+                 struct constant_initializer *out)
+{
+	out->count = count_initializer_elements(init);
+	assert(out->count > 0);
+	out->elements = arena_alloc(arena, out->count * sizeof(*out->elements));
+	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
+	struct constant_bytes *cursor = out->elements;
+	populate_initializer_elements(init, dst_type, &cursor);
+	return RESULT_OK;
 }
 
 struct sema_ops {
@@ -140,6 +232,10 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 		break;
+	case NODE_EXPRESSION_INITIALIZER:
+		check(sema_walk(a->u.init.single, ops, u));
+		check(sema_walk_flat(a->u.init.multi, ops, u));
+		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
@@ -182,6 +278,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+	case NODE_EXPRESSION_SUBSCRIPT:
 		check(sema_walk(a->u.op_binary.lhs, ops, u));
 		check(sema_walk(a->u.op_binary.rhs, ops, u));
 		break;
@@ -258,15 +355,14 @@ static WARN_UNUSED int128_t
 guess(const struct ast *a, struct ctype *expected_type)
 {
 	int128_t value = 0;
-	union constant_value tmp = {0};
+	struct constant_bytes tmp = {0};
 	int128_t l_tmp = 0;
 	int128_t r_tmp = 0;
 
 	switch (a->node_type) {
 	case NODE_CONSTANT:
-		map_numeric_type(a, expected_type, &tmp);
-		/* double values ignored here get rejected by sema_double() */
-		value = tmp.as_integer;
+		map_numeric_type_scalar(a, expected_type, &tmp);
+		value = tmp.byte_value;
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		value = guess(a->u.op_unary.operand, expected_type);
@@ -707,15 +803,10 @@ sema_label_gotos(Arena *arena, struct ast *a, long long int *generator)
 	return RESULT_OK;
 }
 
-struct sema_compound_assignment_state {
-	Arena *arena;
-};
-
 static WARN_UNUSED result_t
 sema_compound_assignment(struct ast *a, void *userdata)
 {
-	struct sema_compound_assignment_state *state = userdata;
-	Arena *arena = state->arena;
+	Arena *arena = userdata;
 
 	enum ast_nodetype new_type = 0;
 	switch (a->node_type) {
@@ -776,19 +867,45 @@ sema_compound_assignment(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
+sema_subscript(struct ast *a, void *userdata)
+{
+	Arena *arena = userdata;
+
+	if (a->node_type != NODE_EXPRESSION_SUBSCRIPT) {
+		return RESULT_OK;
+	}
+
+	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	check_if(new_node == NULL, ERR_SEMA_ALLOC);
+	new_node->node_type = NODE_EXPRESSION_BINARY_ADD;
+	check(ctype_copy(arena, &a->expr_type, &new_node->expr_type));
+	new_node->u.op_binary = a->u.op_binary;
+
+	a->node_type = NODE_EXPRESSION_UNARY_DEREFERENCE;
+	a->u.op_unary.operand = new_node;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
+	bool allow_array = false;
+
 	const struct ast *to_check = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		to_check = a->u.op_binary.lhs;
 		break;
-	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		to_check = a->u.op_unary.operand;
+		break;
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+		to_check = a->u.op_unary.operand;
+		allow_array = true;
 		break;
 	default:
 		return RESULT_OK;
@@ -800,6 +917,11 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 		 * and NODE_EXPRESSION_VARIABLE_USAGE.
 		 */
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE);
+	}
+
+	if (!allow_array && ctype_is_array(&to_check->expr_type)) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY);
 	}
 
 	return RESULT_OK;
@@ -875,21 +997,135 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
-struct sema_expr_types_state {
-	Arena *arena;
-};
+static WARN_UNUSED result_t
+sema_expr_types_initializer_zero_pad(Arena *arena,
+                                     const struct ctype *declaration_type,
+                                     struct ast *init)
+{
+	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (!ctype_is_array(declaration_type)) {
+		if (init->u.init.single == NULL) {
+			check(parse_alloc(arena,
+			                  &init->u.init.single,
+			                  NODE_CONSTANT));
+			init->u.init.single->u.num = 0;
+			init->u.init.single->expr_type.t = CTYPE_INT;
+			init->u.init.single->expr_type
+				.maybe_null_pointer_constant = true;
+			check(ctype_copy(arena,
+			                 &init->u.init.single->expr_type,
+			                 &init->expr_type));
+		}
+		return RESULT_OK;
+	}
+	assert(declaration_type->referent != NULL);
+
+	struct flat **dst = &init->u.init.multi;
+
+	long long unsigned element_count = 0;
+	for (; element_count < declaration_type->sz; ++element_count) {
+		if (*dst == NULL) {
+			check(flat_alloc(arena, dst));
+			check(parse_alloc(arena,
+			                  &(**dst).car,
+			                  NODE_EXPRESSION_INITIALIZER));
+			check(ctype_copy(arena,
+			                 declaration_type->referent,
+			                 &(**dst).car->expr_type));
+		}
+		check(sema_expr_types_initializer_zero_pad(
+			arena,
+			declaration_type->referent,
+			(**dst).car));
+		dst = &(**dst).cdr;
+	}
+
+	return RESULT_OK;
+}
+
+/*
+ * See sema_implicit_cast_initializer() for related logic.
+ */
+static WARN_UNUSED result_t
+sema_expr_types_initializer(Arena *arena,
+                            struct ast_symbol *varname,
+                            const struct ctype *declaration_type,
+                            struct ast *init)
+{
+	if (init == NULL) {
+		return RESULT_OK;
+	}
+
+	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (init->u.init.single != NULL) {
+		/*
+		 * For scalar init, copy upward from constant to containing
+		 * NODE_EXPRESSION_INITIALIZER.
+		 */
+		check(ctype_copy(arena,
+		                 &init->u.init.single->expr_type,
+		                 &init->expr_type));
+		return RESULT_OK;
+	}
+
+	if (!ctype_is_pointer(declaration_type)) {
+		/*
+		 * For now, reject compound initializers for scalar variables.
+		 * In the future, it may make sense to support the special-case
+		 * compound initializer {0} for scalar init.
+		 */
+		return make_result(ERR_SEMA_INIT_SCALAR_WITH_COMPOUND);
+	}
+
+	/*
+	 * For compound init, copy from LHS array type declaration to RHS
+	 * compound init expression.
+	 */
+	check(ctype_copy(arena, declaration_type, &init->expr_type));
+	init->expr_type.t = CTYPE_ARRAY_OF;
+
+	long long unsigned element_count = 0;
+
+	/*
+	 * Recurse into compound initializer elements.
+	 */
+	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
+		check(sema_expr_types_initializer(arena,
+		                                  varname,
+		                                  declaration_type->referent,
+		                                  f->car));
+		++element_count;
+	}
+
+	if (element_count == 0) {
+		return make_result(ERR_SEMA_INIT_COMPOUND_EMPTY);
+	}
+	if (element_count > init->expr_type.sz) {
+		return make_result(ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS,
+		                   varname->name.data,
+		                   varname->name.sz);
+	}
+
+	/*
+	 * Pad compound initializer with zeros as necessary.
+	 */
+	check(sema_expr_types_initializer_zero_pad(arena,
+	                                           declaration_type,
+	                                           init));
+	return RESULT_OK;
+}
 
 static WARN_UNUSED result_t
 sema_expr_types(struct ast *a, void *userdata)
 {
-	struct sema_expr_types_state *state = userdata;
-	Arena *arena = state->arena;
+	Arena *arena = userdata;
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
 	case NODE_BLOCK:
-	case NODE_DECLARATION:
 	case NODE_IF_ELSE:
 	case NODE_LOOP:
 	case NODE_BREAK:
@@ -900,6 +1136,14 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
+	case NODE_DECLARATION:
+		check(sema_expr_types_initializer(arena,
+		                                  &a->u.declare.identifier,
+		                                  &a->u.declare.var_type,
+		                                  a->u.declare.init));
+		break;
+	case NODE_EXPRESSION_INITIALIZER:
+		break; /* handled by NODE_DECLARATION case */
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -913,7 +1157,7 @@ sema_expr_types(struct ast *a, void *userdata)
 		                 &a->expr_type));
 		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
-		if (a->u.op_unary.operand->expr_type.t != CTYPE_POINTER_TO) {
+		if (!ctype_is_pointer(&a->u.op_unary.operand->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_DEREF_INVALID);
 		}
 		check(ctype_copy(arena,
@@ -947,11 +1191,20 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BITWISE_AND:
 	case NODE_EXPRESSION_BITWISE_OR:
 	case NODE_EXPRESSION_BITWISE_XOR:
-		check(ctype_copy(
-			arena,
-			get_common_ctype(&a->u.op_binary.lhs->expr_type,
-		                         &a->u.op_binary.rhs->expr_type),
-			&a->expr_type));
+		if (a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT &&
+		    ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			check(ctype_copy(arena,
+			                 &LIKE_PTRDIFF_T,
+			                 &a->expr_type));
+		} else {
+			check(ctype_copy(
+				arena,
+				get_common_ctype(
+					&a->u.op_binary.lhs->expr_type,
+					&a->u.op_binary.rhs->expr_type),
+				&a->expr_type));
+		}
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
@@ -997,6 +1250,9 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		assert(0 && "COMPOUND_ASSIGN_* should have been eliminated");
 		break;
+	case NODE_EXPRESSION_SUBSCRIPT:
+		assert(0 && "SUBSCRIPT should have been eliminated");
+		break;
 	}
 
 	return RESULT_OK;
@@ -1034,6 +1290,16 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 			valid = false;
 		}
 		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		if ((ctype_is_floating_point(&a->u.op_binary.lhs->expr_type) &&
+		     ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) ||
+		    (ctype_is_floating_point(&a->u.op_binary.rhs->expr_type) &&
+		     ctype_is_pointer(&a->u.op_binary.lhs->expr_type))) {
+			valid = false;
+		}
+
+		break;
 	case NODE_EXPRESSION_CAST:
 		if ((ctype_is_floating_point(&a->u.cast.to_type) &&
 		     ctype_is_pointer(&a->u.cast.expr->expr_type)) ||
@@ -1053,17 +1319,26 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 }
 
 static WARN_UNUSED result_t
-sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
+sema_pointer_cmp_impl(const struct ctype *lhs,
+                      const struct ctype *rhs,
+                      bool ish)
 {
 	if (ctype_is_equal(lhs, rhs)) {
 		/* given equality, nothing more to check */
 	} else if (ctype_is_pointer(lhs) && ctype_is_pointer(rhs)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
-	} else if (ctype_is_pointer(lhs) && !ctype_nullptr_ish(rhs)) {
+	} else if (ctype_is_pointer(lhs) && (!ish || !ctype_nullptr_ish(rhs))) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS);
-	} else if (ctype_is_pointer(rhs) && !ctype_nullptr_ish(lhs)) {
+	} else if (ctype_is_pointer(rhs) && (!ish || !ctype_nullptr_ish(lhs))) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS);
 	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
+{
+	check(sema_pointer_cmp_impl(lhs, rhs, true));
 	return RESULT_OK;
 }
 
@@ -1080,9 +1355,11 @@ sema_pointer(struct ast *a, void *userdata)
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
-		check(ctype_copy(arena,
-		                 &a->u.function.return_type,
-		                 &state->expected_return_type));
+		if (a->u.function.block != NULL) {
+			check(ctype_copy(arena,
+			                 &a->u.function.return_type,
+			                 &state->expected_return_type));
+		}
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 		check(sema_pointer_cmp(&state->expected_return_type,
@@ -1090,8 +1367,11 @@ sema_pointer(struct ast *a, void *userdata)
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			check(sema_pointer_cmp(&a->u.declare.var_type,
-			                       &a->u.declare.init->expr_type));
+			check(sema_pointer_cmp_impl(
+				&a->u.declare.var_type,
+				&a->u.declare.init->expr_type,
+				/* do not allow zero->nullptr for array init */
+				!ctype_is_array(&a->u.declare.var_type)));
 		}
 		break;
 	case NODE_SWITCH:
@@ -1110,6 +1390,40 @@ sema_pointer(struct ast *a, void *userdata)
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
 		}
 		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+		if (!ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    !ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			/* no pointer types involved; nothing more to check */
+		} else if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		           ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_BOTH);
+		}
+		break;
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    ctype_is_integer(&a->u.op_binary.rhs->expr_type)) {
+			assert(ctype_is_equal(&a->expr_type,
+			                      &a->u.op_binary.lhs->expr_type));
+		} else {
+			check(sema_pointer_cmp_impl(
+				&a->u.op_binary.lhs->expr_type,
+				&a->u.op_binary.rhs->expr_type,
+				false));
+		}
+		break;
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
+		                       &a->u.op_binary.rhs->expr_type));
+		break;
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		check(sema_pointer_cmp_impl(&a->u.op_binary.lhs->expr_type,
+		                            &a->u.op_binary.rhs->expr_type,
+		                            false));
+		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
@@ -1124,11 +1438,6 @@ sema_pointer(struct ast *a, void *userdata)
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
-		                       &a->u.op_binary.rhs->expr_type));
-		break;
-	case NODE_EXPRESSION_COMPARE_EQUAL:
-	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
 		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
 		                       &a->u.op_binary.rhs->expr_type));
 		break;
@@ -1157,6 +1466,41 @@ cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
 	return RESULT_OK;
 }
 
+/*
+ * See sema_expr_types_initializer() for related logic.
+ */
+static WARN_UNUSED result_t
+sema_implicit_cast_initializer(Arena *arena,
+                               const struct ctype *expected_type,
+                               struct ast **init)
+{
+	if (*init == NULL) {
+		return RESULT_OK;
+	}
+
+	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if ((**init).u.init.single != NULL) {
+		assert(ctype_is_equal(&(**init).u.init.single->expr_type,
+		                      &(**init).expr_type));
+		check(sema_pointer_cmp(expected_type, &(**init).expr_type));
+		check(cast_if(arena, expected_type, init));
+		return RESULT_OK;
+	}
+
+	/* single XOR multi */
+	assert((**init).u.init.multi != NULL);
+	/* sema_expr_types() sets initial CTYPE_ARRAY_OF */
+	assert((**init).expr_type.t == CTYPE_ARRAY_OF);
+
+	for (struct flat *f = (**init).u.init.multi; f != NULL; f = f->cdr) {
+		check(sema_implicit_cast_initializer(arena,
+		                                     expected_type->referent,
+		                                     &f->car));
+	}
+	return RESULT_OK;
+}
+
 struct sema_implicit_cast_state {
 	Arena *arena;
 	struct ctype expected_return_type;
@@ -1181,9 +1525,9 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              &a->u.op_unary.operand));
 		break;
 	case NODE_DECLARATION:
-		check(cast_if(arena,
-		              &a->u.declare.var_type,
-		              &a->u.declare.init));
+		check(sema_implicit_cast_initializer(arena,
+		                                     &a->u.declare.var_type,
+		                                     &a->u.declare.init));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -1203,8 +1547,22 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 		common = get_common_ctype(&a->u.op_binary.lhs->expr_type,
 		                          &a->u.op_binary.rhs->expr_type);
-		check(cast_if(arena, common, &a->u.op_binary.lhs));
-		check(cast_if(arena, common, &a->u.op_binary.rhs));
+		if ((a->node_type == NODE_EXPRESSION_BINARY_ADD ||
+		     a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT) &&
+		    ((ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		      ctype_is_integer(&a->u.op_binary.rhs->expr_type)) ||
+		     (ctype_is_integer(&a->u.op_binary.lhs->expr_type) &&
+		      ctype_is_pointer(&a->u.op_binary.rhs->expr_type)))) {
+			check(cast_if(
+				arena,
+				&LIKE_PTRDIFF_T,
+				ctype_is_integer(&a->u.op_binary.lhs->expr_type)
+					? &a->u.op_binary.lhs
+					: &a->u.op_binary.rhs));
+		} else {
+			check(cast_if(arena, common, &a->u.op_binary.lhs));
+			check(cast_if(arena, common, &a->u.op_binary.rhs));
+		}
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
@@ -1292,6 +1650,81 @@ sema_fn_param_names(struct ast_parameter *params)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_fn_decl_collect(Arena *arena,
+                     const struct ast *a,
+                     struct string_view *fname,
+                     struct ctype *return_type,
+                     long long int *n_args,
+                     struct ctype **param_types,
+                     bool *is_def,
+                     enum symbol_linkage *linkage,
+                     bool *has_specifier_static)
+{
+	assert(a->node_type == NODE_FUNCTION);
+	memcpy(fname, &a->u.function.identifier.name, sizeof(*fname));
+
+	check(ctype_copy(arena, &a->u.function.return_type, return_type));
+	if (ctype_is_array(return_type)) {
+		return make_result(ERR_SEMA_FUNCTION_RETURN_TYPE_ARRAY,
+		                   fname->data,
+		                   fname->sz);
+	}
+
+	long long int count = 0;
+	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+		++count;
+	}
+
+	*n_args = count;
+	*param_types = arena_alloc(arena, sizeof(**param_types) * count);
+
+	count = 0;
+	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+		check(ctype_copy(arena,
+		                 &cur->parameter_type,
+		                 &(*param_types)[count]));
+		ctype_array_decay_to_pointer(&(*param_types)[count]);
+		++count;
+	}
+
+	check(sema_fn_param_names(a->u.function.params));
+
+	*is_def = (a->u.function.block != NULL);
+	*linkage = (a->u.function.specifier != SPECIFIER_STATIC)
+	                   ? SYMBOL_LINKAGE_EXTERNAL
+	                   : SYMBOL_LINKAGE_INTERNAL;
+	*has_specifier_static = (a->u.function.specifier == SPECIFIER_STATIC);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_fn_call_collect(Arena *arena,
+                     const struct ast *a,
+                     struct string_view *fname,
+                     long long int *n_args,
+                     struct ctype **param_types)
+{
+	assert(a->node_type == NODE_EXPRESSION_FUNCTION_CALL);
+	memcpy(fname, &a->u.call.identifier.name, sizeof(*fname));
+
+	long long int count = 0;
+	for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
+		++count;
+	}
+
+	*n_args = count;
+	*param_types = arena_alloc(arena, sizeof(**param_types) * count);
+
+	count = 0;
+	for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
+		check(ctype_copy(arena,
+		                 &z->car->expr_type,
+		                 &(*param_types)[count++]));
+	}
+	return RESULT_OK;
+}
+
 static WARN_UNUSED bool
 ast_contains(const struct flat *haystack, const struct ast *needle)
 {
@@ -1307,10 +1740,9 @@ static WARN_UNUSED result_t
 sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
-	const struct string_view *fname = NULL;
+	struct string_view fname = {0};
 	struct ctype return_type = {0};
 	long long int n_args = 0;
-	long long int idx = 0;
 	struct ctype *p_types = NULL;
 	bool is_def = false;
 	bool is_def_or_decl = false;
@@ -1322,41 +1754,23 @@ sema_fn_signature(struct ast *a, void *userdata)
 		state->ast_program_globals = a->u.program.globals;
 		return RESULT_OK;
 	case NODE_FUNCTION:
-		fname = &a->u.function.identifier.name;
-		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-			++n_args;
-		}
-		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
-		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-			check(ctype_copy(state->arena,
-			                 &cur->parameter_type,
-			                 &p_types[idx++]));
-		}
-		assert(idx == n_args);
-		check(sema_fn_param_names(a->u.function.params));
-		is_def = (a->u.function.block != NULL);
 		is_def_or_decl = true;
-		check(ctype_copy(state->arena,
-		                 &a->u.function.return_type,
-		                 &return_type));
-		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
-		                  ? SYMBOL_LINKAGE_EXTERNAL
-		                  : SYMBOL_LINKAGE_INTERNAL;
-		has_specifier_static =
-			(a->u.function.specifier == SPECIFIER_STATIC);
+		check(sema_fn_decl_collect(state->arena,
+		                           a,
+		                           &fname,
+		                           &return_type,
+		                           &n_args,
+		                           &p_types,
+		                           &is_def,
+		                           &linkage,
+		                           &has_specifier_static));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		fname = &a->u.call.identifier.name;
-		for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
-			++n_args;
-		}
-		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
-		for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
-			check(ctype_copy(state->arena,
-			                 &z->car->expr_type,
-			                 &p_types[idx++]));
-		}
-		assert(idx == n_args);
+		check(sema_fn_call_collect(state->arena,
+		                           a,
+		                           &fname,
+		                           &n_args,
+		                           &p_types));
 		break;
 	default:
 		return RESULT_OK;
@@ -1367,8 +1781,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		bool allow_def = ast_contains(state->ast_program_globals, a);
 		if (!allow_def) {
 			return make_result(ERR_SEMA_FUNCTION_DEFINITION_NESTED,
-			                   fname->data,
-			                   fname->sz);
+			                   fname.data,
+			                   fname.sz);
 		}
 	} else if (is_def_or_decl && has_specifier_static) {
 		assert(state->ast_program_globals != NULL);
@@ -1376,18 +1790,18 @@ sema_fn_signature(struct ast *a, void *userdata)
 		if (!allow_decl) {
 			return make_result(
 				ERR_SEMA_FUNCTION_LINKAGE_BLOCK_SCOPE,
-				fname->data,
-				fname->sz);
+				fname.data,
+				fname.sz);
 		}
 	}
 
 	struct symbol **s = &state->function_symbols;
-	struct symbol *dup = symbols_get_anywhere(*s, fname);
+	struct symbol *dup = symbols_get_anywhere(*s, &fname);
 	if (dup == NULL) {
 		assert(is_def_or_decl);
 		check(symbols_prepend(state->arena,
 		                      s,
-		                      fname,
+		                      &fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
 		                      &return_type));
@@ -1490,9 +1904,10 @@ sema_declare_file_scope(struct ast *a,
 	if (a->u.declare.init != NULL) {
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			map_numeric_type(a->u.declare.init,
-			                 &a->u.declare.var_type,
-			                 &linkage_state->as_constant);
+			check(map_numeric_type(state->arena,
+			                       a->u.declare.init,
+			                       &a->u.declare.var_type,
+			                       &linkage_state->initializer));
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1544,8 +1959,8 @@ sema_declare_file_scope(struct ast *a,
 			varname->sz);
 	} else {
 		if ((**dup).linkage.initial == INITIAL_VALUE_CONSTANT) {
-			linkage_state->as_constant =
-				(**dup).linkage.as_constant;
+			linkage_state->initializer =
+				(**dup).linkage.initializer;
 		}
 		// NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
 		linkage_state->initial =
@@ -1616,8 +2031,8 @@ sema_declare_block_scope(struct ast *a,
 			 */
 			linkage_state->linkage = (**dup).linkage.linkage;
 			linkage_state->initial = (**dup).linkage.initial;
-			linkage_state->as_constant =
-				(**dup).linkage.as_constant;
+			linkage_state->initializer =
+				(**dup).linkage.initializer;
 		} else {
 			linkage_state->linkage = SYMBOL_LINKAGE_EXTERNAL;
 			linkage_state->initial = INITIAL_VALUE_NO_INITIALIZER;
@@ -1634,12 +2049,15 @@ sema_declare_block_scope(struct ast *a,
 
 		if (a->u.declare.init == NULL) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant.as_integer = 0;
+			check(constant_set_zero(state->arena,
+			                        &a->u.declare.var_type,
+			                        &linkage_state->initializer));
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			map_numeric_type(a->u.declare.init,
-			                 &a->u.declare.var_type,
-			                 &linkage_state->as_constant);
+			check(map_numeric_type(state->arena,
+			                       a->u.declare.init,
+			                       &a->u.declare.var_type,
+			                       &linkage_state->initializer));
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1697,7 +2115,7 @@ sema_declare_apply(struct ast *a,
 	dup->unique = a->u.declare.identifier.unique; /* reuse unique ID */
 	dup->linkage.linkage = linkage_state.linkage;
 	dup->linkage.initial = linkage_state.initial;
-	dup->linkage.as_constant = linkage_state.as_constant;
+	dup->linkage.initializer = linkage_state.initializer;
 	a->u.declare.identifier.ltype = linkage_state.linkage;
 	return RESULT_OK;
 }
@@ -1804,15 +2222,11 @@ sema_typecheck(Arena *arena,
 
 	debug("Expanding compound assignment statements");
 	ops.node_enter = sema_compound_assignment;
-	{
-		struct sema_compound_assignment_state compound_state = {0};
-		compound_state.arena = arena;
-		check(sema_walk(a, &ops, &compound_state));
-	}
+	check(sema_walk(a, &ops, arena));
 
-	debug("Checking lvalues");
-	ops.node_enter = sema_lvalue;
-	check(sema_walk(a, &ops, NULL));
+	debug("Expanding array subscript expressions");
+	ops.node_enter = sema_subscript;
+	check(sema_walk(a, &ops, arena));
 
 	debug("Checking variable usage");
 	ops.node_enter = sema_var_usage;
@@ -1829,12 +2243,12 @@ sema_typecheck(Arena *arena,
 	debug("Propagating expression types");
 	ops.node_enter = NULL;
 	ops.node_exit = sema_expr_types;
-	{
-		struct sema_expr_types_state expr_types_state = {0};
-		expr_types_state.arena = arena;
-		check(sema_walk(a, &ops, &expr_types_state));
-	}
+	check(sema_walk(a, &ops, arena));
 	ops.node_exit = NULL;
+
+	debug("Checking for invalid lvalues");
+	ops.node_enter = sema_lvalue;
+	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking for invalid double usage");
 	ops.node_enter = sema_double;

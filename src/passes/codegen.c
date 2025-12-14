@@ -21,6 +21,7 @@ static const long long int CODEGEN_FP_REGISTER_ARGS = ARRAY_SIZE(CALL_FP);
 static const long long int CODEGEN_BYTES_PER_VALUE = 4;
 static const long long int CODEGEN_BYTES_PER_PUSH = 8;
 static const long long int CODEGEN_BYTES_ARG_FIRST = 16;
+static const long long int CODEGEN_BYTES_STACK_ALIGN_TOP_OR_ARR = 16;
 static const long unsigned UINT_TO_DOUBLE_MAGIC_L1 = 0x43300000;
 static const long unsigned UINT_TO_DOUBLE_MAGIC_L2 = 0x45300000;
 static const long long unsigned UINT_TO_DOUBLE_MAGIC_Q1 = 0x4330000000000000;
@@ -77,9 +78,9 @@ codegen_set_operand_immediate_zero(struct asm_operand *dst)
 }
 
 static void
-codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
+codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 {
-	switch (src->c89type.t) {
+	switch (c->t) {
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
@@ -88,9 +89,16 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 	case CTYPE_UNSIGNED_LONG:
 	case CTYPE_DOUBLE:
 	case CTYPE_POINTER_TO:
+	case CTYPE_ARRAY_OF:
 		dst->word_type = ASM_WORD_64BIT;
 		break;
 	}
+}
+
+static void
+codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
+{
+	codegen_map_ctype_impl(&src->c89type, dst);
 }
 
 static void
@@ -111,6 +119,18 @@ codegen_set_operand_stack(const struct ir_val *basis,
                           struct asm_operand *dst)
 {
 	codegen_set_operand_memory(basis, ASM_REGISTER_RBP, offset, dst);
+}
+
+static void
+codegen_set_operand_indexed(const struct ir_val *basis,
+                            long long int scale,
+                            struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_INDEXED;
+	dst->u.idx.base = ASM_REGISTER_AX;
+	dst->u.idx.index = ASM_REGISTER_DX;
+	dst->u.idx.scale = scale;
+	codegen_map_ctype(basis, dst);
 }
 
 static void
@@ -215,9 +235,24 @@ static const struct asm_operand OPERAND_XMM15 = {
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
+	if (ctype_is_array(&src->c89type) &&
+	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
+		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
+		dst->u.pseudo_mem.num = src->num;
+		dst->u.pseudo_mem.offset = src->offset;
+		dst->u.pseudo_mem.total_bytes =
+			ctype_to_size_bytes(&src->c89type);
+		const struct ctype *innermost = &src->c89type;
+		while (ctype_is_array(innermost)) {
+			innermost = innermost->referent;
+		}
+		codegen_map_ctype_impl(innermost, dst);
+		return;
+	}
+
 	switch (src->subtype) {
 	case IR_VAL_NONE:
-		assert(0 && "unset operand in 2-arg/3-arg op");
+		assert(0 && "unset operand in 2-arg/3-arg/4-arg op");
 		break;
 	case IR_VAL_CONSTANT:
 		switch (src->c89type.t) {
@@ -226,6 +261,7 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
 		case CTYPE_POINTER_TO:
+		case CTYPE_ARRAY_OF:
 			dst->operand_type = ASM_OPERAND_IMMEDIATE;
 			dst->u.num = src->num;
 			break;
@@ -923,6 +959,7 @@ codegen_statement_one(Arena *arena,
 			assert(0 && "double div/rem should lead elsewhere");
 			break;
 		case CTYPE_POINTER_TO:
+		case CTYPE_ARRAY_OF:
 			assert(0 && "ptr div/rem should have been rejected");
 			break;
 		}
@@ -1047,7 +1084,8 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
-		assert((**dst).args[0].word_type == ASM_WORD_64BIT);
+		/* IR_OP_LOAD should operate on a 64-bit pointer */
+		(**dst).args[1].word_type = ASM_WORD_64BIT;
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
@@ -1070,6 +1108,41 @@ codegen_statement_one(Arena *arena,
 		                           ASM_REGISTER_AX,
 		                           0,
 		                           &(**dst).args[1]);
+		break;
+	case IR_OP_POINTER_ADD:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RDX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		assert(src->args[2].subtype == IR_VAL_CONSTANT);
+		if (src->args[2].num == 1 || src->args[2].num == 2 ||
+		    src->args[2].num == 4 || src->args[2].num == 8) {
+			(**dst).opcode = ASM_OP_LEA;
+			codegen_set_operand_indexed(
+				&src->args[0],
+				(long long int)src->args[2].num,
+				&(**dst).args[0]);
+			codegen_map_operand(&src->args[3], &(**dst).args[1]);
+		} else {
+			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+			codegen_map_operand(&src->args[2], &(**dst).args[0]);
+			(**dst).args[1] = OPERAND_RDX_64BIT;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_LEA;
+			codegen_set_operand_indexed(&src->args[0],
+			                            1,
+			                            &(**dst).args[0]);
+			codegen_map_operand(&src->args[3], &(**dst).args[1]);
+		}
+		/* ASM_OP_LEA should produce a 64-bit pointer */
+		(**dst).args[1].word_type = ASM_WORD_64BIT;
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
@@ -1226,9 +1299,8 @@ codegen_variable(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
-	check(ctype_copy(arena, &ir->c89type, &(**dst).c89type));
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
-	(**dst).initial = ir->initial;
+	(**dst).initializer = ir->initializer;
 	return RESULT_OK;
 }
 
@@ -1273,16 +1345,17 @@ round_up_to_multiple_of(long long int n, long long int base)
 }
 
 static WARN_UNUSED result_t
-codegen_replace_pseudoregisters_fn(struct asm_function *cg,
-                                   long long int range[2],
-                                   long long int *offsets,
-                                   bool preflight)
+codegen_replace_pseudo_fn(struct asm_function *cg,
+                          long long int range[2],
+                          long long int *offsets,
+                          bool preflight)
 {
 	long long int cursor = 0;
 	for (struct asm_op *op = cg->ops; op != NULL; op = op->next) {
 		for (size_t i = 0; i < ARRAY_SIZE(op->args); ++i) {
 			struct asm_operand *arg = &op->args[i];
-			if (arg->operand_type != ASM_OPERAND_PSEUDO_REGISTER) {
+			if (arg->operand_type != ASM_OPERAND_PSEUDO_REGISTER &&
+			    arg->operand_type != ASM_OPERAND_PSEUDO_MEMORY) {
 				continue;
 			}
 
@@ -1298,7 +1371,17 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 			const int128_t idx = arg->u.num - range[0];
 
 			assert(offsets != NULL);
-			if (offsets[idx] == 0) {
+			const bool got_offset = (offsets[idx] != 0);
+			if (got_offset) {
+				/* use already-computed offset value for idx */
+			} else if (arg->operand_type ==
+			           ASM_OPERAND_PSEUDO_MEMORY) {
+				cursor += arg->u.pseudo_mem.total_bytes;
+				cursor = round_up_to_multiple_of(
+					cursor,
+					CODEGEN_BYTES_STACK_ALIGN_TOP_OR_ARR);
+				offsets[idx] = cursor;
+			} else {
 				switch (arg->word_type) {
 				case ASM_WORD_32BIT:
 					cursor += CODEGEN_BYTES_PER_VALUE;
@@ -1313,8 +1396,14 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 				offsets[idx] = cursor;
 			}
 
+			long long int computed_offset = offsets[idx];
+			if (arg->operand_type == ASM_OPERAND_PSEUDO_MEMORY) {
+				computed_offset -= arg->u.pseudo_mem.offset;
+				assert(computed_offset > 0);
+			}
+
 			arg->operand_type = ASM_OPERAND_MEMORY;
-			arg->u.mem.offset = -1 * offsets[idx];
+			arg->u.mem.offset = -1 * computed_offset;
 			arg->u.mem.reg = ASM_REGISTER_RBP;
 			/* leave arg->word_type as-is */
 		}
@@ -1323,13 +1412,13 @@ codegen_replace_pseudoregisters_fn(struct asm_function *cg,
 }
 
 result_t
-codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
+codegen_replace_pseudo(Arena *arena, struct assembly *cg)
 {
-	debug("Replacing pseudoregisters with stack addresses");
+	debug("Replacing pseudovalues with stack addresses");
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		long long int range[2] = {LLONG_MAX, LLONG_MIN};
-		check(codegen_replace_pseudoregisters_fn(f, range, NULL, true));
+		check(codegen_replace_pseudo_fn(f, range, NULL, true));
 
 		if (range[0] == LLONG_MAX || range[1] == LLONG_MIN) {
 			continue;
@@ -1340,7 +1429,7 @@ codegen_replace_pseudoregisters(Arena *arena, struct assembly *cg)
 		assert(size <= 4096); /* if exceeded, refactor */
 
 		long long int *off = arena_alloc(arena, sizeof(*off) * size);
-		check(codegen_replace_pseudoregisters_fn(f, range, off, false));
+		check(codegen_replace_pseudo_fn(f, range, off, false));
 
 		assert(f->stack_usage == 0);
 		for (long long int i = 0; i < size; ++i) {
@@ -1359,7 +1448,9 @@ codegen_fixup_alloc_stack(Arena *arena, struct asm_function *cg)
 	}
 
 	struct asm_op *alloc_stack = NULL;
-	const long long int fix = round_up_to_multiple_of(cg->stack_usage, 16);
+	const long long int fix =
+		round_up_to_multiple_of(cg->stack_usage,
+	                                CODEGEN_BYTES_STACK_ALIGN_TOP_OR_ARR);
 	check(codegen_alloc_subq_rsp(arena, &alloc_stack, fix));
 	codegen_op_list_prepend(alloc_stack, &cg->ops);
 	return RESULT_OK;
@@ -1978,6 +2069,17 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		      operand->u.mem.offset,
 		      REGISTER_NAMES[operand->u.mem.reg]);
 		break;
+	case ASM_OPERAND_PSEUDO_MEMORY:
+		debug("  PSEUDOMEM %lld(%lld)",
+		      operand->u.pseudo_mem.offset,
+		      (long long)operand->u.pseudo_mem.num);
+		break;
+	case ASM_OPERAND_INDEXED:
+		debug("  INDEXED (%s, %s, %lld)",
+		      REGISTER_NAMES[operand->u.idx.base],
+		      REGISTER_NAMES[operand->u.idx.index],
+		      operand->u.idx.scale);
+		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		debug("  LABEL %lld", (long long)operand->u.num);
 		break;
@@ -2036,20 +2138,14 @@ codegen_debug_print(const struct assembly *cg)
 {
 	debug("PROGRAM");
 
-	char tmp[128] = {0};
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		debug("  TYPE %s", ctype_to_str(&v->c89type, tmp, sizeof(tmp)));
 		debug("  LINKAGE %s",
 		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
 		                                         : "INTERNAL");
-		if (ctype_is_floating_point(&v->c89type)) {
-			debug("  INITIAL VALUE %f", v->initial.as_double);
-		} else {
-			debug("  INITIAL VALUE %lld",
-			      (long long)v->initial.as_integer);
-		}
+		debug("  INITIALIZER");
+		constant_debug_print(v->initializer, 4);
 	}
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {

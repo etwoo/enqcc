@@ -30,10 +30,26 @@ bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
 bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
 bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 
-union constant_value {
-	int128_t as_integer;
-	double as_double;
+struct constant_bytes {
+	long long unsigned byte_count;
+	long long unsigned byte_value; /* may contain double as quadword */
 };
+
+struct constant_initializer {
+	long long unsigned count;
+	struct constant_bytes *elements;
+};
+
+long long unsigned get_double_as_quadword(double value) WARN_UNUSED;
+result_t constant_set_zero(Arena *arena,
+                           const struct ctype *c89type,
+                           struct constant_initializer *ci) WARN_UNUSED;
+result_t constant_make_zero(Arena *arena,
+                            const struct ctype *c89type,
+                            struct constant_initializer **dst) WARN_UNUSED;
+bool constant_is_zero(const struct constant_initializer *ci) WARN_UNUSED;
+long long unsigned constant_byte_count(const struct constant_initializer *ci);
+void constant_debug_print(const struct constant_initializer *ci, size_t indent);
 
 struct symbol_linkage_state {
 	enum symbol_linkage linkage;
@@ -42,7 +58,7 @@ struct symbol_linkage_state {
 		INITIAL_VALUE_TENTATIVE,
 		INITIAL_VALUE_CONSTANT,
 	} initial;
-	union constant_value as_constant;
+	struct constant_initializer initializer;
 };
 
 struct symbol {

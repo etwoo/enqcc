@@ -44,6 +44,8 @@ struct asm_operand {
 		ASM_OPERAND_REGISTER,
 		ASM_OPERAND_PSEUDO_REGISTER,
 		ASM_OPERAND_MEMORY,
+		ASM_OPERAND_PSEUDO_MEMORY,
+		ASM_OPERAND_INDEXED,
 		ASM_OPERAND_JUMP_TARGET_LABEL,
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
 		ASM_OPERAND_VARIABLE_DATA,
@@ -61,7 +63,17 @@ struct asm_operand {
 		struct {
 			long long int offset;
 			enum asm_register reg;
-		} mem;                       /* MEMORY */
+		} mem;
+		struct {
+			int128_t num;
+			long long int offset;
+			long long int total_bytes;
+		} pseudo_mem;
+		struct {
+			enum asm_register base;
+			enum asm_register index;
+			long long int scale;
+		} idx;
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
 		double dnum;                 /* CONSTANT_DATA_DOUBLE */
@@ -160,9 +172,8 @@ struct asm_function {
 
 struct asm_variable {
 	struct string_view identifier;
-	struct ctype c89type; /* determines alignment */
 	enum asm_linkage linkage;
-	union constant_value initial;
+	struct constant_initializer *initializer;
 	struct asm_variable *next;
 };
 

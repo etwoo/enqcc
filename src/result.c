@@ -191,13 +191,29 @@ result_to_str(result_t r)
 			"Parsing constant expr %s: too large for int or long",
 			r.msg);
 		break;
+	case ERR_PARSE_DECL_ATOM_ARRAY_SIZE_FLOATING_POINT:
+		s = strdup("Parsing declarator expects integer array size");
+		break;
+	case ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_CONSTANT:
+		s = strdup("Parsing declarator expects positive integer "
+		           "constant expression as array size");
+		break;
+	case ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_POSITIVE:
+		s = strdup("Parsing declarator expects positive array size");
+		break;
+	case ERR_PARSE_DECL_ATOM_EARLY_SUBSCRIPT:
+		s = strdup("Parsing (non-abstract) declarator expects "
+		           "identifier before array subscript "
+		           "TOKEN_SQUARE_BRACKET_OPEN");
+		break;
 	case ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE:
 		s = strdup("Parsing declarator expects TOKEN_PAREN_CLOSE after "
 		           "TOKEN_PAREN_OPEN and inner declarator");
 		break;
-	case ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE:
+	case ERR_PARSE_DECL_ATOM_EXPECT_SQ_BRACKET_CLOSE:
 		s = strdup(
-			"Parsing declarator; encountered unreasonable token");
+			"Parsing declarator expects TOKEN_SQUARE_BRACKET_CLOSE "
+			"after TOKEN_SQUARE_BRACKET_OPEN and array size");
 		break;
 	case ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED:
 		s = strdup(
@@ -212,6 +228,18 @@ result_to_str(result_t r)
 		           "function declarations, suggesting use of function "
 		           "pointers, which are not supported");
 		break;
+	case ERR_PARSE_DECL_ATOM_PARENS_INVALID:
+		s = strdup("Parsing declarator: invalid paren-grouping");
+		break;
+	case ERR_PARSE_DECL_ATOM_POINTER_AFTER_PARENS:
+		s = strdup("Parsing declarator: pointer cannot appear after "
+		           "parenthesized expression");
+		break;
+	case ERR_PARSE_DECL_EXPECT_BRACE_CLOSE:
+		s = strdup("Parsing compound initializer expects "
+		           "TOKEN_BRACE_CLOSE after TOKEN_BRACE_OPEN and "
+		           "initializer expression");
+		break;
 	case ERR_PARSE_DECL_EXPECT_TYPE:
 		s = strdup("Parsing variable or function declaration expects "
 		           "valid type in type position");
@@ -219,6 +247,13 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_SEMICOLON after initializer expression");
+		break;
+	case ERR_PARSE_DECL_IDENTIFIER_MISSING:
+		s = strdup("Parsing declarator: missing identifier");
+		break;
+	case ERR_PARSE_DECL_IDENTIFIER_UNEXPECTED:
+		s = strdup("Parsing declarator: unexpected identifier in "
+		           "abstract declarator");
 		break;
 	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
 		s = strdup("Duplicate variable or function specifier");
@@ -234,6 +269,11 @@ result_to_str(result_t r)
 	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing paren-enclosed expression expects "
 		           "TOKEN_PAREN_CLOSE after expression");
+		break;
+	case ERR_PARSE_EXPR_EXPECT_TOKEN_SQ_BRACKET_CLOSE:
+		s = strdup("Parsing array subscript expression expects "
+		           "TOKEN_SQUARE_BRACKET_CLOSE after "
+		           "TOKEN_SQUARE_BRACKET_OPEN and array index value");
 		break;
 	case ERR_PARSE_EXPR_EXPECT_COLON_IN_TERNARY_OP:
 		s = strdup("Parsing ternary conditional operator expects "
@@ -321,6 +361,18 @@ result_to_str(result_t r)
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);
 		break;
+	case ERR_SEMA_INIT_COMPOUND_EMPTY:
+		s = strdup("Empty compound initializer is a C23 extension");
+		break;
+	case ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS:
+		s = my_asprintf(
+			"Excess elements in compound initializer for array %s",
+			r.msg);
+		break;
+	case ERR_SEMA_INIT_SCALAR_WITH_COMPOUND:
+		s = strdup("Scalar variable given compound initializer "
+		           "expression");
+		break;
 	case ERR_SEMA_LABEL_DUPLICATE:
 		s = my_asprintf("Duplicate label: %s", r.msg);
 		break;
@@ -368,6 +420,10 @@ result_to_str(result_t r)
 		                "non-static declaration",
 		                r.msg);
 		break;
+	case ERR_SEMA_FUNCTION_RETURN_TYPE_ARRAY:
+		s = my_asprintf("Function %s cannot return array type", r.msg);
+
+		break;
 	case ERR_SEMA_OPERAND_ADDRESS_OF_INVALID:
 		s = strdup("Address-of operator & requires lvalue argument");
 		break;
@@ -382,6 +438,9 @@ result_to_str(result_t r)
 			"of type 'double' cannot be cast to pointer type, and "
 			"pointer values cannot be cast to type 'double'");
 		break;
+	case ERR_SEMA_OPERAND_ADD_POINTER_BOTH:
+		s = strdup("Addition cannot take two pointer operands");
+		break;
 	case ERR_SEMA_OPERAND_POINTER_CONFLICT:
 		s = strdup("Conflicting pointer types");
 		break;
@@ -390,13 +449,18 @@ result_to_str(result_t r)
 		           "pointer type");
 		break;
 	case ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS:
-		s = strdup("Pointer LHS cannot be compared to non-pointer RHS");
+		s = strdup("Pointer LHS cannot be compared/converted to "
+		           "non-pointer RHS");
 		break;
 	case ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS:
-		s = strdup("Pointer RHS cannot be compared to non-pointer LHS");
+		s = strdup("Pointer RHS cannot be compared/converted to "
+		           "non-pointer LHS");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY:
+		s = strdup("Array type is not assignable");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE:
 		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
@@ -418,10 +482,9 @@ result_to_str(result_t r)
 		                r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_INIT:
-		s = my_asprintf("File-scope variable %s has non-constant "
-		                "initializer: %s",
-		                r.msg,
-		                r.msg);
+		s = my_asprintf(
+			"File-scope variable %s has non-constant initializer",
+			r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE:
 		s = my_asprintf("Declaration of file-scope variable %s with "

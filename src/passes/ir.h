@@ -16,6 +16,7 @@ struct ir_val {
 	} subtype;
 	int128_t num;               /* numeric value, variable ID, etc */
 	double dnum;                /* ... or numeric value as floating point */
+	long long int offset;       /* offset of value within aggregate type */
 	struct string_view varname; /* symbol name, if linkage */
 	struct ctype c89type;
 };
@@ -54,6 +55,7 @@ struct ir_val {
 	F(GET_ADDRESS, 2)                                                      \
 	F(LOAD, 2)                                                             \
 	F(STORE, 2)                                                            \
+	F(POINTER_ADD, 4)                                                      \
 	F(JUMP, 1)                                                             \
 	F(JUMP_IF_ZERO, 2)                                                     \
 	F(JUMP_IF_NOT_ZERO, 2)                                                 \
@@ -86,9 +88,8 @@ struct ir_function {
 
 struct ir_variable {
 	struct string_view identifier;
-	struct ctype c89type;
 	enum ir_linkage linkage;
-	union constant_value initial;
+	struct constant_initializer *initializer;
 	struct ir_variable *next;
 };
 
