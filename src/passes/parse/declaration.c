@@ -315,15 +315,19 @@ parse_declarator(Arena *arena,
 	while (is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
 		token_consume(tok);
 
+		if (!is_token_type(*tok, TOKEN_CONSTANT)) {
+			return make_result(
+				ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_CONSTANT);
+		}
+
 		struct ast *constant = NULL;
 		check(parse_constant(arena, tok, &constant));
-		assert(constant && constant->node_type == NODE_CONSTANT);
-
+		assert(constant != NULL);
 		if (ctype_is_floating_point(&constant->expr_type)) {
 			return make_result(
 				ERR_PARSE_DECL_ATOM_ARRAY_SIZE_FLOATING_POINT);
 		}
-		if (constant->u.num <= 0) {
+		if (constant->u.num == 0) {
 			return make_result(
 				ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_POSITIVE);
 		}

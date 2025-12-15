@@ -192,7 +192,11 @@ result_to_str(result_t r)
 			r.msg);
 		break;
 	case ERR_PARSE_DECL_ATOM_ARRAY_SIZE_FLOATING_POINT:
-		s = strdup("Parsing declarator expects integer for array size");
+		s = strdup("Parsing declarator expects integer array size");
+		break;
+	case ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_CONSTANT:
+		s = strdup("Parsing declarator expects positive integer "
+		           "constant expression as array size");
 		break;
 	case ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_POSITIVE:
 		s = strdup("Parsing declarator expects positive array size");
@@ -208,7 +212,7 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_ATOM_EXPECT_SQ_BRACKET_CLOSE:
 		s = strdup(
 			"Parsing declarator expects TOKEN_SQUARE_BRACKET_CLOSE "
-		        "after TOKEN_SQUARE_BRACKET_OPEN and array size");
+			"after TOKEN_SQUARE_BRACKET_OPEN and array size");
 		break;
 	case ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED:
 		s = strdup(
