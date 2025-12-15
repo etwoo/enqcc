@@ -306,11 +306,12 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+	case NODE_EXPRESSION_SUBSCRIPT:
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
-		parse_debug_print_ast_symbol(NULL, &a->u.var, indent);
+		parse_debug_print_ast_symbol(NULL, &a->u.var, indent + 1);
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		debug("%*sCONDITION", (int)indent + 1, "");

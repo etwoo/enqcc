@@ -255,6 +255,11 @@ result_to_str(result_t r)
 		s = strdup("Parsing paren-enclosed expression expects "
 		           "TOKEN_PAREN_CLOSE after expression");
 		break;
+	case ERR_PARSE_EXPR_EXPECT_TOKEN_SQ_BRACKET_CLOSE:
+		s = strdup("Parsing array subscript expression expects "
+		           "TOKEN_SQUARE_BRACKET_CLOSE after "
+		           "TOKEN_SQUARE_BRACKET_OPEN and array index value");
+		break;
 	case ERR_PARSE_EXPR_EXPECT_COLON_IN_TERNARY_OP:
 		s = strdup("Parsing ternary conditional operator expects "
 		           "TOKEN_COLON after then-expression and before "

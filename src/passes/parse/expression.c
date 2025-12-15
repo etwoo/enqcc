@@ -167,14 +167,32 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
 		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT));
 		token_consume(tok);
-	} else {
-		return RESULT_OK;
 	}
 	/*
 	 * Wrap the inner expr in postincrement/postdecrement.
 	 */
-	post->u.op_unary.operand = *dst;
-	*dst = post;
+	if (post != NULL) {
+		post->u.op_unary.operand = *dst;
+		*dst = post;
+	}
+
+	while (is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
+		token_consume(tok);
+
+		struct ast *postfix = NULL;
+		check(parse_alloc(arena, &postfix, NODE_EXPRESSION_SUBSCRIPT));
+
+		/* make array subscript expr into parent of prev/next exprs */
+		postfix->u.op_binary.lhs = *dst;
+		check(parse_factor(arena, tok, &postfix->u.op_binary.rhs));
+		*dst = postfix;
+
+		if (!is_token_type(*tok, TOKEN_SQUARE_BRACKET_CLOSE)) {
+			return make_result(
+				ERR_PARSE_EXPR_EXPECT_TOKEN_SQ_BRACKET_CLOSE);
+		}
+		token_consume(tok);
+	}
 
 	return RESULT_OK;
 }
@@ -297,6 +315,7 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
+	case NODE_EXPRESSION_SUBSCRIPT:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_EXPRESSION_CAST:
