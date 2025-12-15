@@ -32,6 +32,7 @@ result_t ctype_copy(Arena *arena,
                     struct ctype *dst) WARN_UNUSED;
 const char *ctype_to_str(const struct ctype *c, char *stor, size_t cap);
 long long int ctype_to_size_bytes(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_integer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_signed(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_floating_point(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_pointer(const struct ctype *c) WARN_UNUSED;

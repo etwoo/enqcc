@@ -91,6 +91,26 @@ ctype_to_size_bytes(const struct ctype *c)
 }
 
 bool
+ctype_is_integer(const struct ctype *c)
+{
+	bool b = true;
+	switch (c->t) {
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+		b = true;
+		break;
+	case CTYPE_DOUBLE:
+	case CTYPE_POINTER_TO:
+	case CTYPE_ARRAY_OF:
+		b = false;
+		break;
+	}
+	return b;
+}
+
+bool
 ctype_is_signed(const struct ctype *c)
 {
 	bool b = true;
@@ -119,7 +139,7 @@ ctype_is_floating_point(const struct ctype *c)
 bool
 ctype_is_pointer(const struct ctype *c)
 {
-	return c->t == CTYPE_POINTER_TO;
+	return c->t == CTYPE_POINTER_TO || c->t == CTYPE_ARRAY_OF;
 }
 
 bool

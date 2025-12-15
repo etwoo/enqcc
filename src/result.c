@@ -349,6 +349,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);
 		break;
+	case ERR_SEMA_INIT_SCALAR_WITH_COMPOUND:
+		s = strdup("Scalar variable given compound initializer expression");
+		break;
 	case ERR_SEMA_LABEL_DUPLICATE:
 		s = my_asprintf("Duplicate label: %s", r.msg);
 		break;
@@ -422,6 +425,11 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS:
 		s = strdup("Pointer RHS cannot be compared to non-pointer LHS");
+		break;
+	case ERR_SEMA_OPERAND_SUBSCRIPT_INVALID:
+		s = strdup("Array subscript operator [] requires one operand "
+		           "of type CTYPE_POINTER_TO or CTYPE_ARRAY_OF and "
+		           "another operand of integer type");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");

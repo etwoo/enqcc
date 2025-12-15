@@ -66,6 +66,7 @@ struct ast_parameter {
 
 #define FOREACH_AST_NODE_EXPRESSION(F)                                         \
 	F(EXPRESSION_NULL)                                                     \
+	F(EXPRESSION_INITIALIZER)                                              \
 	F(EXPRESSION_PAREN_ENCLOSED)                                           \
 	F(EXPRESSION_POSTDECREMENT)                                            \
 	F(EXPRESSION_POSTINCREMENT)                                            \
@@ -82,7 +83,6 @@ struct ast_parameter {
 	F(FUNCTION_RETURN_STATEMENT)                                           \
 	F(BLOCK)                                                               \
 	F(DECLARATION)                                                         \
-	F(INITIALIZER)                                                         \
 	F(IF_ELSE)                                                             \
 	F(LOOP)                                                                \
 	F(BREAK)                                                               \

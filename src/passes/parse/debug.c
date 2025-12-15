@@ -147,15 +147,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 			parse_debug_print(a->u.declare.init, indent + 1);
 		}
 		break;
-	case NODE_INITIALIZER:
-		if (a->u.init.single != NULL) {
-			assert(a->u.init.multi == NULL);
-			parse_debug_print(a->u.init.single, indent + 1);
-		} else if (a->u.init.multi != NULL) {
-			assert(a->u.init.single == NULL);
-			parse_debug_print_flat(a->u.init.multi, indent + 1);
-		}
-		break;
 	case NODE_IF_ELSE:
 		debug("%*sCONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.if_.condition, indent + 2);
@@ -263,6 +254,15 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      a->u.case_.unique == UNSET_SWITCH_ID ? " (unset)" : "");
 		break;
 	case NODE_EXPRESSION_NULL:
+		break;
+	case NODE_EXPRESSION_INITIALIZER:
+		if (a->u.init.single != NULL) {
+			assert(a->u.init.multi == NULL);
+			parse_debug_print(a->u.init.single, indent + 1);
+		} else if (a->u.init.multi != NULL) {
+			assert(a->u.init.single == NULL);
+			parse_debug_print_flat(a->u.init.multi, indent + 1);
+		}
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:

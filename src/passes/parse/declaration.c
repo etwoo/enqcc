@@ -493,7 +493,7 @@ parse_initializer_arr(Arena *arena, const struct token **tok, struct flat **dst)
 static WARN_UNUSED result_t
 parse_initializer(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	check(parse_alloc(arena, dst, NODE_INITIALIZER));
+	check(parse_alloc(arena, dst, NODE_EXPRESSION_INITIALIZER));
 
 	if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		check(parse_initializer_arr(arena, tok, &(**dst).u.init.multi));

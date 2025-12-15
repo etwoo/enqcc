@@ -120,10 +120,6 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_DECLARATION:
 		check(sema_walk(a->u.declare.init, ops, u));
 		break;
-	case NODE_INITIALIZER:
-		check(sema_walk(a->u.init.single, ops, u));
-		check(sema_walk_flat(a->u.init.multi, ops, u));
-		break;
 	case NODE_IF_ELSE:
 		check(sema_walk(a->u.if_.condition, ops, u));
 		check(sema_walk_flat(a->u.if_.then_clause, ops, u));
@@ -145,6 +141,10 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_LABEL:
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
+		break;
+	case NODE_EXPRESSION_INITIALIZER:
+		check(sema_walk(a->u.init.single, ops, u));
+		check(sema_walk_flat(a->u.init.multi, ops, u));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -907,8 +907,20 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
-	case NODE_INITIALIZER:
-		assert(0 && "TODO: sema_expr_types for compound initializer?");
+	case NODE_EXPRESSION_INITIALIZER:
+		if (a->u.init.single != NULL) {
+			assert(a->u.init.multi == NULL);
+			check(ctype_copy(arena,
+			                 &a->u.init.single->expr_type,
+			                 &a->expr_type));
+		} else if (a->u.init.multi != NULL) {
+			assert(a->u.init.single == NULL);
+			a->expr_type.t = CTYPE_ARRAY_OF;
+			assert(a->expr_type.referent == NULL);
+			check(ctype_alloc(arena, &a->expr_type.referent));
+			/* sema_implicit_cast_decl_init() sets element type */
+			assert(a->expr_type.referent->t == CTYPE_INT);
+		}
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -922,8 +934,25 @@ sema_expr_types(struct ast *a, void *userdata)
 		                 &a->u.op_unary.operand->expr_type,
 		                 &a->expr_type));
 		break;
+	case NODE_EXPRESSION_SUBSCRIPT:
+		if ((ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		     ctype_is_integer(&a->u.op_binary.rhs->expr_type)) ||
+		    (ctype_is_integer(&a->u.op_binary.lhs->expr_type) &&
+		     ctype_is_pointer(&a->u.op_binary.rhs->expr_type))) {
+			const struct ast *pointer =
+				ctype_is_pointer(&a->u.op_binary.lhs->expr_type)
+					? a->u.op_binary.lhs
+					: a->u.op_binary.rhs;
+			assert(ctype_is_pointer(&pointer->expr_type));
+			check(ctype_copy(arena,
+			                 pointer->expr_type.referent,
+			                 &a->expr_type));
+		} else {
+			return make_result(ERR_SEMA_OPERAND_SUBSCRIPT_INVALID);
+		}
+		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
-		if (a->u.op_unary.operand->expr_type.t != CTYPE_POINTER_TO) {
+		if (!ctype_is_pointer(&a->u.op_unary.operand->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_DEREF_INVALID);
 		}
 		check(ctype_copy(arena,
@@ -957,7 +986,6 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BITWISE_AND:
 	case NODE_EXPRESSION_BITWISE_OR:
 	case NODE_EXPRESSION_BITWISE_XOR:
-	case NODE_EXPRESSION_SUBSCRIPT:
 		check(ctype_copy(
 			arena,
 			get_common_ctype(&a->u.op_binary.lhs->expr_type,
@@ -1168,6 +1196,63 @@ cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_implicit_cast_initializer(Arena *arena,
+                               const struct ctype *expected_type,
+                               struct ast **init)
+{
+	if (*init == NULL) {
+		return RESULT_OK;
+	}
+	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if ((**init).u.init.single != NULL) {
+		assert(ctype_is_equal(&(**init).u.init.single->expr_type,
+		                      &(**init).expr_type));
+		check(sema_pointer_cmp(expected_type, &(**init).expr_type));
+		check(cast_if(arena, expected_type, init));
+		return RESULT_OK;
+	}
+
+	if (!ctype_is_pointer(expected_type)) {
+		/*
+		 * For now, reject compound initializers for scalar variables.
+		 * In the future, it may make sense to support the special-case
+		 * compound initializer {0} for scalar init.
+		 */
+		return make_result(ERR_SEMA_INIT_SCALAR_WITH_COMPOUND);
+	}
+
+	/* single XOR multi */
+	assert((**init).u.init.multi != NULL);
+	/* sema_expr_types() sets initial CTYPE_ARRAY_OF */
+	assert((**init).expr_type.t == CTYPE_ARRAY_OF);
+	/* ... but leaves referent type unset */
+	assert((**init).expr_type.referent->t == CTYPE_INT);
+	/* ... which we now set, based on expected_type from LHS */
+	check(ctype_copy(arena,
+	                 expected_type->referent,
+	                 (**init).expr_type.referent));
+
+	for (struct flat *f = (**init).u.init.multi; f != NULL; f = f->cdr) {
+		check(sema_implicit_cast_initializer(arena,
+		                                     expected_type->referent,
+		                                     &f->car));
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_implicit_cast_declaration(Arena *arena, struct ast *a)
+{
+	assert(a->node_type == NODE_DECLARATION);
+	check(sema_implicit_cast_initializer(arena,
+	                                     &a->u.declare.var_type,
+	                                     &a->u.declare.init));
+	return RESULT_OK;
+}
+
 struct sema_implicit_cast_state {
 	Arena *arena;
 	struct ctype expected_return_type;
@@ -1192,9 +1277,7 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              &a->u.op_unary.operand));
 		break;
 	case NODE_DECLARATION:
-		check(cast_if(arena,
-		              &a->u.declare.var_type,
-		              &a->u.declare.init));
+		check(sema_implicit_cast_declaration(arena, a));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -1858,7 +1941,6 @@ sema_typecheck(Arena *arena,
 		pointer_state.arena = arena;
 		check(sema_walk(a, &ops, &pointer_state));
 	}
-
 	debug("Labeling loops, loop breaks, and continues");
 	check(sema_label_loops(arena, a, label_generator));
 
