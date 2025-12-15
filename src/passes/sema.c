@@ -120,6 +120,10 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_DECLARATION:
 		check(sema_walk(a->u.declare.init, ops, u));
 		break;
+	case NODE_INITIALIZER:
+		check(sema_walk(a->u.init.single, ops, u));
+		check(sema_walk_flat(a->u.init.multi, ops, u));
+		break;
 	case NODE_IF_ELSE:
 		check(sema_walk(a->u.if_.condition, ops, u));
 		check(sema_walk_flat(a->u.if_.then_clause, ops, u));
@@ -902,6 +906,9 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
+	case NODE_INITIALIZER:
+		assert(0 && "TODO: sema_expr_types for compound initializer?");
+		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:

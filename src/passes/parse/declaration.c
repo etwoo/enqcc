@@ -463,6 +463,47 @@ parse_type(Arena *arena,
 	return RESULT_OK;
 }
 
+static result_t parse_initializer(Arena *arena,
+                                  const struct token **tok,
+                                  struct ast **dst) WARN_UNUSED;
+
+static WARN_UNUSED result_t
+parse_initializer_arr(Arena *arena, const struct token **tok, struct flat **dst)
+{
+	assert(is_token_type(*tok, TOKEN_BRACE_OPEN));
+
+	do {
+		token_consume(tok);
+		if (is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
+			break; /* allow final comma after last field */
+		}
+		check(flat_alloc(arena, dst));
+		check(parse_initializer(arena, tok, &(**dst).car));
+		dst = &(**dst).cdr;
+	} while (is_token_type(*tok, TOKEN_COMMA));
+
+	if (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
+		return make_result(ERR_PARSE_DECL_EXPECT_BRACE_CLOSE);
+	}
+	token_consume(tok);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_initializer(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	check(parse_alloc(arena, dst, NODE_INITIALIZER));
+
+	if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
+		check(parse_initializer_arr(arena, tok, &(**dst).u.init.multi));
+	} else {
+		check(parse_expr(arena, tok, &(**dst).u.init.single, 0));
+	}
+
+	return RESULT_OK;
+}
+
 const uint32_t PARSE_DECLARATION_ACCEPT_FUNCTION = 0x100;
 
 result_t
@@ -496,11 +537,9 @@ parse_fn_or_var_declaration(Arena *arena,
 
 		if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
 			token_consume(tok);
-			// TODO: check for compound initializer
-			check(parse_expr(arena,
-			                 tok,
-			                 &(**dst).u.declare.init,
-			                 0));
+			check(parse_initializer(arena,
+			                        tok,
+			                        &(**dst).u.declare.init));
 		}
 
 		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {

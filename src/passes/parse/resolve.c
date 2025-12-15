@@ -82,6 +82,12 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_DECLARATION:
 		assert(0); /* logic error in caller */
 		break;
+	case NODE_INITIALIZER:
+		check(resolve_expr(arena, a->u.init.single, sym));
+		for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+			check(resolve_expr(arena, f->car, sym));
+		}
+		break;
 	case NODE_IF_ELSE:
 		check(resolve_expr(arena, a->u.if_.condition, sym));
 		check(resolve_block(arena, a->u.if_.then_clause, sym));
