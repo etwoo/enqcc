@@ -882,6 +882,52 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_expr_types_initializer(Arena *arena,
+                            const struct ctype *declaration_type,
+                            struct ast *init)
+{
+	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (init->u.init.single != NULL) {
+		/*
+		 * For scalar init, copy upward from constant to containing
+		 * NODE_EXPRESSION_INITIALIZER.
+		 */
+		check(ctype_copy(arena,
+		                 &init->u.init.single->expr_type,
+		                 &init->expr_type));
+		return RESULT_OK;
+	}
+
+	if (!ctype_is_pointer(declaration_type)) {
+		/*
+		 * For now, reject compound initializers for scalar variables.
+		 * In the future, it may make sense to support the special-case
+		 * compound initializer {0} for scalar init.
+		 */
+		return make_result(ERR_SEMA_INIT_SCALAR_WITH_COMPOUND);
+	}
+
+	/*
+	 * For compound init, copy from LHS array type declaration to RHS
+	 * compound init expression.
+	 */
+	check(ctype_copy(arena, declaration_type, &init->expr_type));
+	init->expr_type.t = CTYPE_ARRAY_OF;
+
+	/*
+	 * Recurse into compound initializer elements.
+	 */
+	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
+		check(sema_expr_types_initializer(arena,
+		                                  declaration_type->referent,
+		                                  f->car));
+	}
+
+	return RESULT_OK;
+}
+
 struct sema_expr_types_state {
 	Arena *arena;
 };
@@ -896,7 +942,6 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
 	case NODE_BLOCK:
-	case NODE_DECLARATION:
 	case NODE_IF_ELSE:
 	case NODE_LOOP:
 	case NODE_BREAK:
@@ -907,21 +952,16 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
-	case NODE_EXPRESSION_INITIALIZER:
-		if (a->u.init.single != NULL) {
-			assert(a->u.init.multi == NULL);
-			check(ctype_copy(arena,
-			                 &a->u.init.single->expr_type,
-			                 &a->expr_type));
-		} else if (a->u.init.multi != NULL) {
-			assert(a->u.init.single == NULL);
-			a->expr_type.t = CTYPE_ARRAY_OF;
-			assert(a->expr_type.referent == NULL);
-			check(ctype_alloc(arena, &a->expr_type.referent));
-			/* sema_implicit_cast_decl_init() sets element type */
-			assert(a->expr_type.referent->t == CTYPE_INT);
+	case NODE_DECLARATION:
+		if (a->u.declare.init != NULL) {
+			check(sema_expr_types_initializer(
+				arena,
+				&a->u.declare.var_type,
+				a->u.declare.init));
 		}
 		break;
+	case NODE_EXPRESSION_INITIALIZER:
+		break; /* handled by NODE_DECLARATION case */
 	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
@@ -1214,25 +1254,10 @@ sema_implicit_cast_initializer(Arena *arena,
 		return RESULT_OK;
 	}
 
-	if (!ctype_is_pointer(expected_type)) {
-		/*
-		 * For now, reject compound initializers for scalar variables.
-		 * In the future, it may make sense to support the special-case
-		 * compound initializer {0} for scalar init.
-		 */
-		return make_result(ERR_SEMA_INIT_SCALAR_WITH_COMPOUND);
-	}
-
 	/* single XOR multi */
 	assert((**init).u.init.multi != NULL);
 	/* sema_expr_types() sets initial CTYPE_ARRAY_OF */
 	assert((**init).expr_type.t == CTYPE_ARRAY_OF);
-	/* ... but leaves referent type unset */
-	assert((**init).expr_type.referent->t == CTYPE_INT);
-	/* ... which we now set, based on expected_type from LHS */
-	check(ctype_copy(arena,
-	                 expected_type->referent,
-	                 (**init).expr_type.referent));
 
 	for (struct flat *f = (**init).u.init.multi; f != NULL; f = f->cdr) {
 		check(sema_implicit_cast_initializer(arena,
