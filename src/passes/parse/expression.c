@@ -90,6 +90,29 @@ parse_needs_weird_hack_for_cast_lhs_precedence(const struct ast *a)
 }
 
 static WARN_UNUSED result_t
+parse_postfix(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	struct ast *post = NULL;
+	if (is_token_type(*tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTINCREMENT));
+		token_consume(tok);
+	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
+		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT));
+		token_consume(tok);
+	}
+
+	/*
+	 * Wrap the inner expr in postincrement/postdecrement.
+	 */
+	if (post != NULL) {
+		post->u.op_unary.operand = *dst;
+		*dst = post;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(dst != NULL && *dst == NULL);
@@ -159,22 +182,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	assert(*dst != NULL);
-
-	struct ast *post = NULL;
-	if (is_token_type(*tok, TOKEN_PLUS_SIGN_PLUS_SIGN)) {
-		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTINCREMENT));
-		token_consume(tok);
-	} else if (is_token_type(*tok, TOKEN_HYPHEN_HYPHEN)) {
-		check(parse_alloc(arena, &post, NODE_EXPRESSION_POSTDECREMENT));
-		token_consume(tok);
-	}
-	/*
-	 * Wrap the inner expr in postincrement/postdecrement.
-	 */
-	if (post != NULL) {
-		post->u.op_unary.operand = *dst;
-		*dst = post;
-	}
+	check(parse_postfix(arena, tok, dst));
 
 	while (is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
 		token_consume(tok);
@@ -194,6 +202,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		token_consume(tok);
 	}
 
+	check(parse_postfix(arena, tok, dst));
 	return RESULT_OK;
 }
 
