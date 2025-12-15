@@ -184,7 +184,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 
 		/* make array subscript expr into parent of prev/next exprs */
 		postfix->u.op_binary.lhs = *dst;
-		check(parse_factor(arena, tok, &postfix->u.op_binary.rhs));
+		check(parse_expr(arena, tok, &postfix->u.op_binary.rhs, 0));
 		*dst = postfix;
 
 		if (!is_token_type(*tok, TOKEN_SQUARE_BRACKET_CLOSE)) {
