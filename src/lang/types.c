@@ -3,6 +3,7 @@
 #include "sys/array.h"
 
 #include <assert.h>
+#include <stdio.h>     /* for snprintf() */
 #include <string.h>    /* for memset */
 #include <sys/param.h> /* for MIN() and MAX() */
 
@@ -22,6 +23,7 @@ ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 	assert(src != NULL && dst != NULL);
 	dst->t = src->t;
 	dst->maybe_null_pointer_constant = src->maybe_null_pointer_constant;
+	dst->sz = src->sz;
 
 	if (src->referent != NULL) {
 		dst->referent = NULL;
@@ -44,8 +46,21 @@ ctype_to_str(const struct ctype *c, char *stor, size_t cap)
 
 	size_t copied = strlcpy(stor, CTYPE_AS_STR[c->t], cap);
 
-	if (c->t == CTYPE_POINTER_TO && cap > copied + 1) {
+	if ((c->t == CTYPE_POINTER_TO || c->t == CTYPE_ARRAY_OF) &&
+	    cap > copied + 1) {
 		stor[copied++] = ' ';
+		if (c->t == CTYPE_ARRAY_OF) {
+			size_t remaining = cap - copied;
+			size_t required = snprintf(stor + copied,
+			                           remaining,
+			                           "%llu ",
+			                           c->sz);
+			if (required + 1 > remaining || required < 0) {
+				/* snprintf() indicates insuffient space */
+				return stor;
+			}
+			copied += required;
+		}
 		ctype_to_str(c->referent, stor + copied, cap - copied);
 	}
 
@@ -67,6 +82,10 @@ ctype_to_size_bytes(const struct ctype *c)
 	case CTYPE_POINTER_TO: /* assuming system with 64-bit pointers */
 		b = 8;
 		break;
+	case CTYPE_ARRAY_OF:
+		assert(c->sz > 0 && c->sz < LLONG_MAX);
+		b = (long long int)c->sz * ctype_to_size_bytes(c->referent);
+		break;
 	}
 	return b;
 }
@@ -84,6 +103,7 @@ ctype_is_signed(const struct ctype *c)
 	case CTYPE_UNSIGNED_INT:
 	case CTYPE_UNSIGNED_LONG:
 	case CTYPE_POINTER_TO:
+	case CTYPE_ARRAY_OF:
 		b = false;
 		break;
 	}

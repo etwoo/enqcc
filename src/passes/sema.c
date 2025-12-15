@@ -55,6 +55,7 @@ map_numeric_type(const struct ast *init,
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
 		case CTYPE_POINTER_TO:
+		case CTYPE_ARRAY_OF:
 			val->as_double = (double)a->u.num;
 			break;
 		case CTYPE_DOUBLE:
@@ -71,6 +72,7 @@ map_numeric_type(const struct ast *init,
 	case CTYPE_LONG:
 	case CTYPE_UNSIGNED_LONG:
 	case CTYPE_POINTER_TO:
+	case CTYPE_ARRAY_OF:
 		x = a->u.num;
 		break;
 	case CTYPE_DOUBLE:

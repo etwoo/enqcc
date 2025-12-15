@@ -14,14 +14,16 @@
 	F(LONG)                                                                \
 	F(UNSIGNED_LONG)                                                       \
 	F(DOUBLE)                                                              \
-	F(POINTER_TO)
+	F(POINTER_TO)                                                          \
+	F(ARRAY_OF)
 
 struct ctype {
 #define TO_ENUM(t) CTYPE_##t,
 	enum { FOREACH_CTYPE(TO_ENUM) } t;
 #undef TO_ENUM
 	bool maybe_null_pointer_constant;
-	struct ctype *referent; /* CTYPE_POINTER */
+	struct ctype *referent; /* CTYPE_POINTER_TO, CTYPE_ARRAY_OF */
+	long long unsigned sz;  /* CTYPE_ARRAY_OF */
 };
 
 result_t ctype_alloc(Arena *arena, struct ctype **dst) WARN_UNUSED;

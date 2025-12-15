@@ -88,6 +88,7 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 	case CTYPE_UNSIGNED_LONG:
 	case CTYPE_DOUBLE:
 	case CTYPE_POINTER_TO:
+	case CTYPE_ARRAY_OF:
 		dst->word_type = ASM_WORD_64BIT;
 		break;
 	}
@@ -226,6 +227,7 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
 		case CTYPE_POINTER_TO:
+		case CTYPE_ARRAY_OF:
 			dst->operand_type = ASM_OPERAND_IMMEDIATE;
 			dst->u.num = src->num;
 			break;
@@ -923,6 +925,7 @@ codegen_statement_one(Arena *arena,
 			assert(0 && "double div/rem should lead elsewhere");
 			break;
 		case CTYPE_POINTER_TO:
+		case CTYPE_ARRAY_OF:
 			assert(0 && "ptr div/rem should have been rejected");
 			break;
 		}

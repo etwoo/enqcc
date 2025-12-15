@@ -4,10 +4,12 @@
 #include "passes/parse.h"
 #include "passes/parse/alloc.h"
 #include "passes/parse/block.h"
+#include "passes/parse/constant.h"
 #include "passes/parse/expression.h"
 #include "passes/parse/token.h"
 
 #include <assert.h>
+#include <limits.h> /* for ULLONG_MAX */
 #include <string.h> /* for memset() */
 
 struct parse_basic_type_state {
@@ -203,10 +205,15 @@ struct declarator {
 		DECLARATOR_IDENTIFIER,
 		DECLARATOR_PARENTHESIZED,
 		DECLARATOR_POINTER,
+		DECLARATOR_ARRAY,
 	} atom;
 	union {
 		struct declarator *in_parens;
 		struct declarator *pointee;
+		struct {
+			struct declarator *element;
+			long long unsigned sz;
+		} array;
 	} u;
 };
 
@@ -232,7 +239,6 @@ parse_declarator(Arena *arena,
                  struct ast_parameter **params)
 {
 	assert(dst != NULL);
-	bool check_function_next = false;
 
 	if (0 != (flags & PARSE_DECLARATOR_ABSTRACT) &&
 	    is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
@@ -240,16 +246,33 @@ parse_declarator(Arena *arena,
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_ABSTRACT_BASE;
 		assert(identifier == NULL);
+		return RESULT_OK;
 		/* leave TOKEN_PAREN_CLOSE in place for caller to consume */
-	} else if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
-	           is_token_type(*tok, TOKEN_IDENTIFIER)) {
+	}
+
+	if (is_token_type(*tok, TOKEN_ASTERISK)) {
+		token_consume(tok);
+		check(declarator_alloc(arena, dst));
+		assert(*dst != NULL);
+		(**dst).atom = DECLARATOR_POINTER;
+		check(parse_declarator(arena,
+		                       flags,
+		                       tok,
+		                       &(**dst).u.pointee,
+		                       identifier,
+		                       got_function,
+		                       params));
+		return RESULT_OK;
+	}
+
+	if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
+	    is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
 		(**dst).atom = DECLARATOR_IDENTIFIER;
 		assert(identifier != NULL);
 		*identifier = (**tok).val;
 		token_consume(tok);
-		check_function_next = true;
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		token_consume(tok);
 		check(declarator_alloc(arena, dst));
@@ -267,24 +290,11 @@ parse_declarator(Arena *arena,
 				ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE);
 		}
 		token_consume(tok);
-		check_function_next = true;
-	} else if (is_token_type(*tok, TOKEN_ASTERISK)) {
-		token_consume(tok);
-		check(declarator_alloc(arena, dst));
-		assert(*dst != NULL);
-		(**dst).atom = DECLARATOR_POINTER;
-		check(parse_declarator(arena,
-		                       flags,
-		                       tok,
-		                       &(**dst).u.pointee,
-		                       identifier,
-		                       got_function,
-		                       params));
 	} else {
 		return make_result(ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE);
 	}
 
-	if (check_function_next && is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+	if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		if (*got_function) {
 			return make_result(ERR_PARSE_DECL_ATOM_PARAMS_NESTING);
 		}
@@ -300,6 +310,42 @@ parse_declarator(Arena *arena,
 
 		assert(got_function != NULL);
 		*got_function = true;
+	}
+
+	while (is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
+		token_consume(tok);
+
+		struct ast *constant = NULL;
+		check(parse_constant(arena, tok, &constant));
+		assert(constant && constant->node_type == NODE_CONSTANT);
+
+		if (ctype_is_floating_point(&constant->expr_type)) {
+			return make_result(
+				ERR_PARSE_DECL_ATOM_ARRAY_SIZE_FLOATING_POINT);
+		}
+		if (constant->u.num <= 0) {
+			return make_result(
+				ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_POSITIVE);
+		}
+
+		if (!is_token_type(*tok, TOKEN_SQUARE_BRACKET_CLOSE)) {
+			return make_result(
+				ERR_PARSE_DECL_ATOM_EXPECT_SQ_BRACKET_CLOSE);
+		}
+		token_consume(tok);
+
+		struct declarator *tmp = NULL;
+		check(declarator_alloc(arena, &tmp));
+		assert(tmp != NULL);
+		tmp->atom = DECLARATOR_ARRAY;
+
+		/* parse_constant() limited to range of strtoull() */
+		assert(constant->u.num <= ULLONG_MAX);
+		tmp->u.array.sz = (long long unsigned)constant->u.num;
+
+		/* array declarator as postfix -> flip tmp and dst! */
+		tmp->u.array.element = *dst;
+		*dst = tmp;
 	}
 
 	return RESULT_OK;
@@ -332,6 +378,15 @@ map_declarator_to_ctype(Arena *arena,
 		check(map_declarator_to_ctype(arena,
 		                              basic,
 		                              src->u.pointee,
+		                              &(**dst).referent));
+		break;
+	case DECLARATOR_ARRAY:
+		check(ctype_alloc(arena, dst));
+		(**dst).t = CTYPE_ARRAY_OF;
+		(**dst).sz = src->u.array.sz;
+		check(map_declarator_to_ctype(arena,
+		                              basic,
+		                              src->u.array.element,
 		                              &(**dst).referent));
 		break;
 	}
@@ -437,6 +492,7 @@ parse_fn_or_var_declaration(Arena *arena,
 
 		if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
 			token_consume(tok);
+			// TODO: check for compound initializer
 			check(parse_expr(arena,
 			                 tok,
 			                 &(**dst).u.declare.init,
