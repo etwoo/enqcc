@@ -1244,6 +1244,7 @@ sema_implicit_cast_initializer(Arena *arena,
 	if (*init == NULL) {
 		return RESULT_OK;
 	}
+
 	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
 
 	if ((**init).u.init.single != NULL) {
@@ -1264,17 +1265,6 @@ sema_implicit_cast_initializer(Arena *arena,
 		                                     expected_type->referent,
 		                                     &f->car));
 	}
-
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-sema_implicit_cast_declaration(Arena *arena, struct ast *a)
-{
-	assert(a->node_type == NODE_DECLARATION);
-	check(sema_implicit_cast_initializer(arena,
-	                                     &a->u.declare.var_type,
-	                                     &a->u.declare.init));
 	return RESULT_OK;
 }
 
@@ -1302,7 +1292,9 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              &a->u.op_unary.operand));
 		break;
 	case NODE_DECLARATION:
-		check(sema_implicit_cast_declaration(arena, a));
+		check(sema_implicit_cast_initializer(arena,
+		                                     &a->u.declare.var_type,
+		                                     &a->u.declare.init));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
