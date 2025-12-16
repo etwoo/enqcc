@@ -1460,6 +1460,94 @@ sema_fn_param_names(struct ast_parameter *params)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_adjust_array_to_pointer(struct ctype *c)
+{
+	if (c->t == CTYPE_ARRAY_OF) {
+		c->t = CTYPE_POINTER_TO;
+		c->maybe_null_pointer_constant = false;
+		c->sz = 0;
+		/* leave c->referent as-is */
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_fn_decl_collect(Arena *arena,
+                     const struct ast *a,
+                     struct string_view *fname,
+                     struct ctype *return_type,
+                     long long int *n_args,
+                     struct ctype **param_types,
+                     bool *is_def,
+                     enum symbol_linkage *linkage,
+                     bool *has_specifier_static)
+{
+	assert(a->node_type == NODE_FUNCTION);
+	memcpy(fname, &a->u.function.identifier.name, sizeof(*fname));
+
+	check(ctype_copy(arena, &a->u.function.return_type, return_type));
+	if (ctype_is_array(return_type)) {
+		return make_result(ERR_SEMA_FUNCTION_RETURN_TYPE_ARRAY,
+		                   fname->data,
+		                   fname->sz);
+	}
+
+	long long int count = 0;
+	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+		++count;
+	}
+
+	*n_args = count;
+	*param_types = arena_alloc(arena, sizeof(**param_types) * count);
+
+	count = 0;
+	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+		check(ctype_copy(arena,
+		                 &cur->parameter_type,
+		                 &(*param_types)[count]));
+		check(ctype_walk(&(*param_types)[count],
+		                 sema_adjust_array_to_pointer));
+		++count;
+	}
+
+	check(sema_fn_param_names(a->u.function.params));
+
+	*is_def = (a->u.function.block != NULL);
+	*linkage = (a->u.function.specifier != SPECIFIER_STATIC)
+	                   ? SYMBOL_LINKAGE_EXTERNAL
+	                   : SYMBOL_LINKAGE_INTERNAL;
+	*has_specifier_static = (a->u.function.specifier == SPECIFIER_STATIC);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_fn_call_collect(Arena *arena,
+                     const struct ast *a,
+                     struct string_view *fname,
+                     long long int *n_args,
+                     struct ctype **param_types)
+{
+	assert(a->node_type == NODE_EXPRESSION_FUNCTION_CALL);
+	memcpy(fname, &a->u.call.identifier.name, sizeof(*fname));
+
+	long long int count = 0;
+	for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
+		++count;
+	}
+
+	*n_args = count;
+	*param_types = arena_alloc(arena, sizeof(**param_types) * count);
+
+	count = 0;
+	for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
+		check(ctype_copy(arena,
+		                 &z->car->expr_type,
+		                 &(*param_types)[count++]));
+	}
+	return RESULT_OK;
+}
+
 static WARN_UNUSED bool
 ast_contains(const struct flat *haystack, const struct ast *needle)
 {
@@ -1475,10 +1563,9 @@ static WARN_UNUSED result_t
 sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
-	const struct string_view *fname = NULL;
+	struct string_view fname = {0};
 	struct ctype return_type = {0};
 	long long int n_args = 0;
-	long long int idx = 0;
 	struct ctype *p_types = NULL;
 	bool is_def = false;
 	bool is_def_or_decl = false;
@@ -1490,46 +1577,22 @@ sema_fn_signature(struct ast *a, void *userdata)
 		state->ast_program_globals = a->u.program.globals;
 		return RESULT_OK;
 	case NODE_FUNCTION:
-		fname = &a->u.function.identifier.name;
-		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-			++n_args;
-		}
-		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
-		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
-			// TODO: adjust CTYPE_ARRAY_OF to CTYPE_POINTER_TO
-			// TODO: also handle nesting, like 2D array? or no?
-			check(ctype_copy(state->arena,
-			                 &cur->parameter_type,
-			                 &p_types[idx++]));
-		}
-		assert(idx == n_args);
-		check(sema_fn_param_names(a->u.function.params));
-		is_def = (a->u.function.block != NULL);
-		is_def_or_decl = true;
-		check(ctype_copy(state->arena,
-		                 &a->u.function.return_type,
-		                 &return_type));
-		if (ctype_is_array(&return_type)) {
-			// TODO: reject CTYPE_ARRAY_OF as function return type
-		}
-		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
-		                  ? SYMBOL_LINKAGE_EXTERNAL
-		                  : SYMBOL_LINKAGE_INTERNAL;
-		has_specifier_static =
-			(a->u.function.specifier == SPECIFIER_STATIC);
+		check(sema_fn_decl_collect(state->arena,
+		                           a,
+		                           &fname,
+		                           &return_type,
+		                           &n_args,
+		                           &p_types,
+		                           &is_def,
+		                           &linkage,
+		                           &has_specifier_static));
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
-		fname = &a->u.call.identifier.name;
-		for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
-			++n_args;
-		}
-		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
-		for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
-			check(ctype_copy(state->arena,
-			                 &z->car->expr_type,
-			                 &p_types[idx++]));
-		}
-		assert(idx == n_args);
+		check(sema_fn_call_collect(state->arena,
+		                           a,
+		                           &fname,
+		                           &n_args,
+		                           &p_types));
 		break;
 	default:
 		return RESULT_OK;
@@ -1540,8 +1603,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		bool allow_def = ast_contains(state->ast_program_globals, a);
 		if (!allow_def) {
 			return make_result(ERR_SEMA_FUNCTION_DEFINITION_NESTED,
-			                   fname->data,
-			                   fname->sz);
+			                   fname.data,
+			                   fname.sz);
 		}
 	} else if (is_def_or_decl && has_specifier_static) {
 		assert(state->ast_program_globals != NULL);
@@ -1549,18 +1612,18 @@ sema_fn_signature(struct ast *a, void *userdata)
 		if (!allow_decl) {
 			return make_result(
 				ERR_SEMA_FUNCTION_LINKAGE_BLOCK_SCOPE,
-				fname->data,
-				fname->sz);
+				fname.data,
+				fname.sz);
 		}
 	}
 
 	struct symbol **s = &state->function_symbols;
-	struct symbol *dup = symbols_get_anywhere(*s, fname);
+	struct symbol *dup = symbols_get_anywhere(*s, &fname);
 	if (dup == NULL) {
 		assert(is_def_or_decl);
 		check(symbols_prepend(state->arena,
 		                      s,
-		                      fname,
+		                      &fname,
 		                      is_def ? SYMBOL_FUNCTION_DEFINITION
 		                             : SYMBOL_FUNCTION_DECLARATION,
 		                      &return_type));

@@ -400,6 +400,10 @@ result_to_str(result_t r)
 		                "non-static declaration",
 		                r.msg);
 		break;
+	case ERR_SEMA_FUNCTION_RETURN_TYPE_ARRAY:
+		s = my_asprintf("Function %s cannot return array type", r.msg);
+
+		break;
 	case ERR_SEMA_OPERAND_ADDRESS_OF_INVALID:
 		s = strdup("Address-of operator & requires lvalue argument");
 		break;
