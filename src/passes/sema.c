@@ -9,6 +9,24 @@
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
+/*
+ * From "Writing a C Compiler" by Nora Sandler, Chapter 15, Section "Type
+ * Checking Pointer Arithmetic":
+ *
+ *   To type check addition involving a pointer and an integer, we first
+ *   convert the integer operand to a long. This will simplify later
+ *   compiler passes, when pointer indices will need to be 8 bytes wide
+ *   so that we can add them to 8-byte memory addresses. This conversion
+ *   doesn't come from the C standard; we're just adding it for our own
+ *   convenience. But it also doesn’t violate the standard; converting a
+ *   valid array index to long won't change its value, so the result of
+ *   the whole expression is the same either way. (If an integer is too
+ *   big to represent as a long, we can safely assume that it's not a
+ *   valid array index, since no hardware supports arrays with anywhere
+ *   close to 263 elements.)
+ */
+static const struct ctype LIKE_PTRDIFF_T = {.t = CTYPE_LONG};
+
 static WARN_UNUSED bool
 is_node_lvalue(const struct ast *a)
 {
@@ -1022,11 +1040,20 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BITWISE_AND:
 	case NODE_EXPRESSION_BITWISE_OR:
 	case NODE_EXPRESSION_BITWISE_XOR:
-		check(ctype_copy(
-			arena,
-			get_common_ctype(&a->u.op_binary.lhs->expr_type,
-		                         &a->u.op_binary.rhs->expr_type),
-			&a->expr_type));
+		if (a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT &&
+		    ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    ctype_is_pointer(&a->u.op_binary.lhs->expr_type)) {
+			check(ctype_copy(arena,
+			                 &LIKE_PTRDIFF_T,
+			                 &a->expr_type));
+		} else {
+			check(ctype_copy(
+				arena,
+				get_common_ctype(
+					&a->u.op_binary.lhs->expr_type,
+					&a->u.op_binary.rhs->expr_type),
+				&a->expr_type));
+		}
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
@@ -1109,6 +1136,8 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 			valid = false;
 		}
 		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_CAST:
 		if ((ctype_is_floating_point(&a->u.cast.to_type) &&
 		     ctype_is_pointer(&a->u.cast.expr->expr_type)) ||
@@ -1185,6 +1214,25 @@ sema_pointer(struct ast *a, void *userdata)
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
 		}
 		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+		if (!ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    !ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			/* no pointer types involved; nothing more to check */
+		} else if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		           ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_BOTH);
+		}
+		break;
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
+		                       &a->u.op_binary.rhs->expr_type));
+		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
@@ -1199,11 +1247,6 @@ sema_pointer(struct ast *a, void *userdata)
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
-		                       &a->u.op_binary.rhs->expr_type));
-		break;
-	case NODE_EXPRESSION_COMPARE_EQUAL:
-	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
 		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
 		                       &a->u.op_binary.rhs->expr_type));
 		break;
@@ -1313,8 +1356,21 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 		common = get_common_ctype(&a->u.op_binary.lhs->expr_type,
 		                          &a->u.op_binary.rhs->expr_type);
-		check(cast_if(arena, common, &a->u.op_binary.lhs));
-		check(cast_if(arena, common, &a->u.op_binary.rhs));
+		if (a->node_type == NODE_EXPRESSION_BINARY_ADD &&
+		    ((ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		      ctype_is_integer(&a->u.op_binary.rhs->expr_type)) ||
+		     (ctype_is_integer(&a->u.op_binary.lhs->expr_type) &&
+		      ctype_is_pointer(&a->u.op_binary.rhs->expr_type)))) {
+			check(cast_if(
+				arena,
+				&LIKE_PTRDIFF_T,
+				ctype_is_integer(&a->u.op_binary.lhs->expr_type)
+					? &a->u.op_binary.lhs
+					: &a->u.op_binary.rhs));
+		} else {
+			check(cast_if(arena, common, &a->u.op_binary.lhs));
+			check(cast_if(arena, common, &a->u.op_binary.rhs));
+		}
 		break;
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:

@@ -414,6 +414,9 @@ result_to_str(result_t r)
 			"of type 'double' cannot be cast to pointer type, and "
 			"pointer values cannot be cast to type 'double'");
 		break;
+	case ERR_SEMA_OPERAND_ADD_POINTER_BOTH:
+		s = strdup("Addition cannot take two pointer operands");
+		break;
 	case ERR_SEMA_OPERAND_POINTER_CONFLICT:
 		s = strdup("Conflicting pointer types");
 		break;
