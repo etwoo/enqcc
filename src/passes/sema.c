@@ -16,6 +16,7 @@ is_node_lvalue(const struct ast *a)
 		a = a->u.op_unary.operand;
 	}
 	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+	       a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
 	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE;
 }
 
