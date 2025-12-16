@@ -15,10 +15,9 @@ is_node_lvalue(const struct ast *a)
 	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
 		a = a->u.op_unary.operand;
 	}
-	return (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	        a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
-	        a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) &&
-	       !ctype_is_array(&a->expr_type);
+	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+	       a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
+	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE;
 }
 
 static WARN_UNUSED const struct ast *
@@ -716,15 +715,10 @@ sema_label_gotos(Arena *arena, struct ast *a, long long int *generator)
 	return RESULT_OK;
 }
 
-struct sema_compound_assignment_state {
-	Arena *arena;
-};
-
 static WARN_UNUSED result_t
 sema_compound_assignment(struct ast *a, void *userdata)
 {
-	struct sema_compound_assignment_state *state = userdata;
-	Arena *arena = state->arena;
+	Arena *arena = userdata;
 
 	enum ast_nodetype new_type = 0;
 	switch (a->node_type) {
@@ -781,6 +775,16 @@ sema_compound_assignment(struct ast *a, void *userdata)
 	a->u.op_binary.lhs->kludge.compound_assignment_twin =
 		new_node->u.op_binary.lhs;
 
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_address_of(struct ast *a, void *userdata)
+{
+	Arena *arena = userdata;
+	(void)arena;
+	(void)a;
+	// TODO: insert address-of, should fix arr w/o subscript as bad lvalue
 	return RESULT_OK;
 }
 
@@ -937,15 +941,10 @@ sema_expr_types_initializer(Arena *arena,
 	return RESULT_OK;
 }
 
-struct sema_expr_types_state {
-	Arena *arena;
-};
-
 static WARN_UNUSED result_t
 sema_expr_types(struct ast *a, void *userdata)
 {
-	struct sema_expr_types_state *state = userdata;
-	Arena *arena = state->arena;
+	Arena *arena = userdata;
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
@@ -1924,11 +1923,11 @@ sema_typecheck(Arena *arena,
 
 	debug("Expanding compound assignment statements");
 	ops.node_enter = sema_compound_assignment;
-	{
-		struct sema_compound_assignment_state compound_state = {0};
-		compound_state.arena = arena;
-		check(sema_walk(a, &ops, &compound_state));
-	}
+	check(sema_walk(a, &ops, arena));
+
+	debug("Inserting address-of expressions");
+	ops.node_enter = sema_address_of;
+	check(sema_walk(a, &ops, arena));
 
 	debug("Checking lvalues");
 	ops.node_enter = sema_lvalue;
@@ -1949,11 +1948,7 @@ sema_typecheck(Arena *arena,
 	debug("Propagating expression types");
 	ops.node_enter = NULL;
 	ops.node_exit = sema_expr_types;
-	{
-		struct sema_expr_types_state expr_types_state = {0};
-		expr_types_state.arena = arena;
-		check(sema_walk(a, &ops, &expr_types_state));
-	}
+	check(sema_walk(a, &ops, arena));
 	ops.node_exit = NULL;
 
 	debug("Checking for invalid double usage");

@@ -139,13 +139,7 @@ ctype_is_floating_point(const struct ctype *c)
 bool
 ctype_is_pointer(const struct ctype *c)
 {
-	return c->t == CTYPE_POINTER_TO || ctype_is_array(c);
-}
-
-bool
-ctype_is_array(const struct ctype *c)
-{
-	return c->t == CTYPE_ARRAY_OF;
+	return c->t == CTYPE_POINTER_TO || c->t == CTYPE_ARRAY_OF;
 }
 
 bool
