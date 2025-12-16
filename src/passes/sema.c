@@ -902,6 +902,7 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
  */
 static WARN_UNUSED result_t
 sema_expr_types_initializer(Arena *arena,
+                            struct ast_symbol *varname,
                             const struct ctype *declaration_type,
                             struct ast *init)
 {
@@ -938,13 +939,23 @@ sema_expr_types_initializer(Arena *arena,
 	check(ctype_copy(arena, declaration_type, &init->expr_type));
 	init->expr_type.t = CTYPE_ARRAY_OF;
 
+	long long unsigned element_count = 0;
+
 	/*
 	 * Recurse into compound initializer elements.
 	 */
 	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
 		check(sema_expr_types_initializer(arena,
+		                                  varname,
 		                                  declaration_type->referent,
 		                                  f->car));
+		++element_count;
+	}
+
+	if (element_count > init->expr_type.sz) {
+		return make_result(ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS,
+		                   varname->name.data,
+		                   varname->name.sz);
 	}
 
 	return RESULT_OK;
@@ -971,6 +982,7 @@ sema_expr_types(struct ast *a, void *userdata)
 		break; /* expr_type has no meaning in this context */
 	case NODE_DECLARATION:
 		check(sema_expr_types_initializer(arena,
+		                                  &a->u.declare.identifier,
 		                                  &a->u.declare.var_type,
 		                                  a->u.declare.init));
 		break;

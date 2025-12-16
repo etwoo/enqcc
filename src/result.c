@@ -349,6 +349,11 @@ result_to_str(result_t r)
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);
 		break;
+	case ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS:
+		s = my_asprintf(
+			"Excess elements in compound initializer for array %s",
+			r.msg);
+		break;
 	case ERR_SEMA_INIT_SCALAR_WITH_COMPOUND:
 		s = strdup("Scalar variable given compound initializer "
 		           "expression");
