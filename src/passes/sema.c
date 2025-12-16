@@ -15,9 +15,10 @@ is_node_lvalue(const struct ast *a)
 	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
 		a = a->u.op_unary.operand;
 	}
-	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	       a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
-	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE;
+	return (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+	        a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
+	        a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) &&
+	       !ctype_is_array(&a->expr_type);
 }
 
 static WARN_UNUSED const struct ast *
@@ -775,16 +776,6 @@ sema_compound_assignment(struct ast *a, void *userdata)
 	a->u.op_binary.lhs->kludge.compound_assignment_twin =
 		new_node->u.op_binary.lhs;
 
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-sema_address_of(struct ast *a, void *userdata)
-{
-	Arena *arena = userdata;
-	(void)arena;
-	(void)a;
-	// TODO: insert address-of, should fix arr w/o subscript as bad lvalue
 	return RESULT_OK;
 }
 
@@ -1923,10 +1914,6 @@ sema_typecheck(Arena *arena,
 
 	debug("Expanding compound assignment statements");
 	ops.node_enter = sema_compound_assignment;
-	check(sema_walk(a, &ops, arena));
-
-	debug("Inserting address-of expressions");
-	ops.node_enter = sema_address_of;
 	check(sema_walk(a, &ops, arena));
 
 	debug("Checking lvalues");
