@@ -1496,6 +1496,8 @@ sema_fn_signature(struct ast *a, void *userdata)
 		}
 		p_types = arena_alloc(state->arena, sizeof(*p_types) * n_args);
 		FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
+			// TODO: adjust CTYPE_ARRAY_OF to CTYPE_POINTER_TO
+			// TODO: also handle nesting, like 2D array? or no?
 			check(ctype_copy(state->arena,
 			                 &cur->parameter_type,
 			                 &p_types[idx++]));
@@ -1507,6 +1509,9 @@ sema_fn_signature(struct ast *a, void *userdata)
 		check(ctype_copy(state->arena,
 		                 &a->u.function.return_type,
 		                 &return_type));
+		if (ctype_is_array(&return_type)) {
+			// TODO: reject CTYPE_ARRAY_OF as function return type
+		}
 		linkage = (a->u.function.specifier != SPECIFIER_STATIC)
 		                  ? SYMBOL_LINKAGE_EXTERNAL
 		                  : SYMBOL_LINKAGE_INTERNAL;
