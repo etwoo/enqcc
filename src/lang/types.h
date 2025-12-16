@@ -36,6 +36,7 @@ bool ctype_is_integer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_signed(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_floating_point(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_pointer(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_nullptr_ish(const struct ctype *c) WARN_UNUSED;
 const struct ctype *get_common_ctype(const struct ctype *lhs,
                                      const struct ctype *rhs) WARN_UNUSED;

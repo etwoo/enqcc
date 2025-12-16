@@ -15,9 +15,10 @@ is_node_lvalue(const struct ast *a)
 	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
 		a = a->u.op_unary.operand;
 	}
-	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	       a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
-	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE;
+	return (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+	        a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
+	        a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) &&
+	       !ctype_is_array(&a->expr_type);
 }
 
 static WARN_UNUSED const struct ast *
