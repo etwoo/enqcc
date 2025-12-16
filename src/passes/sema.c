@@ -882,11 +882,18 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+/*
+ * See sema_implicit_cast_initializer() for related logic.
+ */
 static WARN_UNUSED result_t
 sema_expr_types_initializer(Arena *arena,
                             const struct ctype *declaration_type,
                             struct ast *init)
 {
+	if (init == NULL) {
+		return RESULT_OK;
+	}
+
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	if (init->u.init.single != NULL) {
@@ -953,12 +960,9 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
 	case NODE_DECLARATION:
-		if (a->u.declare.init != NULL) {
-			check(sema_expr_types_initializer(
-				arena,
-				&a->u.declare.var_type,
-				a->u.declare.init));
-		}
+		check(sema_expr_types_initializer(arena,
+		                                  &a->u.declare.var_type,
+		                                  a->u.declare.init));
 		break;
 	case NODE_EXPRESSION_INITIALIZER:
 		break; /* handled by NODE_DECLARATION case */
@@ -1236,6 +1240,9 @@ cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
 	return RESULT_OK;
 }
 
+/*
+ * See sema_expr_types_initializer() for related logic.
+ */
 static WARN_UNUSED result_t
 sema_implicit_cast_initializer(Arena *arena,
                                const struct ctype *expected_type,
