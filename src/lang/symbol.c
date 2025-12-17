@@ -27,6 +27,62 @@ some_linkage(enum symbol_linkage linkage)
 	return is_external(linkage) || is_internal(linkage);
 }
 
+long long unsigned
+get_double_as_quadword(double value)
+{
+	long long unsigned as_quadword = 0;
+	static_assert(sizeof(value) <= sizeof(as_quadword),
+	              "destination must be large enough to hold 64-bit double");
+	memcpy(&as_quadword, &value, sizeof(value));
+	return as_quadword;
+}
+
+result_t
+constant_set_zero(Arena *arena, struct constant_initializer *ci)
+{
+	ci->count = 1;
+
+	ci->elements = arena_alloc(arena, sizeof(*ci->elements));
+	check_if(ci->elements == NULL, ERR_SYMBOL_ALLOC);
+	memset(ci->elements, 0, sizeof(*ci->elements));
+
+	ci->elements[0].byte_count = ctype_to_size_bytes(&(struct ctype){
+		.t = CTYPE_INT,
+	});
+	ci->elements[0].byte_value = 0;
+	return RESULT_OK;
+}
+
+bool
+constant_is_zero(const struct constant_initializer *ci)
+{
+	assert(ci->count > 0);
+	for (long long unsigned i = 0; i < ci->count; ++i) {
+		if (ci->elements[i].byte_value != 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+long long unsigned
+constant_byte_count(const struct constant_initializer *ci)
+{
+	long long unsigned byte_count = 0;
+	for (long long unsigned i = 0; i < ci->count; ++i) {
+		byte_count += ci->elements[i].byte_count;
+	}
+	return byte_count;
+}
+
+void
+constant_debug_print(const struct constant_initializer *ci, size_t indent)
+{
+	for (long long unsigned i = 0; i < ci->count; ++i) {
+		debug("%*s0x%llx", (int)indent, "", ci->elements[i].byte_value);
+	}
+}
+
 result_t
 symbols_prepend(Arena *arena,
                 struct symbol **head,

@@ -86,9 +86,8 @@ struct ir_function {
 
 struct ir_variable {
 	struct string_view identifier;
-	struct ctype c89type;
 	enum ir_linkage linkage;
-	union constant_value initial;
+	struct constant_initializer *initializer;
 	struct ir_variable *next;
 };
 

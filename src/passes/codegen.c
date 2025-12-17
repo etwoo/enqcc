@@ -1229,9 +1229,8 @@ codegen_variable(Arena *arena,
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
-	check(ctype_copy(arena, &ir->c89type, &(**dst).c89type));
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
-	(**dst).initial = ir->initial;
+	(**dst).initializer = ir->initializer;
 	return RESULT_OK;
 }
 
@@ -2039,20 +2038,14 @@ codegen_debug_print(const struct assembly *cg)
 {
 	debug("PROGRAM");
 
-	char tmp[128] = {0};
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		debug("  TYPE %s", ctype_to_str(&v->c89type, tmp, sizeof(tmp)));
 		debug("  LINKAGE %s",
 		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
 		                                         : "INTERNAL");
-		if (ctype_is_floating_point(&v->c89type)) {
-			debug("  INITIAL VALUE %f", v->initial.as_double);
-		} else {
-			debug("  INITIAL VALUE %lld",
-			      (long long)v->initial.as_integer);
-		}
+		debug("  INITIALIZER");
+		constant_debug_print(v->initializer, 4);
 	}
 
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {

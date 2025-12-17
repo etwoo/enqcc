@@ -30,39 +30,22 @@ bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
 bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
 bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 
-// TODO: generalize constant_value -> initial_value; scalar _or_ compound value
-//
-// should i fold this into ctype, maybe that will make static init for structs
-// easier later? for now, arrays are simple, flattened, all same type, but
-// later, structs will have arbitrary nesting, different types at each offset?
-//
-// ... or maybe use `struct ast` here, with assumption that all internal nodes
-// are NODE_EXPRESSION_INITIALIZER and all leaf nodes are NODE_CONSTANT, with no
-// dynamic expressions, negations, etc present?
-//
-// find some way to fold all info together, e.g. avoid having ir_variable and
-// asm_variable have to retain c89type separate from this constant_value (scalar
-// or vector), just so that emit_asm_var knows whether to emit double/long/int;
-// all of this info -- double/long/int, how many elements, zero padding at end,
-// etc -- should be rolled up into a single struct, istead of being spread
-// across multiple members that each have to propagate from symbols (created in
-// sema) to ir_variable to asm_variable to emit.c
-//
-//    -> maybe flatten double -> quadword earlier, such that static init values
-//    can be ignorant of doubles entirely!
-//
-//    can retain double crap for floating point constants in ir_val, since that
-//    already tracks ctype in its own way
-//
-//    ... but translating double to quadword representation earlier would maybe
-//    let us switch back to just as_integer and remove as_double here!
-//
-//    ... which would then simplify array representation, could just be an array
-//    of int128_t, would only need to distinguish long vs quad
-union constant_value {
-	int128_t as_integer;
-	double as_double;
+struct constant_bytes {
+	long long unsigned byte_count;
+	long long unsigned byte_value; /* may contain double as quadword */
 };
+
+struct constant_initializer {
+	long long unsigned count;
+	struct constant_bytes *elements;
+};
+
+long long unsigned get_double_as_quadword(double value) WARN_UNUSED;
+result_t constant_set_zero(Arena *arena,
+                           struct constant_initializer *ci) WARN_UNUSED;
+bool constant_is_zero(const struct constant_initializer *ci) WARN_UNUSED;
+long long unsigned constant_byte_count(const struct constant_initializer *ci);
+void constant_debug_print(const struct constant_initializer *ci, size_t indent);
 
 struct symbol_linkage_state {
 	enum symbol_linkage linkage;
@@ -71,7 +54,7 @@ struct symbol_linkage_state {
 		INITIAL_VALUE_TENTATIVE,
 		INITIAL_VALUE_CONSTANT,
 	} initial;
-	union constant_value as_constant;
+	struct constant_initializer initializer;
 };
 
 struct symbol {

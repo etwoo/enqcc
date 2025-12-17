@@ -40,52 +40,86 @@ is_node_lvalue(const struct ast *a)
 }
 
 static WARN_UNUSED const struct ast *
-unpack_constant(const struct ast *a)
+unpack_cast(const struct ast *a)
 {
-	if (a->node_type == NODE_EXPRESSION_CAST) {
+	while (a->node_type == NODE_EXPRESSION_CAST) {
 		/* unpack nodes inserted by sema_implicit_cast() */
 		a = a->u.cast.expr;
 	}
-	if (a->node_type == NODE_EXPRESSION_INITIALIZER &&
-	    a->u.init.single != NULL) {
-		a = a->u.init.single;
-	}
-	if (a->node_type == NODE_CONSTANT) {
-		return a;
-	}
-	return NULL;
+	return a;
 }
 
 static WARN_UNUSED bool
 is_node_constant(const struct ast *a)
 {
-	return (unpack_constant(a) != NULL);
+	a = unpack_cast(a);
+	if (a == NULL || a->node_type != NODE_EXPRESSION_INITIALIZER) {
+		return false;
+	}
+
+	if (a->u.init.single != NULL) {
+		return a->u.init.single->node_type == NODE_CONSTANT;
+	}
+	assert(a->u.init.multi != NULL);
+
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		if (!is_node_constant(f->car)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static WARN_UNUSED long long unsigned
+count_initializer_elements(const struct ast *a)
+{
+	a = unpack_cast(a);
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (a->u.init.single != NULL) {
+		return 1;
+	}
+	assert(a->u.init.multi != NULL);
+
+	long long unsigned count = 0;
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		count += count_initializer_elements(f->car);
+	}
+	return count;
 }
 
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
 static void
-map_numeric_type(const struct ast *init,
-                 struct ctype *dst_type,
-                 union constant_value *val)
+map_numeric_type_scalar(const struct ast *a,
+                        struct ctype *dst_type,
+                        struct constant_bytes *out)
 {
-	const struct ast *a = unpack_constant(init);
-	assert(a != NULL);
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+	assert(a->u.init.single != NULL);
+	a = a->u.init.single;
+
+	assert(!ctype_is_array(dst_type));
+	out->byte_count = ctype_to_size_bytes(dst_type);
 
 	if (dst_type->t == CTYPE_DOUBLE) {
+		double tmp = 0;
 		switch (a->expr_type.t) {
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
 		case CTYPE_POINTER_TO:
-		case CTYPE_ARRAY_OF:
-			val->as_double = (double)a->u.num;
+			tmp = (double)a->u.num;
 			break;
 		case CTYPE_DOUBLE:
-			val->as_double = a->u.double_;
+			tmp = a->u.double_;
+			break;
+		case CTYPE_ARRAY_OF:
+			assert(0); /* logic error in caller */
 			break;
 		}
+		out->byte_value = get_double_as_quadword(tmp);
 		return;
 	}
 
@@ -96,11 +130,13 @@ map_numeric_type(const struct ast *init,
 	case CTYPE_LONG:
 	case CTYPE_UNSIGNED_LONG:
 	case CTYPE_POINTER_TO:
-	case CTYPE_ARRAY_OF:
 		x = a->u.num;
 		break;
 	case CTYPE_DOUBLE:
 		x = (int128_t)a->u.double_;
+		break;
+	case CTYPE_ARRAY_OF:
+		assert(0); /* logic error in caller */
 		break;
 	}
 
@@ -109,7 +145,42 @@ map_numeric_type(const struct ast *init,
 		x %= LONG_TO_INT_TRUNCATOR;
 	}
 
-	val->as_integer = x;
+	assert(x >= 0); /* negative constants currently unsupported */
+	out->byte_value = x;
+}
+
+static void
+populate_initializer_elements(const struct ast *a,
+                              struct ctype *dst_type,
+                              struct constant_bytes **pos)
+{
+	a = unpack_cast(a);
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (a->u.init.single != NULL) {
+		map_numeric_type_scalar(a->u.init.single, dst_type, (*pos)++);
+		return;
+	}
+	assert(a->u.init.multi != NULL);
+
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		populate_initializer_elements(f->car, dst_type->referent, pos);
+	}
+}
+
+static WARN_UNUSED result_t
+map_numeric_type(Arena *arena,
+                 const struct ast *init,
+                 struct ctype *dst_type,
+                 struct constant_initializer *out)
+{
+	out->count = count_initializer_elements(init);
+	assert(out->count > 0);
+	out->elements = arena_alloc(arena, out->count * sizeof(*out->elements));
+	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
+	struct constant_bytes *cursor = out->elements;
+	populate_initializer_elements(init, dst_type, &cursor);
+	return RESULT_OK;
 }
 
 struct sema_ops {
@@ -289,15 +360,14 @@ static WARN_UNUSED int128_t
 guess(const struct ast *a, struct ctype *expected_type)
 {
 	int128_t value = 0;
-	union constant_value tmp = {0};
+	struct constant_bytes tmp = {0};
 	int128_t l_tmp = 0;
 	int128_t r_tmp = 0;
 
 	switch (a->node_type) {
 	case NODE_CONSTANT:
-		map_numeric_type(a, expected_type, &tmp);
-		/* double values ignored here get rejected by sema_double() */
-		value = tmp.as_integer;
+		map_numeric_type_scalar(a, expected_type, &tmp);
+		value = tmp.byte_value;
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		value = guess(a->u.op_unary.operand, expected_type);
@@ -1760,10 +1830,10 @@ sema_declare_file_scope(struct ast *a,
 	if (a->u.declare.init != NULL) {
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			// TODO: support compound initializer
-			map_numeric_type(a->u.declare.init,
-			                 &a->u.declare.var_type,
-			                 &linkage_state->as_constant);
+			check(map_numeric_type(state->arena,
+			                       a->u.declare.init,
+			                       &a->u.declare.var_type,
+			                       &linkage_state->initializer));
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1815,8 +1885,8 @@ sema_declare_file_scope(struct ast *a,
 			varname->sz);
 	} else {
 		if ((**dup).linkage.initial == INITIAL_VALUE_CONSTANT) {
-			linkage_state->as_constant =
-				(**dup).linkage.as_constant;
+			linkage_state->initializer =
+				(**dup).linkage.initializer;
 		}
 		// NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
 		linkage_state->initial =
@@ -1887,8 +1957,8 @@ sema_declare_block_scope(struct ast *a,
 			 */
 			linkage_state->linkage = (**dup).linkage.linkage;
 			linkage_state->initial = (**dup).linkage.initial;
-			linkage_state->as_constant =
-				(**dup).linkage.as_constant;
+			linkage_state->initializer =
+				(**dup).linkage.initializer;
 		} else {
 			linkage_state->linkage = SYMBOL_LINKAGE_EXTERNAL;
 			linkage_state->initial = INITIAL_VALUE_NO_INITIALIZER;
@@ -1905,13 +1975,14 @@ sema_declare_block_scope(struct ast *a,
 
 		if (a->u.declare.init == NULL) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			linkage_state->as_constant.as_integer = 0;
+			check(constant_set_zero(state->arena,
+			                        &linkage_state->initializer));
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			// TODO: support compound initializer
-			map_numeric_type(a->u.declare.init,
-			                 &a->u.declare.var_type,
-			                 &linkage_state->as_constant);
+			check(map_numeric_type(state->arena,
+			                       a->u.declare.init,
+			                       &a->u.declare.var_type,
+			                       &linkage_state->initializer));
 			/*
 			 * Remove init expression from AST. We will initialize
 			 * this value via symbol table processing, not AST.
@@ -1969,7 +2040,7 @@ sema_declare_apply(struct ast *a,
 	dup->unique = a->u.declare.identifier.unique; /* reuse unique ID */
 	dup->linkage.linkage = linkage_state.linkage;
 	dup->linkage.initial = linkage_state.initial;
-	dup->linkage.as_constant = linkage_state.as_constant;
+	dup->linkage.initializer = linkage_state.initializer;
 	a->u.declare.identifier.ltype = linkage_state.linkage;
 	return RESULT_OK;
 }

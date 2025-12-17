@@ -1427,7 +1427,6 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = s->name;
-	check(ctype_copy(arena, &s->c89type, &(**dst).c89type));
 	(**dst).linkage = ir_map_linkage(s->linkage.linkage);
 
 	switch (s->linkage.initial) {
@@ -1435,10 +1434,10 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 		assert(0); /* logic error in caller */
 		break;
 	case INITIAL_VALUE_TENTATIVE:
-		(**dst).initial.as_integer = 0;
+		check(constant_set_zero(arena, (**dst).initializer));
 		break;
 	case INITIAL_VALUE_CONSTANT:
-		(**dst).initial = s->linkage.as_constant;
+		(**dst).initializer = &s->linkage.initializer;
 		break;
 	}
 
@@ -1589,38 +1588,19 @@ ir_debug_print(const struct intermediate *ir)
 	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
 		const struct string_view *vname = &v->identifier;
 		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-
-		char tmp[128] = {0};
-		debug("  VARIABLE TYPE %s",
-		      ctype_to_str(&v->c89type, tmp, sizeof(tmp)));
-
-		switch (v->linkage) {
-		case IR_LINKAGE_INTERNAL:
-			debug("  VARIABLE LINKAGE INTERNAL");
-			break;
-		case IR_LINKAGE_EXTERNAL:
-			debug("  VARIABLE LINKAGE EXTERNAL");
-			break;
-		}
-		if (ctype_is_floating_point(&v->c89type)) {
-			debug("  VARIABLE INIT %f", v->initial.as_double);
-		} else {
-			debug("  VARIABLE INIT %lld",
-			      (long long)v->initial.as_integer);
-		}
+		debug("  LINKAGE %s",
+		      v->linkage == IR_LINKAGE_INTERNAL ? "EXTERNAL"
+		                                        : "INTERNAL");
+		debug("  INITIALIZER");
+		constant_debug_print(v->initializer, 4);
 	}
 
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
-		switch (f->linkage) {
-		case IR_LINKAGE_INTERNAL:
-			debug("  FUNCTION LINKAGE INTERNAL");
-			break;
-		case IR_LINKAGE_EXTERNAL:
-			debug("  FUNCTION LINKAGE EXTERNAL");
-			break;
-		}
+		debug("  LINKAGE %s",
+		      f->linkage == IR_LINKAGE_INTERNAL ? "EXTERNAL"
+		                                        : "INTERNAL");
 		ir_debug_print_list(f->ops);
 	}
 }
