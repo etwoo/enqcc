@@ -95,10 +95,7 @@ map_numeric_type_scalar(const struct ast *a,
                         struct ctype *dst_type,
                         struct constant_bytes *out)
 {
-	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
-	assert(a->u.init.single != NULL);
-	a = a->u.init.single;
-
+	assert(a->node_type == NODE_CONSTANT);
 	assert(!ctype_is_array(dst_type));
 	out->byte_count = ctype_to_size_bytes(dst_type);
 
