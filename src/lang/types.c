@@ -173,6 +173,9 @@ ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
 	if (lhs->t != rhs->t) {
 		return false;
 	}
+	if (lhs->t == CTYPE_ARRAY_OF && lhs->sz != rhs->sz) {
+		return false;
+	}
 	if ((lhs->referent == NULL) != (rhs->referent == NULL)) {
 		return false;
 	}
