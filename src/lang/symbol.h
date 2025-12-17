@@ -30,6 +30,15 @@ bool is_internal(enum symbol_linkage linkage) WARN_UNUSED;
 bool is_external(enum symbol_linkage linkage) WARN_UNUSED;
 bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 
+// TODO: generalize constant_value -> initial_value; scalar _or_ compound value
+//
+// should i fold this into ctype, maybe that will make static init for structs
+// easier later? for now, arrays are simple, flattened, all same type, but
+// later, structs will have arbitrary nesting, different types at each offset?
+//
+// ... or maybe use `struct ast` here, with assumption that all internal nodes
+// are NODE_EXPRESSION_INITIALIZER and all leaf nodes are NODE_CONSTANT, with no
+// dynamic expressions, negations, etc present?
 union constant_value {
 	int128_t as_integer;
 	double as_double;

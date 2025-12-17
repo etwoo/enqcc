@@ -1606,6 +1606,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		state->ast_program_globals = a->u.program.globals;
 		return RESULT_OK;
 	case NODE_FUNCTION:
+		is_def_or_decl = true;
 		check(sema_fn_decl_collect(state->arena,
 		                           a,
 		                           &fname,
@@ -1755,6 +1756,7 @@ sema_declare_file_scope(struct ast *a,
 	if (a->u.declare.init != NULL) {
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
+			// TODO: support compound initializer
 			map_numeric_type(a->u.declare.init,
 			                 &a->u.declare.var_type,
 			                 &linkage_state->as_constant);
@@ -1902,6 +1904,7 @@ sema_declare_block_scope(struct ast *a,
 			linkage_state->as_constant.as_integer = 0;
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
+			// TODO: support compound initializer
 			map_numeric_type(a->u.declare.init,
 			                 &a->u.declare.var_type,
 			                 &linkage_state->as_constant);
