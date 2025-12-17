@@ -1438,7 +1438,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 		assert(0); /* logic error in caller */
 		break;
 	case INITIAL_VALUE_TENTATIVE:
-		check(constant_set_zero(arena, (**dst).initializer));
+		check(constant_make_zero(arena, &(**dst).initializer));
 		break;
 	case INITIAL_VALUE_CONSTANT:
 		(**dst).initializer = &s->linkage.initializer;
