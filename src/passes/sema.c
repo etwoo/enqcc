@@ -1620,6 +1620,7 @@ sema_fn_decl_collect(Arena *arena,
 		check(ctype_copy(arena,
 		                 &cur->parameter_type,
 		                 &(*param_types)[count]));
+		// TODO: sema_adjust_array_to_pointer breaks conflicting_function_declarations.c ...?
 		check(ctype_walk(&(*param_types)[count],
 		                 sema_adjust_array_to_pointer));
 		++count;
