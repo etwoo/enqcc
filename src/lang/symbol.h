@@ -39,6 +39,26 @@ bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 // ... or maybe use `struct ast` here, with assumption that all internal nodes
 // are NODE_EXPRESSION_INITIALIZER and all leaf nodes are NODE_CONSTANT, with no
 // dynamic expressions, negations, etc present?
+//
+// find some way to fold all info together, e.g. avoid having ir_variable and
+// asm_variable have to retain c89type separate from this constant_value (scalar
+// or vector), just so that emit_asm_var knows whether to emit double/long/int;
+// all of this info -- double/long/int, how many elements, zero padding at end,
+// etc -- should be rolled up into a single struct, istead of being spread
+// across multiple members that each have to propagate from symbols (created in
+// sema) to ir_variable to asm_variable to emit.c
+//
+//    -> maybe flatten double -> quadword earlier, such that static init values
+//    can be ignorant of doubles entirely!
+//
+//    can retain double crap for floating point constants in ir_val, since that
+//    already tracks ctype in its own way
+//
+//    ... but translating double to quadword representation earlier would maybe
+//    let us switch back to just as_integer and remove as_double here!
+//
+//    ... which would then simplify array representation, could just be an array
+//    of int128_t, would only need to distinguish long vs quad
 union constant_value {
 	int128_t as_integer;
 	double as_double;

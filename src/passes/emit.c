@@ -613,6 +613,7 @@ emit_asm_var(const struct asm_variable *var, enum platform plat, int fd)
 		        vname->data);
 	}
 
+	// TODO: ctype_to_size_bytes() currently emits array element sz * len; maybe add a new function specifically for alignment that has different logic for arrays, e.g. returns 4/8 if array smaller than 16 bytes, returns 16 if array larger than 16 bytes
 	const long long int alignment = ctype_to_size_bytes(&var->c89type);
 
 	if (var->initial.as_integer != 0 ||
