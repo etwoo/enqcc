@@ -46,6 +46,10 @@ unpack_constant(const struct ast *a)
 		/* unpack nodes inserted by sema_implicit_cast() */
 		a = a->u.cast.expr;
 	}
+	if (a->node_type == NODE_EXPRESSION_INITIALIZER &&
+	    a->u.init.single != NULL) {
+		a = a->u.init.single;
+	}
 	if (a->node_type == NODE_CONSTANT) {
 		return a;
 	}
