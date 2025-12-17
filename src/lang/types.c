@@ -182,13 +182,3 @@ ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
 	return (lhs->referent == NULL && rhs->referent == NULL) ||
 	       ctype_is_equal(lhs->referent, rhs->referent);
 }
-
-result_t
-ctype_walk(struct ctype *c, result_t (*each)(struct ctype *))
-{
-	check(each(c));
-	if (c->referent != NULL) {
-		check(ctype_walk(c->referent, each));
-	}
-	return RESULT_OK;
-}

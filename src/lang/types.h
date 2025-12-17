@@ -42,7 +42,5 @@ const struct ctype *get_common_ctype(const struct ctype *lhs,
                                      const struct ctype *rhs) WARN_UNUSED;
 bool ctype_is_equal(const struct ctype *lhs,
                     const struct ctype *rhs) WARN_UNUSED;
-result_t ctype_walk(struct ctype *c,
-                    result_t (*each)(struct ctype *)) WARN_UNUSED;
 
 #endif

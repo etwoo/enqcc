@@ -1574,16 +1574,21 @@ sema_fn_param_names(struct ast_parameter *params)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-sema_adjust_array_to_pointer(struct ctype *c)
+static void
+sema_fn_param_adjust_array_to_pointer(struct ctype *c)
 {
-	if (c->t == CTYPE_ARRAY_OF) {
-		c->t = CTYPE_POINTER_TO;
-		c->maybe_null_pointer_constant = false;
-		c->sz = 0;
-		/* leave c->referent as-is */
+	struct ctype *prev = NULL;
+	while (ctype_is_array(c)) {
+		prev = c;
+		c = c->referent;
 	}
-	return RESULT_OK;
+	if (prev != NULL) {
+		assert(ctype_is_array(prev));
+		prev->t = CTYPE_POINTER_TO;
+		prev->maybe_null_pointer_constant = false;
+		prev->sz = 0;
+		/* leave referent as-is */
+	}
 }
 
 static WARN_UNUSED result_t
@@ -1620,9 +1625,7 @@ sema_fn_decl_collect(Arena *arena,
 		check(ctype_copy(arena,
 		                 &cur->parameter_type,
 		                 &(*param_types)[count]));
-		// TODO: sema_adjust_array_to_pointer breaks conflicting_function_declarations.c ...?
-		check(ctype_walk(&(*param_types)[count],
-		                 sema_adjust_array_to_pointer));
+		sema_fn_param_adjust_array_to_pointer(&(*param_types)[count]);
 		++count;
 	}
 
