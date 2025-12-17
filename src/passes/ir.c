@@ -85,18 +85,6 @@ ir_unpack_parens(const struct ast *a)
 	return a;
 }
 
-/*
- * Related: sema_implicit_cast() in src/passes/sema.c
- */
-static WARN_UNUSED const struct ast *
-ir_unpack_cast(const struct ast *a)
-{
-	while (a->node_type == NODE_EXPRESSION_CAST) {
-		a = a->u.cast.expr;
-	}
-	return a;
-}
-
 static WARN_UNUSED result_t
 ir_assignment_lvalue(Arena *arena,
                      const struct ast *src,
@@ -280,8 +268,6 @@ ir_decl_init(Arena *arena,
              struct ir_op **dst)
 {
 	assert(a->node_type == NODE_DECLARATION);
-	const struct ast *init = ir_unpack_cast(a->u.declare.init);
-	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	struct ir_op *assigner = NULL;
 	check(ir_alloc_op(arena, &assigner));
@@ -289,9 +275,7 @@ ir_decl_init(Arena *arena,
 
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
-	// TODO: IR for compound initializer instead of just scalar initializer
-	assert(init->u.init.single != NULL);
-	check(ir_expr(arena, init->u.init.single, ir, &inner, &inner_return));
+	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
 
 	ir_val_copy(&inner_return, &assigner->args[0]);
 	{
@@ -1305,6 +1289,11 @@ ir_expr(Arena *arena,
 		check(ir_incr_decr(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_NULL:
+		break;
+	case NODE_EXPRESSION_INITIALIZER:
+		// TODO: IR for compound initializers; remember not to simply discard casts that may be surrounding or within NODE_EXPRESSION_INITIALIZER!
+		assert(a->u.init.single != NULL && a->u.init.multi == NULL);
+		check(ir_expr(arena, a->u.init.single, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
