@@ -1039,10 +1039,16 @@ sema_expr_types_initializer(Arena *arena,
 	for (; element_count < init->expr_type.sz; ++element_count) {
 		assert(pos->cdr == NULL);
 		check(flat_alloc(arena, &pos->cdr));
-		check(parse_alloc(arena, &pos->cdr->car, NODE_CONSTANT));
-		pos->cdr->car->u.num = 0;
-		pos->cdr->car->expr_type.t = CTYPE_INT;
-		pos->cdr->car->expr_type.maybe_null_pointer_constant = true;
+		check(parse_alloc(arena,
+		                  &pos->cdr->car,
+		                  NODE_EXPRESSION_INITIALIZER));
+		check(parse_alloc(arena,
+		                  &pos->cdr->car->u.init.single,
+		                  NODE_CONSTANT));
+		struct ast *new_node = pos->cdr->car->u.init.single;
+		new_node->u.num = 0;
+		new_node->expr_type.t = CTYPE_INT;
+		new_node->expr_type.maybe_null_pointer_constant = true;
 		pos = pos->cdr;
 	}
 
