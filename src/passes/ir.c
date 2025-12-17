@@ -275,7 +275,11 @@ ir_decl_init(Arena *arena,
 
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
-	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
+	assert(a->u.declare.init->node_type == NODE_EXPRESSION_INITIALIZER);
+	const struct ast *init = a->u.declare.init;
+	// TODO: IR for compound initializer instead of just scalar initializer
+	assert(init->u.init.single != NULL);
+	check(ir_expr(arena, init->u.init.single, ir, &inner, &inner_return));
 
 	ir_val_copy(&inner_return, &assigner->args[0]);
 	{
