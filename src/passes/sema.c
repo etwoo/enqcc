@@ -1981,6 +1981,7 @@ sema_declare_block_scope(struct ast *a,
 		if (a->u.declare.init == NULL) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
 			check(constant_set_zero(state->arena,
+			                        &a->u.declare.var_type,
 			                        &linkage_state->initializer));
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;

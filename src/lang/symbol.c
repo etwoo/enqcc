@@ -38,7 +38,9 @@ get_double_as_quadword(double value)
 }
 
 result_t
-constant_set_zero(Arena *arena, struct constant_initializer *ci)
+constant_set_zero(Arena *arena,
+                  const struct ctype *c89type,
+                  struct constant_initializer *ci)
 {
 	ci->count = 1;
 
@@ -46,19 +48,19 @@ constant_set_zero(Arena *arena, struct constant_initializer *ci)
 	check_if(ci->elements == NULL, ERR_SYMBOL_ALLOC);
 	memset(ci->elements, 0, sizeof(*ci->elements));
 
-	ci->elements[0].byte_count = ctype_to_size_bytes(&(struct ctype){
-		.t = CTYPE_INT,
-	});
+	ci->elements[0].byte_count = ctype_to_size_bytes(c89type);
 	ci->elements[0].byte_value = 0;
 	return RESULT_OK;
 }
 
 result_t
-constant_make_zero(Arena *arena, struct constant_initializer **dst)
+constant_make_zero(Arena *arena,
+                   const struct ctype *c89type,
+                   struct constant_initializer **dst)
 {
 	*dst = arena_alloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_SYMBOL_ALLOC);
-	check(constant_set_zero(arena, *dst));
+	check(constant_set_zero(arena, c89type, *dst));
 	return RESULT_OK;
 }
 
@@ -88,7 +90,14 @@ void
 constant_debug_print(const struct constant_initializer *ci, size_t indent)
 {
 	for (long long unsigned i = 0; i < ci->count; ++i) {
-		debug("%*s0x%llx", (int)indent, "", ci->elements[i].byte_value);
+		debug("%*sSIZE:  %llu",
+		      (int)indent,
+		      "",
+		      ci->elements[i].byte_count);
+		debug("%*sVALUE: 0x%llx",
+		      (int)indent,
+		      "",
+		      ci->elements[i].byte_value);
 	}
 }
 
