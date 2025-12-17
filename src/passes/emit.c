@@ -657,6 +657,7 @@ emit_asm_fp_vector_constants(const struct asm_function *f,
 	const char *label_prefix = get_label_prefix(plat);
 
 	if (got_longs != NULL) {
+		dprintf(fd, "\t.data\n");
 		dprintf(fd,
 		        "%s%s%lx%lx%lx%lx:\n",
 		        label_prefix,
@@ -671,6 +672,7 @@ emit_asm_fp_vector_constants(const struct asm_function *f,
 	}
 
 	if (got_quads != NULL) {
+		dprintf(fd, "\t.data\n");
 		dprintf(fd,
 		        "%s%s%llx%llx:\n",
 		        label_prefix,
