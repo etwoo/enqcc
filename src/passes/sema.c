@@ -1241,6 +1241,14 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		if ((ctype_is_floating_point(&a->u.op_binary.lhs->expr_type) &&
+		     ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) ||
+		    (ctype_is_floating_point(&a->u.op_binary.rhs->expr_type) &&
+		     ctype_is_pointer(&a->u.op_binary.lhs->expr_type))) {
+			valid = false;
+		}
+
+		break;
 	case NODE_EXPRESSION_CAST:
 		if ((ctype_is_floating_point(&a->u.cast.to_type) &&
 		     ctype_is_pointer(&a->u.cast.expr->expr_type)) ||
