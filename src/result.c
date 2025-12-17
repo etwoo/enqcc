@@ -469,10 +469,9 @@ result_to_str(result_t r)
 		                r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_INIT:
-		s = my_asprintf("File-scope variable %s has non-constant "
-		                "initializer: %s",
-		                r.msg,
-		                r.msg);
+		s = my_asprintf(
+			"File-scope variable %s has non-constant initializer",
+			r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_FILESCOPE_LINKAGE:
 		s = my_asprintf("Declaration of file-scope variable %s with "
