@@ -85,6 +85,18 @@ ir_unpack_parens(const struct ast *a)
 	return a;
 }
 
+/*
+ * Related: sema_implicit_cast() in src/passes/sema.c
+ */
+static WARN_UNUSED const struct ast *
+ir_unpack_cast(const struct ast *a)
+{
+	while (a->node_type == NODE_EXPRESSION_CAST) {
+		a = a->u.cast.expr;
+	}
+	return a;
+}
+
 static WARN_UNUSED result_t
 ir_assignment_lvalue(Arena *arena,
                      const struct ast *src,
@@ -268,6 +280,8 @@ ir_decl_init(Arena *arena,
              struct ir_op **dst)
 {
 	assert(a->node_type == NODE_DECLARATION);
+	const struct ast *init = ir_unpack_cast(a->u.declare.init);
+	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	struct ir_op *assigner = NULL;
 	check(ir_alloc_op(arena, &assigner));
@@ -275,8 +289,6 @@ ir_decl_init(Arena *arena,
 
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
-	assert(a->u.declare.init->node_type == NODE_EXPRESSION_INITIALIZER);
-	const struct ast *init = a->u.declare.init;
 	// TODO: IR for compound initializer instead of just scalar initializer
 	assert(init->u.init.single != NULL);
 	check(ir_expr(arena, init->u.init.single, ir, &inner, &inner_return));
