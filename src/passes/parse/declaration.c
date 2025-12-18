@@ -374,6 +374,7 @@ parse_declarator(Arena *arena,
 	return RESULT_OK;
 }
 
+// TODO: refactor/rethink declarator->ctype mapping, currently incomprehensible
 static WARN_UNUSED result_t
 map_declarator_to_ctype(Arena *arena,
                         struct ctype *accum,
