@@ -175,7 +175,7 @@ ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
 	if ((ctype_is_array(lhs) && ctype_is_pointer(rhs)) ||
 	    (ctype_is_pointer(lhs) && ctype_is_array(rhs))) {
 		// TODO: implement pointer decay differently?
-	       return ctype_is_equal(lhs->referent, rhs->referent);
+		return ctype_is_equal(lhs->referent, rhs->referent);
 	}
 	if (lhs->t != rhs->t) {
 		return false;
