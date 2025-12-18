@@ -173,6 +173,9 @@ get_common_ctype(const struct ctype *lhs, const struct ctype *rhs)
 bool
 ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
 {
+	if (ctype_is_array(lhs) && ctype_is_array(rhs) && lhs->sz != rhs->sz) {
+		return false;
+	}
 	if ((ctype_is_array(lhs) && ctype_is_pointer(rhs)) ||
 	    (ctype_is_pointer(lhs) && ctype_is_array(rhs))) {
 		// TODO: implement pointer decay differently?
