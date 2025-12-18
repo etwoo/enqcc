@@ -1396,8 +1396,10 @@ sema_pointer(struct ast *a, void *userdata)
 			assert(ctype_is_equal(&a->expr_type,
 			                      &a->u.op_binary.lhs->expr_type));
 		} else {
-			check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
-			                       &a->u.op_binary.rhs->expr_type));
+			check(sema_pointer_cmp_impl(
+				&a->u.op_binary.lhs->expr_type,
+				&a->u.op_binary.rhs->expr_type,
+				false));
 		}
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
