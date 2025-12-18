@@ -61,7 +61,9 @@ ctype_to_str(const struct ctype *c, char *stor, size_t cap)
 			}
 			copied += required;
 		}
-		ctype_to_str(c->referent, stor + copied, cap - copied);
+		if (c->referent != NULL) {
+			ctype_to_str(c->referent, stor + copied, cap - copied);
+		} /* else: tolerate incomplete types */
 	}
 
 	return stor;

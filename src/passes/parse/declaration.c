@@ -7,6 +7,7 @@
 #include "passes/parse/constant.h"
 #include "passes/parse/expression.h"
 #include "passes/parse/token.h"
+#include "sys/debug.h"
 
 #include <assert.h>
 #include <limits.h> /* for ULLONG_MAX */
@@ -201,12 +202,13 @@ parse_function_params(Arena *arena,
 
 struct declarator {
 	enum {
+		DECLARATOR_UNSET,
 		DECLARATOR_ABSTRACT_BASE,
 		DECLARATOR_IDENTIFIER,
 		DECLARATOR_PARENTHESIZED,
 		DECLARATOR_POINTER,
 		DECLARATOR_ARRAY,
-	} atom;
+	} atom[2];
 	union {
 		struct declarator *in_parens;
 		struct declarator *pointee;
@@ -214,7 +216,7 @@ struct declarator {
 			struct declarator *element;
 			long long unsigned sz;
 		} array;
-	} u;
+	} u[2];
 };
 
 static WARN_UNUSED result_t
@@ -244,7 +246,7 @@ parse_declarator(Arena *arena,
 	    is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
-		(**dst).atom = DECLARATOR_ABSTRACT_BASE;
+		(**dst).atom[0] = DECLARATOR_ABSTRACT_BASE;
 		assert(identifier == NULL);
 		return RESULT_OK;
 		/* leave TOKEN_PAREN_CLOSE in place for caller to consume */
@@ -254,11 +256,11 @@ parse_declarator(Arena *arena,
 		token_consume(tok);
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
-		(**dst).atom = DECLARATOR_POINTER;
+		(**dst).atom[0] = DECLARATOR_POINTER;
 		check(parse_declarator(arena,
 		                       flags,
 		                       tok,
-		                       &(**dst).u.pointee,
+		                       &(**dst).u[0].pointee,
 		                       identifier,
 		                       got_function,
 		                       params));
@@ -269,7 +271,7 @@ parse_declarator(Arena *arena,
 	    is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
-		(**dst).atom = DECLARATOR_IDENTIFIER;
+		(**dst).atom[0] = DECLARATOR_IDENTIFIER;
 		assert(identifier != NULL);
 		*identifier = (**tok).val;
 		token_consume(tok);
@@ -277,11 +279,11 @@ parse_declarator(Arena *arena,
 		token_consume(tok);
 		check(declarator_alloc(arena, dst));
 		assert(*dst != NULL);
-		(**dst).atom = DECLARATOR_PARENTHESIZED;
+		(**dst).atom[0] = DECLARATOR_PARENTHESIZED;
 		check(parse_declarator(arena,
 		                       flags,
 		                       tok,
-		                       &(**dst).u.in_parens,
+		                       &(**dst).u[0].in_parens,
 		                       identifier,
 		                       got_function,
 		                       params));
@@ -312,6 +314,9 @@ parse_declarator(Arena *arena,
 		*got_function = true;
 	}
 
+	struct declarator *arr_leftmost = NULL;
+	struct declarator *arr_rightmost = NULL;
+
 	while (is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
 		token_consume(tok);
 
@@ -341,15 +346,29 @@ parse_declarator(Arena *arena,
 		struct declarator *tmp = NULL;
 		check(declarator_alloc(arena, &tmp));
 		assert(tmp != NULL);
-		tmp->atom = DECLARATOR_ARRAY;
+		tmp->atom[1] = DECLARATOR_ARRAY;
 
 		/* parse_constant() limited to range of strtoull() */
 		assert(constant->u.num <= ULLONG_MAX);
-		tmp->u.array.sz = (long long unsigned)constant->u.num;
+		tmp->u[1].array.sz = (long long unsigned)constant->u.num;
 
-		/* array declarator as postfix -> flip tmp and dst! */
-		tmp->u.array.element = *dst;
-		*dst = tmp;
+		if (arr_leftmost == NULL) {
+			arr_leftmost = tmp;
+		}
+
+		if (arr_rightmost != NULL) {
+			/* accumulate nesting of 2D/3D/etc arrays */
+			arr_rightmost->u[1].array.element = tmp;
+		}
+		arr_rightmost = tmp;
+	}
+
+	if (arr_leftmost != NULL) {
+		assert((**dst).atom[0] != DECLARATOR_UNSET);
+		assert((**dst).atom[1] == DECLARATOR_UNSET);
+		(**dst).atom[1] = DECLARATOR_ARRAY;
+		(**dst).u[1].array.sz = arr_leftmost->u[1].array.sz;
+		(**dst).u[1].array.element = arr_leftmost->u[1].array.element;
 	}
 
 	return RESULT_OK;
@@ -357,42 +376,144 @@ parse_declarator(Arena *arena,
 
 static WARN_UNUSED result_t
 map_declarator_to_ctype(Arena *arena,
-                        const struct ctype *basic,
+                        struct ctype *accum,
                         const struct declarator *src,
                         struct ctype **dst)
 {
-	assert(src != NULL);
-	assert(dst != NULL && *dst == NULL);
+	info("%s(): accum %u lhs %u rhs %u",
+	     __func__,
+	     accum == NULL ? -1 : accum->t,
+	     src->atom[0],
+	     src->atom[1]);
 
-	switch (src->atom) {
+	assert(src != NULL);
+	assert(dst != NULL);
+
+	struct ctype *dst_rhs = NULL;
+	if (src->atom[1] != DECLARATOR_UNSET) {
+		assert(src->atom[1] == DECLARATOR_ARRAY);
+
+		check(ctype_alloc(arena, &dst_rhs));
+		dst_rhs->t = CTYPE_ARRAY_OF;
+		dst_rhs->sz = src->u[1].array.sz;
+		info("%s() array size %llu", __func__, src->u[1].array.sz);
+
+		if (src->u[1].array.element != NULL) {
+			check(map_declarator_to_ctype(arena,
+			                              accum,
+			                              src->u[1].array.element,
+			                              &dst_rhs->referent));
+		}
+	}
+
+	char tmp[128] = {0};
+
+	bool parens = false;
+	struct ctype *dst_lhs = NULL;
+	switch (src->atom[0]) {
+	case DECLARATOR_UNSET:
+		break;
 	case DECLARATOR_ABSTRACT_BASE:
 	case DECLARATOR_IDENTIFIER:
-		check(ctype_alloc(arena, dst));
-		check(ctype_copy(arena, basic, *dst));
+		info("%s() base case", __func__);
+		check(ctype_alloc(arena, &dst_lhs));
+		check(ctype_copy(arena, accum, dst_lhs));
 		break;
 	case DECLARATOR_PARENTHESIZED:
+		info("%s() parens", __func__);
+		parens = true;
 		check(map_declarator_to_ctype(arena,
-		                              basic,
-		                              src->u.in_parens,
-		                              dst));
+		                              NULL,
+		                              src->u[0].in_parens,
+		                              &dst_lhs));
 		break;
 	case DECLARATOR_POINTER:
-		check(ctype_alloc(arena, dst));
-		(**dst).t = CTYPE_POINTER_TO;
-		check(map_declarator_to_ctype(arena,
-		                              basic,
-		                              src->u.pointee,
-		                              &(**dst).referent));
+		check(ctype_alloc(arena, &dst_lhs));
+		dst_lhs->t = CTYPE_POINTER_TO;
+		dst_lhs->referent = accum;
+		info("%s() current accum before recursive call %s",
+		     __func__,
+		     ctype_to_str(dst_lhs, tmp, sizeof(tmp)));
+		if (src->u[0].pointee != NULL) {
+			check(map_declarator_to_ctype(arena,
+			                              dst_lhs,
+			                              src->u[0].pointee,
+			                              dst));
+		}
+		info("%s() current accum after recursive call %s",
+		     __func__,
+		     ctype_to_str(dst_lhs, tmp, sizeof(tmp)));
+		info("%s() current dst after recursive call %s",
+		     __func__,
+		     ctype_to_str(*dst, tmp, sizeof(tmp)));
 		break;
 	case DECLARATOR_ARRAY:
-		check(ctype_alloc(arena, dst));
-		(**dst).t = CTYPE_ARRAY_OF;
-		(**dst).sz = src->u.array.sz;
-		check(map_declarator_to_ctype(arena,
-		                              basic,
-		                              src->u.array.element,
-		                              &(**dst).referent));
+		assert(0); /* logic error in caller */
 		break;
+	}
+
+	if (parens && dst_lhs != NULL && dst_rhs != NULL) {
+		info("%s() merging lhs %s",
+		     __func__,
+		     ctype_to_str(dst_lhs, tmp, sizeof(tmp)));
+
+		struct ctype *dst_rhs_innermost = dst_rhs;
+		assert(ctype_is_array(dst_rhs_innermost));
+		while (dst_rhs_innermost->referent != NULL &&
+		       ctype_is_array(dst_rhs_innermost->referent)) {
+			dst_rhs_innermost = dst_rhs_innermost->referent;
+		}
+		assert(ctype_is_array(dst_rhs_innermost));
+		assert(dst_rhs_innermost->referent == NULL);
+		dst_rhs_innermost->referent = accum;
+
+		struct ctype *dst_lhs_innermost = dst_lhs;
+		while (ctype_is_pointer(dst_lhs_innermost) &&
+		       dst_lhs_innermost->referent != NULL &&
+		       ctype_is_pointer(dst_lhs_innermost->referent)) {
+			dst_lhs_innermost = dst_lhs_innermost->referent;
+		}
+		assert(ctype_is_pointer(dst_lhs_innermost));
+		assert(dst_lhs_innermost->referent == NULL);
+		info("%s() innermost lhs %s",
+		     __func__,
+		     ctype_to_str(dst_lhs_innermost, tmp, sizeof(tmp)));
+
+		dst_lhs_innermost->referent = dst_rhs;
+		*dst = dst_lhs;
+		info("%s() merged lhs %s",
+		     __func__,
+		     ctype_to_str(dst_lhs, tmp, sizeof(tmp)));
+	} else if (dst_lhs != NULL && dst_rhs != NULL) {
+		info("%s() merging rhs %s",
+		     __func__,
+		     ctype_to_str(dst_rhs, tmp, sizeof(tmp)));
+		struct ctype *dst_rhs_innermost = dst_rhs;
+		assert(ctype_is_array(dst_rhs_innermost));
+		while (dst_rhs_innermost->referent != NULL &&
+		       ctype_is_array(dst_rhs_innermost->referent)) {
+			dst_rhs_innermost = dst_rhs_innermost->referent;
+		}
+		assert(ctype_is_array(dst_rhs_innermost));
+		assert(dst_rhs_innermost->referent == NULL);
+		info("%s() innermost rhs %s",
+		     __func__,
+		     ctype_to_str(dst_rhs_innermost, tmp, sizeof(tmp)));
+		dst_rhs_innermost->referent = dst_lhs;
+		*dst = dst_rhs;
+		info("%s() merged rhs %s",
+		     __func__,
+		     ctype_to_str(dst_rhs, tmp, sizeof(tmp)));
+	} else if (dst_rhs != NULL && *dst == NULL) {
+		*dst = dst_rhs;
+		info("%s() force rhs %s",
+		     __func__,
+		     ctype_to_str(*dst, tmp, sizeof(tmp)));
+	} else if (dst_lhs != NULL && *dst == NULL) {
+		*dst = dst_lhs;
+		info("%s() force lhs %s",
+		     __func__,
+		     ctype_to_str(*dst, tmp, sizeof(tmp)));
 	}
 
 	return RESULT_OK;

@@ -1577,16 +1577,10 @@ sema_fn_param_names(struct ast_parameter *params)
 static void
 sema_fn_param_adjust_array_to_pointer(struct ctype *c)
 {
-	struct ctype *prev = NULL;
-	while (ctype_is_array(c)) {
-		prev = c;
-		c = c->referent;
-	}
-	if (prev != NULL) {
-		assert(ctype_is_array(prev));
-		prev->t = CTYPE_POINTER_TO;
-		prev->maybe_null_pointer_constant = false;
-		prev->sz = 0;
+	if (ctype_is_array(c)) {
+		c->t = CTYPE_POINTER_TO;
+		c->maybe_null_pointer_constant = false;
+		c->sz = 0;
 		/* leave referent as-is */
 	}
 }
@@ -1620,12 +1614,18 @@ sema_fn_decl_collect(Arena *arena,
 	*n_args = count;
 	*param_types = arena_alloc(arena, sizeof(**param_types) * count);
 
+	char tmp[128] = {0};
+
 	count = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 		check(ctype_copy(arena,
 		                 &cur->parameter_type,
 		                 &(*param_types)[count]));
+		debug("Original parameter: %s",
+		      ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
 		sema_fn_param_adjust_array_to_pointer(&(*param_types)[count]);
+		debug("Adjusted parameter: %s",
+		      ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
 		++count;
 	}
 
