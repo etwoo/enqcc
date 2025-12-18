@@ -1358,8 +1358,11 @@ sema_pointer(struct ast *a, void *userdata)
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
-			check(sema_pointer_cmp(&a->u.declare.var_type,
-			                       &a->u.declare.init->expr_type));
+			check(sema_pointer_cmp_impl(
+				&a->u.declare.var_type,
+				&a->u.declare.init->expr_type,
+				/* do not allow zero->nullptr for array init */
+				!ctype_is_array(&a->u.declare.var_type)));
 		}
 		break;
 	case NODE_SWITCH:
@@ -2261,6 +2264,7 @@ sema_typecheck(Arena *arena,
 		pointer_state.arena = arena;
 		check(sema_walk(a, &ops, &pointer_state));
 	}
+
 	debug("Labeling loops, loop breaks, and continues");
 	check(sema_label_loops(arena, a, label_generator));
 
