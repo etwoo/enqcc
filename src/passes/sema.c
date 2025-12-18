@@ -1328,9 +1328,11 @@ sema_pointer(struct ast *a, void *userdata)
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
-		check(ctype_copy(arena,
-		                 &a->u.function.return_type,
-		                 &state->expected_return_type));
+		if (a->u.function.block != NULL) {
+			check(ctype_copy(arena,
+			                 &a->u.function.return_type,
+			                 &state->expected_return_type));
+		}
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 		check(sema_pointer_cmp(&state->expected_return_type,
