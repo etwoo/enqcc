@@ -1178,7 +1178,7 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BITWISE_XOR:
 		if (a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT &&
 		    ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
-		    ctype_is_pointer(&a->u.op_binary.lhs->expr_type)) {
+		    ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
 			check(ctype_copy(arena,
 			                 &LIKE_PTRDIFF_T,
 			                 &a->expr_type));
@@ -1370,6 +1370,15 @@ sema_pointer(struct ast *a, void *userdata)
 		}
 		break;
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    ctype_is_integer(&a->u.op_binary.rhs->expr_type)) {
+			assert(ctype_is_equal(&a->expr_type,
+			                      &a->u.op_binary.lhs->expr_type));
+		} else {
+			check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
+			                       &a->u.op_binary.rhs->expr_type));
+		}
+		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
 	case NODE_EXPRESSION_COMPARE_LESS_THAN:
