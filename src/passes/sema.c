@@ -2209,10 +2209,6 @@ sema_typecheck(Arena *arena,
 	ops.node_enter = sema_compound_assignment;
 	check(sema_walk(a, &ops, arena));
 
-	debug("Checking lvalues");
-	ops.node_enter = sema_lvalue;
-	check(sema_walk(a, &ops, NULL));
-
 	debug("Checking variable usage");
 	ops.node_enter = sema_var_usage;
 	check(sema_walk(a, &ops, NULL));
@@ -2230,6 +2226,10 @@ sema_typecheck(Arena *arena,
 	ops.node_exit = sema_expr_types;
 	check(sema_walk(a, &ops, arena));
 	ops.node_exit = NULL;
+
+	debug("Checking for invalid lvalues");
+	ops.node_enter = sema_lvalue;
+	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking for invalid double usage");
 	ops.node_enter = sema_double;
