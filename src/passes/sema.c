@@ -35,8 +35,7 @@ is_node_lvalue(const struct ast *a)
 	}
 	return (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
 	        a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
-	        a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) &&
-	       !ctype_is_array(&a->expr_type);
+	        a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE);
 }
 
 static WARN_UNUSED const struct ast *
@@ -875,6 +874,10 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 	switch (a->node_type) {
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		to_check = a->u.op_binary.lhs;
+		if (ctype_is_array(&to_check->expr_type)) {
+			return make_result(
+				ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY);
+		}
 		break;
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 	case NODE_EXPRESSION_PREDECREMENT:
