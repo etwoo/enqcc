@@ -1310,17 +1310,26 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 }
 
 static WARN_UNUSED result_t
-sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
+sema_pointer_cmp_impl(const struct ctype *lhs,
+                      const struct ctype *rhs,
+                      bool ish)
 {
 	if (ctype_is_equal(lhs, rhs)) {
 		/* given equality, nothing more to check */
 	} else if (ctype_is_pointer(lhs) && ctype_is_pointer(rhs)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
-	} else if (ctype_is_pointer(lhs) && !ctype_nullptr_ish(rhs)) {
+	} else if (ctype_is_pointer(lhs) && (!ish || !ctype_nullptr_ish(rhs))) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS);
-	} else if (ctype_is_pointer(rhs) && !ctype_nullptr_ish(lhs)) {
+	} else if (ctype_is_pointer(rhs) && (!ish || !ctype_nullptr_ish(lhs))) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS);
 	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
+{
+	check(sema_pointer_cmp_impl(lhs, rhs, true));
 	return RESULT_OK;
 }
 
@@ -1390,12 +1399,16 @@ sema_pointer(struct ast *a, void *userdata)
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
+		                       &a->u.op_binary.rhs->expr_type));
+		break;
 	case NODE_EXPRESSION_COMPARE_LESS_THAN:
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
-		check(sema_pointer_cmp(&a->u.op_binary.lhs->expr_type,
-		                       &a->u.op_binary.rhs->expr_type));
+		check(sema_pointer_cmp_impl(&a->u.op_binary.lhs->expr_type,
+		                            &a->u.op_binary.rhs->expr_type,
+		                            false));
 		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
