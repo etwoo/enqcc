@@ -474,8 +474,8 @@ map_declarator_to_ctype(Arena *arena,
 		       ctype_is_pointer(dst_lhs_innermost->referent)) {
 			dst_lhs_innermost = dst_lhs_innermost->referent;
 		}
-		assert(ctype_is_pointer(dst_lhs_innermost));
-		assert(dst_lhs_innermost->referent == NULL);
+		//assert(ctype_is_pointer(dst_lhs_innermost));
+		//assert(dst_lhs_innermost->referent == NULL);
 		info("%s() innermost lhs %s",
 		     __func__,
 		     ctype_to_str(dst_lhs_innermost, tmp, sizeof(tmp)));

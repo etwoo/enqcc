@@ -20,7 +20,8 @@ ctype_alloc(Arena *arena, struct ctype **dst)
 result_t
 ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 {
-	assert(src != NULL && dst != NULL);
+	assert(src != NULL);
+	assert(dst != NULL);
 	dst->t = src->t;
 	dst->maybe_null_pointer_constant = src->maybe_null_pointer_constant;
 	dst->sz = src->sz;
