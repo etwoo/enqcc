@@ -870,21 +870,22 @@ sema_compound_assignment(struct ast *a, void *userdata)
 static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
+	bool allow_array = false;
+
 	const struct ast *to_check = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		to_check = a->u.op_binary.lhs;
-		if (ctype_is_array(&to_check->expr_type)) {
-			return make_result(
-				ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY);
-		}
 		break;
-	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		to_check = a->u.op_unary.operand;
+		break;
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+		to_check = a->u.op_unary.operand;
+		allow_array = true;
 		break;
 	default:
 		return RESULT_OK;
@@ -896,6 +897,11 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 		 * and NODE_EXPRESSION_VARIABLE_USAGE.
 		 */
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE);
+	}
+
+	if (!allow_array && ctype_is_array(&to_check->expr_type)) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY);
 	}
 
 	return RESULT_OK;
@@ -1666,10 +1672,10 @@ sema_fn_decl_collect(Arena *arena,
 		                 &cur->parameter_type,
 		                 &(*param_types)[count]));
 		info("Original parameter: %s",
-		      ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
+		     ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
 		sema_fn_param_adjust_array_to_pointer(&(*param_types)[count]);
 		info("Adjusted parameter: %s",
-		      ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
+		     ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
 		++count;
 	}
 
