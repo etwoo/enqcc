@@ -968,6 +968,53 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_expr_types_initializer_zero_pad(Arena *arena,
+                                     const struct ctype *declaration_type,
+                                     struct ast *init)
+{
+	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (!ctype_is_array(declaration_type)) {
+		if (init->u.init.single == NULL) {
+			check(parse_alloc(arena,
+			                  &init->u.init.single,
+			                  NODE_CONSTANT));
+			init->u.init.single->u.num = 0;
+			init->u.init.single->expr_type.t = CTYPE_INT;
+			init->u.init.single->expr_type
+				.maybe_null_pointer_constant = true;
+			check(ctype_copy(arena,
+			                 &init->u.init.single->expr_type,
+			                 &init->expr_type));
+		}
+		return RESULT_OK;
+	}
+	assert(declaration_type->referent != NULL);
+
+	struct flat **dst = &init->u.init.multi;
+
+	long long unsigned element_count = 0;
+	for (; element_count < declaration_type->sz; ++element_count) {
+		if (*dst == NULL) {
+			check(flat_alloc(arena, dst));
+			check(parse_alloc(arena,
+			                  &(**dst).car,
+			                  NODE_EXPRESSION_INITIALIZER));
+			check(ctype_copy(arena,
+			                 declaration_type->referent,
+			                 &(**dst).car->expr_type));
+		}
+		check(sema_expr_types_initializer_zero_pad(
+			arena,
+			declaration_type->referent,
+			(**dst).car));
+		dst = &(**dst).cdr;
+	}
+
+	return RESULT_OK;
+}
+
 /*
  * See sema_implicit_cast_initializer() for related logic.
  */
@@ -1011,7 +1058,6 @@ sema_expr_types_initializer(Arena *arena,
 	init->expr_type.t = CTYPE_ARRAY_OF;
 
 	long long unsigned element_count = 0;
-	struct flat *pos = NULL;
 
 	/*
 	 * Recurse into compound initializer elements.
@@ -1022,7 +1068,6 @@ sema_expr_types_initializer(Arena *arena,
 		                                  declaration_type->referent,
 		                                  f->car));
 		++element_count;
-		pos = f; /* record latest non-NULL element */
 	}
 
 	if (element_count > init->expr_type.sz) {
@@ -1031,27 +1076,12 @@ sema_expr_types_initializer(Arena *arena,
 		                   varname->name.sz);
 	}
 
-	assert(pos != NULL);
-
 	/*
 	 * Pad compound initializer with zeros as necessary.
 	 */
-	for (; element_count < init->expr_type.sz; ++element_count) {
-		assert(pos->cdr == NULL);
-		check(flat_alloc(arena, &pos->cdr));
-		check(parse_alloc(arena,
-		                  &pos->cdr->car,
-		                  NODE_EXPRESSION_INITIALIZER));
-		check(parse_alloc(arena,
-		                  &pos->cdr->car->u.init.single,
-		                  NODE_CONSTANT));
-		struct ast *new_node = pos->cdr->car->u.init.single;
-		new_node->u.num = 0;
-		new_node->expr_type.t = CTYPE_INT;
-		new_node->expr_type.maybe_null_pointer_constant = true;
-		pos = pos->cdr;
-	}
-
+	check(sema_expr_types_initializer_zero_pad(arena,
+	                                           declaration_type,
+	                                           init));
 	return RESULT_OK;
 }
 
