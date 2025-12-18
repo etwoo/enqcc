@@ -417,8 +417,10 @@ map_declarator_to_ctype(Arena *arena,
 	case DECLARATOR_ABSTRACT_BASE:
 	case DECLARATOR_IDENTIFIER:
 		info("%s() base case", __func__);
-		check(ctype_alloc(arena, &dst_lhs));
-		check(ctype_copy(arena, accum, dst_lhs));
+		if (accum != NULL) {
+			check(ctype_alloc(arena, &dst_lhs));
+			check(ctype_copy(arena, accum, dst_lhs));
+		}
 		break;
 	case DECLARATOR_PARENTHESIZED:
 		info("%s() parens", __func__);
@@ -446,7 +448,7 @@ map_declarator_to_ctype(Arena *arena,
 		     ctype_to_str(dst_lhs, tmp, sizeof(tmp)));
 		info("%s() current dst after recursive call %s",
 		     __func__,
-		     ctype_to_str(*dst, tmp, sizeof(tmp)));
+		     *dst ? ctype_to_str(*dst, tmp, sizeof(tmp)) : "none");
 		break;
 	case DECLARATOR_ARRAY:
 		assert(0); /* logic error in caller */
