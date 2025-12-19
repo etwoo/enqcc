@@ -201,8 +201,10 @@ parse_function_params(Arena *arena,
 }
 
 struct declarator {
-	size_t pointer_applies_to;
-	size_t pointer_indirection[2];
+	size_t basic_type_pointer_indirection;
+	struct {
+		size_t pointer_indirection;
+	} prefix;
 	struct {
 		struct ctype type_fragment;
 		struct ctype **current_referent;
@@ -232,19 +234,25 @@ parse_declarator(Arena *arena,
 
 	if (is_token_type(*tok, TOKEN_ASTERISK)) {
 		token_consume(tok);
-		dst->pointer_indirection[dst->pointer_applies_to]++;
+		dst->prefix.pointer_indirection++;
 		check(parse_declarator(arena, flags, tok, dst));
 		return RESULT_OK;
 	}
+
+	size_t maybe_array_of_pointers = 0;
 
 	if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
 	    is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		*dst->out.identifier = (**tok).val;
 		token_consume(tok);
+
+		maybe_array_of_pointers = dst->prefix.pointer_indirection;
+		dst->prefix.pointer_indirection = 0;
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
 		token_consume(tok);
 
-		dst->pointer_applies_to = 1;
+		maybe_array_of_pointers = dst->prefix.pointer_indirection;
+		dst->prefix.pointer_indirection = 0;
 		check(parse_declarator(arena, flags, tok, dst));
 
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
@@ -319,8 +327,29 @@ parse_declarator(Arena *arena,
 			dst->postfix.current_referent =
 				&(**dst->postfix.current_referent).referent;
 		}
+
+		for (; maybe_array_of_pointers > 0; --maybe_array_of_pointers) {
+			assert(*dst->postfix.current_referent == NULL);
+			check(ctype_alloc(arena,
+			                  dst->postfix.current_referent));
+			(**dst->postfix.current_referent).t = CTYPE_POINTER_TO;
+			dst->postfix.current_referent =
+				&(**dst->postfix.current_referent).referent;
+		}
+		assert(maybe_array_of_pointers == 0);
 	}
 
+	if (maybe_array_of_pointers > 0) {
+		/*
+		 * Pointer indirection did not apply to array element (sub)type
+		 * via subscript postfix operator. Tell caller to apply pointer
+		 * indirection to basic type instead.
+		 */
+		dst->basic_type_pointer_indirection = maybe_array_of_pointers;
+		maybe_array_of_pointers = 0;
+	}
+
+	assert(maybe_array_of_pointers == 0);
 	return RESULT_OK;
 }
 
@@ -333,26 +362,20 @@ map_declarator_to_ctype(Arena *arena,
 	assert(dst != NULL);
 	assert(*dst == NULL);
 
-	for (size_t i = src->pointer_indirection[1]; i > 0; --i) {
+	for (size_t i = src->basic_type_pointer_indirection; i > 0; --i) {
 		check(ctype_alloc(arena, dst));
 		(**dst).t = CTYPE_POINTER_TO;
 		dst = &(**dst).referent;
 	}
 
-	if (ctype_is_array(&src->postfix.type_fragment)) {
+	if (ctype_is_pointer(&src->postfix.type_fragment)) {
 		check(ctype_alloc(arena, dst));
 		check(ctype_copy(arena, &src->postfix.type_fragment, *dst));
-		assert(ctype_is_array(*dst));
+		assert(ctype_is_pointer(*dst));
 		while (*dst != NULL) {
-			assert(ctype_is_array(*dst));
+			assert(ctype_is_pointer(*dst));
 			dst = &(**dst).referent;
 		}
-	}
-
-	for (size_t i = src->pointer_indirection[0]; i > 0; --i) {
-		check(ctype_alloc(arena, dst));
-		(**dst).t = CTYPE_POINTER_TO;
-		dst = &(**dst).referent;
 	}
 
 	check(ctype_alloc(arena, dst));
