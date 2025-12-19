@@ -1692,10 +1692,10 @@ sema_fn_decl_collect(Arena *arena,
 		check(ctype_copy(arena,
 		                 &cur->parameter_type,
 		                 &(*param_types)[count]));
-		info("Original parameter: %s",
+		info("Original parameter: %s", // TODO: rm info() log
 		     ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
 		sema_fn_param_adjust_array_to_pointer(&(*param_types)[count]);
-		info("Adjusted parameter: %s",
+		info("Adjusted parameter: %s", // TODO: rm info() log
 		     ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
 		++count;
 	}
