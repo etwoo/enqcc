@@ -226,12 +226,6 @@ parse_declarator(Arena *arena,
 {
 	assert(dst != NULL);
 
-	if (0 != (flags & PARSE_DECLARATOR_ABSTRACT) &&
-	    is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-		/* leave TOKEN_PAREN_CLOSE in place for caller to consume */
-		return RESULT_OK;
-	}
-
 	if (is_token_type(*tok, TOKEN_ASTERISK)) {
 		token_consume(tok);
 		dst->prefix.pointer_indirection++;
@@ -241,8 +235,13 @@ parse_declarator(Arena *arena,
 
 	size_t maybe_array_of_pointers = 0;
 
-	if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
-	    is_token_type(*tok, TOKEN_IDENTIFIER)) {
+	if (0 != (flags & PARSE_DECLARATOR_ABSTRACT) &&
+	    is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		/* leave TOKEN_PAREN_CLOSE in place for caller to consume */
+		maybe_array_of_pointers = dst->prefix.pointer_indirection;
+		dst->prefix.pointer_indirection = 0;
+	} else if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
+	           is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		*dst->out.identifier = (**tok).val;
 		token_consume(tok);
 
