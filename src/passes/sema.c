@@ -1079,6 +1079,9 @@ sema_expr_types_initializer(Arena *arena,
 		++element_count;
 	}
 
+	if (element_count == 0) {
+		return make_result(ERR_SEMA_INIT_COMPOUND_EMPTY);
+	}
 	if (element_count > init->expr_type.sz) {
 		return make_result(ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS,
 		                   varname->name.data,

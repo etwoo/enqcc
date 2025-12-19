@@ -227,9 +227,6 @@ result_to_str(result_t r)
 		           "function declarations, suggesting use of function "
 		           "pointers, which are not supported");
 		break;
-	case ERR_PARSE_DECL_EMPTY_COMPOUND_INITIALIZER:
-		s = strdup("Empty compound initializer is a C23 extension");
-		break;
 	case ERR_PARSE_DECL_EXPECT_BRACE_CLOSE:
 		s = strdup("Parsing compound initializer expects "
 		           "TOKEN_BRACE_CLOSE after TOKEN_BRACE_OPEN and "
@@ -348,6 +345,9 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);
+		break;
+	case ERR_SEMA_INIT_COMPOUND_EMPTY:
+		s = strdup("Empty compound initializer is a C23 extension");
 		break;
 	case ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS:
 		s = my_asprintf(

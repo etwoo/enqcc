@@ -621,11 +621,6 @@ parse_initializer(Arena *arena, const struct token **tok, struct ast **dst)
 
 	if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		check(parse_initializer_arr(arena, tok, &(**dst).u.init.multi));
-		if ((**dst).u.init.multi == NULL) {
-			// TODO: move this check to sema.c
-			return make_result(
-				ERR_PARSE_DECL_EMPTY_COMPOUND_INITIALIZER);
-		}
 	} else {
 		check(parse_expr(arena, tok, &(**dst).u.init.single, 0));
 	}
