@@ -201,7 +201,7 @@ parse_function_params(Arena *arena,
 }
 
 struct declarator {
-	size_t basic_type_pointer_indirection;
+	size_t top_level_pointer_indirection;
 	struct {
 		size_t pointer_indirection;
 	} prefix;
@@ -344,7 +344,7 @@ parse_declarator(Arena *arena,
 		 * via subscript postfix operator. Tell caller to apply pointer
 		 * indirection to basic type instead.
 		 */
-		dst->basic_type_pointer_indirection = maybe_array_of_pointers;
+		dst->top_level_pointer_indirection = maybe_array_of_pointers;
 		maybe_array_of_pointers = 0;
 	}
 
@@ -361,7 +361,7 @@ map_declarator_to_ctype(Arena *arena,
 	assert(dst != NULL);
 	assert(*dst == NULL);
 
-	for (size_t i = src->basic_type_pointer_indirection; i > 0; --i) {
+	for (size_t i = src->top_level_pointer_indirection; i > 0; --i) {
 		check(ctype_alloc(arena, dst));
 		(**dst).t = CTYPE_POINTER_TO;
 		dst = &(**dst).referent;
