@@ -436,6 +436,34 @@ parse_declarator_group_postfix(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+parse_declarator_group_fn_params(Arena *arena,
+                                 const struct token **tok,
+                                 struct declarator *dst)
+{
+	if (*tok == NULL) {
+		return RESULT_OK;
+	}
+
+	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
+	token_consume(tok);
+
+	if (*dst->out.got_function) {
+		return make_result(ERR_PARSE_DECL_ATOM_PARAMS_NESTING);
+	}
+
+	check(parse_function_params(arena, tok, dst->out.params));
+
+	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		return make_result(
+			ERR_PARSE_DECL_ATOM_PARAMS_EXPECT_PAREN_CLOSE);
+	}
+	token_consume(tok);
+
+	*dst->out.got_function = true;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_declarator_by_group(Arena *arena,
                           uint32_t flags,
                           const struct token_group *group,
@@ -455,12 +483,10 @@ parse_declarator_by_group(Arena *arena,
 	                            &got_subscript,
 	                            &got_fn_params);
 
+	dst->prefix.pointer_indirection += got_indirection;
 	if (got_identifier != NULL) {
 		*dst->out.identifier = got_identifier->val;
 	}
-
-	dst->prefix.pointer_indirection += got_indirection;
-
 	if (group->child == NULL && got_subscript == NULL) {
 		assert(dst->top_level_pointer_indirection == 0);
 		dst->top_level_pointer_indirection =
@@ -468,31 +494,7 @@ parse_declarator_by_group(Arena *arena,
 	}
 
 	check(parse_declarator_group_postfix(arena, &got_subscript, dst));
-
-	// TODO: separate got_fn_params handling into helper function
-
-	if (got_fn_params != NULL) {
-		const struct token **tok = &got_fn_params;
-
-		assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
-		token_consume(tok);
-
-		if (*dst->out.got_function) {
-			return make_result(ERR_PARSE_DECL_ATOM_PARAMS_NESTING);
-		}
-
-		info("%s() parsing tokens of function params", __func__);
-		lex_debug_print(*tok);
-		check(parse_function_params(arena, tok, dst->out.params));
-
-		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-			return make_result(
-				ERR_PARSE_DECL_ATOM_PARAMS_EXPECT_PAREN_CLOSE);
-		}
-		token_consume(tok);
-
-		*dst->out.got_function = true;
-	}
+	check(parse_declarator_group_fn_params(arena, &got_fn_params, dst));
 
 	if (group->child != NULL) {
 		check(parse_declarator_by_group(arena,
