@@ -315,36 +315,48 @@ parse_declarator_group_split(Arena *arena,
 	return RESULT_OK;
 }
 
+struct token_group_scan {
+	size_t got_indirection;
+	const struct token *got_identifier;
+	const struct token *got_subscript;
+	const struct token *got_params;
+};
+
 static void
 parse_declarator_group_scan(const struct token_group *group,
-                            size_t *got_indirection,
-                            const struct token **got_identifier,
-                            const struct token **got_subscript,
-                            const struct token **got_fn_params)
+                            struct token_group_scan *scan)
 {
 	const bool is_leaf_group = (group->child == NULL);
+	size_t closing_paren_countdown = 0;
 
 	for (const struct token *t = group->tokens; t != NULL; t = t->next) {
 		switch (t->token_type) {
 		case TOKEN_ASTERISK:
-			if (*got_fn_params == NULL) {
-				(*got_indirection)++;
+			if (scan->got_params == NULL) {
+				scan->got_indirection++;
 			} /* else ignore function parameter indirection */
 			break;
 		case TOKEN_IDENTIFIER:
-			if (*got_identifier == NULL) {
+			if (scan->got_identifier == NULL) {
 				assert(is_leaf_group);
-				*got_identifier = t;
+				scan->got_identifier = t;
 			} /* else: ignore function parameter identifiers */
 			break;
 		case TOKEN_SQUARE_BRACKET_OPEN:
-			if (*got_fn_params == NULL && *got_subscript == NULL) {
-				*got_subscript = t;
+			if (closing_paren_countdown == 0 &&
+			    scan->got_subscript == NULL) {
+				scan->got_subscript = t;
 			} /* else: ignore function parameter subscripts */
 			break;
 		case TOKEN_PAREN_OPEN:
-			if (*got_fn_params == NULL) {
-				*got_fn_params = t;
+			if (scan->got_params == NULL) {
+				scan->got_params = t;
+			}
+			closing_paren_countdown++;
+			break;
+		case TOKEN_PAREN_CLOSE:
+			if (closing_paren_countdown > 0) {
+				closing_paren_countdown--;
 			}
 			break;
 		default:
@@ -473,28 +485,21 @@ parse_declarator_by_group(Arena *arena,
 
 	(void)flags; // TODO: handle PARSE_DECLARATOR_ABSTRACT
 
-	size_t got_indirection = 0;
-	const struct token *got_identifier = NULL;
-	const struct token *got_subscript = NULL;
-	const struct token *got_fn_params = NULL;
-	parse_declarator_group_scan(group,
-	                            &got_indirection,
-	                            &got_identifier,
-	                            &got_subscript,
-	                            &got_fn_params);
+	struct token_group_scan scan = {0};
+	parse_declarator_group_scan(group, &scan);
 
-	dst->prefix.pointer_indirection += got_indirection;
-	if (got_identifier != NULL) {
-		*dst->out.identifier = got_identifier->val;
+	dst->prefix.pointer_indirection += scan.got_indirection;
+	if (scan.got_identifier != NULL) {
+		*dst->out.identifier = scan.got_identifier->val;
 	}
-	if (group->child == NULL && got_subscript == NULL) {
+	if (group->child == NULL && scan.got_subscript == NULL) {
 		assert(dst->top_level_pointer_indirection == 0);
 		dst->top_level_pointer_indirection =
 			dst->prefix.pointer_indirection;
 	}
 
-	check(parse_declarator_group_postfix(arena, &got_subscript, dst));
-	check(parse_declarator_group_fn_params(arena, &got_fn_params, dst));
+	check(parse_declarator_group_postfix(arena, &scan.got_subscript, dst));
+	check(parse_declarator_group_fn_params(arena, &scan.got_params, dst));
 
 	if (group->child != NULL) {
 		check(parse_declarator_by_group(arena,
