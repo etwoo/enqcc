@@ -210,19 +210,19 @@ struct token_group {
 };
 
 static result_t
-parse_declarator_split_groups(Arena *arena,
-                              uint32_t flags,
-                              const struct token **tok,
-                              struct token_group **dst) WARN_UNUSED;
+parse_declarator_group_split(Arena *arena,
+                             uint32_t flags,
+                             const struct token **tok,
+                             struct token_group **dst) WARN_UNUSED;
 
 static WARN_UNUSED result_t
-parse_declarator_split_impl(Arena *arena,
-                            uint32_t flags,
-                            const struct token **tok,
-                            bool *done,
-                            bool *got_identifier,
-                            size_t *closing_paren_countdown,
-                            struct token_group **dst)
+parse_declarator_group_split_impl(Arena *arena,
+                                  uint32_t flags,
+                                  const struct token **tok,
+                                  bool *done,
+                                  bool *got_identifier,
+                                  size_t *closing_paren_countdown,
+                                  struct token_group **dst)
 {
 	while (*tok != NULL) {
 		if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
@@ -271,10 +271,10 @@ parse_declarator_split_impl(Arena *arena,
 		if ((**dst).child != NULL) {
 			return make_result(ERR_PARSE_DECL_ATOM_PARENS_INVALID);
 		}
-		check(parse_declarator_split_groups(arena,
-		                                    flags,
-		                                    tok,
-		                                    &(**dst).child));
+		check(parse_declarator_group_split(arena,
+		                                   flags,
+		                                   tok,
+		                                   &(**dst).child));
 		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			return make_result(
 				ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE);
@@ -286,10 +286,10 @@ parse_declarator_split_impl(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-parse_declarator_split_groups(Arena *arena,
-                              uint32_t flags,
-                              const struct token **tok,
-                              struct token_group **dst)
+parse_declarator_group_split(Arena *arena,
+                             uint32_t flags,
+                             const struct token **tok,
+                             struct token_group **dst)
 {
 	assert(dst != NULL && *dst == NULL);
 
@@ -302,20 +302,21 @@ parse_declarator_split_groups(Arena *arena,
 	size_t closing_paren_countdown = 0;
 
 	while (!done && *tok != NULL) {
-		check(parse_declarator_split_impl(arena,
-		                                  flags,
-		                                  tok,
-		                                  &done,
-		                                  &got_identifier,
-		                                  &closing_paren_countdown,
-		                                  dst));
+		check(parse_declarator_group_split_impl(
+			arena,
+			flags,
+			tok,
+			&done,
+			&got_identifier,
+			&closing_paren_countdown,
+			dst));
 	}
 
 	return RESULT_OK;
 }
 
 static void
-parse_declarator_scan_group(const struct token_group *group,
+parse_declarator_group_scan(const struct token_group *group,
                             size_t *got_indirection,
                             const struct token **got_identifier,
                             const struct token **got_subscript,
@@ -368,47 +369,16 @@ struct declarator {
 };
 
 static WARN_UNUSED result_t
-parse_declarator_by_group(Arena *arena,
-                          uint32_t flags,
-                          const struct token_group *group,
-                          struct declarator *dst)
+parse_declarator_group_postfix(Arena *arena,
+                               const struct token **tok,
+                               struct declarator *dst)
 {
-	assert(dst != NULL);
-
-	(void)flags; // TODO: handle PARSE_DECLARATOR_ABSTRACT
-
-	size_t got_indirection = 0;
-	const struct token *got_identifier = NULL;
-	const struct token *got_subscript = NULL;
-	const struct token *got_fn_params = NULL;
-	parse_declarator_scan_group(group,
-	                            &got_indirection,
-	                            &got_identifier,
-	                            &got_subscript,
-	                            &got_fn_params);
-
-	if (got_identifier != NULL) {
-		*dst->out.identifier = got_identifier->val;
-	}
-
-	dst->prefix.pointer_indirection += got_indirection;
-
-	if (group->child == NULL && got_subscript == NULL) {
-		assert(dst->top_level_pointer_indirection == 0);
-		dst->top_level_pointer_indirection =
-			dst->prefix.pointer_indirection;
-	}
-
-	// TODO: use or rm ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE
-
-	// TODO: separate subscript->fragment into helper function
-
 	struct ctype *new_fragment = NULL;
 	struct ctype **dst_fragment = &new_fragment;
 
-	while (got_subscript != NULL) {
-		const struct token **tok = &got_subscript;
+	// TODO: use or rm ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE
 
+	while (*tok != NULL) {
 		if (!is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
 			break;
 		}
@@ -453,8 +423,6 @@ parse_declarator_by_group(Arena *arena,
 			dst_fragment = &(**dst_fragment).referent;
 		}
 		assert(dst->prefix.pointer_indirection == 0);
-
-		got_subscript = *tok; /* prepare for next loop iteration */
 	}
 
 	if (new_fragment != NULL) {
@@ -463,6 +431,43 @@ parse_declarator_by_group(Arena *arena,
 		*dst_fragment = dst->postfix.type_fragment;
 		dst->postfix.type_fragment = new_fragment;
 	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_declarator_by_group(Arena *arena,
+                          uint32_t flags,
+                          const struct token_group *group,
+                          struct declarator *dst)
+{
+	assert(dst != NULL);
+
+	(void)flags; // TODO: handle PARSE_DECLARATOR_ABSTRACT
+
+	size_t got_indirection = 0;
+	const struct token *got_identifier = NULL;
+	const struct token *got_subscript = NULL;
+	const struct token *got_fn_params = NULL;
+	parse_declarator_group_scan(group,
+	                            &got_indirection,
+	                            &got_identifier,
+	                            &got_subscript,
+	                            &got_fn_params);
+
+	if (got_identifier != NULL) {
+		*dst->out.identifier = got_identifier->val;
+	}
+
+	dst->prefix.pointer_indirection += got_indirection;
+
+	if (group->child == NULL && got_subscript == NULL) {
+		assert(dst->top_level_pointer_indirection == 0);
+		dst->top_level_pointer_indirection =
+			dst->prefix.pointer_indirection;
+	}
+
+	check(parse_declarator_group_postfix(arena, &got_subscript, dst));
 
 	// TODO: separate got_fn_params handling into helper function
 
@@ -506,7 +511,7 @@ parse_declarator(Arena *arena,
                  struct declarator *dst)
 {
 	struct token_group *group = NULL;
-	check(parse_declarator_split_groups(arena, flags, tok, &group));
+	check(parse_declarator_group_split(arena, flags, tok, &group));
 	assert(group != NULL);
 
 	size_t group_number = 0;
