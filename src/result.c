@@ -244,6 +244,13 @@ result_to_str(result_t r)
 		s = strdup("Parsing variable declaration expects "
 		           "TOKEN_SEMICOLON after initializer expression");
 		break;
+	case ERR_PARSE_DECL_IDENTIFIER_MISSING:
+		s = strdup("Parsing declarator: missing identifier");
+		break;
+	case ERR_PARSE_DECL_IDENTIFIER_UNEXPECTED:
+		s = strdup("Parsing declarator: unexpected identifier in "
+		           "abstract declarator");
+		break;
 	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
 		s = strdup("Duplicate variable or function specifier");
 		break;

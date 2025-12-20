@@ -538,6 +538,14 @@ parse_declarator(Arena *arena,
 	check(parse_declarator_group_split(arena, flags, tok, &group));
 	token_group_debug_print(group);
 	check(parse_declarator_by_group(arena, flags, group, dst));
+	if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
+	    dst->out.identifier->data == NULL) {
+		return make_result(ERR_PARSE_DECL_IDENTIFIER_MISSING);
+	}
+	if (0 != (flags & PARSE_DECLARATOR_ABSTRACT) &&
+	    dst->out.identifier->data != NULL) {
+		return make_result(ERR_PARSE_DECL_IDENTIFIER_UNEXPECTED);
+	}
 	return RESULT_OK;
 }
 
@@ -614,10 +622,11 @@ parse_type(Arena *arena,
 	check(parse_basic_type_finalize(&state, &basic_type));
 
 	bool got_function = false;
+	struct string_view dummy_id = {0};
 	struct ast_parameter *dummy_params = NULL;
 
 	struct declarator decl = {0};
-	decl.out.identifier = identifier;
+	decl.out.identifier = identifier != NULL ? identifier : &dummy_id;
 	decl.out.got_function = &got_function;
 	decl.out.params = &dummy_params;
 	check(parse_declarator(arena, flags, tok, &decl));
