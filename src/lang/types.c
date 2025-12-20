@@ -170,17 +170,17 @@ get_common_ctype(const struct ctype *lhs, const struct ctype *rhs)
 	return lhs->t >= rhs->t ? lhs : rhs;
 }
 
-bool
-ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
+static WARN_UNUSED bool
+ctype_is_equal_impl(const struct ctype *lhs,
+                    const struct ctype *rhs,
+                    bool array_to_pointer_decay)
 {
 	if (ctype_is_array(lhs) && ctype_is_array(rhs) && lhs->sz != rhs->sz) {
 		return false;
 	}
-	if ((ctype_is_array(lhs) && ctype_is_pointer(rhs)) ||
-	    (ctype_is_pointer(lhs) && ctype_is_array(rhs))) {
-		// TODO: implement pointer decay differently?
-		// this seems to be causing bad_arg_type.c to fail,
-		// i.e. not typechecking function args at callsite
+	if (((ctype_is_array(lhs) && ctype_is_pointer(rhs)) ||
+	     (ctype_is_pointer(lhs) && ctype_is_array(rhs))) &&
+	    array_to_pointer_decay) {
 		return ctype_is_equal(lhs->referent, rhs->referent);
 	}
 	if (lhs->t != rhs->t) {
@@ -190,5 +190,12 @@ ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
 		return false;
 	}
 	return (lhs->referent == NULL && rhs->referent == NULL) ||
-	       ctype_is_equal(lhs->referent, rhs->referent);
+	       /* array_to_pointer_decay==false for referent(s) */
+	       ctype_is_equal_impl(lhs->referent, rhs->referent, false);
+}
+
+bool
+ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
+{
+	return ctype_is_equal_impl(lhs, rhs, true);
 }

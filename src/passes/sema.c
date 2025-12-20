@@ -1685,18 +1685,12 @@ sema_fn_decl_collect(Arena *arena,
 	*n_args = count;
 	*param_types = arena_alloc(arena, sizeof(**param_types) * count);
 
-	char tmp[128] = {0};
-
 	count = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
 		check(ctype_copy(arena,
 		                 &cur->parameter_type,
 		                 &(*param_types)[count]));
-		info("Original parameter: %s", // TODO: rm info() log
-		     ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
 		sema_fn_param_adjust_array_to_pointer(&(*param_types)[count]);
-		info("Adjusted parameter: %s", // TODO: rm info() log
-		     ctype_to_str(&(*param_types)[count], tmp, sizeof(tmp)));
 		++count;
 	}
 
