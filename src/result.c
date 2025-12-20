@@ -227,6 +227,9 @@ result_to_str(result_t r)
 		           "function declarations, suggesting use of function "
 		           "pointers, which are not supported");
 		break;
+	case ERR_PARSE_DECL_ATOM_PARENS_INVALID:
+		s = strdup("Parsing declarator: invalid paren-grouping");
+		break;
 	case ERR_PARSE_DECL_EXPECT_BRACE_CLOSE:
 		s = strdup("Parsing compound initializer expects "
 		           "TOKEN_BRACE_CLOSE after TOKEN_BRACE_OPEN and "

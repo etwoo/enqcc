@@ -1,5 +1,6 @@
 #include "passes/parse/declaration.h"
 
+#include "passes.h" // TODO: rm
 #include "passes/lex.h"
 #include "passes/parse.h"
 #include "passes/parse/alloc.h"
@@ -200,14 +201,109 @@ parse_function_params(Arena *arena,
 	return RESULT_OK;
 }
 
+const uint32_t PARSE_DECLARATOR_ABSTRACT = 0x200;
+const uint32_t PARSE_DECLARATOR_ACCEPT_FUNCTION_PARAMS = 0x400;
+
+struct token_group {
+	struct token *tokens;
+	struct token_group *child;
+};
+
+static WARN_UNUSED result_t
+parse_declarator_token_groups(Arena *arena,
+                              uint32_t flags,
+                              const struct token **tok,
+                              struct token_group **dst)
+{
+	assert(dst != NULL);
+	assert(*dst == NULL);
+
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_PARSE_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	bool done = false;
+	bool got_identifier = false;
+	size_t closing_paren_countdown = 0;
+
+	while (!done && *tok != NULL) {
+		if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			if (closing_paren_countdown == 0) {
+				break;
+			}
+			--closing_paren_countdown;
+		}
+
+		while (*tok != NULL) {
+			if (is_token_type(*tok, TOKEN_SEMICOLON) ||
+			    is_token_type(*tok, TOKEN_EQUAL_SIGN) ||
+			    is_token_type(*tok, TOKEN_BRACE_OPEN) ||
+			    (is_token_type(*tok, TOKEN_COMMA) &&
+			     0 == (flags &
+			           PARSE_DECLARATOR_ACCEPT_FUNCTION_PARAMS))) {
+				done = true;
+				break;
+			}
+
+			if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
+			    !got_identifier) {
+				break;
+			}
+
+			if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+				if (closing_paren_countdown == 0) {
+					break;
+				}
+				--closing_paren_countdown;
+			}
+
+			struct token **dst_token = &(**dst).tokens;
+			while (*dst_token != NULL) {
+				dst_token = &(**dst_token).next;
+			}
+
+			*dst_token = arena_alloc(arena, sizeof(**dst_token));
+			check_if(*dst_token == NULL, ERR_PARSE_ALLOC);
+			memcpy(*dst_token, *tok, sizeof(**dst_token));
+			(**dst_token).next = NULL;
+
+			if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
+				got_identifier = true;
+			}
+			if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
+				++closing_paren_countdown;
+			}
+			token_consume(tok);
+		}
+
+		if (is_token_type(*tok, TOKEN_PAREN_OPEN) && !got_identifier) {
+			token_consume(tok);
+			if ((**dst).child != NULL) {
+				return make_result(
+					ERR_PARSE_DECL_ATOM_PARENS_INVALID);
+			}
+			check(parse_declarator_token_groups(arena,
+			                                    flags,
+			                                    tok,
+			                                    &(**dst).child));
+			if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+				return make_result(
+					ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE);
+			}
+			token_consume(tok);
+		}
+	}
+
+	return RESULT_OK;
+}
+
 struct declarator {
 	size_t top_level_pointer_indirection;
 	struct {
 		size_t pointer_indirection;
 	} prefix;
 	struct {
-		struct ctype type_fragment;
-		struct ctype **current_referent;
+		struct ctype *type_fragment;
 	} postfix;
 	struct {
 		struct string_view *identifier;
@@ -216,71 +312,72 @@ struct declarator {
 	} out;
 };
 
-const uint32_t PARSE_DECLARATOR_ABSTRACT = 0x200;
-
 static WARN_UNUSED result_t
-parse_declarator(Arena *arena,
-                 uint32_t flags,
-                 const struct token **tok,
-                 struct declarator *dst)
+parse_declarator_by_group(Arena *arena,
+                          uint32_t flags,
+                          const struct token_group *group,
+                          struct declarator *dst)
 {
+	(void)flags; // TODO: handle PARSE_DECLARATOR_ABSTRACT
+
 	assert(dst != NULL);
+	const bool is_leaf_group = (group->child == NULL);
 
-	if (is_token_type(*tok, TOKEN_ASTERISK)) {
-		token_consume(tok);
-		dst->prefix.pointer_indirection++;
-		check(parse_declarator(arena, flags, tok, dst));
-		return RESULT_OK;
+	size_t got_indirection = 0;
+	const struct token *got_identifier = NULL;
+	const struct token *got_subscript = NULL;
+	const struct token *got_fn_params = NULL;
+	for (const struct token *t = group->tokens; t != NULL; t = t->next) {
+		switch (t->token_type) {
+		case TOKEN_ASTERISK:
+			if (got_fn_params == NULL) {
+				++got_indirection;
+			} /* else ignore function parameter indirection */
+			break;
+		case TOKEN_IDENTIFIER:
+			if (got_identifier == NULL) {
+				assert(is_leaf_group);
+				got_identifier = t;
+			} /* else: ignore function parameter identifiers */
+			break;
+		case TOKEN_SQUARE_BRACKET_OPEN:
+			if (got_fn_params == NULL && got_subscript == NULL) {
+				got_subscript = t;
+			} /* else: ignore function parameter subscripts */
+			break;
+		case TOKEN_PAREN_OPEN:
+			if (got_fn_params == NULL) {
+				got_fn_params = t;
+			}
+			break;
+		default:
+			break;
+		}
 	}
 
-	size_t maybe_array_of_pointers = 0;
-
-	if (0 != (flags & PARSE_DECLARATOR_ABSTRACT) &&
-	    is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-		/* leave TOKEN_PAREN_CLOSE in place for caller to consume */
-		maybe_array_of_pointers = dst->prefix.pointer_indirection;
-		dst->prefix.pointer_indirection = 0;
-	} else if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
-	           is_token_type(*tok, TOKEN_IDENTIFIER)) {
-		*dst->out.identifier = (**tok).val;
-		token_consume(tok);
-
-		maybe_array_of_pointers = dst->prefix.pointer_indirection;
-		dst->prefix.pointer_indirection = 0;
-	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-		token_consume(tok);
-
-		maybe_array_of_pointers = dst->prefix.pointer_indirection;
-		dst->prefix.pointer_indirection = 0;
-		check(parse_declarator(arena, flags, tok, dst));
-
-		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-			return make_result(
-				ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE);
-		}
-		token_consume(tok);
-	} else {
-		return make_result(ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE);
+	if (got_identifier != NULL) {
+		*dst->out.identifier = got_identifier->val;
 	}
 
-	if (is_token_type(*tok, TOKEN_PAREN_OPEN)) {
-		if (*dst->out.got_function) {
-			return make_result(ERR_PARSE_DECL_ATOM_PARAMS_NESTING);
-		}
-		token_consume(tok);
+	dst->prefix.pointer_indirection += got_indirection;
 
-		check(parse_function_params(arena, tok, dst->out.params));
-
-		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-			return make_result(
-				ERR_PARSE_DECL_ATOM_PARAMS_EXPECT_PAREN_CLOSE);
-		}
-		token_consume(tok);
-
-		*dst->out.got_function = true;
+	if (is_leaf_group && got_subscript == NULL) {
+		assert(dst->top_level_pointer_indirection == 0);
+		dst->top_level_pointer_indirection =
+			dst->prefix.pointer_indirection;
 	}
 
-	while (is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
+	// TODO: use or rm ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE
+
+	struct ctype *new_fragment = NULL;
+	struct ctype **dst_fragment = &new_fragment;
+
+	while (got_subscript != NULL) {
+		const struct token **tok = &got_subscript;
+
+		if (!is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
+			break;
+		}
 		token_consume(tok);
 
 		if (!is_token_type(*tok, TOKEN_CONSTANT)) {
@@ -309,46 +406,85 @@ parse_declarator(Arena *arena,
 		/* parse_constant() limited to range of strtoull() */
 		assert(constant->u.num <= ULLONG_MAX);
 
-		if (!ctype_is_pointer(&dst->postfix.type_fragment)) {
-			dst->postfix.type_fragment.t = CTYPE_ARRAY_OF;
-			dst->postfix.type_fragment.sz =
-				(long long unsigned)constant->u.num;
-			dst->postfix.current_referent =
-				&dst->postfix.type_fragment.referent;
-		} else {
-			assert(dst->postfix.current_referent != NULL);
-			assert(*dst->postfix.current_referent == NULL);
-			check(ctype_alloc(arena,
-			                  dst->postfix.current_referent));
-			(**dst->postfix.current_referent).t = CTYPE_ARRAY_OF;
-			(**dst->postfix.current_referent).sz =
-				(long long unsigned)constant->u.num;
-			dst->postfix.current_referent =
-				&(**dst->postfix.current_referent).referent;
-		}
+		/* accumulate new fragment by appending */
+		check(ctype_alloc(arena, dst_fragment));
+		(**dst_fragment).t = CTYPE_ARRAY_OF;
+		(**dst_fragment).sz = (long long unsigned)constant->u.num;
+		dst_fragment = &(**dst_fragment).referent;
 
-		for (; maybe_array_of_pointers > 0; --maybe_array_of_pointers) {
-			assert(*dst->postfix.current_referent == NULL);
-			check(ctype_alloc(arena,
-			                  dst->postfix.current_referent));
-			(**dst->postfix.current_referent).t = CTYPE_POINTER_TO;
-			dst->postfix.current_referent =
-				&(**dst->postfix.current_referent).referent;
+		for (; dst->prefix.pointer_indirection > 0;
+		     --dst->prefix.pointer_indirection) {
+			check(ctype_alloc(arena, dst_fragment));
+			(**dst_fragment).t = CTYPE_POINTER_TO;
+			dst_fragment = &(**dst_fragment).referent;
 		}
-		assert(maybe_array_of_pointers == 0);
+		assert(dst->prefix.pointer_indirection == 0);
+
+		got_subscript = *tok; /* prepare for next loop iteration */
 	}
 
-	if (maybe_array_of_pointers > 0) {
-		/*
-		 * Pointer indirection did not apply to array element (sub)type
-		 * via subscript postfix operator. Tell caller to apply pointer
-		 * indirection to basic type instead.
-		 */
-		dst->top_level_pointer_indirection = maybe_array_of_pointers;
-		maybe_array_of_pointers = 0;
+	if (new_fragment != NULL) {
+		assert(*dst_fragment == NULL);
+		/* prepend new fragment onto existing type_fragment */
+		*dst_fragment = dst->postfix.type_fragment;
+		dst->postfix.type_fragment = new_fragment;
 	}
 
-	assert(maybe_array_of_pointers == 0);
+	if (got_fn_params != NULL) {
+		const struct token **tok = &got_fn_params;
+
+		assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
+		token_consume(tok);
+
+		if (*dst->out.got_function) {
+			return make_result(ERR_PARSE_DECL_ATOM_PARAMS_NESTING);
+		}
+
+		info("%s() parsing tokens of function params", __func__);
+		lex_debug_print(*tok);
+		check(parse_function_params(arena, tok, dst->out.params));
+
+		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			return make_result(
+				ERR_PARSE_DECL_ATOM_PARAMS_EXPECT_PAREN_CLOSE);
+		}
+		token_consume(tok);
+
+		*dst->out.got_function = true;
+	}
+
+	if (group->child != NULL) {
+		check(parse_declarator_by_group(arena,
+		                                flags,
+		                                group->child,
+		                                dst));
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_declarator(Arena *arena,
+                 uint32_t flags,
+                 const struct token **tok,
+                 struct declarator *dst)
+{
+	struct token_group *group = NULL;
+	check(parse_declarator_token_groups(arena, flags, tok, &group));
+	assert(group != NULL);
+
+	size_t group_number = 0;
+	{
+		struct token_group *printer = group;
+		while (printer != NULL) {
+			info("Got paren group %zu", group_number);
+			lex_debug_print(printer->tokens);
+			printer = printer->child;
+			++group_number;
+		}
+	}
+
+	check(parse_declarator_by_group(arena, flags, group, dst));
 	return RESULT_OK;
 }
 
@@ -367,9 +503,9 @@ map_declarator_to_ctype(Arena *arena,
 		dst = &(**dst).referent;
 	}
 
-	if (ctype_is_pointer(&src->postfix.type_fragment)) {
+	if (src->postfix.type_fragment != NULL) {
 		check(ctype_alloc(arena, dst));
-		check(ctype_copy(arena, &src->postfix.type_fragment, *dst));
+		check(ctype_copy(arena, src->postfix.type_fragment, *dst));
 		assert(ctype_is_pointer(*dst));
 		while (*dst != NULL) {
 			assert(ctype_is_pointer(*dst));
@@ -398,7 +534,10 @@ parse_specifiers_and_type(Arena *arena,
 	decl.out.identifier = identifier;
 	decl.out.got_function = got_function;
 	decl.out.params = params;
-	check(parse_declarator(arena, 0, tok, &decl));
+	check(parse_declarator(arena,
+	                       PARSE_DECLARATOR_ACCEPT_FUNCTION_PARAMS,
+	                       tok,
+	                       &decl));
 
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, &decl, &tmp));
