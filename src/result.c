@@ -201,6 +201,11 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_POSITIVE:
 		s = strdup("Parsing declarator expects positive array size");
 		break;
+	case ERR_PARSE_DECL_ATOM_EARLY_SUBSCRIPT:
+		s = strdup("Parsing (non-abstract) declarator expects "
+		           "identifier before array subscript "
+		           "TOKEN_SQUARE_BRACKET_OPEN");
+		break;
 	case ERR_PARSE_DECL_ATOM_EXPECT_PAREN_CLOSE:
 		s = strdup("Parsing declarator expects TOKEN_PAREN_CLOSE after "
 		           "TOKEN_PAREN_OPEN and inner declarator");

@@ -322,8 +322,9 @@ struct token_group_scan {
 	const struct token *got_params;
 };
 
-static void
-parse_declarator_group_scan(const struct token_group *group,
+static WARN_UNUSED result_t
+parse_declarator_group_scan(uint32_t flags,
+                            const struct token_group *group,
                             struct token_group_scan *scan)
 {
 	const bool is_leaf_group = (group->child == NULL);
@@ -347,6 +348,13 @@ parse_declarator_group_scan(const struct token_group *group,
 			    scan->got_subscript == NULL) {
 				scan->got_subscript = t;
 			} /* else: ignore function parameter subscripts */
+			if (scan->got_subscript != NULL &&
+			    scan->got_identifier == NULL &&
+			    0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
+			    is_leaf_group) {
+				return make_result(
+					ERR_PARSE_DECL_ATOM_EARLY_SUBSCRIPT);
+			}
 			break;
 		case TOKEN_PAREN_OPEN:
 			if (scan->got_params == NULL) {
@@ -363,6 +371,8 @@ parse_declarator_group_scan(const struct token_group *group,
 			break;
 		}
 	}
+
+	return RESULT_OK;
 }
 
 struct declarator {
@@ -483,10 +493,8 @@ parse_declarator_by_group(Arena *arena,
 {
 	assert(dst != NULL);
 
-	(void)flags; // TODO: handle PARSE_DECLARATOR_ABSTRACT
-
 	struct token_group_scan scan = {0};
-	parse_declarator_group_scan(group, &scan);
+	check(parse_declarator_group_scan(flags, group, &scan));
 
 	dst->prefix.pointer_indirection += scan.got_indirection;
 	if (scan.got_identifier != NULL) {
