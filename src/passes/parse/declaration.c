@@ -398,8 +398,6 @@ parse_declarator_group_postfix(Arena *arena,
 	struct ctype *new_fragment = NULL;
 	struct ctype **dst_fragment = &new_fragment;
 
-	// TODO: use or rm ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE
-
 	while (*tok != NULL) {
 		if (!is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
 			break;
@@ -533,7 +531,8 @@ parse_declarator(Arena *arena,
 		size_t group_number = 0;
 		struct token_group *printer = group;
 		while (printer != NULL) {
-			info("Got paren group %zu", group_number);
+			// TODO: better debug-logging for token_group
+			info("Got paren group %zu", group_number); // TODO rm
 			lex_debug_print(printer->tokens);
 			printer = printer->child;
 			++group_number;

@@ -210,10 +210,6 @@ result_to_str(result_t r)
 		s = strdup("Parsing declarator expects TOKEN_PAREN_CLOSE after "
 		           "TOKEN_PAREN_OPEN and inner declarator");
 		break;
-	case ERR_PARSE_DECL_ATOM_EXPECT_REASONABLE:
-		s = strdup(
-			"Parsing declarator; encountered unreasonable token");
-		break;
 	case ERR_PARSE_DECL_ATOM_EXPECT_SQ_BRACKET_CLOSE:
 		s = strdup(
 			"Parsing declarator expects TOKEN_SQUARE_BRACKET_CLOSE "
