@@ -1,6 +1,6 @@
 #include "passes/parse/declaration.h"
 
-#include "passes.h" // TODO: rm
+#include "passes.h" /* for lex_debug_print() */
 #include "passes/lex.h"
 #include "passes/parse.h"
 #include "passes/parse/alloc.h"
@@ -208,6 +208,17 @@ struct token_group {
 	struct token *tokens;
 	struct token_group *child;
 };
+
+static void
+token_group_debug_print(const struct token_group *group)
+{
+	size_t group_number = 0;
+	for (; group != NULL; group = group->child) {
+		debug("token group %zu", group_number);
+		lex_debug_print(group->tokens);
+		++group_number;
+	}
+}
 
 static result_t
 parse_declarator_group_split(Arena *arena,
@@ -525,20 +536,7 @@ parse_declarator(Arena *arena,
 {
 	struct token_group *group = NULL;
 	check(parse_declarator_group_split(arena, flags, tok, &group));
-	assert(group != NULL);
-
-	{
-		size_t group_number = 0;
-		struct token_group *printer = group;
-		while (printer != NULL) {
-			// TODO: better debug-logging for token_group
-			info("Got paren group %zu", group_number); // TODO rm
-			lex_debug_print(printer->tokens);
-			printer = printer->child;
-			++group_number;
-		}
-	}
-
+	token_group_debug_print(group);
 	check(parse_declarator_by_group(arena, flags, group, dst));
 	return RESULT_OK;
 }
