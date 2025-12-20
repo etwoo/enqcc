@@ -516,8 +516,8 @@ parse_declarator(Arena *arena,
 	check(parse_declarator_group_split(arena, flags, tok, &group));
 	assert(group != NULL);
 
-	size_t group_number = 0;
 	{
+		size_t group_number = 0;
 		struct token_group *printer = group;
 		while (printer != NULL) {
 			info("Got paren group %zu", group_number);
