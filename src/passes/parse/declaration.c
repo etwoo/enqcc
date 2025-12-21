@@ -258,6 +258,57 @@ parse_declarator_group_split(Arena *arena,
                              const struct token **tok,
                              struct token_group **dst) WARN_UNUSED;
 
+/*
+ * Flatten expressions like `(((foobar)))` into `foobar`.
+ */
+static WARN_UNUSED size_t
+parse_needs_weird_hack_for_paren_lonely_symbol(const struct token *tok)
+{
+	enum {
+		COUNT_PAREN_OPEN,
+		GOT_IDENTIFIER,
+		GOT_MISMATCH,
+	} parse_state = COUNT_PAREN_OPEN;
+
+	size_t closing_paren_countdown = 0;
+	size_t max_paren_nesting = 0;
+
+	for (; tok != NULL && parse_state != GOT_MISMATCH; tok = tok->next) {
+		switch (parse_state) {
+		case COUNT_PAREN_OPEN:
+			if (is_token_type(tok, TOKEN_PAREN_OPEN)) {
+				closing_paren_countdown++;
+				max_paren_nesting = closing_paren_countdown;
+			} else if (is_token_type(tok, TOKEN_IDENTIFIER)) {
+				parse_state = GOT_IDENTIFIER;
+				if (closing_paren_countdown == 0) {
+					return 0; /* no parens to flatten */
+				}
+			} else {
+				parse_state = GOT_MISMATCH;
+			}
+			break;
+		case GOT_IDENTIFIER:
+			assert(closing_paren_countdown > 0);
+			if (is_token_type(tok, TOKEN_PAREN_CLOSE)) {
+				closing_paren_countdown--;
+				if (closing_paren_countdown == 0) {
+					assert(max_paren_nesting > 0);
+					return max_paren_nesting;
+				}
+			} else {
+				parse_state = GOT_MISMATCH;
+			}
+			break;
+		default:
+			parse_state = GOT_MISMATCH;
+			break;
+		}
+	}
+
+	return 0; /* tokens do not match required pattern */
+}
+
 static WARN_UNUSED result_t
 parse_declarator_group_split_impl(Arena *arena,
                                   uint32_t flags,
@@ -278,7 +329,17 @@ parse_declarator_group_split_impl(Arena *arena,
 #undef TO_E
 #undef FOREACH_LEX_DONE
 
+	const bool accept_fn_params =
+		(0 != (flags & PARSE_DECLARATOR_ACCEPT_FUNCTION_PARAMS));
+
 	while (*tok != NULL) {
+		const size_t unpack_lonely_symbol =
+			parse_needs_weird_hack_for_paren_lonely_symbol(*tok);
+		for (size_t i = unpack_lonely_symbol; i > 0; --i) {
+			assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
+			token_consume(tok);
+		}
+
 		if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
 		    *got_identifier == false) {
 			break;
@@ -295,8 +356,7 @@ parse_declarator_group_split_impl(Arena *arena,
 		if (is_token_type(*tok, TOKEN_SEMICOLON) ||
 		    is_token_type(*tok, TOKEN_EQUAL_SIGN) ||
 		    is_token_type(*tok, TOKEN_BRACE_OPEN) ||
-		    (is_token_type(*tok, TOKEN_COMMA) &&
-		     0 == (flags & PARSE_DECLARATOR_ACCEPT_FUNCTION_PARAMS))) {
+		    (is_token_type(*tok, TOKEN_COMMA) && !accept_fn_params)) {
 			*done = true;
 		}
 
@@ -335,6 +395,11 @@ parse_declarator_group_split_impl(Arena *arena,
 			(*closing_paren_countdown)++;
 		}
 		token_consume(tok);
+
+		for (size_t i = unpack_lonely_symbol; i > 0; --i) {
+			assert(is_token_type(*tok, TOKEN_PAREN_CLOSE));
+			token_consume(tok);
+		}
 	}
 
 	if (is_token_type(*tok, TOKEN_PAREN_OPEN) && *got_identifier == false) {
