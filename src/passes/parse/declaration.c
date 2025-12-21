@@ -433,6 +433,13 @@ parse_declarator_group_scan(uint32_t flags,
 		case TOKEN_PAREN_OPEN:
 			if (scan->got_params == NULL) {
 				scan->got_params = t;
+			} else if (closing_paren_countdown == 0) {
+				/*
+				 * Treat multiple sets of function parameters
+				 * as function pointer usage, and reject.
+				 */
+				return make_result(
+					ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED);
 			}
 			closing_paren_countdown++;
 			break;
