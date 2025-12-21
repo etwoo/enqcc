@@ -368,7 +368,10 @@ parse_declarator_group_scan(uint32_t flags,
 			break;
 		case TOKEN_IDENTIFIER:
 			if (scan->got_identifier == NULL) {
-				assert(is_leaf_group);
+				if (!is_leaf_group) {
+					return make_result(
+						ERR_PARSE_DECL_ATOM_PARENS_INVALID);
+				}
 				scan->got_identifier = t;
 			} /* else: ignore function parameter identifiers */
 			break;
