@@ -231,6 +231,10 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_ATOM_PARENS_INVALID:
 		s = strdup("Parsing declarator: invalid paren-grouping");
 		break;
+	case ERR_PARSE_DECL_ATOM_POINTER_AFTER_PARENS:
+		s = strdup("Parsing declarator: pointer cannot appear after "
+		           "parenthesized expression");
+		break;
 	case ERR_PARSE_DECL_EXPECT_BRACE_CLOSE:
 		s = strdup("Parsing compound initializer expects "
 		           "TOKEN_BRACE_CLOSE after TOKEN_BRACE_OPEN and "

@@ -221,6 +221,37 @@ token_group_debug_print(const struct token_group *group)
 	}
 }
 
+static WARN_UNUSED result_t
+parse_declarator_group_precheck(const struct token *tok)
+{
+	size_t closing_paren_countdown = 0;
+	bool got_at_least_one_closing_paren = false;
+	for (; tok != NULL; tok = tok->next) {
+		if (is_token_type(tok, TOKEN_IDENTIFIER) ||
+		    (is_token_type(tok, TOKEN_PAREN_CLOSE) &&
+		     closing_paren_countdown == 0)) {
+			break;
+		}
+		if (is_token_type(tok, TOKEN_PAREN_OPEN)) {
+			closing_paren_countdown++;
+		} else if (is_token_type(tok, TOKEN_PAREN_CLOSE)) {
+			if (closing_paren_countdown > 0) {
+				closing_paren_countdown--;
+			}
+			got_at_least_one_closing_paren = true;
+		} else if (is_token_type(tok, TOKEN_ASTERISK) &&
+		           got_at_least_one_closing_paren) {
+			/*
+			 * Pointer declarators can't appear after parenthesized
+			 * expressions. For example: `(int (*)*)` -> invalid
+			 */
+			return make_result(
+				ERR_PARSE_DECL_ATOM_POINTER_AFTER_PARENS);
+		}
+	}
+	return RESULT_OK;
+}
+
 static result_t
 parse_declarator_group_split(Arena *arena,
                              uint32_t flags,
@@ -555,10 +586,14 @@ parse_declarator(Arena *arena,
                  const struct token **tok,
                  struct declarator *dst)
 {
+	check(parse_declarator_group_precheck(*tok));
+
 	struct token_group *group = NULL;
 	check(parse_declarator_group_split(arena, flags, tok, &group));
 	token_group_debug_print(group);
+
 	check(parse_declarator_by_group(arena, flags, group, dst));
+
 	if (0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
 	    dst->out.identifier->data == NULL) {
 		return make_result(ERR_PARSE_DECL_IDENTIFIER_MISSING);
