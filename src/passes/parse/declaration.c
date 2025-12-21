@@ -270,9 +270,12 @@ parse_declarator_group_split_impl(Arena *arena,
 #define FOREACH_LEX_DONE(F)                                                    \
 	FOREACH_LEX_CHAR_REPEAT(F)                                             \
 	FOREACH_LEX_CHAR_EQUALS_SIGN(F)
-#define TO_ENUM(candidate, enum_value) enum_value,
-	const enum lex_tokentype force_done[] = {FOREACH_LEX_DONE(TO_ENUM)};
-#undef TO_ENUM
+#define TO_E(candidate, enum_value) enum_value,
+	/* tokens that forcibly end all declarator parsing */
+	const enum lex_tokentype force_done[] = {FOREACH_LEX_DONE(TO_E)};
+	/* tokens that forcibly end abstract declarator parsing */
+	const enum lex_tokentype force_done_a[] = {FOREACH_LEX_KEYWORD(TO_E)};
+#undef TO_E
 #undef FOREACH_LEX_DONE
 
 	while (*tok != NULL) {
@@ -300,6 +303,14 @@ parse_declarator_group_split_impl(Arena *arena,
 		for (size_t i = 0; i < ARRAY_SIZE(force_done); ++i) {
 			if (is_token_type(*tok, force_done[i])) {
 				*done = true;
+			}
+		}
+
+		if (0 != (flags & PARSE_DECLARATOR_ABSTRACT)) {
+			for (size_t i = 0; i < ARRAY_SIZE(force_done_a); ++i) {
+				if (is_token_type(*tok, force_done_a[i])) {
+					*done = true;
+				}
 			}
 		}
 
