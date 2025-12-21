@@ -8,6 +8,7 @@
 #include "passes/parse/constant.h"
 #include "passes/parse/expression.h"
 #include "passes/parse/token.h"
+#include "sys/array.h"
 #include "sys/debug.h"
 
 #include <assert.h>
@@ -235,6 +236,14 @@ parse_declarator_group_split_impl(Arena *arena,
                                   size_t *closing_paren_countdown,
                                   struct token_group **dst)
 {
+#define FOREACH_LEX_DONE(F)                                                    \
+	FOREACH_LEX_CHAR_REPEAT(F)                                             \
+	FOREACH_LEX_CHAR_EQUALS_SIGN(F)
+#define TO_ENUM(candidate, enum_value) enum_value,
+	const enum lex_tokentype force_done[] = {FOREACH_LEX_DONE(TO_ENUM)};
+#undef TO_ENUM
+#undef FOREACH_LEX_DONE
+
 	while (*tok != NULL) {
 		if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
 		    *got_identifier == false) {
@@ -244,9 +253,9 @@ parse_declarator_group_split_impl(Arena *arena,
 		if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
 			if (*closing_paren_countdown == 0) {
 				*done = true;
-				break;
+			} else {
+				(*closing_paren_countdown)--;
 			}
-			(*closing_paren_countdown)--;
 		}
 
 		if (is_token_type(*tok, TOKEN_SEMICOLON) ||
@@ -255,6 +264,15 @@ parse_declarator_group_split_impl(Arena *arena,
 		    (is_token_type(*tok, TOKEN_COMMA) &&
 		     0 == (flags & PARSE_DECLARATOR_ACCEPT_FUNCTION_PARAMS))) {
 			*done = true;
+		}
+
+		for (size_t i = 0; i < ARRAY_SIZE(force_done); ++i) {
+			if (is_token_type(*tok, force_done[i])) {
+				*done = true;
+			}
+		}
+
+		if (*done == true) {
 			break;
 		}
 
