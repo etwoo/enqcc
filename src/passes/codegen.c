@@ -1074,6 +1074,10 @@ codegen_statement_one(Arena *arena,
 		                           0,
 		                           &(**dst).args[1]);
 		break;
+	case IR_OP_POINTER_ADD:
+	case IR_OP_COPY_TO_OFFSET:
+		assert(0 && "TODO codegen for ptr add and copy to offset");
+		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
