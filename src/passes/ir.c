@@ -1007,10 +1007,14 @@ ir_ptr_math(Arena *arena,
             struct ir_val *return_value)
 {
 	struct ast *pointer = NULL;
+	bool implicit_address_of = false;
 	bool negate_rhs = false;
 	bool swap_lhs_rhs = false;
 
 	switch (a->node_type) {
+	case NODE_EXPRESSION_SUBSCRIPT:
+		implicit_address_of = true;
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_ADD:
 		pointer = ctype_is_pointer(&a->u.op_binary.lhs->expr_type)
 		                  ? a->u.op_binary.lhs
@@ -1036,44 +1040,82 @@ ir_ptr_math(Arena *arena,
 	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
 	assert(right_return.subtype != IR_VAL_NONE);
 
+	if (implicit_address_of) {
+		struct ir_op *addr_of = NULL;
+		check(ir_alloc_op(arena, &addr_of));
+		addr_of->opcode = IR_OP_GET_ADDRESS;
+		ir_val_copy(swap_lhs_rhs ? &right_return : &left_return,
+		            &addr_of->args[0]);
+		check(ir_val_tmpvar_gen(
+			arena,
+			ir,
+			swap_lhs_rhs ? &a->u.op_binary.rhs->expr_type
+				     : &a->u.op_binary.lhs->expr_type,
+			&addr_of->args[1]));
+		ir_val_copy(&addr_of->args[1],
+		            swap_lhs_rhs ? &right_return : &left_return);
+		if (swap_lhs_rhs) {
+			right = ir_op_list_concat(right, addr_of);
+		} else {
+			left = ir_op_list_concat(left, addr_of);
+		}
+	}
+
 	if (negate_rhs) {
+		assert(!swap_lhs_rhs);
 		struct ir_op *negate = NULL;
 		check(ir_alloc_op(arena, &negate));
 		negate->opcode = IR_OP_UNARY_NEGATE;
 		ir_val_copy(&right_return, &negate->args[0]);
 		check(ir_val_tmpvar_gen(arena,
 		                        ir,
-		                        &a->expr_type,
+		                        &a->u.op_binary.rhs->expr_type,
 		                        &negate->args[1]));
 		ir_val_copy(&negate->args[1], &right_return);
 		right = ir_op_list_concat(right, negate);
 	}
 
-	struct ir_op *binary = NULL;
-	check(ir_alloc_op(arena, &binary));
-	binary->opcode = IR_OP_POINTER_ADD;
+	struct ir_op *ptr_plus = NULL;
+	check(ir_alloc_op(arena, &ptr_plus));
+	ptr_plus->opcode = IR_OP_POINTER_ADD;
 
 	size_t pos = 0;
 	if (swap_lhs_rhs) {
-		ir_val_copy(&right_return, &binary->args[pos++]);
-		ir_val_copy(&left_return, &binary->args[pos++]);
+		ir_val_copy(&right_return, &ptr_plus->args[pos++]);
+		ir_val_copy(&left_return, &ptr_plus->args[pos++]);
 	} else {
-		ir_val_copy(&left_return, &binary->args[pos++]);
-		ir_val_copy(&right_return, &binary->args[pos++]);
+		ir_val_copy(&left_return, &ptr_plus->args[pos++]);
+		ir_val_copy(&right_return, &ptr_plus->args[pos++]);
 	}
 	assert(pos == 2);
 
 	long long int scale = ctype_to_size_bytes(pointer->expr_type.referent);
 	assert(scale > 0);
-	binary->args[2].subtype = IR_VAL_CONSTANT;
-	binary->args[2].num = scale;
+	ptr_plus->args[2].subtype = IR_VAL_CONSTANT;
+	ptr_plus->args[2].num = scale;
 
-	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &binary->args[3]));
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &ptr_plus->args[3]));
 
-	assert(return_value->subtype == IR_VAL_NONE);
-	ir_val_copy(&binary->args[3], return_value);
+	// TODO: update ir_assignment_lvalue with subscript expr as well?
+	if (a->node_type == NODE_EXPRESSION_SUBSCRIPT &&
+	    /* dereference upon reaching innermost array dimension */
+	    !ctype_is_array(&a->expr_type)) {
+		struct ir_op *dereference = NULL;
+		check(ir_alloc_op(arena, &dereference));
+		dereference->opcode = IR_OP_LOAD;
+		ir_val_copy(&ptr_plus->args[3], &dereference->args[0]);
+		check(ir_val_tmpvar_gen(arena,
+		                        ir,
+		                        &a->expr_type,
+		                        &dereference->args[1]));
+		ir_val_copy(&dereference->args[1], return_value);
+		ptr_plus = ir_op_list_concat(ptr_plus, dereference);
+	} else {
+		assert(return_value->subtype == IR_VAL_NONE);
+		ir_val_copy(&ptr_plus->args[3], return_value);
+	}
 
-	*dst = ir_op_list_concat(left, ir_op_list_concat(right, binary));
+	*dst = ir_op_list_concat(left, ir_op_list_concat(right, ptr_plus));
 	return RESULT_OK;
 }
 
@@ -1088,6 +1130,7 @@ ir_binary_op(Arena *arena,
 	check(ir_alloc_op(arena, &binary));
 
 	switch (a->node_type) {
+	case NODE_EXPRESSION_SUBSCRIPT:
 	case NODE_EXPRESSION_BINARY_ADD:
 		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) ||
 		    ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
@@ -1428,8 +1471,7 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_POSTINCREMENT:
 		check(ir_incr_decr(arena, a, ir, dst, return_value));
 		break;
-	case NODE_EXPRESSION_SUBSCRIPT:
-		assert(0 && "TODO implement subscript operator");
+	case NODE_EXPRESSION_NULL:
 		break;
 	case NODE_EXPRESSION_INITIALIZER:
 		// TODO: IR for compound initializers; remember not to simply
@@ -1437,8 +1479,6 @@ ir_expr(Arena *arena,
 		// NODE_EXPRESSION_INITIALIZER!
 		assert(a->u.init.single != NULL && a->u.init.multi == NULL);
 		check(ir_expr(arena, a->u.init.single, ir, dst, return_value));
-		break;
-	case NODE_EXPRESSION_NULL:
 		break;
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
@@ -1474,6 +1514,7 @@ ir_expr(Arena *arena,
 		              dst,
 		              return_value));
 		break;
+	case NODE_EXPRESSION_SUBSCRIPT:
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
