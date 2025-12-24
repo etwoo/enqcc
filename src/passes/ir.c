@@ -1024,6 +1024,7 @@ ir_ptr_ptr_math(Arena *arena,
                 struct ir_val *return_value)
 {
 	assert(a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT &&
+	       ctype_is_integer(&a->expr_type) &&
 	       ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 	       ctype_is_pointer(&a->u.op_binary.rhs->expr_type));
 
@@ -1057,6 +1058,9 @@ ir_ptr_ptr_math(Arena *arena,
 	assert(scale > 0);
 	divide->args[1].subtype = IR_VAL_CONSTANT;
 	divide->args[1].num = scale;
+	check(ctype_copy(arena,
+	                 &binary_return.c89type,
+	                 &divide->args[1].c89type));
 
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &divide->args[2]));
 	ir_val_copy(&divide->args[2], return_value);
