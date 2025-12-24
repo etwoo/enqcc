@@ -1045,6 +1045,7 @@ ir_ptr_ptr_math(Arena *arena,
 
 	struct ir_val binary_return = {0};
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &binary_return));
+	ir_val_copy(&binary_return, &binary->args[2]);
 
 	struct ir_op *divide = NULL;
 	check(ir_alloc_op(arena, &divide));
