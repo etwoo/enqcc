@@ -262,6 +262,52 @@ ir_block(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_decl_init_multi(Arena *arena,
+                   const struct ast *a,
+                   struct intermediate *ir,
+                   const struct ir_val *lvalue_base,
+                   long long int *pos,
+                   struct ir_op **dst)
+{
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER ||
+	       a->node_type == NODE_EXPRESSION_CAST);
+
+	if (a->u.init.single != NULL) {
+		struct ir_op *element = NULL;
+		struct ir_val element_return = {0};
+		check(ir_expr(arena,
+		              a->u.init.single,
+		              ir,
+		              &element, /* may remain NULL */
+		              &element_return));
+
+		struct ir_op *copier = NULL;
+		check(ir_alloc_op(arena, &copier));
+		copier->opcode = IR_OP_COPY;
+		ir_val_copy(&element_return, &copier->args[0]);
+		ir_val_copy(lvalue_base, &copier->args[1]);
+		copier->args[1].offset = *pos;
+
+		*dst = ir_op_list_concat(element, copier);
+		*pos += ctype_to_size_bytes(&a->expr_type);
+		return RESULT_OK;
+	}
+	assert(a->u.init.multi != NULL);
+
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		struct ir_op *tmp = NULL;
+		check(ir_decl_init_multi(arena,
+		                         f->car,
+		                         ir,
+		                         lvalue_base,
+		                         pos,
+		                         &tmp));
+		*dst = ir_op_list_concat(*dst, tmp);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_decl_init(Arena *arena,
              const struct ast *a,
              struct intermediate *ir,
@@ -269,26 +315,40 @@ ir_decl_init(Arena *arena,
 {
 	assert(a->node_type == NODE_DECLARATION);
 
-	struct ir_op *assigner = NULL;
-	check(ir_alloc_op(arena, &assigner));
-	assigner->opcode = IR_OP_COPY;
+	const struct ast *dummy_indirect = NULL;
+	struct ir_val lvalue_direct = {0};
+	check(ir_assignment_lvalue(arena, a, &dummy_indirect, &lvalue_direct));
+	assert(dummy_indirect == NULL);
+	assert(lvalue_direct.subtype != IR_VAL_NONE);
 
-	struct ir_op *inner = NULL;
-	struct ir_val inner_return = {0};
-	check(ir_expr(arena, a->u.declare.init, ir, &inner, &inner_return));
+	if (a->u.declare.init->u.init.single != NULL) {
+		assert(a->u.declare.init->u.init.multi == NULL);
 
-	ir_val_copy(&inner_return, &assigner->args[0]);
-	{
-		const struct ast *dummy = NULL;
-		check(ir_assignment_lvalue(arena,
-		                           a,
-		                           &dummy,
-		                           &assigner->args[1]));
-		assert(dummy == NULL);
+		struct ir_op *inner = NULL;
+		struct ir_val inner_return = {0};
+		check(ir_expr(arena,
+		              a->u.declare.init,
+		              ir,
+		              &inner,
+		              &inner_return));
+
+		struct ir_op *assigner = NULL;
+		check(ir_alloc_op(arena, &assigner));
+		assigner->opcode = IR_OP_COPY;
+		ir_val_copy(&inner_return, &assigner->args[0]);
+		ir_val_copy(&lvalue_direct, &assigner->args[1]);
+
+		*dst = ir_op_list_concat(inner, assigner);
+		return RESULT_OK;
 	}
-	assert(assigner->args[1].subtype != IR_VAL_NONE);
 
-	*dst = ir_op_list_concat(inner, assigner);
+	long long int pos = 0;
+	check(ir_decl_init_multi(arena,
+	                         a->u.declare.init,
+	                         ir,
+	                         &lvalue_direct,
+	                         &pos,
+	                         dst));
 	return RESULT_OK;
 }
 
@@ -1432,9 +1492,6 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_NULL:
 		break;
 	case NODE_EXPRESSION_INITIALIZER:
-		// TODO: IR for compound initializers; remember not to simply
-		// discard casts that may be surrounding or within
-		// NODE_EXPRESSION_INITIALIZER!
 		assert(a->u.init.single != NULL && a->u.init.multi == NULL);
 		check(ir_expr(arena, a->u.init.single, ir, dst, return_value));
 		break;

@@ -16,6 +16,7 @@ struct ir_val {
 	} subtype;
 	int128_t num;               /* numeric value, variable ID, etc */
 	double dnum;                /* ... or numeric value as floating point */
+	long long int offset;       /* offset of value within aggregate type */
 	struct string_view varname; /* symbol name, if linkage */
 	struct ctype c89type;
 };
@@ -55,7 +56,6 @@ struct ir_val {
 	F(LOAD, 2)                                                             \
 	F(STORE, 2)                                                            \
 	F(POINTER_ADD, 4)                                                      \
-	F(COPY_TO_OFFSET, 3)                                                   \
 	F(JUMP, 1)                                                             \
 	F(JUMP_IF_ZERO, 2)                                                     \
 	F(JUMP_IF_NOT_ZERO, 2)                                                 \

@@ -1075,7 +1075,6 @@ codegen_statement_one(Arena *arena,
 		                           &(**dst).args[1]);
 		break;
 	case IR_OP_POINTER_ADD:
-	case IR_OP_COPY_TO_OFFSET:
 		assert(0 && "TODO codegen for ptr add and copy to offset");
 		break;
 	case IR_OP_JUMP:
