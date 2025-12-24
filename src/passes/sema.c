@@ -1547,7 +1547,8 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 		common = get_common_ctype(&a->u.op_binary.lhs->expr_type,
 		                          &a->u.op_binary.rhs->expr_type);
-		if (a->node_type == NODE_EXPRESSION_BINARY_ADD &&
+		if ((a->node_type == NODE_EXPRESSION_BINARY_ADD ||
+		     a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT) &&
 		    ((ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		      ctype_is_integer(&a->u.op_binary.rhs->expr_type)) ||
 		     (ctype_is_integer(&a->u.op_binary.lhs->expr_type) &&
