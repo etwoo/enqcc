@@ -328,8 +328,6 @@ ir_decl_init(Arena *arena,
 	assert(lvalue_direct.subtype != IR_VAL_NONE);
 
 	if (a->u.declare.init->u.init.single != NULL) {
-		assert(a->u.declare.init->u.init.multi == NULL);
-
 		struct ir_op *inner = NULL;
 		struct ir_val inner_return = {0};
 		check(ir_expr(arena,

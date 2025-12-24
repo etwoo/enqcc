@@ -1515,7 +1515,6 @@ static WARN_UNUSED bool
 in_memory(struct asm_operand *o)
 {
 	return o->operand_type == ASM_OPERAND_MEMORY ||
-	       o->operand_type == ASM_OPERAND_PSEUDO_MEMORY ||
 	       o->operand_type == ASM_OPERAND_VARIABLE_DATA ||
 	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_DOUBLE ||
 	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_LONGS ||
@@ -2052,6 +2051,7 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  PSEUDOMEM %lld(%lld)",
 		      operand->u.pseudo_mem.offset,
 		      (long long)operand->u.pseudo_mem.num);
+		break;
 	case ASM_OPERAND_INDEXED:
 		debug("  INDEXED (%s, %s, %lld)",
 		      REGISTER_NAMES[operand->u.indexed.base],

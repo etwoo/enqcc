@@ -192,7 +192,7 @@ main(int argc, char *argv[])
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
-			Arena *a = arena_create(4194304);
+			Arena *a = arena_create(8388608);
 			const char *src = argv[optind];
 			const char *dst = argv[optind + 1];
 			rc = result_to_status(compile(a, src, dst, action));
