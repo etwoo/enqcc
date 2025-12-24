@@ -115,6 +115,18 @@ codegen_set_operand_stack(const struct ir_val *basis,
 }
 
 static void
+codegen_set_operand_indexed(const struct ir_val *basis,
+                            long long int scale,
+                            struct asm_operand *dst)
+{
+	dst->operand_type = ASM_OPERAND_INDEXED;
+	dst->u.indexed.base = ASM_REGISTER_AX;
+	dst->u.indexed.index = ASM_REGISTER_DX;
+	dst->u.indexed.scale = scale;
+	codegen_map_ctype(basis, dst);
+}
+
+static void
 codegen_set_operand_register(const struct ir_val *basis,
                              enum asm_register reg,
                              struct asm_operand *dst)
@@ -218,7 +230,7 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	switch (src->subtype) {
 	case IR_VAL_NONE:
-		assert(0 && "unset operand in 2-arg/3-arg op");
+		assert(0 && "unset operand in 2-arg/3-arg/4-arg op");
 		break;
 	case IR_VAL_CONSTANT:
 		switch (src->c89type.t) {
@@ -1075,7 +1087,37 @@ codegen_statement_one(Arena *arena,
 		                           &(**dst).args[1]);
 		break;
 	case IR_OP_POINTER_ADD:
-		assert(0 && "TODO codegen for ptr add and copy to offset");
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RAX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RDX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		assert(src->args[2].subtype == IR_VAL_CONSTANT);
+		if (src->args[2].num == 1 || src->args[2].num == 2 ||
+		    src->args[2].num == 4 || src->args[2].num == 8) {
+			(**dst).opcode = ASM_OP_LEA;
+			codegen_set_operand_indexed(
+				&src->args[0],
+				(long long int)src->args[2].num,
+				&(**dst).args[0]);
+			codegen_map_operand(&src->args[3], &(**dst).args[1]);
+		} else {
+			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+			codegen_map_operand(&src->args[2], &(**dst).args[0]);
+			(**dst).args[1] = OPERAND_RDX_64BIT;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_LEA;
+			codegen_set_operand_indexed(&src->args[0],
+			                            1,
+			                            &(**dst).args[0]);
+			codegen_map_operand(&src->args[3], &(**dst).args[1]);
+		}
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;
@@ -1982,6 +2024,12 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  MEMORY %lld(%s)",
 		      operand->u.mem.offset,
 		      REGISTER_NAMES[operand->u.mem.reg]);
+		break;
+	case ASM_OPERAND_INDEXED:
+		debug("  INDEXED (%s, %s, %lld)",
+		      REGISTER_NAMES[operand->u.indexed.base],
+		      REGISTER_NAMES[operand->u.indexed.index],
+		      operand->u.indexed.scale);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		debug("  LABEL %lld", (long long)operand->u.num);

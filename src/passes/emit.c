@@ -127,6 +127,9 @@ emit_asm_operand(const struct asm_operand *o,
 		        o->u.mem.offset,
 		        REGISTER_AS_STR[o->u.mem.reg][REGISTER_ALIAS_8BYTE]);
 		break;
+	case ASM_OPERAND_INDEXED:
+		assert(0 && "TODO emit for ASM_OPERAND_INDEXED");
+		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		assert(o->u.num <= LLONG_MAX);
 		dprintf(fd,
