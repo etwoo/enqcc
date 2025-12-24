@@ -44,6 +44,7 @@ struct asm_operand {
 		ASM_OPERAND_REGISTER,
 		ASM_OPERAND_PSEUDO_REGISTER,
 		ASM_OPERAND_MEMORY,
+		ASM_OPERAND_PSEUDO_MEMORY,
 		ASM_OPERAND_INDEXED,
 		ASM_OPERAND_JUMP_TARGET_LABEL,
 		ASM_OPERAND_CALL_TARGET_FUNCTION,
@@ -63,6 +64,11 @@ struct asm_operand {
 			long long int offset;
 			enum asm_register reg;
 		} mem;                       /* MEMORY */
+		struct {
+			int128_t num;
+			long long int offset;
+			long long int total_bytes;
+		} pseudo_mem;                /* PSEUDO_MEMORY */
 		struct {
 			enum asm_register base;
 			enum asm_register index;
