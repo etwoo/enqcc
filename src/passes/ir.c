@@ -269,17 +269,21 @@ ir_decl_init_multi(Arena *arena,
                    long long int *pos,
                    struct ir_op **dst)
 {
-	assert(a->node_type == NODE_EXPRESSION_INITIALIZER ||
-	       a->node_type == NODE_EXPRESSION_CAST);
+	bool single_within = false;
+	{
+		const struct ast *unpack = a;
+		while (unpack->node_type == NODE_EXPRESSION_CAST) {
+			/* unpack nodes inserted by sema_implicit_cast() */
+			unpack = unpack->u.cast.expr;
+		}
+		assert(unpack->node_type == NODE_EXPRESSION_INITIALIZER);
+		single_within = (unpack->u.init.single != NULL);
+	}
 
-	if (a->u.init.single != NULL) {
+	if (single_within) {
 		struct ir_op *element = NULL;
 		struct ir_val element_return = {0};
-		check(ir_expr(arena,
-		              a->u.init.single,
-		              ir,
-		              &element, /* may remain NULL */
-		              &element_return));
+		check(ir_expr(arena, a, ir, &element, &element_return));
 
 		struct ir_op *copier = NULL;
 		check(ir_alloc_op(arena, &copier));
@@ -292,6 +296,8 @@ ir_decl_init_multi(Arena *arena,
 		*pos += ctype_to_size_bytes(&a->expr_type);
 		return RESULT_OK;
 	}
+
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 	assert(a->u.init.multi != NULL);
 
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
