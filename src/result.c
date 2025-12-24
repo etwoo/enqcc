@@ -456,11 +456,6 @@ result_to_str(result_t r)
 		s = strdup("Pointer RHS cannot be compared/converted to "
 		           "non-pointer LHS");
 		break;
-	case ERR_SEMA_OPERAND_SUBSCRIPT_INVALID:
-		s = strdup("Array subscript operator [] requires one operand "
-		           "of type CTYPE_POINTER_TO or CTYPE_ARRAY_OF and "
-		           "another operand of integer type");
-		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;

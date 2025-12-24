@@ -34,7 +34,6 @@ is_node_lvalue(const struct ast *a)
 		a = a->u.op_unary.operand;
 	}
 	return (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	        a->node_type == NODE_EXPRESSION_SUBSCRIPT ||
 	        a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE);
 }
 
@@ -868,6 +867,27 @@ sema_compound_assignment(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
+sema_subscript(struct ast *a, void *userdata)
+{
+	Arena *arena = userdata;
+
+	if (a->node_type != NODE_EXPRESSION_SUBSCRIPT) {
+		return RESULT_OK;
+	}
+
+	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	check_if(new_node == NULL, ERR_SEMA_ALLOC);
+	new_node->node_type = NODE_EXPRESSION_BINARY_ADD;
+	check(ctype_copy(arena, &a->expr_type, &new_node->expr_type));
+	new_node->u.op_binary = a->u.op_binary;
+
+	a->node_type = NODE_EXPRESSION_UNARY_DEREFERENCE;
+	a->u.op_unary.operand = new_node;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	bool allow_array = false;
@@ -1136,23 +1156,6 @@ sema_expr_types(struct ast *a, void *userdata)
 		                 &a->u.op_unary.operand->expr_type,
 		                 &a->expr_type));
 		break;
-	case NODE_EXPRESSION_SUBSCRIPT:
-		if ((ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
-		     ctype_is_integer(&a->u.op_binary.rhs->expr_type)) ||
-		    (ctype_is_integer(&a->u.op_binary.lhs->expr_type) &&
-		     ctype_is_pointer(&a->u.op_binary.rhs->expr_type))) {
-			const struct ast *pointer =
-				ctype_is_pointer(&a->u.op_binary.lhs->expr_type)
-					? a->u.op_binary.lhs
-					: a->u.op_binary.rhs;
-			assert(ctype_is_pointer(&pointer->expr_type));
-			check(ctype_copy(arena,
-			                 pointer->expr_type.referent,
-			                 &a->expr_type));
-		} else {
-			return make_result(ERR_SEMA_OPERAND_SUBSCRIPT_INVALID);
-		}
-		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
 		if (!ctype_is_pointer(&a->u.op_unary.operand->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_DEREF_INVALID);
@@ -1246,6 +1249,9 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 		assert(0 && "COMPOUND_ASSIGN_* should have been eliminated");
+		break;
+	case NODE_EXPRESSION_SUBSCRIPT:
+		assert(0 && "SUBSCRIPT should have been eliminated");
 		break;
 	}
 
@@ -1523,7 +1529,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		                                     &a->u.declare.var_type,
 		                                     &a->u.declare.init));
 		break;
-	case NODE_EXPRESSION_SUBSCRIPT:
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
@@ -1542,8 +1547,7 @@ sema_implicit_cast(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 		common = get_common_ctype(&a->u.op_binary.lhs->expr_type,
 		                          &a->u.op_binary.rhs->expr_type);
-		if ((a->node_type == NODE_EXPRESSION_BINARY_ADD ||
-		     a->node_type == NODE_EXPRESSION_SUBSCRIPT) &&
+		if (a->node_type == NODE_EXPRESSION_BINARY_ADD &&
 		    ((ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		      ctype_is_integer(&a->u.op_binary.rhs->expr_type)) ||
 		     (ctype_is_integer(&a->u.op_binary.lhs->expr_type) &&
@@ -2228,6 +2232,10 @@ sema_typecheck(Arena *arena,
 
 	debug("Expanding compound assignment statements");
 	ops.node_enter = sema_compound_assignment;
+	check(sema_walk(a, &ops, arena));
+
+	debug("Expanding array subscript expressions");
+	ops.node_enter = sema_subscript;
 	check(sema_walk(a, &ops, arena));
 
 	debug("Checking variable usage");
