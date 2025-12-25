@@ -241,7 +241,11 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		dst->u.pseudo_mem.offset = src->offset;
 		dst->u.pseudo_mem.total_bytes =
 			ctype_to_size_bytes(&src->c89type);
-		codegen_map_ctype_impl(src->c89type.referent, dst);
+		const struct ctype *innermost = &src->c89type;
+		while (ctype_is_array(innermost)) {
+			innermost = innermost->referent;
+		}
+		codegen_map_ctype_impl(innermost, dst);
 		return;
 	}
 
