@@ -996,7 +996,11 @@ ir_unary_op(Arena *arena,
 		ast_inner = a->u.op_unary.operand;
 		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
-		unary->opcode = IR_OP_LOAD;
+		if (ctype_is_array(&a->expr_type)) {
+			unary->opcode = IR_OP_COPY;
+		} else {
+			unary->opcode = IR_OP_LOAD;
+		}
 		ast_inner = a->u.op_unary.operand;
 		break;
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
@@ -1059,6 +1063,7 @@ ir_unary_op(Arena *arena,
 
 	ir_val_copy(&inner_return, &unary->args[0]);
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &unary->args[1]));
+	ctype_array_decay_to_pointer(&unary->args[1].c89type);
 	ir_val_copy(&unary->args[1], return_value);
 
 	/*
