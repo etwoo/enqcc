@@ -1030,11 +1030,13 @@ ir_ptr_ptr_math(Arena *arena,
 	struct ir_val left_return = {0};
 	check(ir_expr(arena, a->u.op_binary.lhs, ir, &left, &left_return));
 	assert(left_return.subtype != IR_VAL_NONE);
+	// TODO: if left is array type, automatically add IR_OP_GET_ADDRESS
 
 	struct ir_op *right = NULL;
 	struct ir_val right_return = {0};
 	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
 	assert(right_return.subtype != IR_VAL_NONE);
+	// TODO: if right is array type, automatically add IR_OP_GET_ADDRESS
 
 	struct ir_op *binary = NULL;
 	check(ir_alloc_op(arena, &binary));
@@ -1099,11 +1101,13 @@ ir_ptr_math(Arena *arena,
 	struct ir_val left_return = {0};
 	check(ir_expr(arena, a->u.op_binary.lhs, ir, &left, &left_return));
 	assert(left_return.subtype != IR_VAL_NONE);
+	// TODO: if left is array type, automatically add IR_OP_GET_ADDRESS
 
 	struct ir_op *right = NULL;
 	struct ir_val right_return = {0};
 	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
 	assert(right_return.subtype != IR_VAL_NONE);
+	// TODO: if right is array type, automatically add IR_OP_GET_ADDRESS
 
 	if (negate_rhs) {
 		assert(!swap_lhs_rhs);
