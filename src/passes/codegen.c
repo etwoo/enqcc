@@ -120,9 +120,9 @@ codegen_set_operand_indexed(const struct ir_val *basis,
                             struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_INDEXED;
-	dst->u.indexed.base = ASM_REGISTER_AX;
-	dst->u.indexed.index = ASM_REGISTER_DX;
-	dst->u.indexed.scale = scale;
+	dst->u.idx.base = ASM_REGISTER_AX;
+	dst->u.idx.index = ASM_REGISTER_DX;
+	dst->u.idx.scale = scale;
 	codegen_map_ctype(basis, dst);
 }
 
@@ -2054,9 +2054,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		break;
 	case ASM_OPERAND_INDEXED:
 		debug("  INDEXED (%s, %s, %lld)",
-		      REGISTER_NAMES[operand->u.indexed.base],
-		      REGISTER_NAMES[operand->u.indexed.index],
-		      operand->u.indexed.scale);
+		      REGISTER_NAMES[operand->u.idx.base],
+		      REGISTER_NAMES[operand->u.idx.index],
+		      operand->u.idx.scale);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		debug("  LABEL %lld", (long long)operand->u.num);

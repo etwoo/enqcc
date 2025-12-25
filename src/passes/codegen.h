@@ -73,7 +73,7 @@ struct asm_operand {
 			enum asm_register base;
 			enum asm_register index;
 			long long int scale;
-		} indexed;                   /* INDEXED */
+		} idx;                       /* INDEXED */
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
 		double dnum;                 /* CONSTANT_DATA_DOUBLE */

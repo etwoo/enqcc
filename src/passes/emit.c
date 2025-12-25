@@ -131,7 +131,11 @@ emit_asm_operand(const struct asm_operand *o,
 		assert(0 && "PSEUDOMEMORY should have been eliminated");
 		break;
 	case ASM_OPERAND_INDEXED:
-		assert(0 && "TODO emit for ASM_OPERAND_INDEXED");
+		dprintf(fd,
+		        "(%s, %s, %lld)",
+		        REGISTER_AS_STR[o->u.idx.base][REGISTER_ALIAS_8BYTE],
+		        REGISTER_AS_STR[o->u.idx.index][REGISTER_ALIAS_8BYTE],
+		        o->u.idx.scale);
 		break;
 	case ASM_OPERAND_JUMP_TARGET_LABEL:
 		assert(o->u.num <= LLONG_MAX);
