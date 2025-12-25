@@ -1035,7 +1035,12 @@ ir_expr_get_addr(Arena *arena,
 	get_addr->opcode = IR_OP_GET_ADDRESS;
 
 	ir_val_copy(return_value, &get_addr->args[0]);
-	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &get_addr->args[1]));
+	check(ir_val_tmpvar_gen(arena,
+	                        ir,
+	                        &return_value->c89type,
+	                        &get_addr->args[1]));
+
+	ctype_array_decay_to_pointer(&get_addr->args[1].c89type);
 	ir_val_copy(&get_addr->args[1], return_value);
 
 	*dst = ir_op_list_concat(*dst, get_addr);
@@ -1404,7 +1409,7 @@ ir_call_args(Arena *arena,
 {
 	for (; args != NULL; args = args->cdr) {
 		struct ir_val arg_value = {0};
-		check(ir_expr(arena, args->car, ir, dst, &arg_value));
+		check(ir_expr_get_addr(arena, args->car, ir, dst, &arg_value));
 		assert(arg_value.subtype != IR_VAL_NONE);
 
 		assert(*pos < FUNCTION_PARAMETER_LIMIT);

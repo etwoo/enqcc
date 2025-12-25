@@ -355,14 +355,19 @@ resolve_function_params_one(Arena *arena,
                             struct ast_parameter *a,
                             struct symbol **sym)
 {
+	struct ctype adjust_type = {0};
+	check(ctype_copy(arena, &a->parameter_type, &adjust_type));
+	ctype_array_decay_to_pointer(&adjust_type);
+
 	check(symbols_prepend(arena,
 	                      sym,
 	                      &a->symbol.name,
 	                      SYMBOL_VARIABLE,
-	                      &a->parameter_type));
+	                      &adjust_type));
+
 	struct ctype dummy = {0};
 	check(map_symbol_members(arena, *sym, &a->symbol, &dummy));
-	assert(ctype_is_equal(&dummy, &a->parameter_type));
+	assert(ctype_is_equal(&dummy, &adjust_type));
 	return RESULT_OK;
 }
 

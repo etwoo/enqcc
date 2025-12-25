@@ -1650,17 +1650,6 @@ sema_fn_param_names(struct ast_parameter *params)
 	return RESULT_OK;
 }
 
-static void
-sema_fn_param_adjust_array_to_pointer(struct ctype *c)
-{
-	if (ctype_is_array(c)) {
-		c->t = CTYPE_POINTER_TO;
-		c->maybe_null_pointer_constant = false;
-		c->sz = 0;
-		/* leave referent as-is */
-	}
-}
-
 static WARN_UNUSED result_t
 sema_fn_decl_collect(Arena *arena,
                      const struct ast *a,
@@ -1695,7 +1684,7 @@ sema_fn_decl_collect(Arena *arena,
 		check(ctype_copy(arena,
 		                 &cur->parameter_type,
 		                 &(*param_types)[count]));
-		sema_fn_param_adjust_array_to_pointer(&(*param_types)[count]);
+		ctype_array_decay_to_pointer(&(*param_types)[count]);
 		++count;
 	}
 

@@ -199,3 +199,15 @@ ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
 {
 	return ctype_is_equal_impl(lhs, rhs, true);
 }
+
+void
+ctype_array_decay_to_pointer(struct ctype *c)
+{
+	if (ctype_is_array(c)) {
+		c->t = CTYPE_POINTER_TO;
+		c->maybe_null_pointer_constant = false;
+		c->sz = 0;
+		/* leave referent as-is */
+	}
+	assert(!ctype_is_array(c));
+}
