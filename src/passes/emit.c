@@ -599,6 +599,8 @@ emit_asm_fn(const struct asm_function *fn, enum platform plat, int fd)
 	}
 }
 
+static const long long unsigned MAX_ALIGNMENT = 16;
+
 static void
 emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 {
@@ -615,7 +617,10 @@ emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 
 	const long long unsigned byte_count =
 		constant_byte_count(v->initializer);
-	const long long unsigned alignment = MIN(byte_count, 16);
+	const long long unsigned alignment =
+		byte_count >= MAX_ALIGNMENT
+			? MAX_ALIGNMENT
+			: v->initializer->elements[0].byte_value;
 
 	if (constant_is_zero(v->initializer)) {
 		dprintf(fd, "\t.bss\n\t.balign %llu\n", alignment);
