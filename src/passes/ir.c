@@ -943,7 +943,14 @@ ir_expr_get_addr(Arena *arena,
 		 * IR_OP_LOAD + IR_OP_GET_ADDRESS == noop
 		 */
 		prev->next = NULL;
-		ir_val_copy(&prev->args[3], return_value); // TODO
+		/*
+		 * Redirect <return_value> to dst ir_val of remaining <prev>.
+		 */
+		for (size_t i = 0; i < ARRAY_SIZE(prev->args); ++i) {
+			if (prev->args[i].subtype != IR_VAL_NONE) {
+				ir_val_copy(&prev->args[i], return_value);
+			}
+		}
 		return RESULT_OK;
 	}
 
