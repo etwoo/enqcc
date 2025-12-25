@@ -620,7 +620,7 @@ emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 	const long long unsigned alignment =
 		byte_count >= MAX_ALIGNMENT
 			? MAX_ALIGNMENT
-			: v->initializer->elements[0].byte_value;
+			: v->initializer->elements[0].byte_count;
 
 	if (constant_is_zero(v->initializer)) {
 		dprintf(fd, "\t.bss\n\t.balign %llu\n", alignment);
