@@ -77,9 +77,9 @@ codegen_set_operand_immediate_zero(struct asm_operand *dst)
 }
 
 static void
-codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
+codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 {
-	switch (src->c89type.t) {
+	switch (c->t) {
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
@@ -92,6 +92,12 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 		dst->word_type = ASM_WORD_64BIT;
 		break;
 	}
+}
+
+static void
+codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
+{
+	codegen_map_ctype_impl(&src->c89type, dst);
 }
 
 static void
@@ -228,6 +234,17 @@ static const struct asm_operand OPERAND_XMM15 = {
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
+	if (ctype_is_array(&src->c89type) &&
+	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
+		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
+		dst->u.pseudo_mem.num = src->num;
+		dst->u.pseudo_mem.offset = src->offset;
+		dst->u.pseudo_mem.total_bytes =
+			ctype_to_size_bytes(&src->c89type);
+		codegen_map_ctype_impl(src->c89type.referent, dst);
+		return;
+	}
+
 	switch (src->subtype) {
 	case IR_VAL_NONE:
 		assert(0 && "unset operand in 2-arg/3-arg/4-arg op");
@@ -250,16 +267,8 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		}
 		break;
 	case IR_VAL_TEMPORARY_VARIABLE:
-		if (ctype_is_array(&src->c89type)) {
-			dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
-			dst->u.pseudo_mem.num = src->num;
-			dst->u.pseudo_mem.offset = src->offset;
-			dst->u.pseudo_mem.total_bytes =
-				ctype_to_size_bytes(&src->c89type);
-		} else {
-			dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
-			dst->u.num = src->num;
-		}
+		dst->operand_type = ASM_OPERAND_PSEUDO_REGISTER;
+		dst->u.num = src->num;
 		break;
 	case IR_VAL_JUMP_TARGET_LABEL:
 		dst->operand_type = ASM_OPERAND_JUMP_TARGET_LABEL;
@@ -1070,7 +1079,8 @@ codegen_statement_one(Arena *arena,
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
-		assert((**dst).args[0].word_type == ASM_WORD_64BIT);
+		/* IR_OP_LOAD should operate on a 64-bit pointer */
+		(**dst).args[1].word_type = ASM_WORD_64BIT;
 		dst = &(**dst).next;
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
@@ -1126,6 +1136,8 @@ codegen_statement_one(Arena *arena,
 			                            &(**dst).args[0]);
 			codegen_map_operand(&src->args[3], &(**dst).args[1]);
 		}
+		/* ASM_OP_LEA should produce a 64-bit pointer */
+		(**dst).args[1].word_type = ASM_WORD_64BIT;
 		break;
 	case IR_OP_JUMP:
 		(**dst).opcode = ASM_OP_JMP;

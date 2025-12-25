@@ -1184,6 +1184,7 @@ ir_ptr_math(Arena *arena,
 	ptr_plus->args[2].num = scale;
 
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &ptr_plus->args[3]));
+	ctype_array_decay_to_pointer(&ptr_plus->args[3].c89type);
 
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&ptr_plus->args[3], return_value);
@@ -1829,6 +1830,10 @@ ir_debug_print_one(const struct ir_op *op)
 		char tmp[128] = {0};
 		debug("    TYPE %s",
 		      ctype_to_str(&op->args[i].c89type, tmp, sizeof(tmp)));
+
+		if (ctype_is_array(&op->args[i].c89type)) {
+			debug("    OFFSET %lld", op->args[i].offset);
+		}
 	}
 }
 
