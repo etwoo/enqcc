@@ -42,6 +42,10 @@ constant_set_zero(Arena *arena,
                   const struct ctype *c89type,
                   struct constant_initializer *ci)
 {
+	// TODO: make ci->count match array size, if c89type is array
+	// ... alignment calculation in emit_asm_var() relies on this info
+	// affects complex_operands.c; maybe test_alignment.c as well!
+
 	ci->count = 1;
 
 	ci->elements = arena_alloc(arena, sizeof(*ci->elements));
