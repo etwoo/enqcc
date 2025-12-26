@@ -1062,7 +1062,16 @@ ir_unary_op(Arena *arena,
 
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
-	check(ir_expr_get_addr(arena, ast_inner, ir, &inner, &inner_return));
+	if (unary->opcode == IR_OP_GET_ADDRESS &&
+	    ctype_is_array(&ast_inner->expr_type)) {
+		check(ir_expr(arena, ast_inner, ir, &inner, &inner_return));
+	} else {
+		check(ir_expr_get_addr(arena,
+		                       ast_inner,
+		                       ir,
+		                       &inner,
+		                       &inner_return));
+	}
 	assert(inner_return.subtype != IR_VAL_NONE);
 
 	ir_val_copy(&inner_return, &unary->args[0]);
