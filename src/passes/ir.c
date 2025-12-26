@@ -1041,8 +1041,10 @@ ir_unary_op(Arena *arena,
 			} else {
 				assert(0); /* mistake in truth table above */
 			}
-		} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) ==
-		           ctype_to_size_bytes(&a->u.cast.to_type)) {
+		} else if ((ctype_to_size_bytes(&a->u.cast.expr->expr_type) ==
+		            ctype_to_size_bytes(&a->u.cast.to_type)) ||
+		           (ctype_is_pointer(&a->u.cast.expr->expr_type) &&
+		            ctype_is_pointer(&a->u.cast.to_type))) {
 			unary->opcode = IR_OP_COPY;
 		} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) >
 		           ctype_to_size_bytes(&a->u.cast.to_type)) {
