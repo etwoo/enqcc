@@ -392,11 +392,11 @@ ir_decl_init(Arena *arena,
 	if (a->u.declare.init->u.init.single != NULL) {
 		struct ir_op *inner = NULL;
 		struct ir_val inner_return = {0};
-		check(ir_expr(arena,
-		              a->u.declare.init,
-		              ir,
-		              &inner,
-		              &inner_return));
+		check(ir_expr_get_addr(arena,
+		                       a->u.declare.init,
+		                       ir,
+		                       &inner,
+		                       &inner_return));
 
 		struct ir_op *assigner = NULL;
 		check(ir_alloc_op(arena, &assigner));
