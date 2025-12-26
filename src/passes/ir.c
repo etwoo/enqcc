@@ -1316,12 +1316,20 @@ ir_binary_op(Arena *arena,
 
 	struct ir_op *left = NULL;
 	struct ir_val left_return = {0};
-	check(ir_expr(arena, a->u.op_binary.lhs, ir, &left, &left_return));
+	check(ir_expr_get_addr(arena,
+	                       a->u.op_binary.lhs,
+	                       ir,
+	                       &left,
+	                       &left_return));
 	assert(left_return.subtype != IR_VAL_NONE);
 
 	struct ir_op *right = NULL;
 	struct ir_val right_return = {0};
-	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
+	check(ir_expr_get_addr(arena,
+	                       a->u.op_binary.rhs,
+	                       ir,
+	                       &right,
+	                       &right_return));
 	assert(right_return.subtype != IR_VAL_NONE);
 
 	ir_val_copy(&left_return, &binary->args[0]);
