@@ -809,12 +809,11 @@ ir_assignment(Arena *arena,
 		assigner->opcode = IR_OP_STORE;
 
 		/* compute referent of LHS lvalue */
-		check(ir_expr(arena,
-		              lvalue_indirect,
-		              ir,
-		              &lvalue_addr_for_store, /* may remain NULL */
-		              &lvalue_addr_for_store_return));
-
+		check(ir_expr_get_addr(arena,
+		                       lvalue_indirect,
+		                       ir,
+		                       &lvalue_addr_for_store,
+		                       &lvalue_addr_for_store_return));
 		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
 
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
