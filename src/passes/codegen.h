@@ -63,17 +63,17 @@ struct asm_operand {
 		struct {
 			long long int offset;
 			enum asm_register reg;
-		} mem;                       /* MEMORY */
+		} mem;
 		struct {
 			int128_t num;
 			long long int offset;
 			long long int total_bytes;
-		} pseudo_mem;                /* PSEUDO_MEMORY */
+		} pseudo_mem;
 		struct {
 			enum asm_register base;
 			enum asm_register index;
 			long long int scale;
-		} idx;                       /* INDEXED */
+		} idx;
 		struct string_view function; /* CALL_TARGET_FUNCTION */
 		struct string_view variable; /* VARIABLE_DATA */
 		double dnum;                 /* CONSTANT_DATA_DOUBLE */

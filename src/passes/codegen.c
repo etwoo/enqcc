@@ -21,6 +21,7 @@ static const long long int CODEGEN_FP_REGISTER_ARGS = ARRAY_SIZE(CALL_FP);
 static const long long int CODEGEN_BYTES_PER_VALUE = 4;
 static const long long int CODEGEN_BYTES_PER_PUSH = 8;
 static const long long int CODEGEN_BYTES_ARG_FIRST = 16;
+static const long long int CODEGEN_BYTES_STACK_ALIGN_TOP_OR_ARR = 16;
 static const long unsigned UINT_TO_DOUBLE_MAGIC_L1 = 0x43300000;
 static const long unsigned UINT_TO_DOUBLE_MAGIC_L2 = 0x45300000;
 static const long long unsigned UINT_TO_DOUBLE_MAGIC_Q1 = 0x4330000000000000;
@@ -1376,6 +1377,9 @@ codegen_replace_pseudo_fn(struct asm_function *cg,
 			} else if (arg->operand_type ==
 			           ASM_OPERAND_PSEUDO_MEMORY) {
 				cursor += arg->u.pseudo_mem.total_bytes;
+				cursor = round_up_to_multiple_of(
+					cursor,
+					CODEGEN_BYTES_STACK_ALIGN_TOP_OR_ARR);
 				offsets[idx] = cursor;
 			} else {
 				switch (arg->word_type) {
@@ -1444,7 +1448,9 @@ codegen_fixup_alloc_stack(Arena *arena, struct asm_function *cg)
 	}
 
 	struct asm_op *alloc_stack = NULL;
-	const long long int fix = round_up_to_multiple_of(cg->stack_usage, 16);
+	const long long int fix =
+		round_up_to_multiple_of(cg->stack_usage,
+	                                CODEGEN_BYTES_STACK_ALIGN_TOP_OR_ARR);
 	check(codegen_alloc_subq_rsp(arena, &alloc_stack, fix));
 	codegen_op_list_prepend(alloc_stack, &cg->ops);
 	return RESULT_OK;
