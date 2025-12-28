@@ -37,23 +37,41 @@ get_double_as_quadword(double value)
 	return as_quadword;
 }
 
+static WARN_UNUSED long long unsigned
+get_initializer_element_count(const struct ctype *c)
+{
+	if (ctype_is_array(c)) {
+		return c->sz * get_initializer_element_count(c->referent);
+	}
+	return 1;
+}
+
+static WARN_UNUSED long long unsigned
+get_initializer_element_size_bytes(const struct ctype *c)
+{
+	if (ctype_is_array(c)) {
+		return get_initializer_element_size_bytes(c->referent);
+	}
+	return ctype_to_size_bytes(c);
+}
+
 result_t
 constant_set_zero(Arena *arena,
                   const struct ctype *c89type,
                   struct constant_initializer *ci)
 {
-	// TODO: make ci->count match array size, if c89type is array
-	// ... alignment calculation in emit_asm_var() relies on this info
-	// affects complex_operands.c; maybe test_alignment.c as well!
+	ci->count = get_initializer_element_count(c89type);
+	ci->elements = arena_alloc(arena, ci->count * sizeof(*ci->elements));
+	check_if(ci->elements == NULL, ERR_SEMA_ALLOC);
+	memset(ci->elements, 0, ci->count * sizeof(*ci->elements));
 
-	ci->count = 1;
+	const long long unsigned element_size_bytes =
+		get_initializer_element_size_bytes(c89type);
 
-	ci->elements = arena_alloc(arena, sizeof(*ci->elements));
-	check_if(ci->elements == NULL, ERR_SYMBOL_ALLOC);
-	memset(ci->elements, 0, sizeof(*ci->elements));
-
-	ci->elements[0].byte_count = ctype_to_size_bytes(c89type);
-	ci->elements[0].byte_value = 0;
+	for (long long unsigned i = 0; i < ci->count; ++i) {
+		ci->elements[i].byte_count = element_size_bytes;
+		ci->elements[i].byte_value = 0;
+	}
 	return RESULT_OK;
 }
 
