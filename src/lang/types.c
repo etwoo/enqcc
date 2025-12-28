@@ -52,11 +52,11 @@ ctype_to_str(const struct ctype *c, char *stor, size_t cap)
 		stor[copied++] = ' ';
 		if (c->t == CTYPE_ARRAY_OF) {
 			size_t remaining = cap - copied;
-			size_t required = snprintf(stor + copied,
-			                           remaining,
-			                           "%llu ",
-			                           c->sz);
-			if (required + 1 > remaining || required < 0) {
+			int required = snprintf(stor + copied,
+			                        remaining,
+			                        "%llu ",
+			                        c->sz);
+			if (required < 0 || (size_t)required + 1 > remaining) {
 				/* snprintf() indicates insuffient space */
 				return stor;
 			}
