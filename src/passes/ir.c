@@ -200,64 +200,6 @@ static result_t ir_expr(Arena *arena,
                         struct ir_val *return_value) WARN_UNUSED;
 
 static WARN_UNUSED result_t
-ir_expr_get_addr(Arena *arena,
-                 const struct ast *a,
-                 struct intermediate *ir,
-                 struct ir_op **dst,
-                 struct ir_val *return_value)
-{
-	assert(dst != NULL);
-
-	check(ir_expr(arena, a, ir, dst, return_value));
-	assert(return_value->subtype != IR_VAL_NONE);
-
-	if (!ctype_is_array(&return_value->c89type)) {
-		return RESULT_OK;
-	}
-
-	struct ir_op *prev = NULL;
-	struct ir_op *dst_last = *dst;
-	while (dst_last != NULL && dst_last->next != NULL) {
-		prev = dst_last;
-		dst_last = dst_last->next;
-	}
-
-	if (prev != NULL && dst_last->opcode == IR_OP_LOAD) {
-		assert(prev->next == dst_last);
-		assert(dst_last->next == NULL);
-		/*
-		 * IR_OP_LOAD + IR_OP_GET_ADDRESS == noop
-		 */
-		prev->next = NULL;
-		/*
-		 * Redirect <return_value> to dst ir_val of remaining <prev>.
-		 */
-		for (size_t i = 0; i < ARRAY_SIZE(prev->args); ++i) {
-			if (prev->args[i].subtype != IR_VAL_NONE) {
-				ir_val_copy(&prev->args[i], return_value);
-			}
-		}
-		return RESULT_OK;
-	}
-
-	struct ir_op *get_addr = NULL;
-	check(ir_alloc_op(arena, &get_addr));
-	get_addr->opcode = IR_OP_GET_ADDRESS;
-
-	ir_val_copy(return_value, &get_addr->args[0]);
-	check(ir_val_tmpvar_gen(arena,
-	                        ir,
-	                        &return_value->c89type,
-	                        &get_addr->args[1]));
-
-	ctype_array_decay_to_pointer(&get_addr->args[1].c89type);
-	ir_val_copy(&get_addr->args[1], return_value);
-
-	*dst = ir_op_list_concat(*dst, get_addr);
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 ir_ret_op(Arena *arena,
           const struct ast *a,
           struct intermediate *ir,
@@ -267,11 +209,7 @@ ir_ret_op(Arena *arena,
 
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
-	check(ir_expr_get_addr(arena,
-	                       a->u.op_unary.operand,
-	                       ir,
-	                       &inner,
-	                       &inner_return));
+	check(ir_expr(arena, a->u.op_unary.operand, ir, &inner, &inner_return));
 	assert(inner_return.subtype != IR_VAL_NONE);
 
 	struct ir_op *returner = NULL;
@@ -392,11 +330,11 @@ ir_decl_init(Arena *arena,
 	if (a->u.declare.init->u.init.single != NULL) {
 		struct ir_op *inner = NULL;
 		struct ir_val inner_return = {0};
-		check(ir_expr_get_addr(arena,
-		                       a->u.declare.init,
-		                       ir,
-		                       &inner,
-		                       &inner_return));
+		check(ir_expr(arena,
+		              a->u.declare.init,
+		              ir,
+		              &inner,
+		              &inner_return));
 
 		struct ir_op *assigner = NULL;
 		check(ir_alloc_op(arena, &assigner));
@@ -809,11 +747,11 @@ ir_assignment(Arena *arena,
 		assigner->opcode = IR_OP_STORE;
 
 		/* compute referent of LHS lvalue */
-		check(ir_expr_get_addr(arena,
-		                       lvalue_indirect,
-		                       ir,
-		                       &lvalue_addr_for_store,
-		                       &lvalue_addr_for_store_return));
+		check(ir_expr(arena,
+		              lvalue_indirect,
+		              ir,
+		              &lvalue_addr_for_store,
+		              &lvalue_addr_for_store_return));
 		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
 
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
@@ -1089,17 +1027,16 @@ ir_unary_op(Arena *arena,
 
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
+	check(ir_expr(arena, ast_inner, ir, &inner, &inner_return));
+	assert(inner_return.subtype != IR_VAL_NONE);
+
 	if (unary->opcode == IR_OP_GET_ADDRESS &&
 	    ctype_is_array(&ast_inner->expr_type)) {
-		check(ir_expr(arena, ast_inner, ir, &inner, &inner_return));
-	} else {
-		check(ir_expr_get_addr(arena,
-		                       ast_inner,
-		                       ir,
-		                       &inner,
-		                       &inner_return));
+		/* implicit get-addr for array -> skip explicit get-addr */
+		*dst = inner;
+		ir_val_copy(&inner_return, return_value);
+		return RESULT_OK;
 	}
-	assert(inner_return.subtype != IR_VAL_NONE);
 
 	ir_val_copy(&inner_return, &unary->args[0]);
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &unary->args[1]));
@@ -1131,19 +1068,13 @@ ir_ptr_ptr_math(Arena *arena,
 
 	struct ir_op *left = NULL;
 	struct ir_val left_return = {0};
-	check(ir_expr_get_addr(arena,
-	                       a->u.op_binary.lhs,
-	                       ir,
-	                       &left,
-	                       &left_return));
+	check(ir_expr(arena, a->u.op_binary.lhs, ir, &left, &left_return));
+	assert(left_return.subtype != IR_VAL_NONE);
 
 	struct ir_op *right = NULL;
 	struct ir_val right_return = {0};
-	check(ir_expr_get_addr(arena,
-	                       a->u.op_binary.rhs,
-	                       ir,
-	                       &right,
-	                       &right_return));
+	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
+	assert(right_return.subtype != IR_VAL_NONE);
 
 	struct ir_op *binary = NULL;
 	check(ir_alloc_op(arena, &binary));
@@ -1206,19 +1137,13 @@ ir_ptr_math(Arena *arena,
 
 	struct ir_op *left = NULL;
 	struct ir_val left_return = {0};
-	check(ir_expr_get_addr(arena,
-	                       a->u.op_binary.lhs,
-	                       ir,
-	                       &left,
-	                       &left_return));
+	check(ir_expr(arena, a->u.op_binary.lhs, ir, &left, &left_return));
+	assert(left_return.subtype != IR_VAL_NONE);
 
 	struct ir_op *right = NULL;
 	struct ir_val right_return = {0};
-	check(ir_expr_get_addr(arena,
-	                       a->u.op_binary.rhs,
-	                       ir,
-	                       &right,
-	                       &right_return));
+	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
+	assert(right_return.subtype != IR_VAL_NONE);
 
 	if (negate_rhs) {
 		assert(!swap_lhs_rhs);
@@ -1342,20 +1267,12 @@ ir_binary_op(Arena *arena,
 
 	struct ir_op *left = NULL;
 	struct ir_val left_return = {0};
-	check(ir_expr_get_addr(arena,
-	                       a->u.op_binary.lhs,
-	                       ir,
-	                       &left,
-	                       &left_return));
+	check(ir_expr(arena, a->u.op_binary.lhs, ir, &left, &left_return));
 	assert(left_return.subtype != IR_VAL_NONE);
 
 	struct ir_op *right = NULL;
 	struct ir_val right_return = {0};
-	check(ir_expr_get_addr(arena,
-	                       a->u.op_binary.rhs,
-	                       ir,
-	                       &right,
-	                       &right_return));
+	check(ir_expr(arena, a->u.op_binary.rhs, ir, &right, &right_return));
 	assert(right_return.subtype != IR_VAL_NONE);
 
 	ir_val_copy(&left_return, &binary->args[0]);
@@ -1488,7 +1405,7 @@ ir_call_args(Arena *arena,
 {
 	for (; args != NULL; args = args->cdr) {
 		struct ir_val arg_value = {0};
-		check(ir_expr_get_addr(arena, args->car, ir, dst, &arg_value));
+		check(ir_expr(arena, args->car, ir, dst, &arg_value));
 		assert(arg_value.subtype != IR_VAL_NONE);
 
 		assert(*pos < FUNCTION_PARAMETER_LIMIT);
@@ -1530,6 +1447,58 @@ ir_call(Arena *arena,
 	ir_val_copy(&caller->args[pos], return_value);
 
 	*dst = ir_op_list_concat(inner, caller);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_expr_get_addr_implicit(Arena *arena,
+                          struct intermediate *ir,
+                          struct ir_op **dst,
+                          struct ir_val *return_value)
+{
+	if (!ctype_is_array(&return_value->c89type)) {
+		return RESULT_OK;
+	}
+
+	struct ir_op *prev = NULL;
+	struct ir_op *dst_last = *dst;
+	while (dst_last != NULL && dst_last->next != NULL) {
+		prev = dst_last;
+		dst_last = dst_last->next;
+	}
+
+	if (prev != NULL && dst_last->opcode == IR_OP_LOAD) {
+		assert(prev->next == dst_last);
+		assert(dst_last->next == NULL);
+		/*
+		 * IR_OP_LOAD + IR_OP_GET_ADDRESS == noop
+		 */
+		prev->next = NULL;
+		/*
+		 * Redirect <return_value> to dst ir_val of remaining <prev>.
+		 */
+		for (size_t i = 0; i < ARRAY_SIZE(prev->args); ++i) {
+			if (prev->args[i].subtype != IR_VAL_NONE) {
+				ir_val_copy(&prev->args[i], return_value);
+			}
+		}
+		return RESULT_OK;
+	}
+
+	struct ir_op *get_addr = NULL;
+	check(ir_alloc_op(arena, &get_addr));
+	get_addr->opcode = IR_OP_GET_ADDRESS;
+
+	ir_val_copy(return_value, &get_addr->args[0]);
+	check(ir_val_tmpvar_gen(arena,
+	                        ir,
+	                        &return_value->c89type,
+	                        &get_addr->args[1]));
+
+	ctype_array_decay_to_pointer(&get_addr->args[1].c89type);
+	ir_val_copy(&get_addr->args[1], return_value);
+
+	*dst = ir_op_list_concat(*dst, get_addr);
 	return RESULT_OK;
 }
 
@@ -1693,6 +1662,8 @@ ir_expr(Arena *arena,
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
 		                   (int)a->node_type);
 	}
+
+	check(ir_expr_get_addr_implicit(arena, ir, dst, return_value));
 	return RESULT_OK;
 }
 
