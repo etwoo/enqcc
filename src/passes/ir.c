@@ -750,7 +750,7 @@ ir_assignment(Arena *arena,
 		check(ir_expr(arena,
 		              lvalue_indirect,
 		              ir,
-		              &lvalue_addr_for_store,
+		              &lvalue_addr_for_store, /* may remain NULL */
 		              &lvalue_addr_for_store_return));
 		ir_val_copy(&lvalue_addr_for_store_return, &assigner->args[1]);
 
