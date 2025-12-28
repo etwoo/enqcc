@@ -896,17 +896,29 @@ ir_incr_decr(Arena *arena,
 			&load_working_copy_return));
 	}
 
+	int pointer_index = 0;
+
 	struct ir_op *incr = NULL;
 	check(ir_alloc_op(arena, &incr));
 
 	switch (a->node_type) {
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
-		incr->opcode = IR_OP_UNARY_DECREMENT;
+		if (!ctype_is_pointer(&a->expr_type)) {
+			incr->opcode = IR_OP_UNARY_DECREMENT;
+		} else {
+			incr->opcode = IR_OP_POINTER_ADD;
+			pointer_index = -1;
+		}
 		break;
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		incr->opcode = IR_OP_UNARY_INCREMENT;
+		if (!ctype_is_pointer(&a->expr_type)) {
+			incr->opcode = IR_OP_UNARY_INCREMENT;
+		} else {
+			incr->opcode = IR_OP_POINTER_ADD;
+			pointer_index = 1;
+		}
 		break;
 	default:
 		assert(0); /* logic error in caller */
@@ -929,7 +941,17 @@ ir_incr_decr(Arena *arena,
 		assert(0 && "no lvalue found for ir_incr_decr()");
 	}
 
-	ir_val_copy(&incr->args[0], &incr->args[1]);
+	if (!ctype_is_pointer(&a->expr_type)) {
+		ir_val_copy(&incr->args[0], &incr->args[1]);
+	} else {
+		incr->args[1].subtype = IR_VAL_CONSTANT;
+		incr->args[1].num = pointer_index;
+		incr->args[1].c89type.t = CTYPE_LONG; /* LIKE_PTRDIFF_T */
+		incr->args[2].subtype = IR_VAL_CONSTANT;
+		incr->args[2].num = ctype_to_size_bytes(a->expr_type.referent);
+		incr->args[2].c89type.t = CTYPE_LONG; /* LIKE_PTRDIFF_T */
+		ir_val_copy(&incr->args[0], &incr->args[3]);
+	}
 
 	struct ir_op *stash_value_before_changes = NULL;
 	switch (a->node_type) {
@@ -954,7 +976,11 @@ ir_incr_decr(Arena *arena,
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 		assert(return_value->subtype == IR_VAL_NONE);
-		ir_val_copy(&incr->args[1], return_value);
+		if (!ctype_is_pointer(&a->expr_type)) {
+			ir_val_copy(&incr->args[1], return_value);
+		} else {
+			ir_val_copy(&incr->args[3], return_value);
+		}
 		break;
 	default:
 		assert(0); /* logic error in caller */
