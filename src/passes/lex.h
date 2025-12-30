@@ -6,6 +6,7 @@
 #define FOREACH_LEX_KEYWORD(F)                                                 \
 	F("return", TOKEN_KEYWORD_RETURN)                                      \
 	F("void", TOKEN_KEYWORD_VOID)                                          \
+	F("char", TOKEN_KEYWORD_CHAR)                                          \
 	F("int", TOKEN_KEYWORD_INT)                                            \
 	F("long", TOKEN_KEYWORD_LONG)                                          \
 	F("signed", TOKEN_KEYWORD_SIGNED)                                      \
@@ -81,6 +82,8 @@
 enum lex_tokentype {
 	TOKEN_IDENTIFIER,
 	TOKEN_CONSTANT,
+	TOKEN_CONSTANT_CHAR,
+	TOKEN_CONSTANT_STR,
 	TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN,
 	TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN,
 	FOREACH_LEX_ENUM_VALUE(TO_ENUM_ENTRY)

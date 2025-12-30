@@ -130,7 +130,7 @@ issign(char c)
 }
 
 static WARN_UNUSED result_t
-lex_one_constant(struct string_view *pos, struct token **tok)
+lex_one_constant_numeric(struct string_view *pos, struct token **tok)
 {
 	struct token *cur = *tok;
 	size_t allow_sign_for = 0;
@@ -227,6 +227,142 @@ lex_one_constant(struct string_view *pos, struct token **tok)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+is_quote_single(char c)
+{
+	return c == '\'';
+}
+
+static WARN_UNUSED bool
+is_quote_double(char c)
+{
+	return c == '"';
+}
+
+static WARN_UNUSED bool
+is_backslash(char c)
+{
+	return c == '\\';
+}
+
+static WARN_UNUSED bool
+is_valid_escape_char(char c)
+{
+	bool b = false;
+	switch (c) {
+	case '\'':
+	case '"':
+	case '?':
+	case '\\':
+	case 'a':
+	case 'b':
+	case 'f':
+	case 'n':
+	case 'r':
+	case 't':
+	case 'v':
+		b = true;
+		break;
+	default:
+		break;
+	}
+	return b;
+}
+
+static WARN_UNUSED result_t
+lex_one_constant_strlike(struct string_view *pos,
+                         struct token **tok,
+                         enum lex_tokentype token_type)
+{
+	struct token *cur = *tok;
+	cur->token_type = token_type;
+
+	assert(pos->sz > 0);
+	switch (token_type) {
+	case TOKEN_CONSTANT_CHAR:
+		assert(is_quote_single(pos->data[0]));
+		break;
+	case TOKEN_CONSTANT_STR:
+		assert(is_quote_double(pos->data[0]));
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	pos->data++;
+	pos->sz--;
+
+	cur->val.data = pos->data;
+	cur->val.sz = 0;
+
+	bool done = false;
+	while (!done) {
+		if (pos->sz == 0) {
+			return make_result(ERR_LEX_CHAR_EXPECT_MORE);
+		}
+
+		switch (token_type) {
+		case TOKEN_CONSTANT_CHAR:
+			if (is_quote_single(pos->data[0])) {
+				done = true;
+				continue;
+			}
+			break;
+		case TOKEN_CONSTANT_STR:
+			if (is_quote_double(pos->data[0])) {
+				done = true;
+				continue;
+			}
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+
+		const bool escaped = is_backslash(pos->data[0]);
+		if (escaped) {
+			if (pos->sz == 0) {
+				return make_result(ERR_LEX_CHAR_EXPECT_MORE);
+			}
+			pos->data++;
+			pos->sz--;
+			cur->val.sz++;
+			if (!is_valid_escape_char(pos->data[0])) {
+				return make_result(ERR_LEX_CHAR_ESCAPE_INVALID,
+				                   cur->val.data,
+				                   cur->val.sz + 1);
+			}
+		}
+
+		pos->data++;
+		pos->sz--;
+		cur->val.sz++;
+	}
+
+	if (token_type == TOKEN_CONSTANT_CHAR) {
+		switch (cur->val.sz) {
+		case 0:
+			return make_result(ERR_LEX_CHAR_INVALID_EMPTY);
+		case 1:
+			assert(!is_backslash(cur->val.data[0]));
+			break;
+		case 2:
+			if (is_backslash(cur->val.data[0])) {
+				/* 2-char valid if actually escaped 1-char */
+			} else {
+				return make_result(
+					ERR_LEX_CHAR_INVALID_MULTICHAR);
+			}
+			break;
+		default:
+			return make_result(ERR_LEX_CHAR_INVALID_MULTICHAR);
+		}
+	}
+
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 {
@@ -249,8 +385,12 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 		const size_t ahead = lex_readahead_one_or_two_chars(pos, cur);
 		pos->data += ahead;
 		pos->sz -= ahead;
+	} else if (is_quote_single(c)) {
+		check(lex_one_constant_strlike(pos, &cur, TOKEN_CONSTANT_CHAR));
+	} else if (is_quote_double(c)) {
+		check(lex_one_constant_strlike(pos, &cur, TOKEN_CONSTANT_STR));
 	} else if (isdigit(c) || isdot(c)) {
-		check(lex_one_constant(pos, &cur));
+		check(lex_one_constant_numeric(pos, &cur));
 		check(lex_peek_ok(pos, &cur->val));
 	} else if (isalpha(c) || c == '_') {
 		cur->val.data = pos->data;
@@ -319,6 +459,12 @@ lex_debug_one(const struct token *tok)
 		break;
 	case TOKEN_CONSTANT:
 		debug("CONSTANT %.*s", (int)tok->val.sz, tok->val.data);
+		break;
+	case TOKEN_CONSTANT_CHAR:
+		debug("CONSTANT_CHAR %.*s", (int)tok->val.sz, tok->val.data);
+		break;
+	case TOKEN_CONSTANT_STR:
+		debug("CONSTANT_STR %.*s", (int)tok->val.sz, tok->val.data);
 		break;
 	case TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN:
 		debug("TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN");

@@ -144,6 +144,20 @@ result_to_str(result_t r)
 	case ERR_LEX_ALLOC:
 		s = strdup("Cannot allocate token during lex");
 		break;
+	case ERR_LEX_CHAR_ESCAPE_INVALID:
+		s = my_asprintf(
+			"Lexing encountered invalid escape sequence: %s",
+			r.msg);
+		break;
+	case ERR_LEX_CHAR_EXPECT_MORE:
+		s = strdup("Lexing encountered early EOF");
+		break;
+	case ERR_LEX_CHAR_INVALID_EMPTY:
+		s = strdup("Lexing encountered empty char constant");
+		break;
+	case ERR_LEX_CHAR_INVALID_MULTICHAR:
+		s = strdup("Lexing encountered multi-character char constant");
+		break;
 	case ERR_LEX_FLOAT_EXPONENT_NO_DIGITS:
 		s = my_asprintf("Floating point exponent has no digits: %s",
 		                r.msg);
