@@ -22,6 +22,7 @@ struct symbol;
 struct symbol_table {
 	struct symbol *functions;
 	struct symbol *variables;
+	struct symbol *string_literals;
 };
 
 result_t sema_typecheck(Arena *arena,

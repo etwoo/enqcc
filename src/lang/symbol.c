@@ -91,7 +91,8 @@ constant_is_zero(const struct constant_initializer *ci)
 {
 	assert(ci->count > 0);
 	for (long long unsigned i = 0; i < ci->count; ++i) {
-		if (ci->elements[i].byte_value != 0) {
+		if (ci->elements[i].byte_value != 0 ||
+		    ci->elements[i].unique != 0) {
 			return false;
 		}
 	}
@@ -120,6 +121,12 @@ constant_debug_print(const struct constant_initializer *ci, size_t indent)
 		      (int)indent,
 		      "",
 		      ci->elements[i].byte_value);
+		if (ci->elements[i].unique > 0) {
+			debug("%*sREFERENCE TO STRING: str.%lld",
+			      (int)indent,
+			      "",
+			      ci->elements[i].unique);
+		}
 	}
 }
 

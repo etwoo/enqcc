@@ -136,8 +136,15 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_alloc(arena, dst, prefix_ops[got_match].node_type));
 		token_consume(tok);
 		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_CONSTANT)) {
+	} else if (can_parse_constant(*tok)) {
 		check(parse_constant(arena, tok, dst));
+	} else if (is_token_type(*tok, TOKEN_CONSTANT_STR)) {
+		check(parse_alloc(arena, dst, NODE_CONSTANT_STR));
+		(**dst).u.str = (**tok).val;
+		check(ctype_alloc_str_literal(arena,
+		                              &(**tok).val,
+		                              &(**dst).expr_type));
+		token_consume(tok);
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_symbol(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
@@ -329,6 +336,7 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_EXPRESSION_CAST:
 	case NODE_CONSTANT:
+	case NODE_CONSTANT_STR:
 		assert(0); /* logic error in caller */
 		break;
 	}

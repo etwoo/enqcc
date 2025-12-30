@@ -122,6 +122,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_CASE_DEFAULT:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT:
+	case NODE_CONSTANT_STR:
 		break; /* no resolution work to do */
 	case NODE_EXPRESSION_INITIALIZER:
 		check(resolve_expr(arena, a->u.init.single, sym));

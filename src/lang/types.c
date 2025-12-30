@@ -18,6 +18,20 @@ ctype_alloc(Arena *arena, struct ctype **dst)
 }
 
 result_t
+ctype_alloc_str_literal(Arena *arena,
+                        const struct string_view *src,
+                        struct ctype *dst)
+{
+	assert(dst != NULL);
+	dst->t = CTYPE_ARRAY_OF;
+	dst->sz = src->sz;
+	assert(dst->referent == NULL);
+	check(ctype_alloc(arena, &dst->referent));
+	dst->referent->t = CTYPE_CHAR;
+	return RESULT_OK;
+}
+
+result_t
 ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 {
 	assert(src != NULL);
@@ -75,6 +89,11 @@ ctype_to_size_bytes(const struct ctype *c)
 {
 	long long int b = 0;
 	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		b = 1;
+		break;
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 		b = 4;
@@ -98,6 +117,9 @@ ctype_is_integer(const struct ctype *c)
 {
 	bool b = true;
 	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 	case CTYPE_LONG:
@@ -118,11 +140,14 @@ ctype_is_signed(const struct ctype *c)
 {
 	bool b = true;
 	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
 	case CTYPE_INT:
 	case CTYPE_LONG:
 	case CTYPE_DOUBLE:
 		b = true;
 		break;
+	case CTYPE_UNSIGNED_CHAR:
 	case CTYPE_UNSIGNED_INT:
 	case CTYPE_UNSIGNED_LONG:
 	case CTYPE_POINTER_TO:
@@ -140,6 +165,20 @@ ctype_is_floating_point(const struct ctype *c)
 }
 
 bool
+ctype_is_charlike(const struct ctype *c)
+{
+	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
+bool
 ctype_is_pointer(const struct ctype *c)
 {
 	return c->t == CTYPE_POINTER_TO || ctype_is_array(c);
@@ -149,6 +188,20 @@ bool
 ctype_is_array(const struct ctype *c)
 {
 	return c->t == CTYPE_ARRAY_OF;
+}
+
+bool
+ctype_is_strlike_array(const struct ctype *c)
+{
+	/* consider array of any character type as str-like */
+	return c->t == CTYPE_ARRAY_OF && ctype_is_charlike(c->referent);
+}
+
+bool
+ctype_is_strlike_ptr(const struct ctype *c)
+{
+	/* consider pointer to char as str-like; exclude {,un}signed char */
+	return c->t == CTYPE_POINTER_TO && c->referent->t == CTYPE_CHAR;
 }
 
 bool

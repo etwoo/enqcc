@@ -24,6 +24,7 @@ is_token_variable_type(const struct token *tok)
 		return false;
 	}
 	switch (tok->token_type) {
+	case TOKEN_KEYWORD_CHAR:
 	case TOKEN_KEYWORD_INT:
 	case TOKEN_KEYWORD_LONG:
 	case TOKEN_KEYWORD_SIGNED:
