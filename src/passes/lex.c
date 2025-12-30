@@ -240,6 +240,12 @@ is_quote_double(char c)
 }
 
 static WARN_UNUSED bool
+is_newline(char c)
+{
+	return c == '\n';
+}
+
+static WARN_UNUSED bool
 is_backslash(char c)
 {
 	return c == '\\';
@@ -318,6 +324,10 @@ lex_one_constant_strlike(struct string_view *pos,
 		default:
 			assert(0); /* logic error in caller */
 			break;
+		}
+
+		if (is_newline(pos->data[0])) {
+			return make_result(ERR_LEX_CHAR_INVALID_NEWLINE);
 		}
 
 		const bool escaped = is_backslash(pos->data[0]);

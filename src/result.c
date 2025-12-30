@@ -158,6 +158,10 @@ result_to_str(result_t r)
 	case ERR_LEX_CHAR_INVALID_MULTICHAR:
 		s = strdup("Lexing encountered multi-character char constant");
 		break;
+	case ERR_LEX_CHAR_INVALID_NEWLINE:
+		s = strdup("Lexing encountered unescaped newline in char "
+		           "constant or string literal");
+		break;
 	case ERR_LEX_FLOAT_EXPONENT_NO_DIGITS:
 		s = my_asprintf("Floating point exponent has no digits: %s",
 		                r.msg);
