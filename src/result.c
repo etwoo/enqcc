@@ -144,6 +144,24 @@ result_to_str(result_t r)
 	case ERR_LEX_ALLOC:
 		s = strdup("Cannot allocate token during lex");
 		break;
+	case ERR_LEX_CHAR_ESCAPE_INVALID:
+		s = my_asprintf(
+			"Lexing encountered invalid escape sequence: %s",
+			r.msg);
+		break;
+	case ERR_LEX_CHAR_EXPECT_MORE:
+		s = strdup("Lexing encountered early EOF");
+		break;
+	case ERR_LEX_CHAR_INVALID_EMPTY:
+		s = strdup("Lexing encountered empty char constant");
+		break;
+	case ERR_LEX_CHAR_INVALID_MULTICHAR:
+		s = strdup("Lexing encountered multi-character char constant");
+		break;
+	case ERR_LEX_CHAR_INVALID_NEWLINE:
+		s = strdup("Lexing encountered unescaped newline in char "
+		           "constant or string literal");
+		break;
 	case ERR_LEX_FLOAT_EXPONENT_NO_DIGITS:
 		s = my_asprintf("Floating point exponent has no digits: %s",
 		                r.msg);
@@ -257,6 +275,9 @@ result_to_str(result_t r)
 		break;
 	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
 		s = strdup("Duplicate variable or function specifier");
+		break;
+	case ERR_PARSE_DECL_TYPE_CHAR_INVALID:
+		s = strdup("Type 'char' cannot be combined with int/long");
 		break;
 	case ERR_PARSE_DECL_TYPE_DOUBLE_INVALID:
 		s = strdup("Type 'double' cannot be combined with "
@@ -373,6 +394,10 @@ result_to_str(result_t r)
 		s = strdup("Scalar variable given compound initializer "
 		           "expression");
 		break;
+	case ERR_SEMA_INIT_STR_LITERAL_INVALID:
+		s = strdup("String literal can only serve as initializor for "
+		           "variable of type char buffer or char pointer");
+		break;
 	case ERR_SEMA_LABEL_DUPLICATE:
 		s = my_asprintf("Duplicate label: %s", r.msg);
 		break;
@@ -426,6 +451,9 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_OPERAND_ADDRESS_OF_INVALID:
 		s = strdup("Address-of operator & requires lvalue argument");
+		break;
+	case ERR_SEMA_OPERAND_CHAR_ARRAY_SIZE:
+		s = strdup("String initializer for char array is too long");
 		break;
 	case ERR_SEMA_OPERAND_DEREF_INVALID:
 		s = strdup("Pointer dereference operator * requires argument "

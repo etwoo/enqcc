@@ -37,6 +37,9 @@ parse_debug_print_ast_symbol(const char *description,
 	case SYMBOL_FUNCTION_DEFINITION:
 		symbol_type_as_str = "FUNCTION DEFINITION";
 		break;
+	case SYMBOL_STRING_LITERAL:
+		symbol_type_as_str = "STRING LITERAL";
+		break;
 	}
 	debug("%*sIDENTIFIER.TYPE: %s",
 	      (int)indent + 1,
@@ -259,7 +262,8 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.init.single != NULL) {
 			assert(a->u.init.multi == NULL);
 			parse_debug_print(a->u.init.single, indent + 1);
-		} else if (a->u.init.multi != NULL) {
+		}
+		if (a->u.init.multi != NULL) {
 			assert(a->u.init.single == NULL);
 			parse_debug_print_flat(a->u.init.multi, indent + 1);
 		}
@@ -347,6 +351,13 @@ parse_debug_print(const struct ast *a, size_t indent)
 			      "",
 			      (long long)a->u.num);
 		}
+		break;
+	case NODE_CONSTANT_STR:
+		debug("%*sSTR %.*s",
+		      (int)indent + 1,
+		      "",
+		      (int)a->u.str.sz,
+		      a->u.str.data);
 		break;
 	}
 }
