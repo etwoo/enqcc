@@ -52,8 +52,10 @@ struct asm_operand {
 		ASM_OPERAND_CONSTANT_DATA_DOUBLE,
 		ASM_OPERAND_CONSTANT_DATA_VEC_LONGS,
 		ASM_OPERAND_CONSTANT_DATA_VEC_QUADS,
+		ASM_OPERAND_CONSTANT_STRING,
 	} operand_type;
 	enum {
+		ASM_WORD_08BIT, /* BYTE  */
 		ASM_WORD_32BIT, /* DWORD */
 		ASM_WORD_64BIT, /* QWORD */
 	} word_type;
@@ -177,9 +179,16 @@ struct asm_variable {
 	struct asm_variable *next;
 };
 
+struct asm_str {
+	long long int string_unique;
+	struct constant_initializer *initializer;
+	struct asm_str *next;
+};
+
 struct assembly {
 	struct asm_function *functions;
 	struct asm_variable *variables;
+	struct asm_str *string_literals;
 };
 
 #endif

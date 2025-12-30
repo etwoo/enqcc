@@ -154,7 +154,9 @@ ir_assignment_lvalue(Arena *arena,
 		break;
 	}
 
-	if (some_linkage(direct->ltype)) {
+	if (direct->stype == SYMBOL_STRING_LITERAL) {
+		lvalue_direct->subtype = IR_VAL_STRING_LITERAL;
+	} else if (some_linkage(direct->ltype)) {
 		lvalue_direct->subtype = IR_VAL_VARIABLE_DATA;
 		lvalue_direct->varname = direct->name;
 	} else {
@@ -263,6 +265,7 @@ ir_block(Arena *arena,
 
 static WARN_UNUSED result_t
 ir_decl_init_multi(Arena *arena,
+                   const struct ctype *declaration_type,
                    const struct ast *a,
                    struct intermediate *ir,
                    const struct ir_val *lvalue_base,
@@ -293,16 +296,19 @@ ir_decl_init_multi(Arena *arena,
 		copier->args[1].offset = *pos;
 
 		*dst = ir_op_list_concat(element, copier);
-		*pos += ctype_to_size_bytes(&a->expr_type);
+		*pos += ctype_to_size_bytes(declaration_type);
 		return RESULT_OK;
 	}
 
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 	assert(a->u.init.multi != NULL);
+	assert(ctype_is_pointer(declaration_type));
+	assert(declaration_type->referent != NULL);
 
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
 		struct ir_op *tmp = NULL;
 		check(ir_decl_init_multi(arena,
+		                         declaration_type->referent,
 		                         f->car,
 		                         ir,
 		                         lvalue_base,
@@ -348,6 +354,7 @@ ir_decl_init(Arena *arena,
 
 	long long int pos = 0;
 	check(ir_decl_init_multi(arena,
+	                         &a->u.declare.var_type,
 	                         a->u.declare.init,
 	                         ir,
 	                         &lvalue_direct,
@@ -994,7 +1001,9 @@ ir_unary_op(Arena *arena,
 				ctype_is_floating_point(&a->u.cast.to_type);
 			const bool dst_signed =
 				ctype_is_signed(&a->u.cast.to_type);
-			if (src_fp && dst_signed) {
+			const bool dst_charlike =
+				ctype_is_charlike(&a->u.cast.to_type);
+			if (src_fp && (dst_signed || dst_charlike)) {
 				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_INT;
 			} else if (src_fp && !dst_signed) {
 				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_UINT;
@@ -1361,8 +1370,7 @@ ir_logical_op(Arena *arena,
 	foot_pos->opcode = IR_OP_COPY;
 	foot_pos->args[0].subtype = IR_VAL_CONSTANT;
 	foot_pos->args[0].num = jz ? 1 : 0;
-	foot_pos->args[1].subtype = return_value->subtype;
-	foot_pos->args[1].num = return_value->num;
+	ir_val_copy(return_value, &foot_pos->args[1]);
 
 	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
@@ -1384,8 +1392,7 @@ ir_logical_op(Arena *arena,
 	foot_pos->opcode = IR_OP_COPY;
 	foot_pos->args[0].subtype = IR_VAL_CONSTANT;
 	foot_pos->args[0].num = jz ? 0 : 1;
-	foot_pos->args[1].subtype = return_value->subtype;
-	foot_pos->args[1].num = return_value->num;
+	ir_val_copy(return_value, &foot_pos->args[1]);
 
 	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
@@ -1522,6 +1529,9 @@ ir_expr(Arena *arena,
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_CONSTANT;
 		switch (a->expr_type.t) {
+		case CTYPE_CHAR:
+		case CTYPE_SIGNED_CHAR:
+		case CTYPE_UNSIGNED_CHAR:
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:
@@ -1759,6 +1769,21 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 }
 
 static WARN_UNUSED result_t
+ir_string_literal(Arena *arena, struct symbol *s, struct ir_str **dst)
+{
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_IR_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).string_unique = s->unique;
+	assert(s->linkage.initial == INITIAL_VALUE_CONSTANT);
+	(**dst).initializer = &s->linkage.initializer;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_program(Arena *arena,
            const struct ast *a,
            struct symbol_table *sym,
@@ -1814,6 +1839,14 @@ ir_program(Arena *arena,
 		check(ir_var(arena, s, dst_var));
 		assert(*dst_var != NULL);
 		dst_var = &(**dst_var).next;
+	}
+
+	struct ir_str **dst_str = &ir->string_literals;
+	for (struct symbol *s = sym->string_literals; s != NULL; s = s->next) {
+		assert(s->stype == SYMBOL_STRING_LITERAL);
+		check(ir_string_literal(arena, s, dst_str));
+		assert(*dst_str != NULL);
+		dst_str = &(**dst_str).next;
 	}
 
 	return RESULT_OK;
@@ -1876,6 +1909,9 @@ ir_debug_print_one(const struct ir_op *op)
 			debug("  DATA %.*s",
 			      (int)op->args[i].varname.sz,
 			      op->args[i].varname.data);
+			break;
+		case IR_VAL_STRING_LITERAL:
+			debug("  STRING str.%lld", (long long)op->args[i].num);
 			break;
 		}
 

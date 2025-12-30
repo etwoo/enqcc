@@ -7,6 +7,7 @@
 #include <math.h> /* for signbit() */
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>    /* for free() */
 #include <string.h>    /* for memcpy() */
 #include <sys/param.h> /* for MIN() */
 
@@ -15,6 +16,7 @@ static const char LINUX_LABEL_PREFIX[] = ".L";
 static const char LINUX_SECTION_RODATA[] = ".section .rodata";
 static const char MACOS_SYMBOL_WITH_LINKAGE_PREFIX[] = "_";
 static const char MACOS_LABEL_PREFIX[] = "L";
+static const char MACOS_SECTION_CSTRING[] = ".cstring";
 static const char MACOS_SECTION_LITERAL8[] = ".literal8";
 static const char DOUBLE_LABEL_ID[] = "double_";
 static const char VEC_LONGS_LABEL_ID[] = "vecl_";
@@ -63,6 +65,21 @@ get_section_fp_constants(enum platform plat)
 	switch (plat) {
 	case PLATFORM_MACOS:
 		result = MACOS_SECTION_LITERAL8;
+		break;
+	case PLATFORM_LINUX:
+		result = LINUX_SECTION_RODATA;
+		break;
+	}
+	return result;
+}
+
+static WARN_UNUSED const char *
+get_section_string_literals(enum platform plat)
+{
+	const char *result = NULL;
+	switch (plat) {
+	case PLATFORM_MACOS:
+		result = MACOS_SECTION_CSTRING;
 		break;
 	case PLATFORM_LINUX:
 		result = LINUX_SECTION_RODATA;
@@ -199,6 +216,13 @@ emit_asm_operand(const struct asm_operand *o,
 		        o->u.quads[1],
 		        STR_REG_RIP);
 		break;
+	case ASM_OPERAND_CONSTANT_STRING:
+		dprintf(fd,
+		        "%s.str.%lld(%s)",
+		        label_prefix,
+		        (long long)o->u.num,
+		        STR_REG_RIP);
+		break;
 	}
 }
 
@@ -207,6 +231,9 @@ map_wordtype_to_register_alias(const struct asm_operand *o,
                                enum register_alias *dst)
 {
 	switch (o->word_type) {
+	case ASM_WORD_08BIT:
+		*dst = REGISTER_ALIAS_1BYTE;
+		break;
 	case ASM_WORD_32BIT:
 		*dst = REGISTER_ALIAS_4BYTE;
 		break;
@@ -261,6 +288,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		ralias[i] = ralias_default;
 	}
 
+	/* Special-case for opcodes with a two-letter suffix, like movs. */
+	char print_opcode_suffix_src = 0;
+
 	/*
 	 * Choose the overall opcode suffix based on the word_type of the
 	 * destination operand (indicated by the value of ralias_default).
@@ -294,13 +324,15 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		}
 		break;
 	case ASM_OP_MOV_WITH_SIGN_EXTENSION:
-		print_opcode = "movslq";
-		print_opcode_suffix = 0;
-		ralias[0] = REGISTER_ALIAS_4BYTE;
-		assert(ralias[1] == REGISTER_ALIAS_8BYTE);
-		break;
 	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
-		assert(0 && "MOV W/ ZEROEXTENSION should have been eliminated");
+		print_opcode = (op->opcode == ASM_OP_MOV_WITH_SIGN_EXTENSION)
+		                       ? "movs"
+		                       : "movz";
+		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
+		print_opcode_suffix_src = map_ralias_to_op_suffix(ralias[0]);
+		assert(ralias[0] > ralias[1]);
+		assert(ralias[0] > REGISTER_ALIAS_8BYTE);
+		assert(ralias[1] < REGISTER_ALIAS_1BYTE);
 		break;
 	case ASM_OP_CVT_DOUBLE_TO_INT:
 		print_opcode = "cvttsd2si";
@@ -557,6 +589,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	}
 	dprintf(fd, "%s", print_opcode);
 
+	if (print_opcode_suffix_src > 0) {
+		dprintf(fd, "%c", print_opcode_suffix_src);
+	}
 	if (print_opcode_suffix > 0) {
 		dprintf(fd, "%c", print_opcode_suffix);
 	}
@@ -602,44 +637,95 @@ emit_asm_fn(const struct asm_function *fn, enum platform plat, int fd)
 static const long long unsigned MAX_ALIGNMENT = 16;
 
 static void
+emit_asm_initializer(const struct string_view *name,
+                     const char *section,
+                     const char *linkage, /* prefix, if symbol has linkage */
+                     const struct constant_initializer *initializer,
+                     enum platform plat,
+                     int fd)
+{
+	const char *label_prefix = get_label_prefix(plat);
+
+	const long long unsigned byte_count = constant_byte_count(initializer);
+	const long long unsigned alignment =
+		byte_count >= MAX_ALIGNMENT
+			? MAX_ALIGNMENT
+			: initializer->elements[0].byte_count;
+
+	if (constant_is_zero(initializer)) {
+		dprintf(fd, "\t.bss\n\t.balign %llu\n", alignment);
+		dprintf(fd, "%s%.*s:\n", linkage, (int)name->sz, name->data);
+		dprintf(fd, "\t.zero %llu\n", byte_count);
+	} else {
+		dprintf(fd, "\t%s\n", section);
+		if (alignment > 1) {
+			dprintf(fd, "\t.balign %llu\n", alignment);
+		}
+		dprintf(fd, "%s%.*s:\n", linkage, (int)name->sz, name->data);
+		for (long long unsigned i = 0; i < initializer->count; ++i) {
+			switch (initializer->elements[i].byte_count) {
+			case 1:
+				dprintf(fd, "\t.byte ");
+				break;
+			case 4:
+				dprintf(fd, "\t.long ");
+				break;
+			case 8:
+				dprintf(fd, "\t.quad ");
+				break;
+			default:
+				assert(0); /* logic error in caller */
+				break;
+			}
+			if (initializer->elements[i].unique > 0) {
+				dprintf(fd,
+				        "%s.str.%lld\n",
+				        label_prefix,
+				        initializer->elements[i].unique);
+			} else {
+				dprintf(fd,
+				        "0x%llx\n",
+				        initializer->elements[i].byte_value);
+			}
+		}
+	}
+}
+
+static void
+emit_asm_str(const struct asm_str *s, enum platform plat, int fd)
+{
+	const char *label_prefix = get_label_prefix(plat);
+	assert(label_prefix != NULL);
+
+	char *str = NULL;
+	int rc = asprintf(&str, "%s.str.%lld", label_prefix, s->string_unique);
+	assert(rc >= 0);
+
+	const struct string_view sv = {
+		.data = str,
+		.sz = strlen(str),
+	};
+	const char *section_cstr = get_section_string_literals(plat);
+	emit_asm_initializer(&sv, section_cstr, "", s->initializer, plat, fd);
+
+	free(str);
+}
+
+static void
 emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 {
-	const char *vprefix = get_symbol_with_linkage_prefix(plat);
 	const struct string_view *vname = &v->identifier;
+	const char *vprefix = get_symbol_with_linkage_prefix(plat);
 
 	if (v->linkage == ASM_LINKAGE_EXTERNAL) {
 		dprintf(fd,
 		        "\t.globl %s%.*s\n",
-		        vprefix,
+		        get_symbol_with_linkage_prefix(plat),
 		        (int)vname->sz,
 		        vname->data);
 	}
 
-	const long long unsigned byte_count =
-		constant_byte_count(v->initializer);
-	const long long unsigned alignment =
-		byte_count >= MAX_ALIGNMENT
-			? MAX_ALIGNMENT
-			: v->initializer->elements[0].byte_count;
-
-	if (constant_is_zero(v->initializer)) {
-		dprintf(fd, "\t.bss\n\t.balign %llu\n", alignment);
-		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.zero %llu\n", byte_count);
-	} else {
-		dprintf(fd, "\t.data\n\t.balign %llu\n", alignment);
-		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		for (long long unsigned i = 0; i < v->initializer->count; ++i) {
-			if (v->initializer->elements[i].byte_count == 4) {
-				dprintf(fd, "\t.long ");
-			} else {
-				dprintf(fd, "\t.quad ");
-			}
-			dprintf(fd,
-			        "0x%llx\n",
-			        v->initializer->elements[i].byte_value);
-		}
-	}
+	emit_asm_initializer(vname, ".data", vprefix, v->initializer, plat, fd);
 }
 
 /*
@@ -785,6 +871,10 @@ emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
 {
 	if (cg == NULL) {
 		return RESULT_OK;
+	}
+
+	for (struct asm_str *s = cg->string_literals; s != NULL; s = s->next) {
+		emit_asm_str(s, plat, fd);
 	}
 
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {

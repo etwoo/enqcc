@@ -239,7 +239,7 @@ parse_case(Arena *arena, const struct token **tok, struct ast **dst)
 	assert(is_token_type(*tok, TOKEN_KEYWORD_CASE));
 	token_consume(tok);
 
-	if (!is_token_type(*tok, TOKEN_CONSTANT)) {
+	if (!can_parse_constant(*tok)) {
 		return make_result(ERR_PARSE_CASE_EXPECT_CONSTANT);
 	}
 

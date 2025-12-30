@@ -4,11 +4,15 @@
 #include "arena.h"
 #include "result.h"
 #include "sys/compiler_features.h"
+#include "sys/string_view.h"
 
 #include <stdbool.h>
 
 /* note: order of values below determines integer conversion rank */
 #define FOREACH_CTYPE(F)                                                       \
+	F(CHAR)                                                                \
+	F(SIGNED_CHAR)                                                         \
+	F(UNSIGNED_CHAR)                                                       \
 	F(INT)                                                                 \
 	F(UNSIGNED_INT)                                                        \
 	F(LONG)                                                                \
@@ -27,6 +31,9 @@ struct ctype {
 };
 
 result_t ctype_alloc(Arena *arena, struct ctype **dst) WARN_UNUSED;
+result_t ctype_alloc_str_literal(Arena *arena,
+                                 const struct string_view *src,
+                                 struct ctype *dst) WARN_UNUSED;
 result_t ctype_copy(Arena *arena,
                     const struct ctype *src,
                     struct ctype *dst) WARN_UNUSED;
@@ -35,8 +42,11 @@ long long int ctype_to_size_bytes(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_integer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_signed(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_floating_point(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_charlike(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_pointer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_array(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_strlike_array(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_strlike_ptr(const struct ctype *c) WARN_UNUSED;
 bool ctype_nullptr_ish(const struct ctype *c) WARN_UNUSED;
 const struct ctype *get_common_ctype(const struct ctype *lhs,
                                      const struct ctype *rhs) WARN_UNUSED;

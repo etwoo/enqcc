@@ -81,6 +81,11 @@ static void
 codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 {
 	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		dst->word_type = ASM_WORD_08BIT;
+		break;
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
@@ -181,6 +186,16 @@ static const struct asm_operand OPERAND_RAX_64BIT = {
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_AX,
 };
+static const struct asm_operand OPERAND_RAX_32BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_32BIT,
+	.u.reg = ASM_REGISTER_AX,
+};
+static const struct asm_operand OPERAND_RAX_08BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_08BIT,
+	.u.reg = ASM_REGISTER_AX,
+};
 static const struct asm_operand OPERAND_RCX_64BIT = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
@@ -195,21 +210,6 @@ static const struct asm_operand OPERAND_R10_64BIT = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_R10,
-};
-static const struct asm_operand OPERAND_R10_32BIT = {
-	ASM_OPERAND_REGISTER,
-	ASM_WORD_32BIT,
-	.u.reg = ASM_REGISTER_R10,
-};
-static const struct asm_operand OPERAND_R11_64BIT = {
-	ASM_OPERAND_REGISTER,
-	ASM_WORD_64BIT,
-	.u.reg = ASM_REGISTER_R11,
-};
-static const struct asm_operand OPERAND_R11_32BIT = {
-	ASM_OPERAND_REGISTER,
-	ASM_WORD_32BIT,
-	.u.reg = ASM_REGISTER_R11,
 };
 static const struct asm_operand OPERAND_XMM0 = {
 	ASM_OPERAND_REGISTER,
@@ -256,6 +256,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		break;
 	case IR_VAL_CONSTANT:
 		switch (src->c89type.t) {
+		case CTYPE_CHAR:
+		case CTYPE_SIGNED_CHAR:
+		case CTYPE_UNSIGNED_CHAR:
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:
@@ -282,6 +285,10 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 	case IR_VAL_VARIABLE_DATA:
 		dst->operand_type = ASM_OPERAND_VARIABLE_DATA;
 		dst->u.variable = src->varname;
+		break;
+	case IR_VAL_STRING_LITERAL:
+		dst->operand_type = ASM_OPERAND_CONSTANT_STRING;
+		dst->u.num = src->num;
 		break;
 	}
 
@@ -635,6 +642,28 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		                         ? ASM_OP_CVT_DOUBLE_TO_INT
 		                         : ASM_OP_CVT_INT_TO_DOUBLE;
 		codegen_map_operands_all(src, *dst);
+		if (ctype_is_charlike(&src->args[0].c89type)) {
+			assert(src->opcode == IR_OP_CTYPE_INT_TO_DOUBLE);
+			assert((**dst).args[0].word_type == ASM_WORD_08BIT);
+			struct asm_op *to_prepend = NULL;
+			check(codegen_alloc_op(arena, &to_prepend));
+			to_prepend->opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+			codegen_map_operand(&src->args[0],
+			                    &to_prepend->args[0]);
+			to_prepend->args[1] = OPERAND_RAX_32BIT;
+			(**dst).args[0] = OPERAND_RAX_32BIT;
+			codegen_op_list_prepend(to_prepend, dst);
+		} else if (ctype_is_charlike(&src->args[1].c89type)) {
+			assert(src->opcode == IR_OP_CTYPE_DOUBLE_TO_INT);
+			assert((**dst).args[1].word_type == ASM_WORD_08BIT);
+			(**dst).args[1] = OPERAND_RAX_32BIT;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_MOV;
+			(**dst).args[0] = OPERAND_RAX_08BIT;
+			codegen_map_operand(&src->args[1], &(**dst).args[1]);
+			assert((**dst).args[1].word_type == ASM_WORD_08BIT);
+		}
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_UINT:
 		/*
@@ -722,17 +751,21 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		break;
 	case IR_OP_CTYPE_UINT_TO_DOUBLE:
 		check(codegen_alloc_op(arena, dst));
-		if (src->args[0].c89type.t == CTYPE_UNSIGNED_INT) {
-			(**dst).opcode = ASM_OP_MOV;
+		if (src->args[0].c89type.t == CTYPE_UNSIGNED_CHAR ||
+		    src->args[0].c89type.t == CTYPE_UNSIGNED_INT) {
+			(**dst).opcode =
+				ctype_is_charlike(&src->args[0].c89type)
+					? ASM_OP_MOV_WITH_ZERO_EXTENSION
+					: ASM_OP_MOV;
 			codegen_map_operand(&src->args[0], &(**dst).args[0]);
-			codegen_set_operand_eax(&src->args[0],
-			                        &(**dst).args[1]);
+			(**dst).args[1] = OPERAND_RAX_32BIT;
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
 			(**dst).args[0] = OPERAND_RAX_64BIT;
 			codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		} else {
+			assert(src->args[0].c89type.t == CTYPE_UNSIGNED_LONG);
 			/*
 			 * Mimic output of clang for unsigned long -> double.
 			 *
@@ -943,6 +976,11 @@ codegen_statement_one(Arena *arena,
 		/* sign-extend dividend from eax into edx */
 		check(codegen_alloc_op(arena, dst));
 		switch (src->args[0].c89type.t) {
+		case CTYPE_CHAR:
+		case CTYPE_SIGNED_CHAR:
+		case CTYPE_UNSIGNED_CHAR:
+			assert(0 && "char div should have been cast to int");
+			break;
 		case CTYPE_INT:
 			(**dst).opcode = ASM_OP_CDQ;
 			break;
@@ -1060,14 +1098,16 @@ codegen_statement_one(Arena *arena,
 		                         ? ASM_OP_MOV_WITH_SIGN_EXTENSION
 		                         : ASM_OP_MOV_WITH_ZERO_EXTENSION;
 		codegen_map_operands_all(src, *dst);
-		assert((**dst).args[0].word_type == ASM_WORD_32BIT);
-		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
+		assert((**dst).args[0].word_type < ASM_WORD_64BIT);
+		assert((**dst).args[0].word_type < (**dst).args[1].word_type);
 		break;
 	case IR_OP_CTYPE_TRUNCATE:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operands_all(src, *dst);
-		/* to truncate, only move CTYPE_INT's worth of source */
-		(**dst).args[0].word_type = ASM_WORD_32BIT;
+		assert((**dst).args[1].word_type < ASM_WORD_64BIT);
+		assert((**dst).args[0].word_type > (**dst).args[1].word_type);
+		/* truncate -> use CTYPE_INT/CTYPE_CHAR's's worth of source */
+		(**dst).args[0].word_type = (**dst).args[1].word_type;
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
 	case IR_OP_CTYPE_DOUBLE_TO_UINT:
@@ -1305,6 +1345,21 @@ codegen_variable(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+codegen_string_literal(Arena *arena,
+                       const struct ir_str *ir,
+                       struct asm_str **dst)
+{
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).string_unique = ir->string_unique;
+	(**dst).initializer = ir->initializer;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 codegen_program(Arena *arena,
                 const struct intermediate *ir,
                 struct assembly **dst)
@@ -1315,12 +1370,21 @@ codegen_program(Arena *arena,
 		assert(*dst_fun != NULL);
 		dst_fun = &(**dst_fun).next;
 	}
+
 	struct asm_variable **dst_var = &(**dst).variables;
 	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
 		check(codegen_variable(arena, v, dst_var));
 		assert(*dst_var != NULL);
 		dst_var = &(**dst_var).next;
 	}
+
+	struct asm_str **dst_str = &(**dst).string_literals;
+	for (struct ir_str *s = ir->string_literals; s != NULL; s = s->next) {
+		check(codegen_string_literal(arena, s, dst_str));
+		assert(*dst_str != NULL);
+		dst_str = &(**dst_str).next;
+	}
+
 	return RESULT_OK;
 }
 
@@ -1383,8 +1447,14 @@ codegen_replace_pseudo_fn(struct asm_function *cg,
 				offsets[idx] = cursor;
 			} else {
 				switch (arg->word_type) {
+				case ASM_WORD_08BIT:
+					cursor += 1;
+					break;
 				case ASM_WORD_32BIT:
 					cursor += CODEGEN_BYTES_PER_VALUE;
+					cursor = round_up_to_multiple_of(
+						cursor,
+						CODEGEN_BYTES_PER_VALUE);
 					break;
 				case ASM_WORD_64BIT:
 					cursor += CODEGEN_BYTES_PER_VALUE * 2;
@@ -1540,7 +1610,8 @@ in_memory(struct asm_operand *o)
 	       o->operand_type == ASM_OPERAND_VARIABLE_DATA ||
 	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_DOUBLE ||
 	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_LONGS ||
-	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
+	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_QUADS ||
+	       o->operand_type == ASM_OPERAND_CONSTANT_STRING;
 }
 
 /*
@@ -1780,9 +1851,12 @@ fix_shift(struct asm_op *cur, struct fix *trampoline)
  *     movq   %r11, -16(%rbp)
  */
 static WARN_UNUSED bool
-fix_movsx(struct asm_op *cur, struct fix *trampoline)
+fix_movsx_and_movzx(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!(cur->opcode == ASM_OP_MOV_WITH_SIGN_EXTENSION &&
+	if (!(((cur->opcode == ASM_OP_MOV_WITH_SIGN_EXTENSION &&
+	        cur->args[0].word_type < ASM_WORD_64BIT) ||
+	       (cur->opcode == ASM_OP_MOV_WITH_ZERO_EXTENSION &&
+	        cur->args[0].word_type < ASM_WORD_32BIT)) &&
 	      (cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE ||
 	       in_memory(&cur->args[1])))) {
 		return false;
@@ -1792,17 +1866,26 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 
 	trampoline->ops[0]->opcode = ASM_OP_MOV;
 	codegen_copy_operand(&cur->args[0], &trampoline->ops[0]->args[0]);
-	assert(cur->args[0].word_type == ASM_WORD_32BIT);
-	trampoline->ops[0]->args[1] = OPERAND_R10_32BIT;
+	assert(trampoline->ops[0]->args[0].word_type < ASM_WORD_64BIT);
+	codegen_set_operand_r10(&cur->args[0], &trampoline->ops[0]->args[1]);
+	assert(trampoline->ops[0]->args[0].word_type ==
+	       trampoline->ops[0]->args[1].word_type);
 
-	trampoline->ops[1]->opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
-	trampoline->ops[1]->args[0] = OPERAND_R10_32BIT;
-	trampoline->ops[1]->args[1] = OPERAND_R11_64BIT;
+	trampoline->ops[1]->opcode = cur->opcode;
+	codegen_copy_operand(&trampoline->ops[0]->args[1],
+	                     &trampoline->ops[1]->args[0]);
+	codegen_set_operand_r11(&cur->args[1], &trampoline->ops[1]->args[1]);
+	assert(trampoline->ops[1]->args[0].word_type <
+	       trampoline->ops[1]->args[1].word_type);
 
 	trampoline->ops[2]->opcode = ASM_OP_MOV;
-	trampoline->ops[2]->args[0] = OPERAND_R11_64BIT;
+	codegen_copy_operand(&trampoline->ops[1]->args[1],
+	                     &trampoline->ops[2]->args[0]);
 	codegen_copy_operand(&cur->args[1], &trampoline->ops[2]->args[1]);
-	assert(cur->args[1].word_type == ASM_WORD_64BIT);
+	assert(trampoline->ops[2]->args[0].word_type ==
+	       trampoline->ops[2]->args[1].word_type);
+	assert(trampoline->ops[0]->args[0].word_type <
+	       trampoline->ops[2]->args[1].word_type);
 
 	return true;
 }
@@ -1826,11 +1909,18 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
  *     movq %r11, -16(%rbp)
  */
 static WARN_UNUSED bool
-fix_movzx(struct asm_op *cur, struct fix *trampoline)
+fix_movzx_32bit(struct asm_op *cur, struct fix *trampoline)
 {
 	if (cur->opcode != ASM_OP_MOV_WITH_ZERO_EXTENSION) {
 		return false;
 	}
+
+	if (cur->args[0].word_type == ASM_WORD_08BIT) {
+		/* handled by fix_movsx_and_movzx() */
+		return false;
+	}
+
+	assert(cur->args[0].word_type == ASM_WORD_32BIT);
 
 	if (cur->args[1].operand_type == ASM_OPERAND_REGISTER) {
 		trampoline->sz = 1;
@@ -1844,8 +1934,13 @@ fix_movzx(struct asm_op *cur, struct fix *trampoline)
 			trampoline->ops[i]->next = NULL;
 			trampoline->ops[i]->opcode = ASM_OP_MOV;
 		}
-		trampoline->ops[0]->args[1] = OPERAND_R11_32BIT;
-		trampoline->ops[1]->args[0] = OPERAND_R11_64BIT;
+		codegen_set_operand_r11(&cur->args[0],
+		                        &trampoline->ops[0]->args[1]);
+		assert(trampoline->ops[0]->args[1].word_type < ASM_WORD_64BIT);
+		codegen_set_operand_r11(&cur->args[1],
+		                        &trampoline->ops[1]->args[0]);
+		assert(trampoline->ops[0]->args[1].word_type <
+		       trampoline->ops[1]->args[0].word_type);
 	}
 
 	return true;
@@ -2023,8 +2118,8 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 		fix_div,
 		fix_mul,
 		fix_shift,
-		fix_movsx,
-		fix_movzx,
+		fix_movsx_and_movzx,
+		fix_movzx_32bit,
 		fix_cvt_double_to_int,
 		fix_cvt_int_to_double,
 		fix_arithmetic_on_double,
@@ -2108,9 +2203,15 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		      operand->u.quads[0],
 		      operand->u.quads[1]);
 		break;
+	case ASM_OPERAND_CONSTANT_STRING:
+		debug("  CONSTANT STRING %lld", (long long)operand->u.num);
+		break;
 	}
 
 	switch (operand->word_type) {
+	case ASM_WORD_08BIT:
+		debug("    WORD TYPE: 8-BIT HALFWORD (SINGLE BYTE)");
+		break;
 	case ASM_WORD_32BIT:
 		debug("    WORD TYPE: 32-BIT WORD");
 		break;
