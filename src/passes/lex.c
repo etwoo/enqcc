@@ -308,6 +308,7 @@ lex_one_constant_strlike(struct string_view *pos,
 			return make_result(ERR_LEX_CHAR_EXPECT_MORE);
 		}
 
+		// TODO: merge adjacent literals, ignoring isspace() in between
 		switch (token_type) {
 		case TOKEN_CONSTANT_CHAR:
 			if (is_quote_single(pos->data[0])) {
@@ -330,6 +331,7 @@ lex_one_constant_strlike(struct string_view *pos,
 			return make_result(ERR_LEX_CHAR_INVALID_NEWLINE);
 		}
 
+		// TODO: handle escaping in lex, before parse
 		const bool escaped = is_backslash(pos->data[0]);
 		if (escaped) {
 			if (pos->sz == 0) {
@@ -355,15 +357,6 @@ lex_one_constant_strlike(struct string_view *pos,
 		case 0:
 			return make_result(ERR_LEX_CHAR_INVALID_EMPTY);
 		case 1:
-			assert(!is_backslash(cur->val.data[0]));
-			break;
-		case 2:
-			if (is_backslash(cur->val.data[0])) {
-				/* 2-char valid if actually escaped 1-char */
-			} else {
-				return make_result(
-					ERR_LEX_CHAR_INVALID_MULTICHAR);
-			}
 			break;
 		default:
 			return make_result(ERR_LEX_CHAR_INVALID_MULTICHAR);

@@ -54,6 +54,7 @@ struct asm_operand {
 		ASM_OPERAND_CONSTANT_DATA_VEC_QUADS,
 	} operand_type;
 	enum {
+		ASM_WORD_08BIT, /* BYTE  */
 		ASM_WORD_32BIT, /* DWORD */
 		ASM_WORD_64BIT, /* QWORD */
 	} word_type;

@@ -4,11 +4,15 @@
 #include "arena.h"
 #include "result.h"
 #include "sys/compiler_features.h"
+#include "sys/string_view.h"
 
 #include <stdbool.h>
 
 /* note: order of values below determines integer conversion rank */
 #define FOREACH_CTYPE(F)                                                       \
+	F(CHAR)                                                                \
+	F(SIGNED_CHAR)                                                         \
+	F(UNSIGNED_CHAR)                                                       \
 	F(INT)                                                                 \
 	F(UNSIGNED_INT)                                                        \
 	F(LONG)                                                                \
@@ -27,6 +31,9 @@ struct ctype {
 };
 
 result_t ctype_alloc(Arena *arena, struct ctype **dst) WARN_UNUSED;
+result_t ctype_alloc_str_literal(Arena *arena,
+                                 const struct string_view *src,
+                                 struct ctype *dst) WARN_UNUSED;
 result_t ctype_copy(Arena *arena,
                     const struct ctype *src,
                     struct ctype *dst) WARN_UNUSED;

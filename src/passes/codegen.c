@@ -81,6 +81,11 @@ static void
 codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 {
 	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		dst->word_type = ASM_WORD_08BIT;
+		break;
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 		dst->word_type = ASM_WORD_32BIT;
@@ -256,6 +261,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		break;
 	case IR_VAL_CONSTANT:
 		switch (src->c89type.t) {
+		case CTYPE_CHAR:
+		case CTYPE_SIGNED_CHAR:
+		case CTYPE_UNSIGNED_CHAR:
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:
@@ -943,6 +951,11 @@ codegen_statement_one(Arena *arena,
 		/* sign-extend dividend from eax into edx */
 		check(codegen_alloc_op(arena, dst));
 		switch (src->args[0].c89type.t) {
+		case CTYPE_CHAR:
+		case CTYPE_SIGNED_CHAR:
+		case CTYPE_UNSIGNED_CHAR:
+			assert(0 && "char div should have been cast to int");
+			break;
 		case CTYPE_INT:
 			(**dst).opcode = ASM_OP_CDQ;
 			break;
@@ -1383,6 +1396,9 @@ codegen_replace_pseudo_fn(struct asm_function *cg,
 				offsets[idx] = cursor;
 			} else {
 				switch (arg->word_type) {
+				case ASM_WORD_08BIT:
+					cursor += 1;
+					break;
 				case ASM_WORD_32BIT:
 					cursor += CODEGEN_BYTES_PER_VALUE;
 					break;
@@ -2111,6 +2127,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 	}
 
 	switch (operand->word_type) {
+	case ASM_WORD_08BIT:
+		debug("    WORD TYPE: 8-BIT HALFWORD (SINGLE BYTE)");
+		break;
 	case ASM_WORD_32BIT:
 		debug("    WORD TYPE: 32-BIT WORD");
 		break;

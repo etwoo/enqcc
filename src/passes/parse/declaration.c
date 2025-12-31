@@ -16,6 +16,7 @@
 #include <string.h> /* for memset() */
 
 struct parse_basic_type_state {
+	size_t n_char;
 	size_t n_int;
 	size_t n_long;
 	size_t n_signed;
@@ -33,6 +34,9 @@ parse_basic_type_accumulate(const struct token **tok,
 
 	assert(*tok != NULL);
 	switch ((**tok).token_type) {
+	case TOKEN_KEYWORD_CHAR:
+		state->n_char++;
+		break;
 	case TOKEN_KEYWORD_INT:
 		state->n_int++;
 		break;
@@ -58,7 +62,8 @@ static WARN_UNUSED result_t
 parse_basic_type_finalize(struct parse_basic_type_state *state,
                           struct ctype *var_type)
 {
-	if (state->n_int > 1 ||      /* int int -- invalid                 */
+	if (state->n_char > 1 ||     /* char char -- invalid */
+	    state->n_int > 1 ||      /* int int -- invalid */
 	    state->n_long > 1 ||     /* long long -- unsupported           */
 	    state->n_signed > 1 ||   /* signed signed -- invalid           */
 	    state->n_unsigned > 1 || /* unsigned unsigned -- invalid       */
@@ -68,7 +73,8 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 		return make_result(ERR_PARSE_DECL_TYPE_DUPLICATE);
 	}
 
-	if (state->n_int == 0 &&      /* Any particular type may occur zero   */
+	if (state->n_char == 0 &&
+	    state->n_int == 0 &&      /* Any particular type may occur zero   */
 	    state->n_long == 0 &&     /* times, but there must exist at least */
 	    state->n_signed == 0 &&   /* one non-zero count, from the valid   */
 	    state->n_unsigned == 0 && /* options available.                   */
@@ -77,13 +83,28 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 	}
 
 	if (state->n_double > 0) {
-		if (state->n_int > 0 ||      /* int double -- invalid      */
+		if (state->n_char > 0 ||     /* char double -- invalid     */
+		    state->n_int > 0 ||      /* int double -- invalid      */
 		    state->n_long > 0 ||     /* long double -- unsupported */
 		    state->n_signed > 0 ||   /* signed double -- invalid   */
 		    state->n_unsigned > 0) { /* unsigned double -- invalid */
 			return make_result(ERR_PARSE_DECL_TYPE_DOUBLE_INVALID);
 		}
 		var_type->t = CTYPE_DOUBLE;
+		return RESULT_OK;
+	}
+
+	if (state->n_char > 0) {
+		if (state->n_int > 0 || state->n_long > 0) {
+			return make_result(ERR_PARSE_DECL_TYPE_CHAR_INVALID);
+		}
+		if (state->n_unsigned > 0) {
+			var_type->t = CTYPE_UNSIGNED_CHAR;
+		} else if (state->n_signed > 0) {
+			var_type->t = CTYPE_SIGNED_CHAR;
+		} else {
+			var_type->t = CTYPE_CHAR;
+		}
 		return RESULT_OK;
 	}
 

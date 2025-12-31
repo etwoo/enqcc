@@ -348,6 +348,13 @@ parse_debug_print(const struct ast *a, size_t indent)
 			      (long long)a->u.num);
 		}
 		break;
+	case NODE_CONSTANT_STR:
+		debug("%*sSTR %.*s",
+		      (int)indent + 1,
+		      "",
+		      (int)a->u.str.sz,
+		      a->u.str.data);
+		break;
 	}
 }
 

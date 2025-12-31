@@ -207,6 +207,9 @@ map_wordtype_to_register_alias(const struct asm_operand *o,
                                enum register_alias *dst)
 {
 	switch (o->word_type) {
+	case ASM_WORD_08BIT:
+		*dst = REGISTER_ALIAS_1BYTE;
+		break;
 	case ASM_WORD_32BIT:
 		*dst = REGISTER_ALIAS_4BYTE;
 		break;

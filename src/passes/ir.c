@@ -1522,6 +1522,9 @@ ir_expr(Arena *arena,
 		assert(return_value->subtype == IR_VAL_NONE);
 		return_value->subtype = IR_VAL_CONSTANT;
 		switch (a->expr_type.t) {
+		case CTYPE_CHAR:
+		case CTYPE_SIGNED_CHAR:
+		case CTYPE_UNSIGNED_CHAR:
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:

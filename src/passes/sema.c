@@ -100,6 +100,9 @@ map_numeric_type_scalar(const struct ast *a,
 	if (dst_type->t == CTYPE_DOUBLE) {
 		double tmp = 0;
 		switch (a->expr_type.t) {
+		case CTYPE_CHAR:
+		case CTYPE_SIGNED_CHAR:
+		case CTYPE_UNSIGNED_CHAR:
 		case CTYPE_INT:
 		case CTYPE_UNSIGNED_INT:
 		case CTYPE_LONG:
@@ -120,6 +123,9 @@ map_numeric_type_scalar(const struct ast *a,
 
 	int128_t x = 0;
 	switch (a->expr_type.t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
 	case CTYPE_INT:
 	case CTYPE_UNSIGNED_INT:
 	case CTYPE_LONG:
@@ -297,6 +303,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT:
+	case NODE_CONSTANT_STR:
 		break;
 	}
 
@@ -1237,6 +1244,7 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_CONSTANT:
+	case NODE_CONSTANT_STR:
 		break; /* resolve_expr() in parse.c handles leaf nodes */
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:

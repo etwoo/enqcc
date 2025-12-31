@@ -93,6 +93,7 @@ struct ast_parameter {
 	F(CASE)                                                                \
 	F(CASE_DEFAULT)                                                        \
 	F(CONSTANT)                                                            \
+	F(CONSTANT_STR)                                                        \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
 #define TO_ENUM(nodet, ...) NODE_##nodet,
@@ -182,9 +183,10 @@ struct ast {
 			struct ctype to_type;
 			struct ast *expr;
 		} cast;
-		struct ast_symbol var; /* NODE_EXPRESSION_VARIABLE_USAGE */
-		int128_t num;          /* NODE_CONSTANT */
-		double double_;        /* NODE_CONSTANT with CTYPE_DOUBLE */
+		struct ast_symbol var;  /* NODE_EXPRESSION_VARIABLE_USAGE */
+		int128_t num;           /* NODE_CONSTANT */
+		double double_;         /* NODE_CONSTANT with CTYPE_DOUBLE */
+		struct string_view str; /* NODE_CONSTANT_STR */
 	} u;
 	struct ctype expr_type;
 	struct {

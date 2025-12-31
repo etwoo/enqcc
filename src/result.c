@@ -276,6 +276,9 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
 		s = strdup("Duplicate variable or function specifier");
 		break;
+	case ERR_PARSE_DECL_TYPE_CHAR_INVALID:
+		s = strdup("Type 'char' cannot be combined with int/long");
+		break;
 	case ERR_PARSE_DECL_TYPE_DOUBLE_INVALID:
 		s = strdup("Type 'double' cannot be combined with "
 		           "int/long/signed/unsigned");

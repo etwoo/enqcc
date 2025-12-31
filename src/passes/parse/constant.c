@@ -26,8 +26,16 @@ is_constant_maybe_double(const struct string_view *val)
 result_t
 parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 {
-	assert((**tok).token_type == TOKEN_CONSTANT);
 	check(parse_alloc(arena, dst, NODE_CONSTANT));
+
+	if ((**tok).token_type == TOKEN_CONSTANT_CHAR) {
+		assert((**tok).val.sz == 1);
+		(**dst).expr_type.t = CTYPE_INT;
+		(**dst).u.num = (int)(**tok).val.data[0];
+		return RESULT_OK;
+	}
+
+	assert((**tok).token_type == TOKEN_CONSTANT);
 
 	/*
 	 * strtoull() does not update errno on success, so we must clear it
