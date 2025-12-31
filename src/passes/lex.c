@@ -251,30 +251,6 @@ is_backslash(char c)
 	return c == '\\';
 }
 
-static WARN_UNUSED bool
-is_valid_escape_char(char c)
-{
-	bool b = false;
-	switch (c) {
-	case '\'':
-	case '"':
-	case '?':
-	case '\\':
-	case 'a':
-	case 'b':
-	case 'f':
-	case 'n':
-	case 'r':
-	case 't':
-	case 'v':
-		b = true;
-		break;
-	default:
-		break;
-	}
-	return b;
-}
-
 static WARN_UNUSED char
 map_escape_char(char c)
 {
@@ -313,10 +289,16 @@ map_escape_char(char c)
 		c = '\v';
 		break;
 	default:
-		assert(0); /* logic error in caller */
+		c = '\0'; /* use NUL to signal error to caller */
 		break;
 	}
 	return c;
+}
+
+static WARN_UNUSED bool
+is_valid_escape_char(char c)
+{
+	return (map_escape_char(c) != '\0');
 }
 
 static WARN_UNUSED result_t
