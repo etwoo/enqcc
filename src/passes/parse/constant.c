@@ -32,6 +32,7 @@ parse_constant(Arena *arena, const struct token **tok, struct ast **dst)
 		assert((**tok).val.sz == 1);
 		(**dst).expr_type.t = CTYPE_INT;
 		(**dst).u.num = (int)(**tok).val.data[0];
+		token_consume(tok);
 		return RESULT_OK;
 	}
 
