@@ -24,7 +24,7 @@ ctype_alloc_str_literal(Arena *arena,
 {
 	assert(dst != NULL);
 	dst->t = CTYPE_ARRAY_OF;
-	dst->sz = src->sz + 1; /* +1 for NUL terminator */
+	dst->sz = src->sz; /* excluding space for NUL terminator */
 	assert(dst->referent == NULL);
 	check(ctype_alloc(arena, &dst->referent));
 	dst->referent->t = CTYPE_CHAR;

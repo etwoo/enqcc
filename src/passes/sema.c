@@ -57,7 +57,8 @@ is_node_constant(const struct ast *a)
 	}
 
 	if (a->u.init.single != NULL) {
-		return a->u.init.single->node_type == NODE_CONSTANT;
+		return a->u.init.single->node_type == NODE_CONSTANT ||
+		       a->u.init.single->node_type == NODE_CONSTANT_STR;
 	}
 	assert(a->u.init.multi != NULL);
 
@@ -75,7 +76,12 @@ count_initializer_elements(const struct ast *a)
 	a = unpack_cast(a);
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
-	if (a->u.init.single != NULL) {
+	const struct ast *s = a->u.init.single;
+	if (s != NULL && s->node_type == NODE_CONSTANT_STR) {
+		return s->u.str.sz; /* excluding space for NUL terminator */
+	}
+	if (s != NULL) {
+		assert(s->node_type == NODE_CONSTANT);
 		return 1;
 	}
 	assert(a->u.init.multi != NULL);
@@ -167,7 +173,23 @@ populate_initializer_elements(const struct ast *a,
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	if (a->u.init.single != NULL) {
-		map_numeric_type_scalar(a->u.init.single, dst_type, (*pos)++);
+		const struct ast *s = a->u.init.single;
+		if (s->node_type == NODE_CONSTANT_STR) {
+			assert(ctype_is_strlike_array(dst_type));
+			size_t i = 0;
+			for (; i < s->u.str.sz; ++i) {
+				(**pos).byte_count = 1;
+				(**pos).byte_value = (unsigned)s->u.str.data[i];
+				assert(i < dst_type->sz);
+			}
+			for (; i < dst_type->sz; ++i) {
+				(**pos).byte_count = 1;
+				(**pos).byte_value = 0;
+			}
+		} else {
+			map_numeric_type_scalar(s, dst_type, *pos);
+		}
+		(*pos)++;
 		return;
 	}
 	assert(a->u.init.multi != NULL);
