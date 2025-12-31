@@ -71,24 +71,33 @@ is_node_constant(const struct ast *a)
 }
 
 static WARN_UNUSED long long unsigned
-count_initializer_elements(const struct ast *a)
+count_initializer_elements(struct ctype *dst_type, const struct ast *a)
 {
+	assert(dst_type != NULL);
+
 	a = unpack_cast(a);
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	const struct ast *s = a->u.init.single;
 	if (s != NULL && s->node_type == NODE_CONSTANT_STR) {
-		return s->u.str.sz; /* excluding space for NUL terminator */
+		size_t extra = 0;
+		if (ctype_is_strlike_ptr(dst_type)) {
+			extra = 1; /* include space for NUL terminator */
+		} else {
+			assert(ctype_is_strlike_array(dst_type));
+		}
+		return s->u.str.sz + extra;
 	}
 	if (s != NULL) {
 		assert(s->node_type == NODE_CONSTANT);
 		return 1;
 	}
 	assert(a->u.init.multi != NULL);
+	assert(ctype_is_pointer(dst_type));
 
 	long long unsigned count = 0;
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
-		count += count_initializer_elements(f->car);
+		count += count_initializer_elements(dst_type->referent, f->car);
 	}
 	return count;
 }
@@ -175,20 +184,19 @@ populate_initializer_elements(const struct ast *a,
 	if (a->u.init.single != NULL) {
 		const struct ast *s = a->u.init.single;
 		if (s->node_type == NODE_CONSTANT_STR &&
-		    ctype_is_strlike_array(dst_type)) {
+		    (ctype_is_strlike_array(dst_type) ||
+		     ctype_is_strlike_ptr(dst_type))) {
 			size_t i = 0;
 			for (; i < s->u.str.sz; ++i) {
 				(**pos).byte_count = 1;
 				(**pos).byte_value = (unsigned)s->u.str.data[i];
-				assert(i < dst_type->sz);
+				(*pos)++;
 			}
 			for (; i < dst_type->sz; ++i) {
 				(**pos).byte_count = 1;
 				(**pos).byte_value = 0;
+				(*pos)++;
 			}
-		} else if (s->node_type == NODE_CONSTANT_STR &&
-		           ctype_is_strlike_ptr(dst_type)) {
-			assert(0 && "TODO: char pointer init by str literal");
 		} else {
 			map_numeric_type_scalar(s, dst_type, *pos);
 		}
@@ -208,7 +216,7 @@ map_numeric_type(Arena *arena,
                  struct ctype *dst_type,
                  struct constant_initializer *out)
 {
-	out->count = count_initializer_elements(init);
+	out->count = count_initializer_elements(dst_type, init);
 	assert(out->count > 0);
 	out->elements = arena_alloc(arena, out->count * sizeof(*out->elements));
 	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
