@@ -177,6 +177,15 @@ ctype_is_array(const struct ctype *c)
 }
 
 bool
+ctype_is_strlike_array(const struct ctype *c)
+{
+	return c->t == CTYPE_ARRAY_OF &&
+	       (c->referent->t == CTYPE_CHAR ||
+	        c->referent->t == CTYPE_SIGNED_CHAR ||
+	        c->referent->t == CTYPE_UNSIGNED_CHAR);
+}
+
+bool
 ctype_nullptr_ish(const struct ctype *c)
 {
 	return c->maybe_null_pointer_constant;

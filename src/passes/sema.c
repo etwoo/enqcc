@@ -1341,6 +1341,10 @@ sema_pointer_cmp_impl(const struct ctype *lhs,
 {
 	if (ctype_is_equal(lhs, rhs)) {
 		/* given equality, nothing more to check */
+	} else if (ctype_is_strlike_array(lhs) && ctype_is_strlike_array(rhs)) {
+		if (lhs->sz < rhs->sz) {
+			return make_result(ERR_SEMA_OPERAND_CHAR_ARRAY_SIZE);
+		} /* else: RHS string may be shorter than LHS capacity */
 	} else if (ctype_is_pointer(lhs) && ctype_is_pointer(rhs)) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
 	} else if (ctype_is_pointer(lhs) && (!ish || !ctype_nullptr_ish(rhs))) {
