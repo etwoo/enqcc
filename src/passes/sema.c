@@ -102,7 +102,6 @@ count_initializer_elements(struct ctype *dst_type, const struct ast *a)
 	return count;
 }
 
-static const long long int INT_TO_CHAR_TRUNCATOR = 256;
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
 static void
@@ -156,12 +155,6 @@ map_numeric_type_scalar(const struct ast *a,
 	case CTYPE_ARRAY_OF:
 		assert(0); /* logic error in caller */
 		break;
-	}
-
-	if ((dst_type->t == CTYPE_CHAR && x > CHAR_MAX) ||
-	    (dst_type->t == CTYPE_SIGNED_CHAR && x > SCHAR_MAX) ||
-	    (dst_type->t == CTYPE_UNSIGNED_CHAR && x > UCHAR_MAX)) {
-		x %= INT_TO_CHAR_TRUNCATOR;
 	}
 
 	if ((dst_type->t == CTYPE_INT && x > INT_MAX) ||
