@@ -275,10 +275,55 @@ is_valid_escape_char(char c)
 	return b;
 }
 
+static WARN_UNUSED char
+map_escape_char(char c)
+{
+	switch (c) {
+	case '\'':
+		c = '\'';
+		break;
+	case '"':
+		c = '"';
+		break;
+	case '?':
+		c = '?';
+		break;
+	case '\\':
+		c = '\\';
+		break;
+	case 'a':
+		c = '\a';
+		break;
+	case 'b':
+		c = '\b';
+		break;
+	case 'f':
+		c = '\f';
+		break;
+	case 'n':
+		c = '\n';
+		break;
+	case 'r':
+		c = '\r';
+		break;
+	case 't':
+		c = '\t';
+		break;
+	case 'v':
+		c = '\v';
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+	return c;
+}
+
 static WARN_UNUSED result_t
-lex_one_constant_strlike(struct string_view *pos,
-                         struct token **tok,
-                         enum lex_tokentype token_type)
+lex_one_strlike(Arena *arena,
+                struct string_view *pos,
+                struct token **tok,
+                enum lex_tokentype token_type)
 {
 	struct token *cur = *tok;
 	cur->token_type = token_type;
@@ -303,6 +348,8 @@ lex_one_constant_strlike(struct string_view *pos,
 	cur->val.sz = 0;
 
 	bool done = false;
+	bool deepcopy = false;
+
 	while (!done) {
 		if (pos->sz == 0) {
 			return make_result(ERR_LEX_CHAR_EXPECT_MORE);
@@ -331,9 +378,9 @@ lex_one_constant_strlike(struct string_view *pos,
 			return make_result(ERR_LEX_CHAR_INVALID_NEWLINE);
 		}
 
-		// TODO: handle escaping in lex, before parse
 		const bool escaped = is_backslash(pos->data[0]);
 		if (escaped) {
+			deepcopy = true;
 			if (pos->sz == 0) {
 				return make_result(ERR_LEX_CHAR_EXPECT_MORE);
 			}
@@ -350,6 +397,27 @@ lex_one_constant_strlike(struct string_view *pos,
 		pos->data++;
 		pos->sz--;
 		cur->val.sz++;
+	}
+
+	if (deepcopy) {
+		struct string_view raw = cur->val;
+		char *out = arena_alloc(arena, raw.sz);
+		cur->val.data = out;
+		cur->val.sz = 0;
+		bool escaped = false;
+		for (size_t i = 0; i < raw.sz; ++i) {
+			char c = raw.data[i];
+			if (escaped) {
+				escaped = false;
+				c = map_escape_char(c);
+			} else if (is_backslash(c)) {
+				escaped = true;
+				continue;
+			}
+			out[cur->val.sz] = c;
+			cur->val.sz++;
+		}
+		assert(!escaped); /* no dangling escape char */
 	}
 
 	if (token_type == TOKEN_CONSTANT_CHAR) {
@@ -389,9 +457,9 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 		pos->data += ahead;
 		pos->sz -= ahead;
 	} else if (is_quote_single(c)) {
-		check(lex_one_constant_strlike(pos, &cur, TOKEN_CONSTANT_CHAR));
+		check(lex_one_strlike(arena, pos, &cur, TOKEN_CONSTANT_CHAR));
 	} else if (is_quote_double(c)) {
-		check(lex_one_constant_strlike(pos, &cur, TOKEN_CONSTANT_STR));
+		check(lex_one_strlike(arena, pos, &cur, TOKEN_CONSTANT_STR));
 	} else if (isdigit(c) || isdot(c)) {
 		check(lex_one_constant_numeric(pos, &cur));
 		check(lex_peek_ok(pos, &cur->val));
