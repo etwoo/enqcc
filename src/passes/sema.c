@@ -2157,7 +2157,11 @@ sema_declare_apply(struct ast *a,
 		                      &a->u.declare.var_type));
 		dup = state->variable_symbols;
 		check(sema_alloc_auxiliary(state->arena, &dup->auxiliary));
-		sema_get_auxiliary(dup)->dscope = dscope;
+		if (linkage_state.linkage == SYMBOL_LINKAGE_EXTERNAL) {
+			sema_get_auxiliary(dup)->dscope = SCOPE_FILE;
+		} else {
+			sema_get_auxiliary(dup)->dscope = dscope;
+		}
 	} else if (!ctype_is_equal(&a->u.declare.var_type, &dup->c89type)) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_TYPE_CONFLICT,
 		                   dup->name.data,
