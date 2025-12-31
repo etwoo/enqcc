@@ -1948,6 +1948,24 @@ sema_fn_signature(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED struct symbol *
+symbols_get_scoped(struct symbol *head, /* maybe NULL */
+                   const struct string_view *name,
+                   enum symbol_declaration_scope dscope)
+{
+	while (true) {
+		struct symbol *candidate = symbols_get_anywhere(head, name);
+		if (candidate == NULL) {
+			break;
+		}
+		if (sema_get_auxiliary(candidate)->dscope == dscope) {
+			return candidate;
+		}
+		head = candidate->next;
+	}
+	return NULL;
+}
+
 static WARN_UNUSED result_t
 sema_declare_file_scope(struct ast *a,
                         struct sema_symbol_state *state,
@@ -1996,7 +2014,7 @@ sema_declare_file_scope(struct ast *a,
 			varname->sz);
 	}
 
-	*dup = symbols_get_anywhere(state->variable_symbols, varname);
+	*dup = symbols_get_scoped(state->variable_symbols, varname, SCOPE_FILE);
 
 	if (*dup == NULL) {
 		/* no earlier declaration to cross-reference linkage */
@@ -2029,24 +2047,6 @@ sema_declare_file_scope(struct ast *a,
 	}
 
 	return RESULT_OK;
-}
-
-static WARN_UNUSED struct symbol *
-symbols_get_scoped(struct symbol *head, /* maybe NULL */
-                   const struct string_view *name,
-                   enum symbol_declaration_scope dscope)
-{
-	while (true) {
-		struct symbol *candidate = symbols_get_anywhere(head, name);
-		if (candidate == NULL) {
-			break;
-		}
-		if (sema_get_auxiliary(candidate)->dscope == dscope) {
-			return candidate;
-		}
-		head = candidate->next;
-	}
-	return NULL;
 }
 
 static WARN_UNUSED result_t
