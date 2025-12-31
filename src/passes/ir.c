@@ -1361,8 +1361,7 @@ ir_logical_op(Arena *arena,
 	foot_pos->opcode = IR_OP_COPY;
 	foot_pos->args[0].subtype = IR_VAL_CONSTANT;
 	foot_pos->args[0].num = jz ? 1 : 0;
-	foot_pos->args[1].subtype = return_value->subtype;
-	foot_pos->args[1].num = return_value->num;
+	ir_val_copy(return_value, &foot_pos->args[1]);
 
 	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
@@ -1384,8 +1383,7 @@ ir_logical_op(Arena *arena,
 	foot_pos->opcode = IR_OP_COPY;
 	foot_pos->args[0].subtype = IR_VAL_CONSTANT;
 	foot_pos->args[0].num = jz ? 0 : 1;
-	foot_pos->args[1].subtype = return_value->subtype;
-	foot_pos->args[1].num = return_value->num;
+	ir_val_copy(return_value, &foot_pos->args[1]);
 
 	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
