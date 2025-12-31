@@ -240,6 +240,13 @@ is_quote_double(char c)
 }
 
 static WARN_UNUSED bool
+is_delimiter(enum lex_tokentype token_type, char c)
+{
+	return (token_type == TOKEN_CONSTANT_CHAR && is_quote_single(c)) ||
+	       (token_type == TOKEN_CONSTANT_STR && is_quote_double(c));
+}
+
+static WARN_UNUSED bool
 is_newline(char c)
 {
 	return c == '\n';
@@ -302,6 +309,51 @@ is_valid_escape_char(char c)
 }
 
 static WARN_UNUSED result_t
+map_span_to_strlike(Arena *arena,
+                    enum lex_tokentype token_type,
+                    const struct string_view *src,
+                    struct string_view *dst)
+{
+	char *out = arena_alloc(arena, src->sz); /* source size -> capacity */
+	dst->data = out;
+	dst->sz = 0;
+
+	bool escaped = false;
+	bool between_neighbors = false;
+
+	for (size_t i = 0; i < src->sz; ++i) {
+		char c = src->data[i];
+
+		if (between_neighbors) {
+			if (is_delimiter(token_type, c)) {
+				between_neighbors = false;
+			} else {
+				assert(isspace(c));
+			}
+			continue;
+		}
+
+		if (escaped) {
+			escaped = false;
+			c = map_escape_char(c);
+		} else if (is_delimiter(token_type, c)) {
+			between_neighbors = true;
+			continue;
+		} else if (is_backslash(c)) {
+			escaped = true;
+			continue;
+		}
+
+		out[dst->sz] = c;
+		dst->sz++;
+	}
+
+	assert(!escaped);           /* no dangling escape char */
+	assert(!between_neighbors); /* require final delimiter */
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 lex_one_strlike(Arena *arena,
                 struct string_view *pos,
                 struct token **tok,
@@ -311,18 +363,7 @@ lex_one_strlike(Arena *arena,
 	cur->token_type = token_type;
 
 	assert(pos->sz > 0);
-	switch (token_type) {
-	case TOKEN_CONSTANT_CHAR:
-		assert(is_quote_single(pos->data[0]));
-		break;
-	case TOKEN_CONSTANT_STR:
-		assert(is_quote_double(pos->data[0]));
-		break;
-	default:
-		assert(0); /* logic error in caller */
-		break;
-	}
-
+	assert(is_delimiter(token_type, pos->data[0]));
 	pos->data++;
 	pos->sz--;
 
@@ -337,23 +378,28 @@ lex_one_strlike(Arena *arena,
 			return make_result(ERR_LEX_CHAR_EXPECT_MORE);
 		}
 
-		// TODO: merge adjacent literals, ignoring isspace() in between
-		switch (token_type) {
-		case TOKEN_CONSTANT_CHAR:
-			if (is_quote_single(pos->data[0])) {
-				done = true;
-				continue;
+		if (is_delimiter(token_type, pos->data[0])) {
+			done = true;
+			for (size_t i = 1; i < pos->sz; ++i) {
+				const char peek = pos->data[i];
+				if (isspace(peek)) {
+					/* continue scanning */
+				} else if (is_delimiter(token_type, peek)) {
+					/* merge current and next literal */
+					deepcopy = true;
+					done = false;
+					i++; /* seek past delim */
+					pos->data += i;
+					pos->sz -= i;
+					cur->val.sz += i;
+					break;
+				} else {
+					/* next token should not merge */
+					assert(done);
+					break;
+				}
 			}
-			break;
-		case TOKEN_CONSTANT_STR:
-			if (is_quote_double(pos->data[0])) {
-				done = true;
-				continue;
-			}
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
+			continue;
 		}
 
 		if (is_newline(pos->data[0])) {
@@ -383,23 +429,7 @@ lex_one_strlike(Arena *arena,
 
 	if (deepcopy) {
 		struct string_view raw = cur->val;
-		char *out = arena_alloc(arena, raw.sz);
-		cur->val.data = out;
-		cur->val.sz = 0;
-		bool escaped = false;
-		for (size_t i = 0; i < raw.sz; ++i) {
-			char c = raw.data[i];
-			if (escaped) {
-				escaped = false;
-				c = map_escape_char(c);
-			} else if (is_backslash(c)) {
-				escaped = true;
-				continue;
-			}
-			out[cur->val.sz] = c;
-			cur->val.sz++;
-		}
-		assert(!escaped); /* no dangling escape char */
+		check(map_span_to_strlike(arena, token_type, &raw, &cur->val));
 	}
 
 	if (token_type == TOKEN_CONSTANT_CHAR) {
