@@ -136,8 +136,7 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		check(parse_alloc(arena, dst, prefix_ops[got_match].node_type));
 		token_consume(tok);
 		check(parse_factor(arena, tok, &(**dst).u.op_unary.operand));
-	} else if (is_token_type(*tok, TOKEN_CONSTANT) ||
-	           is_token_type(*tok, TOKEN_CONSTANT_CHAR)) {
+	} else if (can_parse_constant(*tok)) {
 		check(parse_constant(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_CONSTANT_STR)) {
 		check(parse_alloc(arena, dst, NODE_CONSTANT_STR));

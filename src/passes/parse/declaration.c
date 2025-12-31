@@ -571,7 +571,7 @@ parse_declarator_group_postfix(Arena *arena,
 		}
 		token_consume(tok);
 
-		if (!is_token_type(*tok, TOKEN_CONSTANT)) {
+		if (!can_parse_constant(*tok)) {
 			return make_result(
 				ERR_PARSE_DECL_ATOM_ARRAY_SIZE_NON_CONSTANT);
 		}

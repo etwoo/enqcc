@@ -14,6 +14,13 @@
 #include <stdlib.h> /* for strtoll() */
 #include <string.h> /* for memchr() */
 
+bool
+can_parse_constant(const struct token *tok)
+{
+	return is_token_type(tok, TOKEN_CONSTANT) ||
+	       is_token_type(tok, TOKEN_CONSTANT_CHAR);
+}
+
 static WARN_UNUSED bool
 is_constant_maybe_double(const struct string_view *val)
 {
