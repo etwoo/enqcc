@@ -174,8 +174,8 @@ populate_initializer_elements(const struct ast *a,
 
 	if (a->u.init.single != NULL) {
 		const struct ast *s = a->u.init.single;
-		if (s->node_type == NODE_CONSTANT_STR) {
-			assert(ctype_is_strlike_array(dst_type));
+		if (s->node_type == NODE_CONSTANT_STR &&
+		    ctype_is_strlike_array(dst_type)) {
 			size_t i = 0;
 			for (; i < s->u.str.sz; ++i) {
 				(**pos).byte_count = 1;
@@ -186,6 +186,9 @@ populate_initializer_elements(const struct ast *a,
 				(**pos).byte_count = 1;
 				(**pos).byte_value = 0;
 			}
+		} else if (s->node_type == NODE_CONSTANT_STR &&
+		           ctype_is_strlike_ptr(dst_type)) {
+			assert(0 && "TODO: char pointer init by str literal");
 		} else {
 			map_numeric_type_scalar(s, dst_type, *pos);
 		}

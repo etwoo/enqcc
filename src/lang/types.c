@@ -179,10 +179,18 @@ ctype_is_array(const struct ctype *c)
 bool
 ctype_is_strlike_array(const struct ctype *c)
 {
+	/* consider arrays of any character type as str-like */
 	return c->t == CTYPE_ARRAY_OF &&
 	       (c->referent->t == CTYPE_CHAR ||
 	        c->referent->t == CTYPE_SIGNED_CHAR ||
 	        c->referent->t == CTYPE_UNSIGNED_CHAR);
+}
+
+bool
+ctype_is_strlike_ptr(const struct ctype *c)
+{
+	/* consider pointers to char as str-like; exclude {,un}signed char */
+	return c->t == CTYPE_POINTER_TO && c->referent->t == CTYPE_CHAR;
 }
 
 bool
