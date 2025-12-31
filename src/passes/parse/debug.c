@@ -259,7 +259,8 @@ parse_debug_print(const struct ast *a, size_t indent)
 		if (a->u.init.single != NULL) {
 			assert(a->u.init.multi == NULL);
 			parse_debug_print(a->u.init.single, indent + 1);
-		} else if (a->u.init.multi != NULL) {
+		}
+		if (a->u.init.multi != NULL) {
 			assert(a->u.init.single == NULL);
 			parse_debug_print_flat(a->u.init.multi, indent + 1);
 		}

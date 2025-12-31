@@ -1052,6 +1052,11 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 {
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
+	if (init->u.init.single != NULL &&
+	    ctype_is_strlike_array(&init->u.init.single->expr_type)) {
+		return RESULT_OK;
+	}
+
 	if (!ctype_is_array(declaration_type)) {
 		if (init->u.init.single == NULL) {
 			check(parse_alloc(arena,
@@ -1067,6 +1072,8 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 		}
 		return RESULT_OK;
 	}
+
+	assert(init->u.init.single == NULL);
 	assert(declaration_type->referent != NULL);
 
 	struct flat **dst = &init->u.init.multi;
