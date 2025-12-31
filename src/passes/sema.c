@@ -1541,8 +1541,6 @@ sema_implicit_cast_initializer(Arena *arena,
 	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
 
 	if ((**init).u.init.single != NULL) {
-		assert(ctype_is_equal(&(**init).u.init.single->expr_type,
-		                      &(**init).expr_type));
 		check(sema_pointer_cmp(expected_type, &(**init).expr_type));
 		check(cast_if(arena, expected_type, init));
 		return RESULT_OK;
