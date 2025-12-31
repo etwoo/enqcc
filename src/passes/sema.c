@@ -82,7 +82,7 @@ count_initializer_elements(struct ctype *dst_type, const struct ast *a)
 	if (s != NULL && s->node_type == NODE_CONSTANT_STR) {
 		size_t extra = 0;
 		if (ctype_is_strlike_ptr(dst_type)) {
-			extra = 1; /* include space for NUL terminator */
+			extra = 1; /* +1 for NUL terminator */
 		} else {
 			assert(ctype_is_strlike_array(dst_type));
 		}
@@ -1382,7 +1382,7 @@ sema_pointer_cmp_impl(const struct ctype *lhs,
 	if (ctype_is_equal(lhs, rhs)) {
 		/* given equality, nothing more to check */
 	} else if (ctype_is_strlike_array(lhs) && ctype_is_strlike_array(rhs)) {
-		if (lhs->sz < rhs->sz) {
+		if (lhs->sz < rhs->sz - 1) { /* -1 for (maybe) NUL terminator */
 			return make_result(ERR_SEMA_OPERAND_CHAR_ARRAY_SIZE);
 		} /* else: RHS string may be shorter than LHS capacity */
 	} else if (ctype_is_pointer(lhs) && ctype_is_pointer(rhs)) {
