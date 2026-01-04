@@ -196,6 +196,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_CAST:
 		check(resolve_expr(arena, a->u.cast.expr, sym));
 		break;
+	case NODE_CONSTANT_COMPOUND:
+		assert(0 && "compound literals not yet supported");
+		break;
 	}
 
 	return RESULT_OK;

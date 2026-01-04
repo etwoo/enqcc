@@ -94,6 +94,7 @@ struct ast_parameter {
 	F(CASE_DEFAULT)                                                        \
 	F(CONSTANT)                                                            \
 	F(CONSTANT_STR)                                                        \
+	F(CONSTANT_COMPOUND)                                                   \
 	FOREACH_AST_NODE_EXPRESSION(F)
 
 #define TO_ENUM(nodet, ...) NODE_##nodet,
@@ -130,6 +131,10 @@ struct ast {
 			struct ast *single;
 			struct flat *multi;
 		} init;
+		struct {
+			struct ctype object_type;
+			struct flat *compound;
+		} literal;
 		struct {
 			struct ast *condition;
 			struct flat *then_clause;

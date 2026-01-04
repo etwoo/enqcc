@@ -35,7 +35,7 @@ is_node_lvalue(const struct ast *a)
 	}
 	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
 	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE ||
-	       a->node_type == NODE_CONSTANT_STR;
+	       a->node_type == NODE_CONSTANT_COMPOUND;
 }
 
 static WARN_UNUSED const struct ast *
@@ -203,6 +203,27 @@ populate_initializer_elements(const struct ast *a,
 	}
 }
 
+// TODO: in earlier sema pass, replace all single NODE_CONSTANT_STR with multi
+// compound initializer of char, then replace code below (and elsewhere) to
+// remove special-casing of NODE_CONSTANT_STR and instead handle generically as
+// array of chars/bytes (including auto-adding of terminating NUL, space
+// permitting, which should fall out naturally from existing zero-padding
+// behavior for numeric arrays)
+//
+// this should hopefully make IR for literal init of char array just-work
+//
+// right now, IR is not well-factored to handle array init with single
+// NODE_CONSTANT_STR, instead of using multi compound initializer with char
+// elements; basically, it seems like IR would require ugly changes, which we
+// can avoid by normalizing to array-like (instead of literal-like)
+// representation
+//
+// should also make literal init of char pointer a bit easier, as the
+// initializer will already be in array-like form, suitable for hoisting to
+// symbol table, where we've already taken the approach of normalizing to
+// array-style for char arrays/pointers with linkage, i.e. using array of .byte
+// directives, avoiding use of .ascii/.asciz directives (maybe bad in general,
+// but at least consistent in this specific case)
 static WARN_UNUSED result_t
 map_numeric_type(Arena *arena,
                  const struct ast *init,
@@ -338,6 +359,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT:
 	case NODE_CONSTANT_STR:
+	case NODE_CONSTANT_COMPOUND:
 		break;
 	}
 
@@ -929,6 +951,85 @@ sema_subscript(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
+sema_str_literal_expand(Arena *arena,
+                        const struct string_view *lit,
+                        struct flat **dst)
+{
+	assert(dst != NULL);
+	assert(*dst == NULL);
+
+	for (size_t i = 0; i <= lit->sz; ++i) {
+		check(flat_alloc(arena, dst));
+		check(parse_alloc(arena,
+		                  &(**dst).car,
+		                  NODE_EXPRESSION_INITIALIZER));
+		check(parse_alloc(arena,
+		                  &(**dst).car->u.init.single,
+		                  NODE_CONSTANT));
+
+		struct ast *new_node = (**dst).car->u.init.single;
+		if (i < lit->sz) {
+			new_node->u.num = (int)lit->data[i];
+		} else {
+			new_node->u.num = 0; /* implicit NUL terminator */
+		}
+		new_node->expr_type.t = CTYPE_INT;
+
+		(**dst).car->expr_type.t = CTYPE_INT;
+		dst = &(**dst).cdr;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_str_literal_as_init(Arena *arena, struct ast *init)
+{
+	assert(init != NULL);
+	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (init->u.init.single != NULL &&
+	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
+		const struct string_view deepcopy = init->u.init.single->u.str;
+		check(sema_str_literal_expand(arena,
+		                              &deepcopy,
+		                              &init->u.init.multi));
+		init->u.init.single = NULL;
+		return RESULT_OK;
+	}
+
+	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
+		check(sema_str_literal_as_init(arena, f->car));
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_str_literal_to_compound_literal(struct ast *a, void *userdata)
+{
+	Arena *arena = userdata;
+
+	if (a->node_type == NODE_CONSTANT_STR) {
+		const struct string_view deepcopy = a->u.str;
+		a->node_type = NODE_CONSTANT_COMPOUND;
+		check(ctype_alloc_str_literal(arena,
+		                              &deepcopy,
+		                              &a->u.literal.object_type));
+		check(sema_str_literal_expand(arena,
+		                              &deepcopy,
+		                              &a->u.literal.compound));
+		return RESULT_OK;
+	}
+
+	if (a->node_type == NODE_DECLARATION && a->u.declare.init != NULL) {
+		check(sema_str_literal_as_init(arena, a->u.declare.init));
+		return RESULT_OK;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	bool allow_array = false;
@@ -1059,9 +1160,7 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 			init->u.init.single->expr_type.t = CTYPE_INT;
 			init->u.init.single->expr_type
 				.maybe_null_pointer_constant = true;
-			check(ctype_copy(arena,
-			                 &init->u.init.single->expr_type,
-			                 &init->expr_type));
+			init->expr_type.t = CTYPE_INT;
 		}
 		return RESULT_OK;
 	}
@@ -1285,7 +1384,7 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_CONSTANT:
-	case NODE_CONSTANT_STR:
+	case NODE_CONSTANT_COMPOUND:
 		break; /* resolve_expr() in parse.c handles leaf nodes */
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
@@ -1301,6 +1400,9 @@ sema_expr_types(struct ast *a, void *userdata)
 		break;
 	case NODE_EXPRESSION_SUBSCRIPT:
 		assert(0 && "SUBSCRIPT should have been eliminated");
+		break;
+	case NODE_CONSTANT_STR:
+		assert(0 && "CONSTANT_STR should have been eliminated");
 		break;
 	}
 
@@ -2281,6 +2383,10 @@ sema_typecheck(Arena *arena,
 
 	debug("Expanding array subscript expressions");
 	ops.node_enter = sema_subscript;
+	check(sema_walk(a, &ops, arena));
+
+	debug("Expanding string literals to compound literals");
+	ops.node_enter = sema_str_literal_to_compound_literal;
 	check(sema_walk(a, &ops, arena));
 
 	debug("Checking variable usage");

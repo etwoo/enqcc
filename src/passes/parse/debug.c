@@ -356,6 +356,9 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      (int)a->u.str.sz,
 		      a->u.str.data);
 		break;
+	case NODE_CONSTANT_COMPOUND:
+		parse_debug_print_flat(a->u.literal.compound, indent + 1);
+		break;
 	}
 }
 

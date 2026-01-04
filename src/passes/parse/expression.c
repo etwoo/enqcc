@@ -337,6 +337,7 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_CAST:
 	case NODE_CONSTANT:
 	case NODE_CONSTANT_STR:
+	case NODE_CONSTANT_COMPOUND:
 		assert(0); /* logic error in caller */
 		break;
 	}
