@@ -57,8 +57,8 @@ is_node_constant(const struct ast *a)
 	}
 
 	if (a->u.init.single != NULL) {
-		return a->u.init.single->node_type == NODE_CONSTANT ||
-		       a->u.init.single->node_type == NODE_CONSTANT_STR;
+		const enum ast_nodetype nt = a->u.init.single->node_type;
+		return nt == NODE_CONSTANT || nt == NODE_CONSTANT_COMPOUND;
 	}
 	assert(a->u.init.multi != NULL);
 
@@ -79,15 +79,6 @@ count_initializer_elements(struct ctype *dst_type, const struct ast *a)
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	const struct ast *s = a->u.init.single;
-	if (s != NULL && s->node_type == NODE_CONSTANT_STR) {
-		size_t extra = 0;
-		if (ctype_is_strlike_ptr(dst_type)) {
-			extra = 1; /* +1 for NUL terminator */
-		} else {
-			assert(ctype_is_strlike_array(dst_type));
-		}
-		return s->u.str.sz + extra;
-	}
 	if (s != NULL) {
 		assert(s->node_type == NODE_CONSTANT);
 		return 1;
@@ -176,24 +167,7 @@ populate_initializer_elements(const struct ast *a,
 
 	if (a->u.init.single != NULL) {
 		const struct ast *s = a->u.init.single;
-		if (s->node_type == NODE_CONSTANT_STR &&
-		    (ctype_is_strlike_array(dst_type) ||
-		     ctype_is_strlike_ptr(dst_type))) {
-			size_t i = 0;
-			for (; i < s->u.str.sz; ++i) {
-				(**pos).byte_count = 1;
-				(**pos).byte_value = (unsigned)s->u.str.data[i];
-				(*pos)++;
-			}
-			for (; i < dst_type->sz; ++i) {
-				(**pos).byte_count = 1;
-				(**pos).byte_value = 0;
-				(*pos)++;
-			}
-		} else {
-			map_numeric_type_scalar(s, dst_type, *pos);
-		}
-		(*pos)++;
+		map_numeric_type_scalar(s, dst_type, (*pos)++);
 		return;
 	}
 	assert(a->u.init.multi != NULL);
@@ -203,27 +177,6 @@ populate_initializer_elements(const struct ast *a,
 	}
 }
 
-// TODO: in earlier sema pass, replace all single NODE_CONSTANT_STR with multi
-// compound initializer of char, then replace code below (and elsewhere) to
-// remove special-casing of NODE_CONSTANT_STR and instead handle generically as
-// array of chars/bytes (including auto-adding of terminating NUL, space
-// permitting, which should fall out naturally from existing zero-padding
-// behavior for numeric arrays)
-//
-// this should hopefully make IR for literal init of char array just-work
-//
-// right now, IR is not well-factored to handle array init with single
-// NODE_CONSTANT_STR, instead of using multi compound initializer with char
-// elements; basically, it seems like IR would require ugly changes, which we
-// can avoid by normalizing to array-like (instead of literal-like)
-// representation
-//
-// should also make literal init of char pointer a bit easier, as the
-// initializer will already be in array-like form, suitable for hoisting to
-// symbol table, where we've already taken the approach of normalizing to
-// array-style for char arrays/pointers with linkage, i.e. using array of .byte
-// directives, avoiding use of .ascii/.asciz directives (maybe bad in general,
-// but at least consistent in this specific case)
 static WARN_UNUSED result_t
 map_numeric_type(Arena *arena,
                  const struct ast *init,
