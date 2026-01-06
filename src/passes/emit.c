@@ -845,7 +845,7 @@ emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
 	}
 
 	for (struct asm_str *s = cg->string_literals; s != NULL; s = s->next) {
-		emit_asm_str(s, plat, fd); // TODO
+		emit_asm_str(s, plat, fd);
 	}
 
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
