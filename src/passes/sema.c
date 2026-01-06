@@ -944,10 +944,10 @@ sema_str_literal_as_init(Arena *arena, struct ast *init)
 	if (init->u.init.single != NULL &&
 	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
 		const struct string_view deepcopy = init->u.init.single->u.str;
+		init->u.init.single = NULL;
 		check(sema_str_literal_expand(arena,
 		                              &deepcopy,
 		                              &init->u.init.multi));
-		init->u.init.single = NULL;
 		return RESULT_OK;
 	}
 
@@ -957,13 +957,75 @@ sema_str_literal_as_init(Arena *arena, struct ast *init)
 	return RESULT_OK;
 }
 
+// TODO: handle string literals nested within array initializers
 static WARN_UNUSED result_t
-sema_str_literal_to_compound_literal(struct ast *a, void *userdata)
+sema_str_literal_hoist(Arena *arena,
+                       struct ctype *var_type,
+                       struct ast *init,
+                       struct symbol **s)
 {
-	Arena *arena = userdata;
+	if (!ctype_is_strlike_ptr(var_type)) {
+		return RESULT_OK;
+	}
+
+	struct ctype array_type = {0};
+	check(ctype_copy(arena, var_type, &array_type));
+	array_type.t = CTYPE_ARRAY_OF;
+	assert(ctype_is_strlike_array(&array_type));
+
+	/* translate u.init.multi into equivalent constant_initializer */
+	assert(init->u.init.multi != NULL);
+	struct constant_initializer initializer = {0};
+	check(map_numeric_type(arena, init, &array_type, &initializer));
+
+	array_type.sz = initializer.count;
+
+	/* add constant_initializer to symbol table */
+	struct string_view dummy_name = {0};
+	check(symbols_prepend(arena,
+	                      s,
+	                      &dummy_name,
+	                      SYMBOL_STRING_LITERAL,
+	                      &array_type));
+	(**s).linkage.initial = INITIAL_VALUE_CONSTANT;
+	(**s).linkage.initializer = initializer;
+
+	/* remove array init expression from AST */
+	init->u.init.multi = NULL;
+
+	/* create replacement initializer: simple variable reference */
+	struct ast *new_node = NULL;
+	check(parse_alloc(arena, &new_node, NODE_EXPRESSION_VARIABLE_USAGE));
+	new_node->expr_type = array_type;
+
+	/* make variable expr refer to string literal in symbol table */
+	struct ast_symbol *new_var = &new_node->u.var;
+	new_var->name = dummy_name;
+	new_var->unique = (**s).unique;
+	new_var->stype = SYMBOL_STRING_LITERAL;
+	new_var->ltype = SYMBOL_LINKAGE_INTERNAL;
+
+	/* add new init expression to AST */
+	init->u.init.single = new_node;
+
+	return RESULT_OK;
+}
+
+struct sema_str_literal_state {
+	Arena *arena;
+	struct symbol *string_literal_symbols;
+};
+
+static WARN_UNUSED result_t
+sema_str_literal(struct ast *a, void *userdata)
+{
+	struct sema_str_literal_state *state = userdata;
+	Arena *arena = state->arena;
 
 	if (a->node_type == NODE_CONSTANT_STR) {
 		const struct string_view deepcopy = a->u.str;
+		// TODO: rm NODE_CONSTANT_COMPOUND type; instead, hoist
+		// immediately and set node_type = EXPRESSION_VARIABLE_USAGE
 		a->node_type = NODE_CONSTANT_COMPOUND;
 		check(ctype_alloc_str_literal(arena,
 		                              &deepcopy,
@@ -976,8 +1038,15 @@ sema_str_literal_to_compound_literal(struct ast *a, void *userdata)
 
 	if (a->node_type == NODE_DECLARATION && a->u.declare.init != NULL) {
 		check(sema_str_literal_as_init(arena, a->u.declare.init));
+		check(sema_str_literal_hoist(arena,
+		                             &a->u.declare.var_type,
+		                             a->u.declare.init,
+		                             &state->string_literal_symbols));
 		return RESULT_OK;
 	}
+
+	// TODO: also hoist init exprs "natively" in compound found, identical
+	// to NODE_CONSTANT_STR values after expansion
 
 	return RESULT_OK;
 }
@@ -1180,11 +1249,16 @@ sema_expr_types_initializer(Arena *arena,
 	}
 
 	/*
+	 * sema_str_literal() diverts array initializor of char pointer
+	 * variable declaration; hence, should not appear here.
+	 */
+	assert(!ctype_is_strlike_ptr(declaration_type));
+
+	/*
 	 * For compound init, copy from LHS array type declaration to RHS
 	 * compound init expression.
 	 */
 	check(ctype_copy(arena, declaration_type, &init->expr_type));
-	init->expr_type.t = CTYPE_ARRAY_OF;
 
 	long long unsigned element_count = 0;
 
@@ -1596,8 +1670,9 @@ sema_implicit_cast_initializer(Arena *arena,
 
 	/* single XOR multi */
 	assert((**init).u.init.multi != NULL);
-	/* sema_expr_types() sets initial CTYPE_ARRAY_OF */
-	assert((**init).expr_type.t == CTYPE_ARRAY_OF);
+	/* array (multi) initializor must correspond to array type */
+	assert(ctype_is_array(expected_type));
+	assert(ctype_is_array(&(**init).expr_type));
 
 	for (struct flat *f = (**init).u.init.multi; f != NULL; f = f->cdr) {
 		check(sema_implicit_cast_initializer(arena,
@@ -2338,9 +2413,15 @@ sema_typecheck(Arena *arena,
 	ops.node_enter = sema_subscript;
 	check(sema_walk(a, &ops, arena));
 
-	debug("Expanding string literals to compound literals");
-	ops.node_enter = sema_str_literal_to_compound_literal;
-	check(sema_walk(a, &ops, arena));
+	debug("Expanding string literals and hoisting if necessary");
+	ops.node_enter = sema_str_literal;
+	{
+		struct sema_str_literal_state str_state = {0};
+		str_state.arena = arena;
+		str_state.string_literal_symbols = s->string_literals;
+		check(sema_walk(a, &ops, &str_state));
+		s->string_literals = str_state.string_literal_symbols;
+	}
 
 	debug("Checking variable usage");
 	ops.node_enter = sema_var_usage;
