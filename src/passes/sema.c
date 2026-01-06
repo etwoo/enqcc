@@ -919,29 +919,35 @@ sema_subscript(struct ast *a, void *userdata)
 static WARN_UNUSED result_t
 sema_str_literal_expand(Arena *arena,
                         const struct string_view *lit,
+                        const size_t capacity,
                         struct flat **dst)
 {
 	assert(dst != NULL);
 	assert(*dst == NULL);
 
 	for (size_t i = 0; i <= lit->sz; ++i) {
-		check(flat_alloc(arena, dst));
+		struct flat *new_flat = NULL;
+		check(flat_alloc(arena, &new_flat));
 		check(parse_alloc(arena,
-		                  &(**dst).car,
+		                  &new_flat->car,
 		                  NODE_EXPRESSION_INITIALIZER));
-		check(parse_alloc(arena,
-		                  &(**dst).car->u.init.single,
-		                  NODE_CONSTANT));
+		new_flat->car->expr_type.t = CTYPE_INT;
 
-		struct ast *new_node = (**dst).car->u.init.single;
+		struct ast *new_init = NULL;
+		check(parse_alloc(arena, &new_init, NODE_CONSTANT));
+		new_init->expr_type.t = CTYPE_INT;
+
 		if (i < lit->sz) {
-			new_node->u.num = (int)lit->data[i];
+			new_init->u.num = (int)lit->data[i];
+		} else if (i < capacity) {
+			new_init->u.num = 0; /* implicit NUL terminator */
 		} else {
-			new_node->u.num = 0; /* implicit NUL terminator */
+			break; /* lacks capacity; abandon new_flat/new_init */
 		}
-		new_node->expr_type.t = CTYPE_INT;
 
-		(**dst).car->expr_type.t = CTYPE_INT;
+		new_flat->car->u.init.single = new_init;
+		*dst = new_flat;
+
 		dst = &(**dst).cdr;
 	}
 
@@ -949,7 +955,9 @@ sema_str_literal_expand(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-sema_str_literal_as_init(Arena *arena, struct ast *init)
+sema_str_literal_as_init(Arena *arena,
+                         const struct ctype *declaration_type,
+                         struct ast *init)
 {
 	assert(init != NULL);
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
@@ -958,14 +966,25 @@ sema_str_literal_as_init(Arena *arena, struct ast *init)
 	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
 		const struct string_view deepcopy = init->u.init.single->u.str;
 		init->u.init.single = NULL;
+
+		assert(ctype_is_pointer(declaration_type));
+		assert(declaration_type->referent != NULL);
+
 		check(sema_str_literal_expand(arena,
 		                              &deepcopy,
+		                              ctype_is_array(declaration_type)
+		                                      ? declaration_type->sz
+		                                      : SIZE_MAX,
 		                              &init->u.init.multi));
 		return RESULT_OK;
 	}
 
 	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
-		check(sema_str_literal_as_init(arena, f->car));
+		assert(ctype_is_pointer(declaration_type));
+		assert(declaration_type->referent != NULL);
+		check(sema_str_literal_as_init(arena,
+		                               declaration_type->referent,
+		                               f->car));
 	}
 	return RESULT_OK;
 }
@@ -1039,6 +1058,7 @@ sema_str_literal(struct ast *a, void *userdata)
 		                  NODE_EXPRESSION_INITIALIZER));
 		check(sema_str_literal_expand(arena,
 		                              &a->u.str,
+		                              SIZE_MAX,
 		                              &fake_init->u.init.multi));
 		struct ast *new_node = NULL;
 		check(sema_str_literal_hoist(arena,
@@ -1052,7 +1072,9 @@ sema_str_literal(struct ast *a, void *userdata)
 	}
 
 	if (a->node_type == NODE_DECLARATION && a->u.declare.init != NULL) {
-		check(sema_str_literal_as_init(arena, a->u.declare.init));
+		check(sema_str_literal_as_init(arena,
+		                               &a->u.declare.var_type,
+		                               a->u.declare.init));
 		if (ctype_is_strlike_ptr(&a->u.declare.var_type) &&
 		    a->u.declare.init->u.init.multi != NULL) {
 			struct ast *new_node = NULL;
@@ -1206,6 +1228,7 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 	}
 
 	assert(init->u.init.single == NULL);
+	assert(ctype_is_pointer(declaration_type));
 	assert(declaration_type->referent != NULL);
 
 	struct flat **dst = &init->u.init.multi;
