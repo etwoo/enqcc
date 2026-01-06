@@ -1053,7 +1053,8 @@ sema_str_literal(struct ast *a, void *userdata)
 
 	if (a->node_type == NODE_DECLARATION && a->u.declare.init != NULL) {
 		check(sema_str_literal_as_init(arena, a->u.declare.init));
-		if (ctype_is_strlike_ptr(&a->u.declare.var_type)) {
+		if (ctype_is_strlike_ptr(&a->u.declare.var_type) &&
+		    a->u.declare.init->u.init.multi != NULL) {
 			struct ast *new_node = NULL;
 			check(sema_str_literal_hoist(arena,
 			                             &a->u.declare.var_type,
