@@ -200,6 +200,13 @@ emit_asm_operand(const struct asm_operand *o,
 		        o->u.quads[1],
 		        STR_REG_RIP);
 		break;
+	case ASM_OPERAND_CONSTANT_STRING:
+		dprintf(fd,
+		        "%s.str.%lld(%s)",
+		        label_prefix,
+		        (long long)o->u.num,
+		        STR_REG_RIP);
+		break;
 	}
 }
 
@@ -607,11 +614,11 @@ static const long long unsigned MAX_ALIGNMENT = 16;
 
 static void
 emit_asm_initializer(const struct string_view *name,
+                     const char *linkage, /* prefix, if symbol has linkage */
                      const struct constant_initializer *initializer,
                      enum platform plat,
                      int fd)
 {
-	const char *lnk_prefix = get_symbol_with_linkage_prefix(plat);
 	const char *label_prefix = get_label_prefix(plat);
 
 	const long long unsigned byte_count = constant_byte_count(initializer);
@@ -622,11 +629,11 @@ emit_asm_initializer(const struct string_view *name,
 
 	if (constant_is_zero(initializer)) {
 		dprintf(fd, "\t.bss\n\t.balign %llu\n", alignment);
-		dprintf(fd, "%s%.*s:\n", lnk_prefix, (int)name->sz, name->data);
+		dprintf(fd, "%s%.*s:\n", linkage, (int)name->sz, name->data);
 		dprintf(fd, "\t.zero %llu\n", byte_count);
 	} else {
 		dprintf(fd, "\t.data\n\t.balign %llu\n", alignment);
-		dprintf(fd, "%s%.*s:\n", lnk_prefix, (int)name->sz, name->data);
+		dprintf(fd, "%s%.*s:\n", linkage, (int)name->sz, name->data);
 		for (long long unsigned i = 0; i < initializer->count; ++i) {
 			switch (initializer->elements[i].byte_count) {
 			case 1:
@@ -670,7 +677,7 @@ emit_asm_str(const struct asm_str *s, enum platform plat, int fd)
 		.data = str,
 		.sz = strlen(str),
 	};
-	emit_asm_initializer(&sv, s->initializer, plat, fd);
+	emit_asm_initializer(&sv, "", s->initializer, plat, fd);
 
 	free(str);
 }
@@ -679,6 +686,7 @@ static void
 emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 {
 	const struct string_view *vname = &v->identifier;
+	const char *vprefix = get_symbol_with_linkage_prefix(plat);
 
 	if (v->linkage == ASM_LINKAGE_EXTERNAL) {
 		dprintf(fd,
@@ -688,7 +696,7 @@ emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	emit_asm_initializer(vname, v->initializer, plat, fd);
+	emit_asm_initializer(vname, vprefix, v->initializer, plat, fd);
 }
 
 /*

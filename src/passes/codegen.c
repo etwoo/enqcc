@@ -291,6 +291,10 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		dst->operand_type = ASM_OPERAND_VARIABLE_DATA;
 		dst->u.variable = src->varname;
 		break;
+	case IR_VAL_STRING_LITERAL:
+		dst->operand_type = ASM_OPERAND_CONSTANT_STRING;
+		dst->u.num = src->num;
+		break;
 	}
 
 	codegen_map_ctype(src, dst);
@@ -1580,7 +1584,8 @@ in_memory(struct asm_operand *o)
 	       o->operand_type == ASM_OPERAND_VARIABLE_DATA ||
 	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_DOUBLE ||
 	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_LONGS ||
-	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_QUADS;
+	       o->operand_type == ASM_OPERAND_CONSTANT_DATA_VEC_QUADS ||
+	       o->operand_type == ASM_OPERAND_CONSTANT_STRING;
 }
 
 /*
@@ -2147,6 +2152,9 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  CONSTANT VEC QUADS 0x%llx 0x%llx",
 		      operand->u.quads[0],
 		      operand->u.quads[1]);
+		break;
+	case ASM_OPERAND_CONSTANT_STRING:
+		debug("  CONSTANT STRING %lld", (long long)operand->u.num);
 		break;
 	}
 

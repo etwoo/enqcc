@@ -154,7 +154,9 @@ ir_assignment_lvalue(Arena *arena,
 		break;
 	}
 
-	if (some_linkage(direct->ltype)) {
+	if (direct->stype == SYMBOL_STRING_LITERAL) {
+		lvalue_direct->subtype = IR_VAL_STRING_LITERAL;
+	} else if (some_linkage(direct->ltype)) {
 		lvalue_direct->subtype = IR_VAL_VARIABLE_DATA;
 		lvalue_direct->varname = direct->name;
 	} else {
@@ -1902,6 +1904,9 @@ ir_debug_print_one(const struct ir_op *op)
 			debug("  DATA %.*s",
 			      (int)op->args[i].varname.sz,
 			      op->args[i].varname.data);
+			break;
+		case IR_VAL_STRING_LITERAL:
+			debug("  STRING str.%lld", (long long)op->args[i].num);
 			break;
 		}
 
