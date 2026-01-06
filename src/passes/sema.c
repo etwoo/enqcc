@@ -1012,6 +1012,8 @@ sema_str_literal_as_init(Arena *arena,
 	assert(init != NULL);
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
+	bool expanded = false;
+
 	if (init->u.init.single != NULL &&
 	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
 		const struct string_view deepcopy = init->u.init.single->u.str;
@@ -1026,10 +1028,14 @@ sema_str_literal_as_init(Arena *arena,
 		                                      ? declaration_type->sz
 		                                      : SIZE_MAX,
 		                              &init->u.init.multi));
+		expanded = true;
 	}
 
 	if (ctype_is_strlike_ptr(declaration_type) &&
 	    init->u.init.multi != NULL) {
+		if (!expanded) {
+			return make_result(ERR_SEMA_INIT_SCALAR_WITH_COMPOUND);
+		}
 		struct ast *new_node = NULL;
 		check(sema_str_literal_hoist(arena,
 		                             declaration_type,
