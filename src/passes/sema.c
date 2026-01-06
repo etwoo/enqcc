@@ -1016,6 +1016,10 @@ sema_str_literal_as_init(Arena *arena,
 
 	if (init->u.init.single != NULL &&
 	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
+		if (!ctype_is_strlike_ptr(declaration_type) &&
+		    !ctype_is_strlike_array(declaration_type)) {
+			return make_result(ERR_SEMA_INIT_STR_LITERAL_INVALID);
+		}
 		const struct string_view deepcopy = init->u.init.single->u.str;
 		init->u.init.single = NULL;
 
