@@ -58,7 +58,10 @@ is_node_constant(const struct ast *a)
 
 	if (a->u.init.single != NULL) {
 		const enum ast_nodetype nt = a->u.init.single->node_type;
-		return nt == NODE_CONSTANT || nt == NODE_CONSTANT_COMPOUND;
+		return nt == NODE_CONSTANT ||
+		       nt == NODE_CONSTANT_COMPOUND || // TODO: rm node_type
+		       (nt == NODE_EXPRESSION_VARIABLE_USAGE &&
+		        a->u.init.single->u.var.stype == SYMBOL_STRING_LITERAL);
 	}
 	assert(a->u.init.multi != NULL);
 
@@ -80,7 +83,7 @@ count_initializer_elements(struct ctype *dst_type, const struct ast *a)
 
 	const struct ast *s = a->u.init.single;
 	if (s != NULL) {
-		assert(s->node_type == NODE_CONSTANT);
+		assert(is_node_constant(a));
 		return 1;
 	}
 	assert(a->u.init.multi != NULL);
@@ -167,7 +170,19 @@ populate_initializer_elements(const struct ast *a,
 
 	if (a->u.init.single != NULL) {
 		const struct ast *s = a->u.init.single;
-		map_numeric_type_scalar(s, dst_type, (*pos)++);
+		switch (s->node_type) {
+		case NODE_CONSTANT:
+			map_numeric_type_scalar(s, dst_type, (*pos)++);
+			break;
+		case NODE_EXPRESSION_VARIABLE_USAGE:
+			assert(s->u.var.stype == SYMBOL_STRING_LITERAL);
+			// TODO: add pointer as initializer element, using
+			// `.quad <label>` syntax (i.e. pointer as quad)
+			return;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		return;
 	}
 	assert(a->u.init.multi != NULL);
