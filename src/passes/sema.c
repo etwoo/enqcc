@@ -1061,9 +1061,6 @@ sema_str_literal(struct ast *a, void *userdata)
 		return RESULT_OK;
 	}
 
-	// TODO: also hoist init exprs "natively" in compound found, identical
-	// to NODE_CONSTANT_STR values after expansion
-
 	return RESULT_OK;
 }
 
