@@ -955,47 +955,11 @@ sema_str_literal_expand(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-sema_str_literal_as_init(Arena *arena,
-                         const struct ctype *declaration_type,
-                         struct ast *init)
-{
-	assert(init != NULL);
-	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
-
-	if (init->u.init.single != NULL &&
-	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
-		const struct string_view deepcopy = init->u.init.single->u.str;
-		init->u.init.single = NULL;
-
-		assert(ctype_is_pointer(declaration_type));
-		assert(declaration_type->referent != NULL);
-
-		check(sema_str_literal_expand(arena,
-		                              &deepcopy,
-		                              ctype_is_array(declaration_type)
-		                                      ? declaration_type->sz
-		                                      : SIZE_MAX,
-		                              &init->u.init.multi));
-		return RESULT_OK;
-	}
-
-	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
-		assert(ctype_is_pointer(declaration_type));
-		assert(declaration_type->referent != NULL);
-		check(sema_str_literal_as_init(arena,
-		                               declaration_type->referent,
-		                               f->car));
-	}
-	return RESULT_OK;
-}
-
-// TODO: handle string literals nested within array initializers
-static WARN_UNUSED result_t
 sema_str_literal_hoist(Arena *arena,
-                       struct ctype *var_type,
+                       const struct ctype *var_type,
                        struct ast *init,
-                       struct ast **new_node,
-                       struct symbol **s)
+                       struct symbol **s,
+                       struct ast **new_node)
 {
 	struct ctype array_type = {0};
 	check(ctype_copy(arena, var_type, &array_type));
@@ -1039,6 +1003,54 @@ sema_str_literal_hoist(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_str_literal_as_init(Arena *arena,
+                         const struct ctype *declaration_type,
+                         struct ast *init,
+                         struct symbol **symbols)
+{
+	assert(init != NULL);
+	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
+
+	if (init->u.init.single != NULL &&
+	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
+		const struct string_view deepcopy = init->u.init.single->u.str;
+		init->u.init.single = NULL;
+
+		assert(ctype_is_pointer(declaration_type));
+		assert(declaration_type->referent != NULL);
+
+		check(sema_str_literal_expand(arena,
+		                              &deepcopy,
+		                              ctype_is_array(declaration_type)
+		                                      ? declaration_type->sz
+		                                      : SIZE_MAX,
+		                              &init->u.init.multi));
+	}
+
+	if (ctype_is_strlike_ptr(declaration_type) &&
+	    init->u.init.multi != NULL) {
+		struct ast *new_node = NULL;
+		check(sema_str_literal_hoist(arena,
+		                             declaration_type,
+		                             init,
+		                             symbols,
+		                             &new_node));
+		init->u.init.single = new_node;
+		assert(init->u.init.multi == NULL);
+	}
+
+	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
+		assert(ctype_is_pointer(declaration_type));
+		assert(declaration_type->referent != NULL);
+		check(sema_str_literal_as_init(arena,
+		                               declaration_type->referent,
+		                               f->car,
+		                               symbols));
+	}
+	return RESULT_OK;
+}
+
 struct sema_str_literal_state {
 	Arena *arena;
 	struct symbol *string_literal_symbols;
@@ -1064,8 +1076,8 @@ sema_str_literal(struct ast *a, void *userdata)
 		check(sema_str_literal_hoist(arena,
 		                             &a->expr_type,
 		                             fake_init,
-		                             &new_node,
-		                             symbols));
+		                             symbols,
+		                             &new_node));
 		assert(new_node != NULL);
 		memcpy(a, new_node, sizeof(*a));
 		return RESULT_OK;
@@ -1074,17 +1086,8 @@ sema_str_literal(struct ast *a, void *userdata)
 	if (a->node_type == NODE_DECLARATION && a->u.declare.init != NULL) {
 		check(sema_str_literal_as_init(arena,
 		                               &a->u.declare.var_type,
-		                               a->u.declare.init));
-		if (ctype_is_strlike_ptr(&a->u.declare.var_type) &&
-		    a->u.declare.init->u.init.multi != NULL) {
-			struct ast *new_node = NULL;
-			check(sema_str_literal_hoist(arena,
-			                             &a->u.declare.var_type,
-			                             a->u.declare.init,
-			                             &new_node,
-			                             symbols));
-			a->u.declare.init->u.init.single = new_node;
-		}
+		                               a->u.declare.init,
+		                               symbols));
 		return RESULT_OK;
 	}
 
@@ -1223,6 +1226,7 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 			init->u.init.single->expr_type
 				.maybe_null_pointer_constant = true;
 			init->expr_type.t = CTYPE_INT;
+			init->expr_type.maybe_null_pointer_constant = true;
 		}
 		return RESULT_OK;
 	}
