@@ -34,6 +34,7 @@ bool some_linkage(enum symbol_linkage linkage) WARN_UNUSED;
 struct constant_bytes {
 	long long unsigned byte_count;
 	long long unsigned byte_value; /* may contain double as quadword */
+	long long int unique;          /* optional: SYMBOL_STRING_LITERAL ID */
 };
 
 struct constant_initializer {

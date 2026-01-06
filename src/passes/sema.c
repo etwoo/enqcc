@@ -170,17 +170,17 @@ populate_initializer_elements(const struct ast *a,
 		const struct ast *s = a->u.init.single;
 		switch (s->node_type) {
 		case NODE_CONSTANT:
-			map_numeric_type_scalar(s, dst_type, (*pos)++);
+			map_numeric_type_scalar(s, dst_type, *pos);
 			break;
 		case NODE_EXPRESSION_VARIABLE_USAGE:
 			assert(s->u.var.stype == SYMBOL_STRING_LITERAL);
-			// TODO: add pointer as initializer element, using
-			// `.quad <label>` syntax (i.e. pointer as quad)
+			(**pos).unique = s->u.var.unique;
 			return;
 		default:
 			assert(0); /* logic error in caller */
 			break;
 		}
+		(*pos)++;
 		return;
 	}
 	assert(a->u.init.multi != NULL);
@@ -996,6 +996,9 @@ sema_str_literal_hoist(Arena *arena,
 	                      &dummy_name,
 	                      SYMBOL_STRING_LITERAL,
 	                      &array_type));
+	if ((**s).unique == 0) {
+		(**s).unique = 4096; /* avoid zero as string literal ID */
+	}
 	(**s).linkage.initial = INITIAL_VALUE_CONSTANT;
 	(**s).linkage.initializer = initializer;
 
