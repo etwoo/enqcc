@@ -34,8 +34,7 @@ is_node_lvalue(const struct ast *a)
 		a = a->u.op_unary.operand;
 	}
 	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE ||
-	       a->node_type == NODE_CONSTANT_COMPOUND;
+	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE;
 }
 
 static WARN_UNUSED const struct ast *
@@ -59,7 +58,6 @@ is_node_constant(const struct ast *a)
 	if (a->u.init.single != NULL) {
 		const enum ast_nodetype nt = a->u.init.single->node_type;
 		return nt == NODE_CONSTANT ||
-		       nt == NODE_CONSTANT_COMPOUND || // TODO: rm node_type
 		       (nt == NODE_EXPRESSION_VARIABLE_USAGE &&
 		        a->u.init.single->u.var.stype == SYMBOL_STRING_LITERAL);
 	}
@@ -327,7 +325,6 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT:
 	case NODE_CONSTANT_STR:
-	case NODE_CONSTANT_COMPOUND:
 		break;
 	}
 
@@ -977,12 +974,9 @@ static WARN_UNUSED result_t
 sema_str_literal_hoist(Arena *arena,
                        struct ctype *var_type,
                        struct ast *init,
+                       struct ast **new_node,
                        struct symbol **s)
 {
-	if (!ctype_is_strlike_ptr(var_type)) {
-		return RESULT_OK;
-	}
-
 	struct ctype array_type = {0};
 	check(ctype_copy(arena, var_type, &array_type));
 	array_type.t = CTYPE_ARRAY_OF;
@@ -1009,19 +1003,15 @@ sema_str_literal_hoist(Arena *arena,
 	init->u.init.multi = NULL;
 
 	/* create replacement initializer: simple variable reference */
-	struct ast *new_node = NULL;
-	check(parse_alloc(arena, &new_node, NODE_EXPRESSION_VARIABLE_USAGE));
-	new_node->expr_type = array_type;
+	check(parse_alloc(arena, new_node, NODE_EXPRESSION_VARIABLE_USAGE));
+	(**new_node).expr_type = array_type;
 
 	/* make variable expr refer to string literal in symbol table */
-	struct ast_symbol *new_var = &new_node->u.var;
+	struct ast_symbol *new_var = &(**new_node).u.var;
 	new_var->name = dummy_name;
 	new_var->unique = (**s).unique;
 	new_var->stype = SYMBOL_STRING_LITERAL;
 	new_var->ltype = SYMBOL_LINKAGE_INTERNAL;
-
-	/* add new init expression to AST */
-	init->u.init.single = new_node;
 
 	return RESULT_OK;
 }
@@ -1036,27 +1026,38 @@ sema_str_literal(struct ast *a, void *userdata)
 {
 	struct sema_str_literal_state *state = userdata;
 	Arena *arena = state->arena;
+	struct symbol **symbols = &state->string_literal_symbols;
 
 	if (a->node_type == NODE_CONSTANT_STR) {
-		const struct string_view deepcopy = a->u.str;
-		// TODO: rm NODE_CONSTANT_COMPOUND type; instead, hoist
-		// immediately and set node_type = EXPRESSION_VARIABLE_USAGE
-		a->node_type = NODE_CONSTANT_COMPOUND;
-		check(ctype_alloc_str_literal(arena,
-		                              &deepcopy,
-		                              &a->u.literal.object_type));
+		struct ast *fake_init = NULL;
+		check(parse_alloc(arena,
+		                  &fake_init,
+		                  NODE_EXPRESSION_INITIALIZER));
 		check(sema_str_literal_expand(arena,
-		                              &deepcopy,
-		                              &a->u.literal.compound));
+		                              &a->u.str,
+		                              &fake_init->u.init.multi));
+		struct ast *new_node = NULL;
+		check(sema_str_literal_hoist(arena,
+		                             &a->expr_type,
+		                             fake_init,
+		                             &new_node,
+		                             symbols));
+		assert(new_node != NULL);
+		memcpy(a, new_node, sizeof(*a));
 		return RESULT_OK;
 	}
 
 	if (a->node_type == NODE_DECLARATION && a->u.declare.init != NULL) {
 		check(sema_str_literal_as_init(arena, a->u.declare.init));
-		check(sema_str_literal_hoist(arena,
-		                             &a->u.declare.var_type,
-		                             a->u.declare.init,
-		                             &state->string_literal_symbols));
+		if (ctype_is_strlike_ptr(&a->u.declare.var_type)) {
+			struct ast *new_node = NULL;
+			check(sema_str_literal_hoist(arena,
+			                             &a->u.declare.var_type,
+			                             a->u.declare.init,
+			                             &new_node,
+			                             symbols));
+			a->u.declare.init->u.init.single = new_node;
+		}
 		return RESULT_OK;
 	}
 
@@ -1426,7 +1427,6 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_CONSTANT:
-	case NODE_CONSTANT_COMPOUND:
 		break; /* resolve_expr() in parse.c handles leaf nodes */
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_ADD:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SUB:
