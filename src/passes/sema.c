@@ -1080,15 +1080,12 @@ sema_str_literal(struct ast *a, void *userdata)
 		                             &new_node));
 		assert(new_node != NULL);
 		memcpy(a, new_node, sizeof(*a));
-		return RESULT_OK;
-	}
-
-	if (a->node_type == NODE_DECLARATION && a->u.declare.init != NULL) {
+	} else if (a->node_type == NODE_DECLARATION &&
+	           a->u.declare.init != NULL) {
 		check(sema_str_literal_as_init(arena,
 		                               &a->u.declare.var_type,
 		                               a->u.declare.init,
 		                               symbols));
-		return RESULT_OK;
 	}
 
 	return RESULT_OK;
