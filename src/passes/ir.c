@@ -1760,6 +1760,23 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 }
 
 static WARN_UNUSED result_t
+ir_string_literal(Arena *arena,
+                  struct symbol *s,
+                  struct ir_str **dst)
+{
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_IR_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).string_unique = s->unique;
+	assert(s->linkage.initial == INITIAL_VALUE_CONSTANT);
+	(**dst).initializer = &s->linkage.initializer;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_program(Arena *arena,
            const struct ast *a,
            struct symbol_table *sym,
@@ -1815,6 +1832,14 @@ ir_program(Arena *arena,
 		check(ir_var(arena, s, dst_var));
 		assert(*dst_var != NULL);
 		dst_var = &(**dst_var).next;
+	}
+
+	struct ir_str **dst_str = &ir->string_literals;
+	for (struct symbol *s = sym->string_literals; s != NULL; s = s->next) {
+		assert(s->stype == SYMBOL_STRING_LITERAL);
+		check(ir_string_literal(arena, s, dst_str));
+		assert(*dst_str != NULL);
+		dst_str = &(**dst_str).next;
 	}
 
 	return RESULT_OK;

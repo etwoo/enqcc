@@ -7,6 +7,7 @@
 #include <math.h> /* for signbit() */
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>    /* for free() */
 #include <string.h>    /* for memcpy() */
 #include <sys/param.h> /* for MIN() */
 
@@ -605,44 +606,89 @@ emit_asm_fn(const struct asm_function *fn, enum platform plat, int fd)
 static const long long unsigned MAX_ALIGNMENT = 16;
 
 static void
+emit_asm_initializer(const struct string_view *name,
+                     const struct constant_initializer *initializer,
+                     enum platform plat,
+                     int fd)
+{
+	const char *lnk_prefix = get_symbol_with_linkage_prefix(plat);
+	const char *label_prefix = get_label_prefix(plat);
+
+	const long long unsigned byte_count = constant_byte_count(initializer);
+	const long long unsigned alignment =
+		byte_count >= MAX_ALIGNMENT
+			? MAX_ALIGNMENT
+			: initializer->elements[0].byte_count;
+
+	if (constant_is_zero(initializer)) {
+		dprintf(fd, "\t.bss\n\t.balign %llu\n", alignment);
+		dprintf(fd, "%s%.*s:\n", lnk_prefix, (int)name->sz, name->data);
+		dprintf(fd, "\t.zero %llu\n", byte_count);
+	} else {
+		dprintf(fd, "\t.data\n\t.balign %llu\n", alignment);
+		dprintf(fd, "%s%.*s:\n", lnk_prefix, (int)name->sz, name->data);
+		for (long long unsigned i = 0; i < initializer->count; ++i) {
+			switch (initializer->elements[i].byte_count) {
+			case 1:
+				dprintf(fd, "\t.byte ");
+				break;
+			case 4:
+				dprintf(fd, "\t.long ");
+				break;
+			case 8:
+				dprintf(fd, "\t.quad ");
+				break;
+			default:
+				assert(0); /* logic error in caller */
+				break;
+			}
+			if (initializer->elements[i].unique > 0) {
+				dprintf(fd,
+				        "%s.str.%lld\n",
+				        label_prefix,
+				        initializer->elements[i].unique);
+			} else {
+				dprintf(fd,
+				        "0x%llx\n",
+				        initializer->elements[i].byte_value);
+			}
+		}
+	}
+}
+
+static void
+emit_asm_str(const struct asm_str *s, enum platform plat, int fd)
+{
+	char *str = NULL;
+	int rc = asprintf(&str,
+	                  "%s.str.%lld",
+	                  get_label_prefix(plat),
+	                  s->string_unique);
+	assert(rc >= 0);
+
+	const struct string_view sv = {
+		.data = str,
+		.sz = strlen(str),
+	};
+	emit_asm_initializer(&sv, s->initializer, plat, fd);
+
+	free(str);
+}
+
+static void
 emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 {
-	const char *vprefix = get_symbol_with_linkage_prefix(plat);
 	const struct string_view *vname = &v->identifier;
 
 	if (v->linkage == ASM_LINKAGE_EXTERNAL) {
 		dprintf(fd,
 		        "\t.globl %s%.*s\n",
-		        vprefix,
+		        get_symbol_with_linkage_prefix(plat),
 		        (int)vname->sz,
 		        vname->data);
 	}
 
-	const long long unsigned byte_count =
-		constant_byte_count(v->initializer);
-	const long long unsigned alignment =
-		byte_count >= MAX_ALIGNMENT
-			? MAX_ALIGNMENT
-			: v->initializer->elements[0].byte_count;
-
-	if (constant_is_zero(v->initializer)) {
-		dprintf(fd, "\t.bss\n\t.balign %llu\n", alignment);
-		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		dprintf(fd, "\t.zero %llu\n", byte_count);
-	} else {
-		dprintf(fd, "\t.data\n\t.balign %llu\n", alignment);
-		dprintf(fd, "%s%.*s:\n", vprefix, (int)vname->sz, vname->data);
-		for (long long unsigned i = 0; i < v->initializer->count; ++i) {
-			if (v->initializer->elements[i].byte_count == 4) {
-				dprintf(fd, "\t.long ");
-			} else {
-				dprintf(fd, "\t.quad ");
-			}
-			dprintf(fd,
-			        "0x%llx\n",
-			        v->initializer->elements[i].byte_value);
-		}
-	}
+	emit_asm_initializer(vname, v->initializer, plat, fd);
 }
 
 /*
@@ -788,6 +834,10 @@ emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
 {
 	if (cg == NULL) {
 		return RESULT_OK;
+	}
+
+	for (struct asm_str *s = cg->string_literals; s != NULL; s = s->next) {
+		emit_asm_str(s, plat, fd); // TODO
 	}
 
 	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {

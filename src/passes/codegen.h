@@ -178,9 +178,16 @@ struct asm_variable {
 	struct asm_variable *next;
 };
 
+struct asm_str {
+	long long int string_unique;
+	struct constant_initializer *initializer;
+	struct asm_str *next;
+};
+
 struct assembly {
 	struct asm_function *functions;
 	struct asm_variable *variables;
+	struct asm_str *string_literals;
 };
 
 #endif

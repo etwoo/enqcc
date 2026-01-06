@@ -1318,6 +1318,21 @@ codegen_variable(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+codegen_string_literal(Arena *arena,
+                       const struct ir_str *ir,
+                       struct asm_str **dst)
+{
+	assert(dst != NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+
+	(**dst).string_unique = ir->string_unique;
+	(**dst).initializer = ir->initializer;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 codegen_program(Arena *arena,
                 const struct intermediate *ir,
                 struct assembly **dst)
@@ -1328,12 +1343,21 @@ codegen_program(Arena *arena,
 		assert(*dst_fun != NULL);
 		dst_fun = &(**dst_fun).next;
 	}
+
 	struct asm_variable **dst_var = &(**dst).variables;
 	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
 		check(codegen_variable(arena, v, dst_var));
 		assert(*dst_var != NULL);
 		dst_var = &(**dst_var).next;
 	}
+
+	struct asm_str **dst_str = &(**dst).string_literals;
+	for (struct ir_str *s = ir->string_literals; s != NULL; s = s->next) {
+		check(codegen_string_literal(arena, s, dst_str));
+		assert(*dst_str != NULL);
+		dst_str = &(**dst_str).next;
+	}
+
 	return RESULT_OK;
 }
 

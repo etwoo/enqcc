@@ -93,6 +93,12 @@ struct ir_variable {
 	struct ir_variable *next;
 };
 
+struct ir_str {
+	long long int string_unique;
+	struct constant_initializer *initializer;
+	struct ir_str *next;
+};
+
 struct ir_env {
 	long long int generator;
 	long long int labels;
@@ -101,6 +107,7 @@ struct ir_env {
 struct intermediate {
 	struct ir_function *functions;
 	struct ir_variable *variables;
+	struct ir_str *string_literals;
 	struct ir_env env;
 };
 

@@ -175,6 +175,7 @@ populate_initializer_elements(const struct ast *a,
 		case NODE_EXPRESSION_VARIABLE_USAGE:
 			assert(s->u.var.stype == SYMBOL_STRING_LITERAL);
 			(**pos).unique = s->u.var.unique;
+			(**pos).byte_count = 8; /* set .quad for str literal */
 			return;
 		default:
 			assert(0); /* logic error in caller */
