@@ -637,16 +637,22 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
 	case IR_OP_CTYPE_INT_TO_DOUBLE:
-		if (ctype_is_charlike(&src->args[0].c89type)) {
-			assert(src->opcode == IR_OP_CTYPE_INT_TO_DOUBLE);
-			// TODO
-		}
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = src->opcode == IR_OP_CTYPE_DOUBLE_TO_INT
 		                         ? ASM_OP_CVT_DOUBLE_TO_INT
 		                         : ASM_OP_CVT_INT_TO_DOUBLE;
 		codegen_map_operands_all(src, *dst);
-		if (ctype_is_charlike(&src->args[1].c89type)) {
+		if (ctype_is_charlike(&src->args[0].c89type)) {
+			assert(src->opcode == IR_OP_CTYPE_INT_TO_DOUBLE);
+			assert((**dst).args[0].word_type == ASM_WORD_08BIT);
+			struct asm_op *to_prepend = NULL;
+			check(codegen_alloc_op(arena, &to_prepend));
+			to_prepend->opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			to_prepend->args[1] = OPERAND_RAX_32BIT;
+			(**dst).args[0] = OPERAND_RAX_32BIT;
+			codegen_op_list_prepend(to_prepend, dst);
+		} else if (ctype_is_charlike(&src->args[1].c89type)) {
 			assert(src->opcode == IR_OP_CTYPE_DOUBLE_TO_INT);
 			assert((**dst).args[1].word_type == ASM_WORD_08BIT);
 			(**dst).args[1] = OPERAND_RAX_32BIT;
