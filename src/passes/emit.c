@@ -272,6 +272,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		ralias[i] = ralias_default;
 	}
 
+	/* Special-case for opcodes with a two-letter suffix, like movs. */
+	char print_opcode_suffix_src = 0;
+
 	/*
 	 * Choose the overall opcode suffix based on the word_type of the
 	 * destination operand (indicated by the value of ralias_default).
@@ -305,10 +308,12 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		}
 		break;
 	case ASM_OP_MOV_WITH_SIGN_EXTENSION:
-		print_opcode = "movslq";
-		print_opcode_suffix = 0;
-		ralias[0] = REGISTER_ALIAS_4BYTE;
-		assert(ralias[1] == REGISTER_ALIAS_8BYTE);
+		print_opcode = "movs";
+		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
+		print_opcode_suffix_src = map_ralias_to_op_suffix(ralias[0]);
+		assert(ralias[0] < ralias[1]);
+		assert(ralias[0] < REGISTER_ALIAS_8BYTE);
+		assert(ralias[1] > REGISTER_ALIAS_1BYTE);
 		break;
 	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
 		assert(0 && "MOV W/ ZEROEXTENSION should have been eliminated");
@@ -568,6 +573,9 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 	}
 	dprintf(fd, "%s", print_opcode);
 
+	if (print_opcode_suffix_src > 0) {
+		dprintf(fd, "%c", print_opcode_suffix_src);
+	}
 	if (print_opcode_suffix > 0) {
 		dprintf(fd, "%c", print_opcode_suffix);
 	}
