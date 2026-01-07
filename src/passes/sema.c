@@ -72,7 +72,7 @@ is_node_constant(const struct ast *a)
 }
 
 static WARN_UNUSED long long unsigned
-count_initializer_elements(struct ctype *dst_type, const struct ast *a)
+count_initializer_elements(const struct ctype *dst_type, const struct ast *a)
 {
 	assert(dst_type != NULL);
 
@@ -94,11 +94,12 @@ count_initializer_elements(struct ctype *dst_type, const struct ast *a)
 	return count;
 }
 
+static const long long int INT_TO_CHAR_TRUNCATOR = 256;
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
 static void
 map_numeric_type_scalar(const struct ast *a,
-                        struct ctype *dst_type,
+                        const struct ctype *dst_type,
                         struct constant_bytes *out)
 {
 	assert(a->node_type == NODE_CONSTANT);
@@ -149,6 +150,12 @@ map_numeric_type_scalar(const struct ast *a,
 		break;
 	}
 
+	if ((dst_type->t == CTYPE_CHAR && x > CHAR_MAX) ||
+	    (dst_type->t == CTYPE_SIGNED_CHAR && x > SCHAR_MAX) ||
+	    (dst_type->t == CTYPE_UNSIGNED_CHAR && x > UCHAR_MAX)) {
+		x %= INT_TO_CHAR_TRUNCATOR;
+	}
+
 	if ((dst_type->t == CTYPE_INT && x > INT_MAX) ||
 	    (dst_type->t == CTYPE_UNSIGNED_INT && x > UINT_MAX)) {
 		x %= LONG_TO_INT_TRUNCATOR;
@@ -160,7 +167,7 @@ map_numeric_type_scalar(const struct ast *a,
 
 static void
 populate_initializer_elements(const struct ast *a,
-                              struct ctype *dst_type,
+                              const struct ctype *dst_type,
                               struct constant_bytes **pos)
 {
 	a = unpack_cast(a);
@@ -194,7 +201,7 @@ populate_initializer_elements(const struct ast *a,
 static WARN_UNUSED result_t
 map_numeric_type(Arena *arena,
                  const struct ast *init,
-                 struct ctype *dst_type,
+                 const struct ctype *dst_type,
                  struct constant_initializer *out)
 {
 	out->count = count_initializer_elements(dst_type, init);
@@ -381,7 +388,7 @@ has_container(struct sema_label_loops_state *state,
 }
 
 static WARN_UNUSED int128_t
-guess(const struct ast *a, struct ctype *expected_type)
+guess(const struct ast *a, const struct ctype *expected_type)
 {
 	int128_t value = 0;
 	struct constant_bytes tmp = {0};
@@ -510,7 +517,8 @@ guess(const struct ast *a, struct ctype *expected_type)
 }
 
 static WARN_UNUSED int128_t
-guess_case_value(const struct ast *containing_case, struct ctype *expected_type)
+guess_case_value(const struct ast *containing_case,
+                 const struct ctype *expected_type)
 {
 	assert(containing_case->node_type == NODE_CASE);
 	return guess(containing_case->u.case_.constant, expected_type);
@@ -1358,10 +1366,15 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
-	case NODE_SWITCH:
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
+	case NODE_SWITCH:
+		if (ctype_is_charlike(&a->u.switch_.control->expr_type)) {
+			/* promote controlling expr of switch from char->int */
+			a->u.switch_.control->expr_type.t = CTYPE_INT;
+		}
+		break;
 	case NODE_DECLARATION:
 		check(sema_expr_types_initializer(arena,
 		                                  &a->u.declare.identifier,
