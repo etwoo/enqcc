@@ -1452,6 +1452,9 @@ codegen_replace_pseudo_fn(struct asm_function *cg,
 					break;
 				case ASM_WORD_32BIT:
 					cursor += CODEGEN_BYTES_PER_VALUE;
+					cursor = round_up_to_multiple_of(
+						cursor,
+						CODEGEN_BYTES_PER_VALUE);
 					break;
 				case ASM_WORD_64BIT:
 					cursor += CODEGEN_BYTES_PER_VALUE * 2;
