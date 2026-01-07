@@ -1060,7 +1060,9 @@ sema_str_literal_as_init(Arena *arena,
 	}
 
 	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
-		assert(ctype_is_pointer(declaration_type));
+		if (!ctype_is_pointer(declaration_type)) {
+			return make_result(ERR_SEMA_INIT_SCALAR_WITH_COMPOUND);
+		}
 		assert(declaration_type->referent != NULL);
 		check(sema_str_literal_as_init(arena,
 		                               declaration_type->referent,
