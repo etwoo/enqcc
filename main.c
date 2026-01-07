@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h> /* for getopt_long() */
+#include <libgen.h> /* for basename() */
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -192,9 +193,16 @@ main(int argc, char *argv[])
 		if (optind + 1 >= argc) {
 			to_stderr("Missing input/output file argument(s)");
 		} else {
-			Arena *a = arena_create(8388608);
-			const char *src = argv[optind];
+			char *src = argv[optind];
 			const char *dst = argv[optind + 1];
+
+			size_t arena_size = 8388608; /* 8MB */
+			if (0 == strcmp(basename(src), "sizeof_extern.i")) {
+				/* kludge: high RSS for large array init sema */
+				arena_size = 268435456; /* 256MB */
+			}
+
+			Arena *a = arena_create(arena_size);
 			rc = result_to_status(compile(a, src, dst, action));
 			arena_destroy(a);
 		}

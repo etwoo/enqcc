@@ -89,6 +89,9 @@ ctype_to_size_bytes(const struct ctype *c)
 {
 	long long int b = 0;
 	switch (c->t) {
+	case CTYPE_VOID:
+		b = 0;
+		break;
 	case CTYPE_CHAR:
 	case CTYPE_SIGNED_CHAR:
 	case CTYPE_UNSIGNED_CHAR:
@@ -126,6 +129,7 @@ ctype_is_integer(const struct ctype *c)
 	case CTYPE_UNSIGNED_LONG:
 		b = true;
 		break;
+	case CTYPE_VOID:
 	case CTYPE_DOUBLE:
 	case CTYPE_POINTER_TO:
 	case CTYPE_ARRAY_OF:
@@ -147,6 +151,7 @@ ctype_is_signed(const struct ctype *c)
 	case CTYPE_DOUBLE:
 		b = true;
 		break;
+	case CTYPE_VOID:
 	case CTYPE_UNSIGNED_CHAR:
 	case CTYPE_UNSIGNED_INT:
 	case CTYPE_UNSIGNED_LONG:
@@ -202,6 +207,30 @@ ctype_is_strlike_ptr(const struct ctype *c)
 {
 	/* consider pointer to char as str-like; exclude {,un}signed char */
 	return c->t == CTYPE_POINTER_TO && c->referent->t == CTYPE_CHAR;
+}
+
+bool
+ctype_is_void(const struct ctype *c)
+{
+	return c->t == CTYPE_VOID;
+}
+
+bool
+ctype_is_void_ptr(const struct ctype *c)
+{
+	return c->t == CTYPE_POINTER_TO && ctype_is_void(c->referent);
+}
+
+bool
+ctype_is_incomplete(const struct ctype *c)
+{
+	return ctype_is_void(c);
+}
+
+bool
+ctype_is_ptr_to_incomplete(const struct ctype *c)
+{
+	return ctype_is_void_ptr(c);
 }
 
 bool

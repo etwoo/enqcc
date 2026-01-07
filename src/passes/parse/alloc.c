@@ -17,6 +17,15 @@ parse_alloc(Arena *arena, struct ast **dst, unsigned nt)
 }
 
 result_t
+parse_alloc_null_expr(Arena *arena, struct ast **dst)
+{
+	check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+	assert(*dst != NULL);
+	(**dst).expr_type.t = CTYPE_VOID;
+	return RESULT_OK;
+}
+
+result_t
 flat_alloc(Arena *arena, struct flat **dst)
 {
 	assert(dst != NULL && *dst == NULL);

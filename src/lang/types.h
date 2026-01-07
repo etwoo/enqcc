@@ -18,8 +18,9 @@
 	F(LONG)                                                                \
 	F(UNSIGNED_LONG)                                                       \
 	F(DOUBLE)                                                              \
+	F(ARRAY_OF)                                                            \
 	F(POINTER_TO)                                                          \
-	F(ARRAY_OF)
+	F(VOID)
 
 struct ctype {
 #define TO_ENUM(t) CTYPE_##t,
@@ -47,6 +48,10 @@ bool ctype_is_pointer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_strlike_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_strlike_ptr(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_void(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_void_ptr(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_incomplete(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_ptr_to_incomplete(const struct ctype *c) WARN_UNUSED;
 bool ctype_nullptr_ish(const struct ctype *c) WARN_UNUSED;
 const struct ctype *get_common_ctype(const struct ctype *lhs,
                                      const struct ctype *rhs) WARN_UNUSED;

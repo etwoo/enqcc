@@ -276,6 +276,10 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
 		s = strdup("Duplicate variable or function specifier");
 		break;
+	case ERR_PARSE_DECL_TYPE_ARRAY_INCOMPLETE:
+		s = strdup("Array element type cannot be void or, more "
+		           "generally, an incomplete type");
+		break;
 	case ERR_PARSE_DECL_TYPE_CHAR_INVALID:
 		s = strdup("Type 'char' cannot be combined with int/long");
 		break;
@@ -286,6 +290,19 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_TYPE_DUPLICATE:
 		s = strdup("Duplicate basic type, like `int int` or "
 		           "`signed unsigned`");
+		break;
+	case ERR_PARSE_DECL_TYPE_VOID_INVALID:
+		s = strdup("Type 'void' cannot be combined with "
+		           "double/char/int/long/signed/unsigned");
+		break;
+	case ERR_PARSE_DECL_TYPE_VOID_PARAM_TYPE:
+		s = my_asprintf(
+			"Cannot declare function parameter '%s' of type 'void'",
+			r.msg);
+		break;
+	case ERR_PARSE_DECL_TYPE_VOID_VAR_TYPE:
+		s = my_asprintf("Cannot declare variable '%s' of type 'void'",
+		                r.msg);
 		break;
 	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing paren-enclosed expression expects "
@@ -349,6 +366,10 @@ result_to_str(result_t r)
 		           "do-loop body and before do-loop controlling "
 		           "expression");
 		break;
+	case ERR_PARSE_SIZEOF_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing paren-enclosed sizeof argument expects "
+		           "TOKEN_PAREN_CLOSE after type name or expression");
+		break;
 	case ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
@@ -378,6 +399,9 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_CASE_OUTSIDE:
 		s = strdup("Invalid case with no enclosing switch");
+		break;
+	case ERR_SEMA_CAST_TO_ARRAY_TYPE_INVALID:
+		s = strdup("Cannot cast to array type");
 		break;
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);
@@ -459,6 +483,9 @@ result_to_str(result_t r)
 		s = strdup("Pointer dereference operator * requires argument "
 		           "of type CTYPE_POINTER_TO");
 		break;
+	case ERR_SEMA_OPERAND_DEREF_VOID_PTR:
+		s = strdup("Cannot dereference void pointer");
+		break;
 	case ERR_SEMA_OPERAND_DOUBLE_INVALID:
 		s = strdup(
 			"Complement ~, remainder %, and bitwise operations "
@@ -468,6 +495,11 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_OPERAND_ADD_POINTER_BOTH:
 		s = strdup("Addition cannot take two pointer operands");
+		break;
+	case ERR_SEMA_OPERAND_ADD_POINTER_VOID:
+		s = strdup(
+			"Pointer arithmetic cannot take void pointer operand "
+			"or, more generally, pointer to incomplete type");
 		break;
 	case ERR_SEMA_OPERAND_POINTER_CONFLICT:
 		s = strdup("Conflicting pointer types");
@@ -483,6 +515,18 @@ result_to_str(result_t r)
 	case ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS:
 		s = strdup("Pointer RHS cannot be compared/converted to "
 		           "non-pointer LHS");
+		break;
+	case ERR_SEMA_OPERAND_SCALAR_REQUIRED:
+		s = strdup("Operator or condition requires scalar expression");
+		break;
+	case ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE:
+		s = strdup("Cannot get sizeof() incomplete type");
+		break;
+	case ERR_SEMA_RETURN_STATEMENT_EXPECT_VALUE:
+		s = strdup("non-void function should return a value");
+		break;
+	case ERR_SEMA_RETURN_STATEMENT_EXPECT_VOID:
+		s = strdup("void function should not return a value");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");

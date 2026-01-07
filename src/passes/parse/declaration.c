@@ -16,6 +16,7 @@
 #include <string.h> /* for memset() */
 
 struct parse_basic_type_state {
+	size_t n_void;
 	size_t n_char;
 	size_t n_int;
 	size_t n_long;
@@ -34,6 +35,9 @@ parse_basic_type_accumulate(const struct token **tok,
 
 	assert(*tok != NULL);
 	switch ((**tok).token_type) {
+	case TOKEN_KEYWORD_VOID:
+		state->n_void++;
+		break;
 	case TOKEN_KEYWORD_CHAR:
 		state->n_char++;
 		break;
@@ -62,8 +66,9 @@ static WARN_UNUSED result_t
 parse_basic_type_finalize(struct parse_basic_type_state *state,
                           struct ctype *var_type)
 {
-	if (state->n_char > 1 ||     /* char char -- invalid */
-	    state->n_int > 1 ||      /* int int -- invalid */
+	if (state->n_void > 1 ||     /* void void -- invalid               */
+	    state->n_char > 1 ||     /* char char -- invalid               */
+	    state->n_int > 1 ||      /* int int -- invalid                 */
 	    state->n_long > 1 ||     /* long long -- unsupported           */
 	    state->n_signed > 1 ||   /* signed signed -- invalid           */
 	    state->n_unsigned > 1 || /* unsigned unsigned -- invalid       */
@@ -73,13 +78,27 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 		return make_result(ERR_PARSE_DECL_TYPE_DUPLICATE);
 	}
 
-	if (state->n_char == 0 &&
-	    state->n_int == 0 &&      /* Any particular type may occur zero   */
-	    state->n_long == 0 &&     /* times, but there must exist at least */
-	    state->n_signed == 0 &&   /* one non-zero count, from the valid   */
-	    state->n_unsigned == 0 && /* options available.                   */
+	if (state->n_void == 0 &&     /* Any particular type may */
+	    state->n_char == 0 &&     /* occur zero times, but   */
+	    state->n_int == 0 &&      /* there must exist at     */
+	    state->n_long == 0 &&     /* least one non-zero type */
+	    state->n_signed == 0 &&   /* count, from the valid   */
+	    state->n_unsigned == 0 && /* options available.      */
 	    state->n_double == 0) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TYPE);
+	}
+
+	if (state->n_void > 0) {
+		if (state->n_char > 0 ||     /* char void -- invalid     */
+		    state->n_int > 0 ||      /* int void -- invalid      */
+		    state->n_long > 0 ||     /* long void -- invalid     */
+		    state->n_signed > 0 ||   /* signed void -- invalid   */
+		    state->n_unsigned > 0 || /* unsigned void -- invalid */
+		    state->n_double > 0) {   /* double void -- invalid   */
+			return make_result(ERR_PARSE_DECL_TYPE_VOID_INVALID);
+		}
+		var_type->t = CTYPE_VOID;
+		return RESULT_OK;
 	}
 
 	if (state->n_double > 0) {
@@ -202,7 +221,8 @@ parse_function_params(Arena *arena,
                       const struct token **tok,
                       struct ast_parameter **dst)
 {
-	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
+	if (is_token_type(*tok, TOKEN_KEYWORD_VOID) &&
+	    is_token_type((**tok).next, TOKEN_PAREN_CLOSE)) {
 		token_consume(tok);
 		return RESULT_OK;
 	}
@@ -738,6 +758,17 @@ map_declarator_to_ctype(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+ctype_has_fragment_array_of_incomplete(const struct ctype *c)
+{
+	for (; ctype_is_pointer(c); c = c->referent) {
+		if (ctype_is_array(c) && ctype_is_incomplete(c->referent)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static WARN_UNUSED result_t
 parse_specifiers_and_type(Arena *arena,
                           const struct token **tok,
@@ -762,6 +793,10 @@ parse_specifiers_and_type(Arena *arena,
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, &decl, &tmp));
 	check(ctype_copy(arena, tmp, var_type));
+
+	if (ctype_has_fragment_array_of_incomplete(var_type)) {
+		return make_result(ERR_PARSE_DECL_TYPE_ARRAY_INCOMPLETE);
+	}
 	return RESULT_OK;
 }
 
@@ -798,6 +833,10 @@ parse_type(Arena *arena,
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, &decl, &tmp));
 	check(ctype_copy(arena, tmp, var_type));
+
+	if (ctype_has_fragment_array_of_incomplete(var_type)) {
+		return make_result(ERR_PARSE_DECL_TYPE_ARRAY_INCOMPLETE);
+	}
 	return RESULT_OK;
 }
 
@@ -873,6 +912,12 @@ parse_fn_or_var_declaration(Arena *arena,
 		                 &(**dst).u.declare.var_type));
 		(**dst).u.declare.identifier.name = fn_or_var_name;
 
+		if (ctype_is_void(&fn_return_or_var_type)) {
+			return make_result(ERR_PARSE_DECL_TYPE_VOID_VAR_TYPE,
+			                   fn_or_var_name.data,
+			                   fn_or_var_name.sz);
+		}
+
 		if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
 			token_consume(tok);
 			check(parse_initializer(arena,
@@ -900,6 +945,14 @@ parse_fn_or_var_declaration(Arena *arena,
 	                 &(**dst).u.function.return_type));
 	(**dst).u.function.identifier.name = fn_or_var_name;
 	(**dst).u.function.params = fn_params_maybe;
+
+	FOREACH_FUNCTION_PARAMETER (cur, fn_params_maybe) {
+		if (ctype_is_void(&cur->parameter_type)) {
+			return make_result(ERR_PARSE_DECL_TYPE_VOID_PARAM_TYPE,
+			                   cur->symbol.name.data,
+			                   cur->symbol.name.sz);
+		}
+	}
 
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		assert((**dst).u.function.block == NULL);

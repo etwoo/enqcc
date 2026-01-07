@@ -9,6 +9,7 @@ struct ast;
 struct flat;
 
 result_t parse_alloc(Arena *arena, struct ast **dst, unsigned nt) WARN_UNUSED;
+result_t parse_alloc_null_expr(Arena *arena, struct ast **dst) WARN_UNUSED;
 result_t flat_alloc(Arena *arena, struct flat **dst) WARN_UNUSED;
 
 #endif

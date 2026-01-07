@@ -22,7 +22,7 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 	if (is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		token_consume(tok);
 		check(flat_alloc(arena, dst));
-		check(parse_alloc(arena, &(**dst).car, NODE_EXPRESSION_NULL));
+		check(parse_alloc_null_expr(arena, &(**dst).car));
 		return RESULT_OK;
 	}
 

@@ -27,6 +27,14 @@
  *   close to 263 elements.)
  */
 static const struct ctype LIKE_PTRDIFF_T = {.t = CTYPE_LONG};
+/*
+ * From "Writing a C Compiler" by Nora Sandler, Chapter 17, Section "sizeof
+ * Expressions":
+ *
+ *   A sizeof expression has type size_t; in our implementation, that's
+ *   just unsigned long.
+ */
+static const struct ctype LIKE_SIZE_T = {.t = CTYPE_UNSIGNED_LONG};
 
 static WARN_UNUSED bool
 is_node_lvalue(const struct ast *a)
@@ -35,7 +43,8 @@ is_node_lvalue(const struct ast *a)
 		a = a->u.op_unary.operand;
 	}
 	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE;
+	       (a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE &&
+	        !ctype_is_void_ptr(&a->u.op_unary.operand->expr_type));
 }
 
 static WARN_UNUSED const struct ast *
@@ -124,6 +133,7 @@ map_numeric_type_scalar(const struct ast *a,
 			tmp = a->u.double_;
 			break;
 		case CTYPE_ARRAY_OF:
+		case CTYPE_VOID:
 			assert(0); /* logic error in caller */
 			break;
 		}
@@ -147,6 +157,7 @@ map_numeric_type_scalar(const struct ast *a,
 		x = (int128_t)a->u.double_;
 		break;
 	case CTYPE_ARRAY_OF:
+	case CTYPE_VOID:
 		assert(0); /* logic error in caller */
 		break;
 	}
@@ -279,6 +290,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -1415,12 +1427,12 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		check(promote_if_char(arena, &a->u.op_unary.operand));
 		__attribute__((fallthrough));
-	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
+	case NODE_FUNCTION_RETURN_STATEMENT:
 		check(ctype_copy(arena,
 		                 &a->u.op_unary.operand->expr_type,
 		                 &a->expr_type));
@@ -1440,6 +1452,9 @@ sema_expr_types(struct ast *a, void *userdata)
 		check(ctype_copy(arena,
 		                 &a->u.op_unary.operand->expr_type,
 		                 a->expr_type.referent));
+		break;
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
+		check(ctype_copy(arena, &LIKE_SIZE_T, &a->expr_type));
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
@@ -1539,6 +1554,119 @@ sema_expr_types(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+is_scalar(const struct ctype *c)
+{
+	/*
+	 * Allow CTYPE_ARRAY_OF, despite it not truly being scalar, assuming
+	 * other code will perform array-to-pointer decay.
+	 */
+	return !ctype_is_void(c);
+}
+
+static WARN_UNUSED result_t
+sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	bool scalar = true;
+
+	switch (a->node_type) {
+	case NODE_IF_ELSE:
+		scalar = is_scalar(&a->u.if_.condition->expr_type);
+		break;
+	case NODE_LOOP:
+		if (a->u.loop.precond->node_type != NODE_EXPRESSION_NULL &&
+		    !is_scalar(&a->u.loop.precond->expr_type)) {
+			scalar = false;
+		}
+		if (a->u.loop.postcond->node_type != NODE_EXPRESSION_NULL &&
+		    !is_scalar(&a->u.loop.postcond->expr_type)) {
+			scalar = false;
+		}
+		break;
+	case NODE_SWITCH:
+		scalar = is_scalar(&a->u.switch_.control->expr_type);
+		break;
+	case NODE_CASE:
+		scalar = is_scalar(&a->u.case_.constant->expr_type);
+		break;
+	case NODE_EXPRESSION_UNARY_NEGATE:
+	case NODE_EXPRESSION_UNARY_NOT:
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+		scalar = is_scalar(&a->u.op_unary.operand->expr_type);
+		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		scalar = is_scalar(&a->u.op_binary.lhs->expr_type) &&
+		         is_scalar(&a->u.op_binary.rhs->expr_type);
+		break;
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		scalar = is_scalar(&a->u.op_ternary.condition->expr_type);
+		if (is_scalar(&a->u.op_ternary.then_expr->expr_type) !=
+		    is_scalar(&a->u.op_ternary.else_expr->expr_type)) {
+			scalar = false;
+		}
+		break;
+	case NODE_EXPRESSION_CAST:
+		if (ctype_is_array(&a->u.cast.to_type)) {
+			// TODO: reject cast to struct type (ch18)
+			return make_result(ERR_SEMA_CAST_TO_ARRAY_TYPE_INVALID);
+		}
+		if (is_scalar(&a->u.cast.to_type)) {
+			scalar = is_scalar(&a->u.cast.expr->expr_type);
+		}
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		scalar = is_scalar(&a->u.op_binary.rhs->expr_type);
+		/* guaranteed by sema_lvalue(), is_node_lvalue() */
+		assert(is_scalar(&a->u.op_binary.lhs->expr_type));
+		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		/* guaranteed by sema_lvalue(), is_node_lvalue() */
+		assert(is_scalar(&a->u.op_unary.operand->expr_type));
+		break;
+	default:
+		break;
+	}
+
+	if (!scalar) {
+		return make_result(ERR_SEMA_OPERAND_SCALAR_REQUIRED);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_incomplete_types(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	if (a->node_type == NODE_EXPRESSION_UNARY_SIZE_OF) {
+		assert(ctype_is_equal(&a->expr_type, &LIKE_SIZE_T));
+		if (ctype_is_incomplete(&a->u.op_unary.operand->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE);
+		}
+	}
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 {
@@ -1579,7 +1707,6 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 		     ctype_is_pointer(&a->u.op_binary.lhs->expr_type))) {
 			valid = false;
 		}
-
 		break;
 	case NODE_EXPRESSION_CAST:
 		if ((ctype_is_floating_point(&a->u.cast.to_type) &&
@@ -1599,11 +1726,17 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+static const uint32_t SPC_ZERO_AS_NULL = 0x1;
+static const uint32_t SPC_VOIDP_AS_ANY_PTR = 0x2;
+
 static WARN_UNUSED result_t
 sema_pointer_cmp_impl(const struct ctype *lhs,
                       const struct ctype *rhs,
-                      bool ish)
+                      uint32_t flags)
 {
+	const bool ish = (0 != (flags & SPC_ZERO_AS_NULL));
+	const bool void_ptr_as_any_ptr = (0 != (flags & SPC_VOIDP_AS_ANY_PTR));
+
 	if (ctype_is_equal(lhs, rhs)) {
 		/* given equality, nothing more to check */
 	} else if (ctype_is_strlike_array(lhs) && ctype_is_strlike_array(rhs)) {
@@ -1611,19 +1744,27 @@ sema_pointer_cmp_impl(const struct ctype *lhs,
 			return make_result(ERR_SEMA_OPERAND_CHAR_ARRAY_SIZE);
 		} /* else: RHS string may be shorter than LHS capacity */
 	} else if (ctype_is_pointer(lhs) && ctype_is_pointer(rhs)) {
-		return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
+		if (void_ptr_as_any_ptr &&
+		    (ctype_is_void_ptr(lhs) || ctype_is_void_ptr(rhs))) {
+			/* void* converts to/from any other pointer type */
+		} else {
+			return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
+		}
 	} else if (ctype_is_pointer(lhs) && (!ish || !ctype_nullptr_ish(rhs))) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS);
 	} else if (ctype_is_pointer(rhs) && (!ish || !ctype_nullptr_ish(lhs))) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS);
 	}
+
 	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
 sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
 {
-	check(sema_pointer_cmp_impl(lhs, rhs, true));
+	check(sema_pointer_cmp_impl(lhs,
+	                            rhs,
+	                            SPC_ZERO_AS_NULL | SPC_VOIDP_AS_ANY_PTR));
 	return RESULT_OK;
 }
 
@@ -1652,11 +1793,15 @@ sema_pointer(struct ast *a, void *userdata)
 		break;
 	case NODE_DECLARATION:
 		if (a->u.declare.init != NULL) {
+			uint32_t flags = SPC_VOIDP_AS_ANY_PTR;
+			/* do not allow zero->nullptr for array init */
+			if (!ctype_is_array(&a->u.declare.var_type)) {
+				flags |= SPC_ZERO_AS_NULL;
+			}
 			check(sema_pointer_cmp_impl(
 				&a->u.declare.var_type,
 				&a->u.declare.init->expr_type,
-				/* do not allow zero->nullptr for array init */
-				!ctype_is_array(&a->u.declare.var_type)));
+				flags));
 		}
 		break;
 	case NODE_SWITCH:
@@ -1675,6 +1820,20 @@ sema_pointer(struct ast *a, void *userdata)
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
 		}
 		break;
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+		if (ctype_is_void_ptr(&a->u.op_unary.operand->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_DEREF_VOID_PTR);
+		}
+		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		if (ctype_is_ptr_to_incomplete(
+			    &a->u.op_unary.operand->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
+		}
+		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 		if (!ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		    !ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
@@ -1682,9 +1841,20 @@ sema_pointer(struct ast *a, void *userdata)
 		} else if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		           ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_BOTH);
+		} else if (ctype_is_ptr_to_incomplete(
+				   &a->u.op_binary.lhs->expr_type) ||
+		           ctype_is_ptr_to_incomplete(
+				   &a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
 		}
 		break;
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		if (ctype_is_ptr_to_incomplete(
+			    &a->u.op_binary.lhs->expr_type) ||
+		    ctype_is_ptr_to_incomplete(
+			    &a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
+		}
 		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		    ctype_is_integer(&a->u.op_binary.rhs->expr_type)) {
 			assert(ctype_is_equal(&a->expr_type,
@@ -1693,7 +1863,7 @@ sema_pointer(struct ast *a, void *userdata)
 			check(sema_pointer_cmp_impl(
 				&a->u.op_binary.lhs->expr_type,
 				&a->u.op_binary.rhs->expr_type,
-				false));
+				0));
 		}
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
@@ -1707,7 +1877,7 @@ sema_pointer(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
 		check(sema_pointer_cmp_impl(&a->u.op_binary.lhs->expr_type,
 		                            &a->u.op_binary.rhs->expr_type,
-		                            false));
+		                            0));
 		break;
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
@@ -1789,6 +1959,16 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		                 &state->expected_return_type));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
+		if (ctype_is_void(&state->expected_return_type) ==
+		    ctype_is_void(&a->u.op_unary.operand->expr_type)) {
+			/* void function XOR void return statement */
+		} else if (ctype_is_void(&state->expected_return_type)) {
+			return make_result(
+				ERR_SEMA_RETURN_STATEMENT_EXPECT_VOID);
+		} else {
+			return make_result(
+				ERR_SEMA_RETURN_STATEMENT_EXPECT_VALUE);
+		}
 		check(cast_if(arena,
 		              &state->expected_return_type,
 		              &a->u.op_unary.operand));
@@ -2531,6 +2711,14 @@ sema_typecheck(Arena *arena,
 
 	debug("Checking for invalid lvalues");
 	ops.node_enter = sema_lvalue;
+	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking for invalid usage of non-scalar expressions");
+	ops.node_enter = sema_non_scalar;
+	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking for invalid usage of incomplete types");
+	ops.node_enter = sema_incomplete_types;
 	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking for invalid double usage");

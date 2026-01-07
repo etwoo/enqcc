@@ -97,6 +97,9 @@ codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 	case CTYPE_ARRAY_OF:
 		dst->word_type = ASM_WORD_64BIT;
 		break;
+	case CTYPE_VOID:
+		assert(0); /* logic error in caller */
+		break;
 	}
 }
 
@@ -272,6 +275,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 			dst->operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
 			dst->u.dnum = src->dnum;
 			break;
+		case CTYPE_VOID:
+			assert(0); /* logic error in caller */
+			break;
 		}
 		break;
 	case IR_VAL_TEMPORARY_VARIABLE:
@@ -289,6 +295,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 	case IR_VAL_STRING_LITERAL:
 		dst->operand_type = ASM_OPERAND_CONSTANT_STRING;
 		dst->u.num = src->num;
+		break;
+	case IR_VAL_DUMMY:
+		assert(0 && "sema/ir allowed void in unexpected location?");
 		break;
 	}
 
@@ -347,6 +356,13 @@ codegen_alloc_addq_rsp(Arena *arena, struct asm_op **dst, long long int n)
 {
 	check(codegen_alloc_modify_rsp(arena, dst, true, n));
 	return RESULT_OK;
+}
+
+static WARN_UNUSED bool
+is_return_value_void(const struct ir_op *src, size_t pos)
+{
+	assert(src->args[pos].subtype != IR_VAL_NONE);
+	return src->args[pos].subtype == IR_VAL_DUMMY;
 }
 
 static WARN_UNUSED result_t
@@ -438,6 +454,10 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		dst = &(**dst).next;
 	}
 
+	if (is_return_value_void(src, n_args)) {
+		return RESULT_OK;
+	}
+
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	if (ctype_is_floating_point(&src->args[n_args].c89type)) {
@@ -475,11 +495,13 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 {
 	switch (src->opcode) {
 	case IR_OP_RET:
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		(**dst).args[1] = OPERAND_XMM0;
-		dst = &(**dst).next;
+		if (!is_return_value_void(src, 0)) {
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			(**dst).args[1] = OPERAND_XMM0;
+			dst = &(**dst).next;
+		}
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_RET;
 		break;
@@ -889,11 +911,14 @@ codegen_statement_one(Arena *arena,
 
 	switch (src->opcode) {
 	case IR_OP_RET:
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
+		if (!is_return_value_void(src, 0)) {
+			(**dst).opcode = ASM_OP_MOV;
+			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			codegen_set_operand_eax(&src->args[0],
+			                        &(**dst).args[1]);
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+		}
 		(**dst).opcode = ASM_OP_RET;
 		break;
 	case IR_OP_UNARY_NEGATE:
@@ -999,6 +1024,9 @@ codegen_statement_one(Arena *arena,
 		case CTYPE_POINTER_TO:
 		case CTYPE_ARRAY_OF:
 			assert(0 && "ptr div/rem should have been rejected");
+			break;
+		case CTYPE_VOID:
+			assert(0); /* logic error in caller */
 			break;
 		}
 		dst = &(**dst).next;
