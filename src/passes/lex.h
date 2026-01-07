@@ -5,6 +5,7 @@
 
 #define FOREACH_LEX_KEYWORD(F)                                                 \
 	F("return", TOKEN_KEYWORD_RETURN)                                      \
+	F("sizeof", TOKEN_KEYWORD_SIZEOF)                                      \
 	F("void", TOKEN_KEYWORD_VOID)                                          \
 	F("char", TOKEN_KEYWORD_CHAR)                                          \
 	F("int", TOKEN_KEYWORD_INT)                                            \
