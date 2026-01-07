@@ -1437,15 +1437,18 @@ sema_expr_types(struct ast *a, void *userdata)
 		                 &a->u.op_unary.operand->expr_type,
 		                 a->expr_type.referent));
 		break;
-	case NODE_EXPRESSION_UNARY_NOT:
-	case NODE_EXPRESSION_LOGICAL_AND:
-	case NODE_EXPRESSION_LOGICAL_OR:
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
 	case NODE_EXPRESSION_COMPARE_LESS_THAN:
 	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN:
 	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		check(promote_if_char(arena, &a->u.op_binary.lhs));
+		check(promote_if_char(arena, &a->u.op_binary.rhs));
+		__attribute__((fallthrough));
+	case NODE_EXPRESSION_UNARY_NOT:
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
 		a->expr_type.t = CTYPE_INT; /* effectively cast to bool */
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
