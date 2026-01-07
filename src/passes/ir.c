@@ -265,6 +265,7 @@ ir_block(Arena *arena,
 
 static WARN_UNUSED result_t
 ir_decl_init_multi(Arena *arena,
+                   const struct ctype *declaration_type,
                    const struct ast *a,
                    struct intermediate *ir,
                    const struct ir_val *lvalue_base,
@@ -295,16 +296,19 @@ ir_decl_init_multi(Arena *arena,
 		copier->args[1].offset = *pos;
 
 		*dst = ir_op_list_concat(element, copier);
-		*pos += ctype_to_size_bytes(&a->expr_type);
+		*pos += ctype_to_size_bytes(declaration_type);
 		return RESULT_OK;
 	}
 
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 	assert(a->u.init.multi != NULL);
+	assert(ctype_is_pointer(declaration_type));
+	assert(declaration_type->referent != NULL);
 
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
 		struct ir_op *tmp = NULL;
 		check(ir_decl_init_multi(arena,
+		                         declaration_type->referent,
 		                         f->car,
 		                         ir,
 		                         lvalue_base,
@@ -350,6 +354,7 @@ ir_decl_init(Arena *arena,
 
 	long long int pos = 0;
 	check(ir_decl_init_multi(arena,
+	                         &a->u.declare.var_type,
 	                         a->u.declare.init,
 	                         ir,
 	                         &lvalue_direct,
