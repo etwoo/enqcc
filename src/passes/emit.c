@@ -2,7 +2,6 @@
 #include "passes/codegen.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
-#include "sys/debug.h"
 
 #include <assert.h>
 #include <math.h> /* for signbit() */
