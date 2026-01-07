@@ -1453,12 +1453,11 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
-		check(promote_if_char(arena, &a->u.op_binary.lhs));
-		check(promote_if_char(arena, &a->u.op_binary.rhs));
-		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BITWISE_AND:
 	case NODE_EXPRESSION_BITWISE_OR:
 	case NODE_EXPRESSION_BITWISE_XOR:
+		check(promote_if_char(arena, &a->u.op_binary.lhs));
+		check(promote_if_char(arena, &a->u.op_binary.rhs));
 		if (a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT &&
 		    ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		    ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
@@ -1477,6 +1476,10 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		if (a->node_type != NODE_EXPRESSION_VARIABLE_ASSIGNMENT) {
+			check(promote_if_char(arena, &a->u.op_binary.lhs));
+			check(promote_if_char(arena, &a->u.op_binary.rhs));
+		}
 		/*
 		 * Shift left/right takes the LHS type, not the common
 		 * type of the two sides. The number of shift bits on
