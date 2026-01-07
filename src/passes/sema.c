@@ -1352,6 +1352,33 @@ sema_expr_types_initializer(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
+{
+	if (*a == NULL || ctype_is_equal(&(**a).expr_type, cast_to)) {
+		return RESULT_OK;
+	}
+	struct ast *cast_wrap = NULL;
+	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
+	check(ctype_copy(arena, cast_to, &cast_wrap->expr_type));
+	check(ctype_copy(arena, cast_to, &cast_wrap->u.cast.to_type));
+	cast_wrap->u.cast.expr = *a;
+	*a = cast_wrap;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+promote_if_char(Arena *arena, struct ast **a)
+{
+	if (*a != NULL && ctype_is_charlike(&(**a).expr_type)) {
+		const struct ctype promote_type = {
+			.t = CTYPE_INT,
+		};
+		check(cast_if(arena, &promote_type, a));
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_expr_types(struct ast *a, void *userdata)
 {
 	Arena *arena = userdata;
@@ -1366,7 +1393,6 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
-	case NODE_SWITCH:
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
@@ -1378,9 +1404,14 @@ sema_expr_types(struct ast *a, void *userdata)
 		break;
 	case NODE_EXPRESSION_INITIALIZER:
 		break; /* handled by NODE_DECLARATION case */
-	case NODE_FUNCTION_RETURN_STATEMENT:
+	case NODE_SWITCH:
+		check(promote_if_char(arena, &a->u.switch_.control));
+		break;
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+		check(promote_if_char(arena, &a->u.op_unary.operand));
+		__attribute__((fallthrough));
+	case NODE_FUNCTION_RETURN_STATEMENT:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -1422,6 +1453,9 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
+		check(promote_if_char(arena, &a->u.op_binary.lhs));
+		check(promote_if_char(arena, &a->u.op_binary.rhs));
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BITWISE_AND:
 	case NODE_EXPRESSION_BITWISE_OR:
 	case NODE_EXPRESSION_BITWISE_XOR:
@@ -1692,21 +1726,6 @@ sema_pointer(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED result_t
-cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
-{
-	if (*a == NULL || ctype_is_equal(&(**a).expr_type, cast_to)) {
-		return RESULT_OK;
-	}
-	struct ast *cast_wrap = NULL;
-	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
-	check(ctype_copy(arena, cast_to, &cast_wrap->expr_type));
-	check(ctype_copy(arena, cast_to, &cast_wrap->u.cast.to_type));
-	cast_wrap->u.cast.expr = *a;
-	*a = cast_wrap;
-	return RESULT_OK;
-}
-
 /*
  * See sema_expr_types_initializer() for related logic.
  */
@@ -1768,16 +1787,6 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		check(sema_implicit_cast_initializer(arena,
 		                                     &a->u.declare.var_type,
 		                                     &a->u.declare.init));
-		break;
-	case NODE_SWITCH:
-		if (ctype_is_charlike(&a->u.switch_.control->expr_type)) {
-			/* promote controlling expr of switch from char->int */
-			check(cast_if(arena,
-			              &(struct ctype){
-					      .t = CTYPE_INT,
-				      },
-			              &a->u.switch_.control));
-		}
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
