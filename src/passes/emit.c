@@ -695,6 +695,7 @@ static void
 emit_asm_str(const struct asm_str *s, enum platform plat, int fd)
 {
 	const char *label_prefix = get_label_prefix(plat);
+	assert(label_prefix != NULL);
 
 	char *str = NULL;
 	int rc = asprintf(&str, "%s.str.%lld", label_prefix, s->string_unique);

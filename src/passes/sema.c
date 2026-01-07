@@ -6,7 +6,7 @@
 #include "sys/debug.h"
 
 #include <assert.h>
-#include <limits.h>    /* for SIZE_MAX */
+#include <stdint.h>    /* for SIZE_MAX */
 #include <stdlib.h>    /* for strtoll() */
 #include <sys/param.h> /* for MAX() */
 
