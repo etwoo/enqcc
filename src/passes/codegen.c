@@ -1104,10 +1104,10 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_CTYPE_TRUNCATE:
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operands_all(src, *dst);
-		(**dst).args[0].word_type = (**dst).args[1].word_type;
-		/* truncate -> use CTYPE_INT/CTYPE_CHAR's's worth of source */
 		assert((**dst).args[1].word_type < ASM_WORD_64BIT);
 		assert((**dst).args[0].word_type > (**dst).args[1].word_type);
+		/* truncate -> use CTYPE_INT/CTYPE_CHAR's's worth of source */
+		(**dst).args[0].word_type = (**dst).args[1].word_type;
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
 	case IR_OP_CTYPE_DOUBLE_TO_UINT:
