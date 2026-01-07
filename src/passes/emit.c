@@ -17,6 +17,7 @@ static const char LINUX_LABEL_PREFIX[] = ".L";
 static const char LINUX_SECTION_RODATA[] = ".section .rodata";
 static const char MACOS_SYMBOL_WITH_LINKAGE_PREFIX[] = "_";
 static const char MACOS_LABEL_PREFIX[] = "L";
+static const char MACOS_SECTION_CSTRING[] = ".cstring";
 static const char MACOS_SECTION_LITERAL8[] = ".literal8";
 static const char DOUBLE_LABEL_ID[] = "double_";
 static const char VEC_LONGS_LABEL_ID[] = "vecl_";
@@ -65,6 +66,21 @@ get_section_fp_constants(enum platform plat)
 	switch (plat) {
 	case PLATFORM_MACOS:
 		result = MACOS_SECTION_LITERAL8;
+		break;
+	case PLATFORM_LINUX:
+		result = LINUX_SECTION_RODATA;
+		break;
+	}
+	return result;
+}
+
+static WARN_UNUSED const char *
+get_section_string_literals(enum platform plat)
+{
+	const char *result = NULL;
+	switch (plat) {
+	case PLATFORM_MACOS:
+		result = MACOS_SECTION_CSTRING;
 		break;
 	case PLATFORM_LINUX:
 		result = LINUX_SECTION_RODATA;
@@ -623,6 +639,7 @@ static const long long unsigned MAX_ALIGNMENT = 16;
 
 static void
 emit_asm_initializer(const struct string_view *name,
+                     const char *section,
                      const char *linkage, /* prefix, if symbol has linkage */
                      const struct constant_initializer *initializer,
                      enum platform plat,
@@ -641,7 +658,10 @@ emit_asm_initializer(const struct string_view *name,
 		dprintf(fd, "%s%.*s:\n", linkage, (int)name->sz, name->data);
 		dprintf(fd, "\t.zero %llu\n", byte_count);
 	} else {
-		dprintf(fd, "\t.data\n\t.balign %llu\n", alignment);
+		dprintf(fd, "\t%s\n", section);
+		if (alignment > 1) {
+			dprintf(fd, "\t.balign %llu\n", alignment);
+		}
 		dprintf(fd, "%s%.*s:\n", linkage, (int)name->sz, name->data);
 		for (long long unsigned i = 0; i < initializer->count; ++i) {
 			switch (initializer->elements[i].byte_count) {
@@ -686,7 +706,8 @@ emit_asm_str(const struct asm_str *s, enum platform plat, int fd)
 		.data = str,
 		.sz = strlen(str),
 	};
-	emit_asm_initializer(&sv, "", s->initializer, plat, fd);
+	const char *section_cstr = get_section_string_literals(plat);
+	emit_asm_initializer(&sv, section_cstr, "", s->initializer, plat, fd);
 
 	free(str);
 }
@@ -705,7 +726,7 @@ emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
 		        vname->data);
 	}
 
-	emit_asm_initializer(vname, vprefix, v->initializer, plat, fd);
+	emit_asm_initializer(vname, ".data", vprefix, v->initializer, plat, fd);
 }
 
 /*
