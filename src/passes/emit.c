@@ -2,6 +2,7 @@
 #include "passes/codegen.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
+#include "sys/debug.h"
 
 #include <assert.h>
 #include <math.h> /* for signbit() */
@@ -308,15 +309,15 @@ emit_asm_op(const struct asm_op *op, enum platform plat, int fd)
 		}
 		break;
 	case ASM_OP_MOV_WITH_SIGN_EXTENSION:
-		print_opcode = "movs";
+	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
+		print_opcode = (op->opcode == ASM_OP_MOV_WITH_SIGN_EXTENSION)
+		                       ? "movs"
+		                       : "movz";
 		map_wordtype_to_register_alias(&op->args[0], &ralias[0]);
 		print_opcode_suffix_src = map_ralias_to_op_suffix(ralias[0]);
-		assert(ralias[0] < ralias[1]);
-		assert(ralias[0] < REGISTER_ALIAS_8BYTE);
-		assert(ralias[1] > REGISTER_ALIAS_1BYTE);
-		break;
-	case ASM_OP_MOV_WITH_ZERO_EXTENSION:
-		assert(0 && "MOV W/ ZEROEXTENSION should have been eliminated");
+		assert(ralias[0] > ralias[1]);
+		assert(ralias[0] > REGISTER_ALIAS_8BYTE);
+		assert(ralias[1] < REGISTER_ALIAS_1BYTE);
 		break;
 	case ASM_OP_CVT_DOUBLE_TO_INT:
 		print_opcode = "cvttsd2si";
