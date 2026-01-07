@@ -186,6 +186,16 @@ static const struct asm_operand OPERAND_RAX_64BIT = {
 	ASM_WORD_64BIT,
 	.u.reg = ASM_REGISTER_AX,
 };
+static const struct asm_operand OPERAND_RAX_32BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_32BIT,
+	.u.reg = ASM_REGISTER_AX,
+};
+static const struct asm_operand OPERAND_RAX_08BIT = {
+	ASM_OPERAND_REGISTER,
+	ASM_WORD_08BIT,
+	.u.reg = ASM_REGISTER_AX,
+};
 static const struct asm_operand OPERAND_RCX_64BIT = {
 	ASM_OPERAND_REGISTER,
 	ASM_WORD_64BIT,
@@ -627,11 +637,26 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
 	case IR_OP_CTYPE_INT_TO_DOUBLE:
+		if (ctype_is_charlike(&src->args[0].c89type)) {
+			assert(src->opcode == IR_OP_CTYPE_INT_TO_DOUBLE);
+			// TODO
+		}
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = src->opcode == IR_OP_CTYPE_DOUBLE_TO_INT
 		                         ? ASM_OP_CVT_DOUBLE_TO_INT
 		                         : ASM_OP_CVT_INT_TO_DOUBLE;
 		codegen_map_operands_all(src, *dst);
+		if (ctype_is_charlike(&src->args[1].c89type)) {
+			assert(src->opcode == IR_OP_CTYPE_DOUBLE_TO_INT);
+			assert((**dst).args[1].word_type == ASM_WORD_08BIT);
+			(**dst).args[1] = OPERAND_RAX_32BIT;
+			dst = &(**dst).next;
+			check(codegen_alloc_op(arena, dst));
+			(**dst).opcode = ASM_OP_MOV;
+			(**dst).args[0] = OPERAND_RAX_08BIT;
+			codegen_map_operand(&src->args[1], &(**dst).args[1]);
+			assert((**dst).args[1].word_type == ASM_WORD_08BIT);
+		}
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_UINT:
 		/*
@@ -719,8 +744,12 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 		break;
 	case IR_OP_CTYPE_UINT_TO_DOUBLE:
 		check(codegen_alloc_op(arena, dst));
-		if (src->args[0].c89type.t == CTYPE_UNSIGNED_INT) {
-			(**dst).opcode = ASM_OP_MOV;
+		if (src->args[0].c89type.t == CTYPE_UNSIGNED_CHAR ||
+		    src->args[0].c89type.t == CTYPE_UNSIGNED_INT) {
+			(**dst).opcode =
+				ctype_is_charlike(&src->args[0].c89type)
+					? ASM_OP_MOV_WITH_ZERO_EXTENSION
+					: ASM_OP_MOV;
 			codegen_map_operand(&src->args[0], &(**dst).args[0]);
 			codegen_set_operand_eax(&src->args[0],
 			                        &(**dst).args[1]);
@@ -730,6 +759,7 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			(**dst).args[0] = OPERAND_RAX_64BIT;
 			codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		} else {
+			assert(src->args[0].c89type.t == CTYPE_UNSIGNED_LONG);
 			/*
 			 * Mimic output of clang for unsigned long -> double.
 			 *

@@ -165,6 +165,20 @@ ctype_is_floating_point(const struct ctype *c)
 }
 
 bool
+ctype_is_charlike(const struct ctype *c)
+{
+	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
+bool
 ctype_is_pointer(const struct ctype *c)
 {
 	return c->t == CTYPE_POINTER_TO || ctype_is_array(c);
@@ -180,10 +194,7 @@ bool
 ctype_is_strlike_array(const struct ctype *c)
 {
 	/* consider array of any character type as str-like */
-	return c->t == CTYPE_ARRAY_OF &&
-	       (c->referent->t == CTYPE_CHAR ||
-	        c->referent->t == CTYPE_SIGNED_CHAR ||
-	        c->referent->t == CTYPE_UNSIGNED_CHAR);
+	return c->t == CTYPE_ARRAY_OF && ctype_is_charlike(c->referent);
 }
 
 bool

@@ -992,15 +992,19 @@ ir_unary_op(Arena *arena,
 				&a->u.cast.expr->expr_type);
 			const bool src_signed =
 				ctype_is_signed(&a->u.cast.expr->expr_type);
+			const bool src_charlike =
+				ctype_is_charlike(&a->u.cast.expr->expr_type);
 			const bool dst_fp =
 				ctype_is_floating_point(&a->u.cast.to_type);
 			const bool dst_signed =
 				ctype_is_signed(&a->u.cast.to_type);
-			if (src_fp && dst_signed) {
+			const bool dst_charlike =
+				ctype_is_charlike(&a->u.cast.to_type);
+			if (src_fp && (dst_signed || dst_charlike)) {
 				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_INT;
 			} else if (src_fp && !dst_signed) {
 				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_UINT;
-			} else if (src_signed && dst_fp) {
+			} else if ((src_signed || src_charlike) && dst_fp) {
 				unary->opcode = IR_OP_CTYPE_INT_TO_DOUBLE;
 			} else if (!src_signed && dst_fp) {
 				unary->opcode = IR_OP_CTYPE_UINT_TO_DOUBLE;
@@ -1762,9 +1766,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 }
 
 static WARN_UNUSED result_t
-ir_string_literal(Arena *arena,
-                  struct symbol *s,
-                  struct ir_str **dst)
+ir_string_literal(Arena *arena, struct symbol *s, struct ir_str **dst)
 {
 	assert(dst != NULL);
 	*dst = arena_alloc(arena, sizeof(**dst));

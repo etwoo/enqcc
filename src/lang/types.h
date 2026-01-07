@@ -42,6 +42,7 @@ long long int ctype_to_size_bytes(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_integer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_signed(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_floating_point(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_charlike(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_pointer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_strlike_array(const struct ctype *c) WARN_UNUSED;
