@@ -647,7 +647,7 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			assert((**dst).args[0].word_type == ASM_WORD_08BIT);
 			struct asm_op *to_prepend = NULL;
 			check(codegen_alloc_op(arena, &to_prepend));
-			to_prepend->opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
+			to_prepend->opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
 			codegen_map_operand(&src->args[0],
 			                    &to_prepend->args[0]);
 			to_prepend->args[1] = OPERAND_RAX_32BIT;
