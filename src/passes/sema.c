@@ -183,7 +183,7 @@ populate_initializer_elements(const struct ast *a,
 			assert(s->u.var.stype == SYMBOL_STRING_LITERAL);
 			(**pos).unique = s->u.var.unique;
 			(**pos).byte_count = 8; /* set .quad for str literal */
-			return;
+			break;
 		default:
 			assert(0); /* logic error in caller */
 			break;
@@ -210,6 +210,7 @@ map_numeric_type(Arena *arena,
 	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
 	struct constant_bytes *cursor = out->elements;
 	populate_initializer_elements(init, dst_type, &cursor);
+	assert((size_t)(cursor - out->elements) == out->count);
 	return RESULT_OK;
 }
 

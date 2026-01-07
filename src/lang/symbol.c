@@ -121,6 +121,12 @@ constant_debug_print(const struct constant_initializer *ci, size_t indent)
 		      (int)indent,
 		      "",
 		      ci->elements[i].byte_value);
+		if (ci->elements[i].unique > 0) {
+			debug("%*sREFERENCE TO STRING: str.%lld",
+			      (int)indent,
+			      "",
+			      ci->elements[i].unique);
+		}
 	}
 }
 
