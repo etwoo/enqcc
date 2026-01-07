@@ -992,8 +992,6 @@ ir_unary_op(Arena *arena,
 				&a->u.cast.expr->expr_type);
 			const bool src_signed =
 				ctype_is_signed(&a->u.cast.expr->expr_type);
-			const bool src_charlike =
-				ctype_is_charlike(&a->u.cast.expr->expr_type);
 			const bool dst_fp =
 				ctype_is_floating_point(&a->u.cast.to_type);
 			const bool dst_signed =
@@ -1004,7 +1002,7 @@ ir_unary_op(Arena *arena,
 				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_INT;
 			} else if (src_fp && !dst_signed) {
 				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_UINT;
-			} else if ((src_signed || src_charlike) && dst_fp) {
+			} else if (src_signed && dst_fp) {
 				unary->opcode = IR_OP_CTYPE_INT_TO_DOUBLE;
 			} else if (!src_signed && dst_fp) {
 				unary->opcode = IR_OP_CTYPE_UINT_TO_DOUBLE;

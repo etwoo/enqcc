@@ -758,8 +758,7 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 					? ASM_OP_MOV_WITH_ZERO_EXTENSION
 					: ASM_OP_MOV;
 			codegen_map_operand(&src->args[0], &(**dst).args[0]);
-			codegen_set_operand_eax(&src->args[0],
-			                        &(**dst).args[1]);
+			(**dst).args[1] = OPERAND_RAX_32BIT;
 			dst = &(**dst).next;
 			check(codegen_alloc_op(arena, dst));
 			(**dst).opcode = ASM_OP_CVT_INT_TO_DOUBLE;
