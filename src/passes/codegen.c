@@ -648,7 +648,8 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 			struct asm_op *to_prepend = NULL;
 			check(codegen_alloc_op(arena, &to_prepend));
 			to_prepend->opcode = ASM_OP_MOV_WITH_ZERO_EXTENSION;
-			codegen_map_operand(&src->args[0], &(**dst).args[0]);
+			codegen_map_operand(&src->args[0],
+			                    &to_prepend->args[0]);
 			to_prepend->args[1] = OPERAND_RAX_32BIT;
 			(**dst).args[0] = OPERAND_RAX_32BIT;
 			codegen_op_list_prepend(to_prepend, dst);
@@ -1915,15 +1916,19 @@ fix_movzx_32bit(struct asm_op *cur, struct fix *trampoline)
 		return false;
 	}
 
-	assert(cur->args[0].word_type < ASM_WORD_64BIT);
+	if (cur->args[0].word_type == ASM_WORD_08BIT) {
+		/* handled by fix_movsx_and_movzx() */
+		return false;
+	}
 
-	if (cur->args[0].word_type == ASM_WORD_32BIT &&
-	    cur->args[1].operand_type == ASM_OPERAND_REGISTER) {
+	assert(cur->args[0].word_type == ASM_WORD_32BIT);
+
+	if (cur->args[1].operand_type == ASM_OPERAND_REGISTER) {
 		trampoline->sz = 1;
 		memcpy(trampoline->ops[0], cur, sizeof(*cur));
 		trampoline->ops[0]->next = NULL;
 		trampoline->ops[0]->opcode = ASM_OP_MOV;
-	} else if (cur->args[0].word_type == ASM_WORD_32BIT) {
+	} else {
 		trampoline->sz = 2;
 		for (size_t i = 0; i < trampoline->sz; ++i) {
 			memcpy(trampoline->ops[i], cur, sizeof(*cur));
@@ -1937,10 +1942,6 @@ fix_movzx_32bit(struct asm_op *cur, struct fix *trampoline)
 		                        &trampoline->ops[1]->args[0]);
 		assert(trampoline->ops[0]->args[1].word_type <
 		       trampoline->ops[1]->args[0].word_type);
-	} else {
-		/* handled by fix_movsx_and_movzx() */
-		assert(cur->args[0].word_type == ASM_WORD_08BIT);
-		return false;
 	}
 
 	return true;
