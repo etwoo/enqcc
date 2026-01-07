@@ -1366,15 +1366,10 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CONTINUE:
 	case NODE_GOTO:
 	case NODE_LABEL:
+	case NODE_SWITCH:
 	case NODE_CASE:
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
-	case NODE_SWITCH:
-		if (ctype_is_charlike(&a->u.switch_.control->expr_type)) {
-			/* promote controlling expr of switch from char->int */
-			a->u.switch_.control->expr_type.t = CTYPE_INT;
-		}
-		break;
 	case NODE_DECLARATION:
 		check(sema_expr_types_initializer(arena,
 		                                  &a->u.declare.identifier,
@@ -1773,6 +1768,16 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		check(sema_implicit_cast_initializer(arena,
 		                                     &a->u.declare.var_type,
 		                                     &a->u.declare.init));
+		break;
+	case NODE_SWITCH:
+		if (ctype_is_charlike(&a->u.switch_.control->expr_type)) {
+			/* promote controlling expr of switch from char->int */
+			check(cast_if(arena,
+			              &(struct ctype){
+					      .t = CTYPE_INT,
+				      },
+			              &a->u.switch_.control));
+		}
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -2521,12 +2526,6 @@ sema_typecheck(Arena *arena,
 		check(sema_walk(a, &ops, &pointer_state));
 	}
 
-	debug("Labeling loops, loop breaks, and continues");
-	check(sema_label_loops(arena, a, label_generator));
-
-	debug("Labeling goto statements and labels");
-	check(sema_label_gotos(arena, a, label_generator));
-
 	debug("Inserting cast expressions");
 	ops.node_enter = sema_implicit_cast;
 	{
@@ -2534,6 +2533,12 @@ sema_typecheck(Arena *arena,
 		cast_state.arena = arena;
 		check(sema_walk(a, &ops, &cast_state));
 	}
+
+	debug("Labeling loops, loop breaks, and continues");
+	check(sema_label_loops(arena, a, label_generator));
+
+	debug("Labeling goto statements and labels");
+	check(sema_label_gotos(arena, a, label_generator));
 
 	struct sema_symbol_state state = {0};
 	state.arena = arena;
