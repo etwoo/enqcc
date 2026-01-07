@@ -1851,9 +1851,12 @@ fix_shift(struct asm_op *cur, struct fix *trampoline)
  *     movq   %r11, -16(%rbp)
  */
 static WARN_UNUSED bool
-fix_movsx(struct asm_op *cur, struct fix *trampoline)
+fix_movsx_and_movzx(struct asm_op *cur, struct fix *trampoline)
 {
-	if (!(cur->opcode == ASM_OP_MOV_WITH_SIGN_EXTENSION &&
+	if (!(((cur->opcode == ASM_OP_MOV_WITH_SIGN_EXTENSION &&
+	        cur->args[0].word_type < ASM_WORD_64BIT) ||
+	       (cur->opcode == ASM_OP_MOV_WITH_ZERO_EXTENSION &&
+	        cur->args[0].word_type < ASM_WORD_32BIT)) &&
 	      (cur->args[0].operand_type == ASM_OPERAND_IMMEDIATE ||
 	       in_memory(&cur->args[1])))) {
 		return false;
@@ -1868,7 +1871,7 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
 	assert(trampoline->ops[0]->args[0].word_type ==
 	       trampoline->ops[0]->args[1].word_type);
 
-	trampoline->ops[1]->opcode = ASM_OP_MOV_WITH_SIGN_EXTENSION;
+	trampoline->ops[1]->opcode = cur->opcode;
 	codegen_copy_operand(&trampoline->ops[0]->args[1],
 	                     &trampoline->ops[1]->args[0]);
 	codegen_set_operand_r11(&cur->args[1], &trampoline->ops[1]->args[1]);
@@ -1906,18 +1909,21 @@ fix_movsx(struct asm_op *cur, struct fix *trampoline)
  *     movq %r11, -16(%rbp)
  */
 static WARN_UNUSED bool
-fix_movzx(struct asm_op *cur, struct fix *trampoline)
+fix_movzx_32bit(struct asm_op *cur, struct fix *trampoline)
 {
 	if (cur->opcode != ASM_OP_MOV_WITH_ZERO_EXTENSION) {
 		return false;
 	}
 
-	if (cur->args[1].operand_type == ASM_OPERAND_REGISTER) {
+	assert(cur->args[0].word_type < ASM_WORD_64BIT);
+
+	if (cur->args[0].word_type == ASM_WORD_32BIT &&
+	    cur->args[1].operand_type == ASM_OPERAND_REGISTER) {
 		trampoline->sz = 1;
 		memcpy(trampoline->ops[0], cur, sizeof(*cur));
 		trampoline->ops[0]->next = NULL;
 		trampoline->ops[0]->opcode = ASM_OP_MOV;
-	} else {
+	} else if (cur->args[0].word_type == ASM_WORD_32BIT) {
 		trampoline->sz = 2;
 		for (size_t i = 0; i < trampoline->sz; ++i) {
 			memcpy(trampoline->ops[i], cur, sizeof(*cur));
@@ -1931,6 +1937,10 @@ fix_movzx(struct asm_op *cur, struct fix *trampoline)
 		                        &trampoline->ops[1]->args[0]);
 		assert(trampoline->ops[0]->args[1].word_type <
 		       trampoline->ops[1]->args[0].word_type);
+	} else {
+		/* handled by fix_movsx_and_movzx() */
+		assert(cur->args[0].word_type == ASM_WORD_08BIT);
+		return false;
 	}
 
 	return true;
@@ -2108,8 +2118,8 @@ codegen_fixup_instructions(Arena *arena, struct assembly *cg)
 		fix_div,
 		fix_mul,
 		fix_shift,
-		fix_movsx,
-		fix_movzx,
+		fix_movsx_and_movzx,
+		fix_movzx_32bit,
 		fix_cvt_double_to_int,
 		fix_cvt_int_to_double,
 		fix_arithmetic_on_double,
