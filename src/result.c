@@ -522,6 +522,12 @@ result_to_str(result_t r)
 	case ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE:
 		s = strdup("Cannot get sizeof() incomplete type");
 		break;
+	case ERR_SEMA_RETURN_STATEMENT_EXPECT_VALUE:
+		s = strdup("non-void function should return a value");
+		break;
+	case ERR_SEMA_RETURN_STATEMENT_EXPECT_VOID:
+		s = strdup("void function should not return a value");
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;

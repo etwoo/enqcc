@@ -1958,6 +1958,16 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		                 &state->expected_return_type));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
+		if (ctype_is_void(&state->expected_return_type) ==
+		    ctype_is_void(&a->u.op_unary.operand->expr_type)) {
+			/* void function XOR void return statement */
+		} else if (ctype_is_void(&state->expected_return_type)) {
+			return make_result(
+				ERR_SEMA_RETURN_STATEMENT_EXPECT_VOID);
+		} else {
+			return make_result(
+				ERR_SEMA_RETURN_STATEMENT_EXPECT_VALUE);
+		}
 		check(cast_if(arena,
 		              &state->expected_return_type,
 		              &a->u.op_unary.operand));
