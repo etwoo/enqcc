@@ -10,6 +10,7 @@
 
 /* note: order of values below determines integer conversion rank */
 #define FOREACH_CTYPE(F)                                                       \
+	F(VOID)                                                                \
 	F(CHAR)                                                                \
 	F(SIGNED_CHAR)                                                         \
 	F(UNSIGNED_CHAR)                                                       \

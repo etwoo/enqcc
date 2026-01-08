@@ -1543,6 +1543,9 @@ ir_expr(Arena *arena,
 		case CTYPE_DOUBLE:
 			return_value->dnum = a->u.double_;
 			break;
+		case CTYPE_VOID:
+			assert(0); /* logic error in caller */
+			break;
 		}
 		check(ctype_copy(arena, &a->expr_type, &return_value->c89type));
 		assert(*dst == NULL); /* does not create new dst op */

@@ -124,6 +124,7 @@ map_numeric_type_scalar(const struct ast *a,
 			tmp = a->u.double_;
 			break;
 		case CTYPE_ARRAY_OF:
+		case CTYPE_VOID:
 			assert(0); /* logic error in caller */
 			break;
 		}
@@ -147,6 +148,7 @@ map_numeric_type_scalar(const struct ast *a,
 		x = (int128_t)a->u.double_;
 		break;
 	case CTYPE_ARRAY_OF:
+	case CTYPE_VOID:
 		assert(0); /* logic error in caller */
 		break;
 	}
@@ -279,6 +281,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -1415,12 +1418,13 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		check(promote_if_char(arena, &a->u.op_unary.operand));
 		__attribute__((fallthrough));
-	case NODE_FUNCTION_RETURN_STATEMENT:
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
+	case NODE_FUNCTION_RETURN_STATEMENT:
 		check(ctype_copy(arena,
 		                 &a->u.op_unary.operand->expr_type,
 		                 &a->expr_type));

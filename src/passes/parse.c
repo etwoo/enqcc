@@ -269,7 +269,16 @@ parse_stmt_one(Arena *arena,
 	if (is_token_type(*tok, TOKEN_KEYWORD_RETURN)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
-		check(parse_expr(arena, tok, &(**dst).u.op_unary.operand, 0));
+		if (is_token_type(*tok, TOKEN_SEMICOLON)) {
+			check(parse_alloc(arena,
+			                  &(**dst).u.op_unary.operand,
+			                  NODE_EXPRESSION_NULL));
+		} else {
+			check(parse_expr(arena,
+			                 tok,
+			                 &(**dst).u.op_unary.operand,
+			                 0));
+		}
 		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		token_consume(tok);

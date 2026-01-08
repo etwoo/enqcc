@@ -287,6 +287,10 @@ result_to_str(result_t r)
 		s = strdup("Duplicate basic type, like `int int` or "
 		           "`signed unsigned`");
 		break;
+	case ERR_PARSE_DECL_TYPE_VOID_INVALID:
+		s = strdup("Type 'void' cannot be combined with "
+		           "double/char/int/long/signed/unsigned");
+		break;
 	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing paren-enclosed expression expects "
 		           "TOKEN_PAREN_CLOSE after expression");
@@ -348,6 +352,10 @@ result_to_str(result_t r)
 		s = strdup("Parsing loop expects TOKEN_KEYWORD_WHILE after "
 		           "do-loop body and before do-loop controlling "
 		           "expression");
+		break;
+	case ERR_PARSE_SIZEOF_EXPECT_TOKEN_PAREN_CLOSE:
+		s = strdup("Parsing paren-enclosed sizeof argument expects "
+		           "TOKEN_PAREN_CLOSE after type name or expression");
 		break;
 	case ERR_PARSE_STMT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "

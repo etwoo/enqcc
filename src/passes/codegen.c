@@ -97,6 +97,9 @@ codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 	case CTYPE_ARRAY_OF:
 		dst->word_type = ASM_WORD_64BIT;
 		break;
+	case CTYPE_VOID:
+		assert(0); /* logic error in caller */
+		break;
 	}
 }
 
@@ -271,6 +274,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		case CTYPE_DOUBLE:
 			dst->operand_type = ASM_OPERAND_CONSTANT_DATA_DOUBLE;
 			dst->u.dnum = src->dnum;
+			break;
+		case CTYPE_VOID:
+			assert(0); /* logic error in caller */
 			break;
 		}
 		break;
@@ -999,6 +1005,9 @@ codegen_statement_one(Arena *arena,
 		case CTYPE_POINTER_TO:
 		case CTYPE_ARRAY_OF:
 			assert(0 && "ptr div/rem should have been rejected");
+			break;
+		case CTYPE_VOID:
+			assert(0); /* logic error in caller */
 			break;
 		}
 		dst = &(**dst).next;

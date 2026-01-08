@@ -16,6 +16,7 @@
 #include <string.h> /* for memset() */
 
 struct parse_basic_type_state {
+	size_t n_void;
 	size_t n_char;
 	size_t n_int;
 	size_t n_long;
@@ -34,6 +35,9 @@ parse_basic_type_accumulate(const struct token **tok,
 
 	assert(*tok != NULL);
 	switch ((**tok).token_type) {
+	case TOKEN_KEYWORD_VOID:
+		state->n_void++;
+		break;
 	case TOKEN_KEYWORD_CHAR:
 		state->n_char++;
 		break;
@@ -62,8 +66,9 @@ static WARN_UNUSED result_t
 parse_basic_type_finalize(struct parse_basic_type_state *state,
                           struct ctype *var_type)
 {
-	if (state->n_char > 1 ||     /* char char -- invalid */
-	    state->n_int > 1 ||      /* int int -- invalid */
+	if (state->n_void > 1 ||     /* void void -- invalid               */
+	    state->n_char > 1 ||     /* char char -- invalid               */
+	    state->n_int > 1 ||      /* int int -- invalid                 */
 	    state->n_long > 1 ||     /* long long -- unsupported           */
 	    state->n_signed > 1 ||   /* signed signed -- invalid           */
 	    state->n_unsigned > 1 || /* unsigned unsigned -- invalid       */
@@ -73,13 +78,27 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 		return make_result(ERR_PARSE_DECL_TYPE_DUPLICATE);
 	}
 
-	if (state->n_char == 0 &&
-	    state->n_int == 0 &&      /* Any particular type may occur zero   */
-	    state->n_long == 0 &&     /* times, but there must exist at least */
-	    state->n_signed == 0 &&   /* one non-zero count, from the valid   */
-	    state->n_unsigned == 0 && /* options available.                   */
+	if (state->n_void == 0 &&     /* Any particular type may */
+	    state->n_char == 0 &&     /* occur zero times, but   */
+	    state->n_int == 0 &&      /* there must exist at     */
+	    state->n_long == 0 &&     /* least one non-zero type */
+	    state->n_signed == 0 &&   /* count, from the valid   */
+	    state->n_unsigned == 0 && /* options available.      */
 	    state->n_double == 0) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TYPE);
+	}
+
+	if (state->n_void > 0) {
+		if (state->n_char > 0 ||     /* char void -- invalid     */
+		    state->n_int > 0 ||      /* int void -- invalid      */
+		    state->n_long > 0 ||     /* long void -- invalid     */
+		    state->n_signed > 0 ||   /* signed void -- invalid   */
+		    state->n_unsigned > 0 || /* unsigned void -- invalid */
+		    state->n_double > 0) {   /* double void -- invalid   */
+			return make_result(ERR_PARSE_DECL_TYPE_VOID_INVALID);
+		}
+		var_type->t = CTYPE_VOID;
+		return RESULT_OK;
 	}
 
 	if (state->n_double > 0) {
@@ -202,7 +221,9 @@ parse_function_params(Arena *arena,
                       const struct token **tok,
                       struct ast_parameter **dst)
 {
-	if (is_token_type(*tok, TOKEN_KEYWORD_VOID)) {
+	if (is_token_type(*tok, TOKEN_KEYWORD_VOID) &&
+	    *tok != NULL && /* avoid NULL dereference on (**tok).next */
+	    is_token_type((**tok).next, TOKEN_PAREN_CLOSE)) {
 		token_consume(tok);
 		return RESULT_OK;
 	}

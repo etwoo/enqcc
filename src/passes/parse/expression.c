@@ -131,7 +131,37 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		}
 	}
 
-	if (got_match < SIZE_MAX) {
+	if (got_match < SIZE_MAX &&
+	    prefix_ops[got_match].node_type == NODE_EXPRESSION_UNARY_SIZE_OF &&
+	    *tok != NULL && /* avoid NULL dereference on (**tok).next */
+	    is_token_type((**tok).next, TOKEN_PAREN_OPEN)) {
+		/* handle optional parens around sizeof() operand */
+		token_consume(tok);
+		token_consume(tok);
+		const struct token *rewind = *tok;
+		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_SIZE_OF));
+		auto_result try_type = parse_type(arena,
+		                                  PARSE_DECLARATOR_ABSTRACT,
+		                                  tok,
+		                                  &(**dst).expr_type,
+		                                  NULL);
+		if (try_type.err == OK) {
+			check(parse_alloc(arena,
+			                  &(**dst).u.op_unary.operand,
+			                  NODE_EXPRESSION_NULL));
+		} else {
+			*tok = rewind;
+			check(parse_expr(arena,
+			                 tok,
+			                 &(**dst).u.op_unary.operand,
+			                 0));
+		}
+		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+			return make_result(
+				ERR_PARSE_SIZEOF_EXPECT_TOKEN_PAREN_CLOSE);
+		}
+		token_consume(tok);
+	} else if (got_match < SIZE_MAX) {
 		assert(got_match < ARRAY_SIZE(prefix_ops));
 		check(parse_alloc(arena, dst, prefix_ops[got_match].node_type));
 		token_consume(tok);
@@ -326,6 +356,7 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
