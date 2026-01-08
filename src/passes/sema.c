@@ -1619,6 +1619,10 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
 		scalar = is_scalar(&a->u.op_ternary.condition->expr_type);
+		if (is_scalar(&a->u.op_ternary.then_expr->expr_type) !=
+		    is_scalar(&a->u.op_ternary.else_expr->expr_type)) {
+			scalar = false;
+		}
 		break;
 	case NODE_EXPRESSION_CAST:
 		if (ctype_is_array(&a->u.cast.to_type)) {
