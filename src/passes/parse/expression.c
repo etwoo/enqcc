@@ -190,7 +190,6 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	} else if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
 		check(parse_symbol(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_PAREN_OPEN) &&
-	           *tok != NULL && /* avoid NULL dereference on (**tok).next */
 	           is_token_variable_type((**tok).next)) {
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_CAST));
