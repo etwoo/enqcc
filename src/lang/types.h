@@ -48,6 +48,7 @@ bool ctype_is_pointer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_strlike_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_strlike_ptr(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_void_ptr(const struct ctype *c) WARN_UNUSED;
 bool ctype_nullptr_ish(const struct ctype *c) WARN_UNUSED;
 const struct ctype *get_common_ctype(const struct ctype *lhs,
                                      const struct ctype *rhs) WARN_UNUSED;

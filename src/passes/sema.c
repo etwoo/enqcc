@@ -1617,6 +1617,7 @@ sema_pointer_cmp_impl(const struct ctype *lhs,
 	} else if (ctype_is_pointer(lhs) && ctype_is_pointer(rhs)) {
 		if (ctype_is_void_ptr(lhs) || ctype_is_void_ptr(rhs)) {
 			/* void* converts to/from any other pointer type */
+			// TODO: should we avoid arr->ptr decay here?
 		} else {
 			return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
 		}

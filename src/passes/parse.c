@@ -20,7 +20,7 @@ static WARN_UNUSED result_t
 parse_alloc_if_unset(Arena *arena, struct ast **dst)
 {
 	if (*dst == NULL) {
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+		check(parse_alloc_null_expr(arena, dst));
 	}
 	return RESULT_OK;
 }
@@ -77,7 +77,7 @@ parse_loop_for_init(Arena *arena,
 	assert(*dst != NULL);
 
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
-		check(parse_alloc_if_unset(arena, &(**dst).car));
+		check(parse_alloc_null_expr(arena, &(**dst).car));
 		token_consume(tok);
 	} else if (is_token_variable_type(*tok)) {
 		check(parse_fn_or_var_declaration(arena, 0, tok, &(**dst).car));
@@ -270,9 +270,9 @@ parse_stmt_one(Arena *arena,
 		token_consume(tok);
 		check(parse_alloc(arena, dst, NODE_FUNCTION_RETURN_STATEMENT));
 		if (is_token_type(*tok, TOKEN_SEMICOLON)) {
-			check(parse_alloc(arena,
-			                  &(**dst).u.op_unary.operand,
-			                  NODE_EXPRESSION_NULL));
+			check(parse_alloc_null_expr(
+				arena,
+				&(**dst).u.op_unary.operand));
 		} else {
 			check(parse_expr(arena,
 			                 tok,
@@ -282,7 +282,7 @@ parse_stmt_one(Arena *arena,
 		expect_semicolon_after = true;
 	} else if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		token_consume(tok);
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_NULL));
+		check(parse_alloc_null_expr(arena, dst));
 	} else if (is_token_type(*tok, TOKEN_BRACE_OPEN)) {
 		check(parse_block(arena, tok, dst));
 	} else if (is_token_type(*tok, TOKEN_KEYWORD_IF)) {

@@ -145,9 +145,9 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		                                  &(**dst).expr_type,
 		                                  NULL);
 		if (try_type.err == OK) {
-			check(parse_alloc(arena,
-			                  &(**dst).u.op_unary.operand,
-			                  NODE_EXPRESSION_NULL));
+			check(parse_alloc_null_expr(
+				arena,
+				&(**dst).u.op_unary.operand));
 		} else {
 			*tok = rewind;
 			check(parse_expr(arena,
