@@ -222,7 +222,6 @@ parse_function_params(Arena *arena,
                       struct ast_parameter **dst)
 {
 	if (is_token_type(*tok, TOKEN_KEYWORD_VOID) &&
-	    *tok != NULL && /* avoid NULL dereference on (**tok).next */
 	    is_token_type((**tok).next, TOKEN_PAREN_CLOSE)) {
 		token_consume(tok);
 		return RESULT_OK;
