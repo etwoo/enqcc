@@ -1618,14 +1618,14 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		scalar = is_scalar(&a->u.op_binary.rhs->expr_type);
-		/* guaranteed be sema_lvalue(), is_node_lvalue() */
+		/* guaranteed by sema_lvalue(), is_node_lvalue() */
 		assert(is_scalar(&a->u.op_binary.lhs->expr_type));
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		/* guaranteed be sema_lvalue(), is_node_lvalue() */
+		/* guaranteed by sema_lvalue(), is_node_lvalue() */
 		assert(is_scalar(&a->u.op_unary.operand->expr_type));
 		break;
 	default:
