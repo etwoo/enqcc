@@ -1543,6 +1543,101 @@ sema_expr_types(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+is_scalar(const struct ctype *c)
+{
+	/*
+	 * Allow CTYPE_ARRAY_OF, despite it not truly being scalar, assuming
+	 * other code will perform array-to-pointer decay.
+	 */
+	return c->t != CTYPE_VOID;
+}
+
+static WARN_UNUSED result_t
+sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	bool scalar = true;
+
+	switch (a->node_type) {
+	case NODE_IF_ELSE:
+		scalar = is_scalar(&a->u.if_.condition->expr_type);
+		break;
+	case NODE_LOOP:
+		if (a->u.loop.precond->node_type != NODE_EXPRESSION_NULL &&
+		    !is_scalar(&a->u.loop.precond->expr_type)) {
+			scalar = false;
+		}
+		if (a->u.loop.postcond->node_type != NODE_EXPRESSION_NULL &&
+		    !is_scalar(&a->u.loop.postcond->expr_type)) {
+			scalar = false;
+		}
+		break;
+	case NODE_SWITCH:
+		scalar = is_scalar(&a->u.switch_.control->expr_type);
+		break;
+	case NODE_CASE:
+		scalar = is_scalar(&a->u.case_.constant->expr_type);
+		break;
+	case NODE_EXPRESSION_UNARY_NEGATE:
+	case NODE_EXPRESSION_UNARY_NOT:
+	case NODE_EXPRESSION_UNARY_COMPLEMENT:
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+		scalar = is_scalar(&a->u.op_unary.operand->expr_type);
+		break;
+	case NODE_EXPRESSION_BINARY_ADD:
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+	case NODE_EXPRESSION_BINARY_MULTIPLY:
+	case NODE_EXPRESSION_BINARY_DIVIDE:
+	case NODE_EXPRESSION_BINARY_REMAINDER:
+	case NODE_EXPRESSION_BITWISE_AND:
+	case NODE_EXPRESSION_BITWISE_OR:
+	case NODE_EXPRESSION_BITWISE_XOR:
+	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
+	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
+	case NODE_EXPRESSION_LOGICAL_AND:
+	case NODE_EXPRESSION_LOGICAL_OR:
+	case NODE_EXPRESSION_COMPARE_EQUAL:
+	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN:
+	case NODE_EXPRESSION_COMPARE_LESS_THAN_EQ:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN:
+	case NODE_EXPRESSION_COMPARE_MORE_THAN_EQ:
+		scalar = is_scalar(&a->u.op_binary.lhs->expr_type) &&
+		         is_scalar(&a->u.op_binary.rhs->expr_type);
+		break;
+	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		scalar = is_scalar(&a->u.op_ternary.condition->expr_type);
+		break;
+	case NODE_EXPRESSION_CAST:
+		if (ctype_is_array(&a->u.cast.to_type)) {
+			// TODO: reject cast to struct type (ch18)
+			return make_result(ERR_SEMA_CAST_TO_ARRAY_TYPE_INVALID);
+		}
+		scalar = is_scalar(&a->u.cast.expr->expr_type);
+		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		scalar = is_scalar(&a->u.op_binary.rhs->expr_type);
+		/* guaranteed be sema_lvalue(), is_node_lvalue() */
+		assert(is_scalar(&a->u.op_binary.lhs->expr_type));
+		break;
+	case NODE_EXPRESSION_PREDECREMENT:
+	case NODE_EXPRESSION_POSTDECREMENT:
+	case NODE_EXPRESSION_PREINCREMENT:
+	case NODE_EXPRESSION_POSTINCREMENT:
+		/* guaranteed be sema_lvalue(), is_node_lvalue() */
+		assert(is_scalar(&a->u.op_unary.operand->expr_type));
+		break;
+	default:
+		break;
+	}
+
+	if (!scalar) {
+		return make_result(ERR_SEMA_OPERAND_SCALAR_REQUIRED);
+	}
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 {
@@ -1583,7 +1678,6 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 		     ctype_is_pointer(&a->u.op_binary.lhs->expr_type))) {
 			valid = false;
 		}
-
 		break;
 	case NODE_EXPRESSION_CAST:
 		if ((ctype_is_floating_point(&a->u.cast.to_type) &&
@@ -2540,6 +2634,10 @@ sema_typecheck(Arena *arena,
 
 	debug("Checking for invalid lvalues");
 	ops.node_enter = sema_lvalue;
+	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking for invalid non-scalar expressions");
+	ops.node_enter = sema_non_scalar;
 	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking for invalid double usage");

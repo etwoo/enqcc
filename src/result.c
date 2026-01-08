@@ -387,6 +387,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_CASE_OUTSIDE:
 		s = strdup("Invalid case with no enclosing switch");
 		break;
+	case ERR_SEMA_CAST_TO_ARRAY_TYPE_INVALID:
+		s = strdup("Cannot cast to array type");
+		break;
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);
 		break;
@@ -491,6 +494,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_OPERAND_POINTER_RHS_VS_NOT_LHS:
 		s = strdup("Pointer RHS cannot be compared/converted to "
 		           "non-pointer LHS");
+		break;
+	case ERR_SEMA_OPERAND_SCALAR_REQUIRED:
+		s = strdup("Operator or condition requires scalar expression");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
