@@ -758,6 +758,17 @@ map_declarator_to_ctype(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+ctype_has_fragment_array_of_incomplete(const struct ctype *c)
+{
+	for (; ctype_is_pointer(c); c = c->referent) {
+		if (ctype_is_array(c) && ctype_is_incomplete(c->referent)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static WARN_UNUSED result_t
 parse_specifiers_and_type(Arena *arena,
                           const struct token **tok,
@@ -783,7 +794,7 @@ parse_specifiers_and_type(Arena *arena,
 	check(map_declarator_to_ctype(arena, &basic_type, &decl, &tmp));
 	check(ctype_copy(arena, tmp, var_type));
 
-	if (ctype_is_array(var_type) && ctype_is_incomplete(&basic_type)) {
+	if (ctype_has_fragment_array_of_incomplete(var_type)) {
 		return make_result(ERR_PARSE_DECL_TYPE_ARRAY_INCOMPLETE);
 	}
 	return RESULT_OK;
@@ -823,7 +834,7 @@ parse_type(Arena *arena,
 	check(map_declarator_to_ctype(arena, &basic_type, &decl, &tmp));
 	check(ctype_copy(arena, tmp, var_type));
 
-	if (ctype_is_array(var_type) && ctype_is_incomplete(&basic_type)) {
+	if (ctype_has_fragment_array_of_incomplete(var_type)) {
 		return make_result(ERR_PARSE_DECL_TYPE_ARRAY_INCOMPLETE);
 	}
 	return RESULT_OK;
