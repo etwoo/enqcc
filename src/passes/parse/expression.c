@@ -12,6 +12,43 @@
 #include <inttypes.h>
 
 static WARN_UNUSED result_t
+parse_sizeof_with_parens(Arena *arena,
+                         const struct token **tok,
+                         struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_KEYWORD_SIZEOF));
+	token_consume(tok);
+	assert(is_token_type(*tok, TOKEN_PAREN_OPEN));
+	token_consume(tok);
+
+	check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_SIZE_OF));
+
+	const struct token *rewind = *tok;
+	struct ctype tmp = {0};
+
+	auto_result try_type =
+		parse_type(arena, PARSE_DECLARATOR_ABSTRACT, tok, &tmp, NULL);
+	if (try_type.err == OK) {
+		check(parse_alloc_null_expr(arena,
+		                            &(**dst).u.op_unary.operand));
+		/* override CTYPE_VOID for NODE_EXPRESSION_NULL */
+		check(ctype_copy(arena,
+		                 &tmp,
+		                 &(**dst).u.op_unary.operand->expr_type));
+	} else {
+		*tok = rewind;
+		check(parse_expr(arena, tok, &(**dst).u.op_unary.operand, 0));
+	}
+
+	if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		return make_result(ERR_PARSE_SIZEOF_EXPECT_TOKEN_PAREN_CLOSE);
+	}
+	token_consume(tok);
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_symbol(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(is_token_type(*tok, TOKEN_IDENTIFIER));
@@ -134,38 +171,8 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	if (got_match < SIZE_MAX &&
 	    prefix_ops[got_match].node_type == NODE_EXPRESSION_UNARY_SIZE_OF &&
 	    is_token_type((**tok).next, TOKEN_PAREN_OPEN)) {
-		/* handle optional parens around sizeof() operand */
-		token_consume(tok);
-		token_consume(tok);
-		const struct token *rewind = *tok;
-		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_SIZE_OF));
-		struct ctype tmp = {0};
-		auto_result try_type = parse_type(arena,
-		                                  PARSE_DECLARATOR_ABSTRACT,
-		                                  tok,
-		                                  &tmp,
-		                                  NULL);
-		if (try_type.err == OK) {
-			check(parse_alloc_null_expr(
-				arena,
-				&(**dst).u.op_unary.operand));
-			/* override CTYPE_VOID for NODE_EXPRESSION_NULL */
-			check(ctype_copy(
-				arena,
-				&tmp,
-				&(**dst).u.op_unary.operand->expr_type));
-		} else {
-			*tok = rewind;
-			check(parse_expr(arena,
-			                 tok,
-			                 &(**dst).u.op_unary.operand,
-			                 0));
-		}
-		if (!is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-			return make_result(
-				ERR_PARSE_SIZEOF_EXPECT_TOKEN_PAREN_CLOSE);
-		}
-		token_consume(tok);
+		check(parse_sizeof_with_parens(arena, tok, dst));
+		/* non-parenthesized sizeof handled below */
 	} else if (got_match < SIZE_MAX) {
 		assert(got_match < ARRAY_SIZE(prefix_ops));
 		check(parse_alloc(arena, dst, prefix_ops[got_match].node_type));
