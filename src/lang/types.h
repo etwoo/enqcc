@@ -18,8 +18,8 @@
 	F(LONG)                                                                \
 	F(UNSIGNED_LONG)                                                       \
 	F(DOUBLE)                                                              \
-	F(POINTER_TO)                                                          \
 	F(ARRAY_OF)                                                            \
+	F(POINTER_TO)                                                          \
 	F(VOID)
 
 struct ctype {
