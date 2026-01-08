@@ -276,6 +276,10 @@ result_to_str(result_t r)
 	case ERR_PARSE_DECL_SPECIFIER_DUPLICATE:
 		s = strdup("Duplicate variable or function specifier");
 		break;
+	case ERR_PARSE_DECL_TYPE_ARRAY_INCOMPLETE:
+		s = strdup("Array element type cannot be void or, more "
+		           "generally, an incomplete type");
+		break;
 	case ERR_PARSE_DECL_TYPE_CHAR_INVALID:
 		s = strdup("Type 'char' cannot be combined with int/long");
 		break;
@@ -483,7 +487,7 @@ result_to_str(result_t r)
 	case ERR_SEMA_OPERAND_ADD_POINTER_VOID:
 		s = strdup(
 			"Pointer arithmetic cannot take void pointer operand "
-		        "or, more generally, pointer to incomplete type");
+			"or, more generally, pointer to incomplete type");
 		break;
 	case ERR_SEMA_OPERAND_POINTER_CONFLICT:
 		s = strdup("Conflicting pointer types");

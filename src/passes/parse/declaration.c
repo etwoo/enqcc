@@ -782,6 +782,11 @@ parse_specifiers_and_type(Arena *arena,
 	struct ctype *tmp = NULL;
 	check(map_declarator_to_ctype(arena, &basic_type, &decl, &tmp));
 	check(ctype_copy(arena, tmp, var_type));
+
+	if (ctype_is_array(var_type) && ctype_is_incomplete(&basic_type)) {
+		return make_result(ERR_PARSE_DECL_TYPE_ARRAY_INCOMPLETE);
+	}
+
 	return RESULT_OK;
 }
 
