@@ -1615,7 +1615,11 @@ sema_pointer_cmp_impl(const struct ctype *lhs,
 			return make_result(ERR_SEMA_OPERAND_CHAR_ARRAY_SIZE);
 		} /* else: RHS string may be shorter than LHS capacity */
 	} else if (ctype_is_pointer(lhs) && ctype_is_pointer(rhs)) {
-		return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
+		if (ctype_is_void_ptr(lhs) || ctype_is_void_ptr(rhs)) {
+			/* void* converts to/from any other pointer type */
+		} else {
+			return make_result(ERR_SEMA_OPERAND_POINTER_CONFLICT);
+		}
 	} else if (ctype_is_pointer(lhs) && (!ish || !ctype_nullptr_ish(rhs))) {
 		return make_result(ERR_SEMA_OPERAND_POINTER_LHS_VS_NOT_RHS);
 	} else if (ctype_is_pointer(rhs) && (!ish || !ctype_nullptr_ish(lhs))) {

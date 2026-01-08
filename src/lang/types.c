@@ -210,6 +210,12 @@ ctype_is_strlike_ptr(const struct ctype *c)
 }
 
 bool
+ctype_is_void_ptr(const struct ctype *c)
+{
+	return c->t == CTYPE_POINTER_TO && c->referent->t == CTYPE_VOID;
+}
+
+bool
 ctype_nullptr_ish(const struct ctype *c)
 {
 	return c->maybe_null_pointer_constant;
