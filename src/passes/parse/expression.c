@@ -133,7 +133,6 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 
 	if (got_match < SIZE_MAX &&
 	    prefix_ops[got_match].node_type == NODE_EXPRESSION_UNARY_SIZE_OF &&
-	    *tok != NULL && /* avoid NULL dereference on (**tok).next */
 	    is_token_type((**tok).next, TOKEN_PAREN_OPEN)) {
 		/* handle optional parens around sizeof() operand */
 		token_consume(tok);
