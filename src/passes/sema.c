@@ -43,7 +43,8 @@ is_node_lvalue(const struct ast *a)
 		a = a->u.op_unary.operand;
 	}
 	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	       a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE;
+	       (a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE &&
+		!ctype_is_void_ptr(&a->u.op_unary.operand->expr_type));
 }
 
 static WARN_UNUSED const struct ast *
@@ -1635,7 +1636,8 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		scalar = is_scalar(&a->u.op_unary.operand->expr_type);
+		/* guaranteed by sema_lvalue(), is_node_lvalue() */
+		assert(is_scalar(&a->u.op_unary.operand->expr_type));
 		break;
 	default:
 		break;
