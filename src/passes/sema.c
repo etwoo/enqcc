@@ -1778,6 +1778,11 @@ sema_pointer(struct ast *a, void *userdata)
 			return make_result(ERR_SEMA_OPERAND_POINTER_INVALID);
 		}
 		break;
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+		if (ctype_is_void_ptr(&a->u.op_unary.operand->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_DEREF_VOID_PTR);
+		}
+		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 		if (!ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		    !ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {

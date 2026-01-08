@@ -483,6 +483,9 @@ result_to_str(result_t r)
 		s = strdup("Pointer dereference operator * requires argument "
 		           "of type CTYPE_POINTER_TO");
 		break;
+	case ERR_SEMA_OPERAND_DEREF_VOID_PTR:
+		s = strdup("Cannot dereference void pointer");
+		break;
 	case ERR_SEMA_OPERAND_DOUBLE_INVALID:
 		s = strdup(
 			"Complement ~, remainder %, and bitwise operations "
