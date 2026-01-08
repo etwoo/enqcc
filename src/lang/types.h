@@ -10,7 +10,6 @@
 
 /* note: order of values below determines integer conversion rank */
 #define FOREACH_CTYPE(F)                                                       \
-	F(VOID)                                                                \
 	F(CHAR)                                                                \
 	F(SIGNED_CHAR)                                                         \
 	F(UNSIGNED_CHAR)                                                       \
@@ -20,7 +19,8 @@
 	F(UNSIGNED_LONG)                                                       \
 	F(DOUBLE)                                                              \
 	F(POINTER_TO)                                                          \
-	F(ARRAY_OF)
+	F(ARRAY_OF)                                                            \
+	F(VOID)
 
 struct ctype {
 #define TO_ENUM(t) CTYPE_##t,
