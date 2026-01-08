@@ -209,10 +209,28 @@ ctype_is_strlike_ptr(const struct ctype *c)
 	return c->t == CTYPE_POINTER_TO && c->referent->t == CTYPE_CHAR;
 }
 
+static WARN_UNUSED bool
+ctype_is_void(const struct ctype *c)
+{
+	return c->t == CTYPE_VOID;
+}
+
 bool
 ctype_is_void_ptr(const struct ctype *c)
 {
-	return c->t == CTYPE_POINTER_TO && c->referent->t == CTYPE_VOID;
+	return c->t == CTYPE_POINTER_TO && ctype_is_void(c->referent);
+}
+
+bool
+ctype_is_incomplete(const struct ctype *c)
+{
+	return ctype_is_void(c);
+}
+
+bool
+ctype_is_ptr_to_incomplete(const struct ctype *c)
+{
+	return ctype_is_void_ptr(c);
 }
 
 bool

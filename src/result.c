@@ -480,6 +480,11 @@ result_to_str(result_t r)
 	case ERR_SEMA_OPERAND_ADD_POINTER_BOTH:
 		s = strdup("Addition cannot take two pointer operands");
 		break;
+	case ERR_SEMA_OPERAND_ADD_POINTER_VOID:
+		s = strdup(
+			"Pointer arithmetic cannot take void pointer operand "
+		        "or, more generally, pointer to incomplete type");
+		break;
 	case ERR_SEMA_OPERAND_POINTER_CONFLICT:
 		s = strdup("Conflicting pointer types");
 		break;

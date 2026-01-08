@@ -1785,9 +1785,20 @@ sema_pointer(struct ast *a, void *userdata)
 		} else if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		           ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_BOTH);
+		} else if (ctype_is_ptr_to_incomplete(
+				   &a->u.op_binary.lhs->expr_type) ||
+		           ctype_is_ptr_to_incomplete(
+				   &a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
 		}
 		break;
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		if (ctype_is_ptr_to_incomplete(
+			    &a->u.op_binary.lhs->expr_type) ||
+		    ctype_is_ptr_to_incomplete(
+			    &a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
+		}
 		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 		    ctype_is_integer(&a->u.op_binary.rhs->expr_type)) {
 			assert(ctype_is_equal(&a->expr_type,
