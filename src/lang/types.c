@@ -209,7 +209,7 @@ ctype_is_strlike_ptr(const struct ctype *c)
 	return c->t == CTYPE_POINTER_TO && c->referent->t == CTYPE_CHAR;
 }
 
-static WARN_UNUSED bool
+bool
 ctype_is_void(const struct ctype *c)
 {
 	return c->t == CTYPE_VOID;

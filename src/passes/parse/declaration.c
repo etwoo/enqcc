@@ -901,6 +901,12 @@ parse_fn_or_var_declaration(Arena *arena,
 		                 &(**dst).u.declare.var_type));
 		(**dst).u.declare.identifier.name = fn_or_var_name;
 
+		if (ctype_is_void(&fn_return_or_var_type)) {
+			return make_result(ERR_PARSE_DECL_TYPE_VOID_VAR_TYPE,
+			                   fn_or_var_name.data,
+			                   fn_or_var_name.sz);
+		}
+
 		if (is_token_type(*tok, TOKEN_EQUAL_SIGN)) {
 			token_consume(tok);
 			check(parse_initializer(arena,
@@ -928,6 +934,14 @@ parse_fn_or_var_declaration(Arena *arena,
 	                 &(**dst).u.function.return_type));
 	(**dst).u.function.identifier.name = fn_or_var_name;
 	(**dst).u.function.params = fn_params_maybe;
+
+	FOREACH_FUNCTION_PARAMETER (cur, fn_params_maybe) {
+		if (ctype_is_void(&cur->parameter_type)) {
+			return make_result(ERR_PARSE_DECL_TYPE_VOID_PARAM_TYPE,
+			                   cur->symbol.name.data,
+			                   cur->symbol.name.sz);
+		}
+	}
 
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		assert((**dst).u.function.block == NULL);

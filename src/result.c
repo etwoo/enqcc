@@ -295,6 +295,15 @@ result_to_str(result_t r)
 		s = strdup("Type 'void' cannot be combined with "
 		           "double/char/int/long/signed/unsigned");
 		break;
+	case ERR_PARSE_DECL_TYPE_VOID_PARAM_TYPE:
+		s = my_asprintf(
+			"Cannot declare function parameter '%s' of type 'void'",
+			r.msg);
+		break;
+	case ERR_PARSE_DECL_TYPE_VOID_VAR_TYPE:
+		s = my_asprintf("Cannot declare variable '%s' of type 'void'",
+		                r.msg);
+		break;
 	case ERR_PARSE_EXPR_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing paren-enclosed expression expects "
 		           "TOKEN_PAREN_CLOSE after expression");

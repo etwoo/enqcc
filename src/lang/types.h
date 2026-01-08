@@ -48,6 +48,7 @@ bool ctype_is_pointer(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_strlike_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_strlike_ptr(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_void(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_void_ptr(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_incomplete(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_ptr_to_incomplete(const struct ctype *c) WARN_UNUSED;
