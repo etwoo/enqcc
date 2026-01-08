@@ -27,6 +27,14 @@
  *   close to 263 elements.)
  */
 static const struct ctype LIKE_PTRDIFF_T = {.t = CTYPE_LONG};
+/*
+ * From "Writing a C Compiler" by Nora Sandler, Chapter 17, Section "sizeof
+ * Expressions":
+ *
+ *   A sizeof expression has type size_t; in our implementation, that's
+ *   just unsigned long.
+ */
+static const struct ctype LIKE_SIZE_T = {.t = CTYPE_UNSIGNED_LONG};
 
 static WARN_UNUSED bool
 is_node_lvalue(const struct ast *a)
@@ -1418,7 +1426,6 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 		check(promote_if_char(arena, &a->u.op_unary.operand));
 		__attribute__((fallthrough));
-	case NODE_EXPRESSION_UNARY_SIZE_OF:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -1444,6 +1451,9 @@ sema_expr_types(struct ast *a, void *userdata)
 		check(ctype_copy(arena,
 		                 &a->u.op_unary.operand->expr_type,
 		                 a->expr_type.referent));
+		break;
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
+		check(ctype_copy(arena, &LIKE_SIZE_T, &a->expr_type));
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
@@ -1550,7 +1560,7 @@ is_scalar(const struct ctype *c)
 	 * Allow CTYPE_ARRAY_OF, despite it not truly being scalar, assuming
 	 * other code will perform array-to-pointer decay.
 	 */
-	return c->t != CTYPE_VOID;
+	return !ctype_is_void(c);
 }
 
 static WARN_UNUSED result_t
@@ -1634,6 +1644,18 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 
 	if (!scalar) {
 		return make_result(ERR_SEMA_OPERAND_SCALAR_REQUIRED);
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+sema_incomplete_types(struct ast *a, void *userdata MAYBE_UNUSED)
+{
+	if (a->node_type == NODE_EXPRESSION_UNARY_SIZE_OF) {
+		assert(ctype_is_equal(&a->expr_type, &LIKE_SIZE_T));
+		if (ctype_is_incomplete(&a->u.op_unary.operand->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE);
+		}
 	}
 	return RESULT_OK;
 }
@@ -2652,8 +2674,12 @@ sema_typecheck(Arena *arena,
 	ops.node_enter = sema_lvalue;
 	check(sema_walk(a, &ops, NULL));
 
-	debug("Checking for invalid non-scalar expressions");
+	debug("Checking for invalid usage of non-scalar expressions");
 	ops.node_enter = sema_non_scalar;
+	check(sema_walk(a, &ops, NULL));
+
+	debug("Checking for invalid usage of incomplete types");
+	ops.node_enter = sema_incomplete_types;
 	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking for invalid double usage");

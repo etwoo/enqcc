@@ -139,15 +139,21 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 		token_consume(tok);
 		const struct token *rewind = *tok;
 		check(parse_alloc(arena, dst, NODE_EXPRESSION_UNARY_SIZE_OF));
+		struct ctype tmp = {0};
 		auto_result try_type = parse_type(arena,
 		                                  PARSE_DECLARATOR_ABSTRACT,
 		                                  tok,
-		                                  &(**dst).expr_type,
+		                                  &tmp,
 		                                  NULL);
 		if (try_type.err == OK) {
 			check(parse_alloc_null_expr(
 				arena,
 				&(**dst).u.op_unary.operand));
+			/* override CTYPE_VOID for NODE_EXPRESSION_NULL */
+			check(ctype_copy(
+				arena,
+				&tmp,
+				&(**dst).u.op_unary.operand->expr_type));
 		} else {
 			*tok = rewind;
 			check(parse_expr(arena,
