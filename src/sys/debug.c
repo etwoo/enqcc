@@ -12,7 +12,7 @@ vlog(const char *level,
      const char *pattern,
      va_list ap)
 {
-	fprintf(stderr, "%-*s %s:%u: ", LOG_LVL_MAX_LEN, level, fname, lineno);
+	fprintf(stderr, "%-*s %s:%-3u ", LOG_LVL_MAX_LEN, level, fname, lineno);
 	vfprintf(stderr, pattern, ap);
 	fputc('\n', stderr);
 }
