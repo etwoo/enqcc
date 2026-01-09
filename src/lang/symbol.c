@@ -113,6 +113,13 @@ void
 constant_debug_print(const struct constant_initializer *ci, size_t indent)
 {
 	for (long long unsigned i = 0; i < ci->count; ++i) {
+		if (i > 32) {
+			debug("%*s(skipping next %llu elements ...)",
+			      (int)indent,
+			      "",
+			      ci->count - i);
+			break;
+		}
 		debug("%*sSIZE:  %llu",
 		      (int)indent,
 		      "",
