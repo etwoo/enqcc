@@ -622,7 +622,9 @@ parse_declarator_group_postfix(Arena *arena,
 		(**dst_fragment).t = CTYPE_ARRAY_OF;
 		(**dst_fragment).sz = (long long unsigned)constant->u.num;
 		dst_fragment = &(**dst_fragment).referent;
+	}
 
+	if (new_fragment != NULL) {
 		for (; dst->prefix.pointer_indirection > 0;
 		     --dst->prefix.pointer_indirection) {
 			check(ctype_alloc(arena, dst_fragment));
@@ -630,9 +632,7 @@ parse_declarator_group_postfix(Arena *arena,
 			dst_fragment = &(**dst_fragment).referent;
 		}
 		assert(dst->prefix.pointer_indirection == 0);
-	}
 
-	if (new_fragment != NULL) {
 		assert(*dst_fragment == NULL);
 		/* prepend new fragment onto existing type_fragment */
 		*dst_fragment = dst->postfix.type_fragment;
