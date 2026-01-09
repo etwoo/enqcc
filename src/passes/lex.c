@@ -129,73 +129,22 @@ issign(char c)
 	return c == '+' || c == '-';
 }
 
+struct lex_sep_state {
+	const char sep;
+	bool found;             /* found this separator during lex?       */
+	size_t allow_sign_span; /* if found, allows +/- in following span */
+	bool needs_digit;       /* if found, expects digit to follow      */
+};
+
 static WARN_UNUSED result_t
-lex_one_constant_numeric(struct string_view *pos, struct token **tok)
+lex_one_constant_numeric_finalize(struct string_view *pos,
+                                  struct token *cur,
+                                  const struct lex_sep_state *sep_chars,
+                                  size_t n_sep_chars)
 {
-	struct token *cur = *tok;
-	size_t allow_sign_for = 0;
-	size_t sep_latest = SIZE_MAX;
-
-	struct {
-		const char sep;
-		const bool allow_sign_next;
-		bool found;
-		bool needs_digit; /* must have digit somewhere in remainder */
-	} sep_chars[] = {
-		{
-			.sep = DECIMAL_POINT,
-			.allow_sign_next = false,
-			.found = false,
-			.needs_digit = false,
-		},
-		{
-			.sep = E_NOTATION_CHAR,
-			.allow_sign_next = true,
-			.found = false,
-			.needs_digit = true,
-		},
-	};
-
-	cur->val.data = pos->data;
-	assert(isdigit(cur->val.data[0]) || isdot(cur->val.data[0]));
-
-	while (pos->sz > 0) {
-		const char c = *pos->data;
-
-		bool is_sep = false;
-		for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
-			if (sep_chars[i].sep == toupper(c)) {
-				if (!sep_chars[i].found) {
-					sep_chars[i].found = true;
-					is_sep = true;
-					sep_latest = i;
-					if (sep_chars[i].allow_sign_next) {
-						allow_sign_for = 2;
-					}
-				}
-				break;
-			}
-		}
-
-		if (isdigit(c) || is_sep || (issign(c) && allow_sign_for > 0)) {
-			pos->data++;
-			pos->sz--;
-			if (allow_sign_for > 0) {
-				allow_sign_for--;
-			}
-			if (sep_latest != SIZE_MAX && isdigit(c)) {
-				assert(sep_latest < ARRAY_SIZE(sep_chars));
-				sep_chars[sep_latest].needs_digit = false;
-			}
-			continue;
-		}
-
-		break;
-	}
-
 	bool found_sep = false;
 	bool malformed = false;
-	for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
+	for (size_t i = 0; i < n_sep_chars; ++i) {
 		if (sep_chars[i].found) {
 			found_sep = true;
 			malformed = sep_chars[i].needs_digit || malformed;
@@ -224,6 +173,73 @@ lex_one_constant_numeric(struct string_view *pos, struct token **tok)
 
 	cur->val.sz = pos->data - cur->val.data;
 	cur->token_type = TOKEN_CONSTANT;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+lex_one_constant_numeric(struct string_view *pos, struct token **tok)
+{
+	struct token *cur = *tok;
+	struct lex_sep_state *sep_latest = NULL;
+
+	struct lex_sep_state sep_chars[] = {
+		{
+			.sep = DECIMAL_POINT,
+			.found = false,
+			.allow_sign_span = 0,
+			.needs_digit = false,
+		},
+		{
+			.sep = E_NOTATION_CHAR,
+			.found = false,
+			.allow_sign_span = 2,
+			.needs_digit = true,
+		},
+	};
+
+	cur->val.data = pos->data;
+	assert(isdigit(cur->val.data[0]) || isdot(cur->val.data[0]));
+
+	while (pos->sz > 0) {
+		const char c = *pos->data;
+
+		bool newly_found_sep = false;
+		for (size_t i = 0; i < ARRAY_SIZE(sep_chars); ++i) {
+			if (sep_chars[i].sep == toupper(c)) {
+				if (!sep_chars[i].found) {
+					sep_chars[i].found = true;
+					newly_found_sep = true;
+					sep_latest = &sep_chars[i];
+				}
+				break;
+			}
+		}
+
+		if (isdigit(c) ||          /* process decimal digit: [0-9]  */
+		    newly_found_sep ||     /* process separator: '.' or 'E' */
+		    (issign(c) &&          /* process +/- sign, if (!) ...  */
+		     sep_latest != NULL && /* ... sign allowed in this span */
+		     sep_latest->allow_sign_span > 0)) {
+			pos->data++;
+			pos->sz--;
+			if (sep_latest != NULL) {
+				if (sep_latest->allow_sign_span > 0) {
+					sep_latest->allow_sign_span--;
+				}
+				if (isdigit(c)) {
+					sep_latest->needs_digit = false;
+				}
+			}
+			continue;
+		}
+
+		break;
+	}
+
+	check(lex_one_constant_numeric_finalize(pos,
+	                                        cur,
+	                                        sep_chars,
+	                                        ARRAY_SIZE(sep_chars)));
 	return RESULT_OK;
 }
 
@@ -354,6 +370,23 @@ map_span_to_strlike(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+lex_one_strlike_check_size(const struct token *tok,
+                           enum lex_tokentype token_type)
+{
+	if (token_type == TOKEN_CONSTANT_CHAR) {
+		switch (tok->val.sz) {
+		case 0:
+			return make_result(ERR_LEX_CHAR_INVALID_EMPTY);
+		case 1:
+			break;
+		default:
+			return make_result(ERR_LEX_CHAR_INVALID_MULTICHAR);
+		}
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 lex_one_strlike(Arena *arena,
                 struct string_view *pos,
                 struct token **tok,
@@ -432,17 +465,7 @@ lex_one_strlike(Arena *arena,
 		check(map_span_to_strlike(arena, token_type, &raw, &cur->val));
 	}
 
-	if (token_type == TOKEN_CONSTANT_CHAR) {
-		switch (cur->val.sz) {
-		case 0:
-			return make_result(ERR_LEX_CHAR_INVALID_EMPTY);
-		case 1:
-			break;
-		default:
-			return make_result(ERR_LEX_CHAR_INVALID_MULTICHAR);
-		}
-	}
-
+	check(lex_one_strlike_check_size(cur, token_type));
 	return RESULT_OK;
 }
 

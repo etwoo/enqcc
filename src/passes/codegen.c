@@ -330,6 +330,301 @@ codegen_map_linkage(enum ir_linkage linkage)
 	assert(0); /* logic error in caller */
 }
 
+static WARN_UNUSED bool
+in_place_update(const struct ir_op *src, size_t result_pos)
+{
+	if (src->args[0].subtype != src->args[result_pos].subtype ||
+	    src->args[0].num != src->args[result_pos].num ||
+	    src->args[0].varname.sz != src->args[result_pos].varname.sz) {
+		return false;
+	}
+	if ((src->args[0].varname.data == NULL) !=
+	    (src->args[result_pos].varname.data == NULL)) {
+		return false;
+	}
+	if (src->args[0].varname.data == NULL) {
+		assert(src->args[result_pos].varname.data == NULL);
+		return true;
+	}
+	return (0 == strncmp(src->args[0].varname.data,
+	                     src->args[result_pos].varname.data,
+	                     src->args[0].varname.sz));
+}
+
+static WARN_UNUSED result_t
+codegen_statement_unary_op(Arena *arena,
+                           const struct ir_op *src,
+                           struct asm_op **dst)
+{
+	check(codegen_alloc_op(arena, dst));
+
+	switch (src->opcode) {
+	case IR_OP_UNARY_NEGATE:
+	case IR_OP_UNARY_COMPLEMENT:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operands_all(src, *dst);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = src->opcode == IR_OP_UNARY_NEGATE
+		                         ? ASM_OP_UNARY_NEG
+		                         : ASM_OP_UNARY_NOT;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
+	case IR_OP_UNARY_NOT:
+		(**dst).opcode = ASM_OP_COMPARE;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[0], &(**dst).args[1]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_SET_IF_EQ;
+		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		break;
+	case IR_OP_UNARY_DECREMENT:
+	case IR_OP_UNARY_INCREMENT:
+		(**dst).opcode = src->opcode == IR_OP_UNARY_DECREMENT
+		                         ? ASM_OP_UNARY_DECREMENT
+		                         : ASM_OP_UNARY_INCREMENT;
+		assert(in_place_update(src, 1));
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_binary_op(Arena *arena,
+                            const struct ir_op *src,
+                            struct asm_op **dst)
+{
+	check(codegen_alloc_op(arena, dst));
+
+	if (!in_place_update(src, 2)) {
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+	}
+
+	const bool a_signed = ctype_is_signed(&src->args[0].c89type);
+
+	switch (src->opcode) {
+	case IR_OP_BINARY_ADD:
+		(**dst).opcode = ASM_OP_BINARY_ADD;
+		break;
+	case IR_OP_BINARY_SUBTRACT:
+		(**dst).opcode = ASM_OP_BINARY_SUBTRACT;
+		break;
+	case IR_OP_BINARY_MULTIPLY:
+		(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+		break;
+	case IR_OP_BITWISE_AND:
+		(**dst).opcode = ASM_OP_BITWISE_AND;
+		break;
+	case IR_OP_BITWISE_OR:
+		(**dst).opcode = ASM_OP_BITWISE_OR;
+		break;
+	case IR_OP_BITWISE_XOR:
+		(**dst).opcode = ASM_OP_BITWISE_XOR;
+		break;
+	case IR_OP_BITWISE_SHIFT_LEFT:
+		(**dst).opcode = a_signed ? ASM_OP_BITWISE_SIGNED_SHIFT_LEFT
+		                          : ASM_OP_BITWISE_UNSIGNED_SHIFT_LEFT;
+		break;
+	case IR_OP_BITWISE_SHIFT_RIGHT:
+		(**dst).opcode = a_signed ? ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT
+		                          : ASM_OP_BITWISE_UNSIGNED_SHIFT_RIGHT;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	codegen_map_operand(&src->args[1], &(**dst).args[0]);
+	codegen_map_operand(&src->args[2], &(**dst).args[1]);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_div_rem(Arena *arena,
+                          const struct ir_op *src,
+                          struct asm_op **dst)
+{
+	const bool a_signed = ctype_is_signed(&src->args[0].c89type);
+
+	/* copy dividend to eax */
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_map_operand(&src->args[0], &(**dst).args[0]);
+	codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
+	dst = &(**dst).next;
+
+	/* sign-extend dividend from eax into edx */
+	check(codegen_alloc_op(arena, dst));
+	switch (src->args[0].c89type.t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		assert(0 && "char div should have been cast to int");
+		break;
+	case CTYPE_INT:
+		(**dst).opcode = ASM_OP_CDQ;
+		break;
+	case CTYPE_LONG:
+		(**dst).opcode = ASM_OP_CQO;
+		break;
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_UNSIGNED_LONG:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RDX_64BIT;
+		break;
+	case CTYPE_DOUBLE:
+		assert(0 && "double div/rem should lead elsewhere");
+		break;
+	case CTYPE_POINTER_TO:
+	case CTYPE_ARRAY_OF:
+		assert(0 && "ptr div/rem should have been rejected");
+		break;
+	case CTYPE_VOID:
+		assert(0); /* logic error in caller */
+		break;
+	}
+	dst = &(**dst).next;
+
+	/* prepare divisor and idiv op */
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = a_signed ? ASM_OP_IDIV : ASM_OP_DIV;
+	codegen_map_operand(&src->args[1], &(**dst).args[0]);
+	assert(ctype_is_equal(&src->args[0].c89type, &src->args[1].c89type));
+	dst = &(**dst).next;
+
+	/* copy result from eax (quotient) or edx (remainder) */
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	switch (src->opcode) {
+	case IR_OP_BINARY_DIVIDE:
+		codegen_set_operand_eax(&src->args[0], &(**dst).args[0]);
+		break;
+	case IR_OP_BINARY_REMAINDER:
+		codegen_set_operand_register(&src->args[0],
+		                             ASM_REGISTER_DX,
+		                             &(**dst).args[0]);
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	codegen_map_operand(&src->args[2], &(**dst).args[1]);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_cmp_op(Arena *arena,
+                         const struct ir_op *src,
+                         struct asm_op **dst)
+{
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_COMPARE;
+	/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
+	codegen_map_operand(&src->args[1], &(**dst).args[0]);
+	codegen_map_operand(&src->args[0], &(**dst).args[1]);
+	dst = &(**dst).next;
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_set_operand_immediate_zero(&(**dst).args[0]);
+	codegen_map_operand(&src->args[2], &(**dst).args[1]);
+	dst = &(**dst).next;
+
+	const bool a_signed = ctype_is_signed(&src->args[0].c89type);
+
+	check(codegen_alloc_op(arena, dst));
+	switch (src->opcode) {
+	case IR_OP_COMPARE_EQUAL:
+		(**dst).opcode = ASM_OP_SET_IF_EQ;
+		break;
+	case IR_OP_COMPARE_NOT_EQUAL:
+		(**dst).opcode = ASM_OP_SET_IF_NEQ;
+		break;
+	case IR_OP_COMPARE_LESS_THAN:
+		(**dst).opcode = a_signed ? ASM_OP_SET_IF_LT : ASM_OP_SET_IF_B;
+		break;
+	case IR_OP_COMPARE_LESS_THAN_EQ:
+		(**dst).opcode =
+			a_signed ? ASM_OP_SET_IF_LTE : ASM_OP_SET_IF_BE;
+		break;
+	case IR_OP_COMPARE_MORE_THAN:
+		(**dst).opcode = a_signed ? ASM_OP_SET_IF_GT : ASM_OP_SET_IF_A;
+		break;
+	case IR_OP_COMPARE_MORE_THAN_EQ:
+		(**dst).opcode =
+			a_signed ? ASM_OP_SET_IF_GTE : ASM_OP_SET_IF_AE;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+
+	codegen_map_operand(&src->args[2], &(**dst).args[0]);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_ptr_add_op(Arena *arena,
+                             const struct ir_op *src,
+                             struct asm_op **dst)
+{
+	assert(src->opcode == IR_OP_POINTER_ADD);
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_map_operand(&src->args[0], &(**dst).args[0]);
+	(**dst).args[1] = OPERAND_RAX_64BIT;
+	dst = &(**dst).next;
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_map_operand(&src->args[1], &(**dst).args[0]);
+	(**dst).args[1] = OPERAND_RDX_64BIT;
+	dst = &(**dst).next;
+
+	check(codegen_alloc_op(arena, dst));
+	assert(src->args[2].subtype == IR_VAL_CONSTANT);
+
+	if (src->args[2].num == 1 || src->args[2].num == 2 ||
+	    src->args[2].num == 4 || src->args[2].num == 8) {
+		(**dst).opcode = ASM_OP_LEA;
+		codegen_set_operand_indexed(&src->args[0],
+		                            (long long int)src->args[2].num,
+		                            &(**dst).args[0]);
+		codegen_map_operand(&src->args[3], &(**dst).args[1]);
+	} else {
+		(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
+		codegen_map_operand(&src->args[2], &(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RDX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_LEA;
+		codegen_set_operand_indexed(&src->args[0], 1, &(**dst).args[0]);
+		codegen_map_operand(&src->args[3], &(**dst).args[1]);
+	}
+
+	/* ASM_OP_LEA should produce a 64-bit pointer */
+	(**dst).args[1].word_type = ASM_WORD_64BIT;
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 codegen_alloc_modify_rsp(Arena *arena,
                          struct asm_op **dst,
@@ -469,25 +764,127 @@ codegen_op_call(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED bool
-in_place_update(const struct ir_op *src, size_t result_pos)
+static WARN_UNUSED result_t
+codegen_statement_fp_arithmetic_op(Arena *arena,
+                                   const struct ir_op *src,
+                                   struct asm_op **dst)
 {
-	if (src->args[0].subtype != src->args[result_pos].subtype ||
-	    src->args[0].num != src->args[result_pos].num ||
-	    src->args[0].varname.sz != src->args[result_pos].varname.sz) {
-		return false;
+	check(codegen_alloc_op(arena, dst));
+
+	if (!in_place_update(src, 2)) {
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
 	}
-	if ((src->args[0].varname.data == NULL) !=
-	    (src->args[result_pos].varname.data == NULL)) {
-		return false;
+
+	switch (src->opcode) {
+	case IR_OP_BINARY_ADD:
+		(**dst).opcode = ASM_OP_DOUBLE_BINARY_ADD;
+		break;
+	case IR_OP_BINARY_SUBTRACT:
+		(**dst).opcode = ASM_OP_DOUBLE_BINARY_SUBTRACT;
+		break;
+	case IR_OP_BINARY_MULTIPLY:
+		(**dst).opcode = ASM_OP_DOUBLE_BINARY_MULTIPLY;
+		break;
+	case IR_OP_BINARY_DIVIDE:
+		(**dst).opcode = ASM_OP_DOUBLE_BINARY_DIVIDE;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
 	}
-	if (src->args[0].varname.data == NULL) {
-		assert(src->args[result_pos].varname.data == NULL);
-		return true;
+
+	codegen_map_operand(&src->args[1], &(**dst).args[0]);
+	codegen_map_operand(&src->args[2], &(**dst).args[1]);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_fp_cmp_op(Arena *arena,
+                            const struct ir_op *src,
+                            struct asm_op **dst)
+{
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_DOUBLE_COMPARE;
+	/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
+	codegen_map_operand(&src->args[1], &(**dst).args[0]);
+	codegen_map_operand(&src->args[0], &(**dst).args[1]);
+	dst = &(**dst).next;
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_set_operand_immediate_zero(&(**dst).args[0]);
+	codegen_map_operand(&src->args[2], &(**dst).args[1]);
+	dst = &(**dst).next;
+	check(codegen_alloc_op(arena, dst));
+	switch (src->opcode) {
+	case IR_OP_COMPARE_EQUAL:
+	case IR_OP_COMPARE_LESS_THAN:
+	case IR_OP_COMPARE_LESS_THAN_EQ:
+	case IR_OP_COMPARE_MORE_THAN:
+	case IR_OP_COMPARE_MORE_THAN_EQ:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_SET_IF_NP;
+		(**dst).args[0] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		switch (src->opcode) {
+		case IR_OP_COMPARE_EQUAL:
+			(**dst).opcode = ASM_OP_SET_IF_EQ;
+			break;
+		case IR_OP_COMPARE_LESS_THAN:
+			(**dst).opcode = ASM_OP_SET_IF_B;
+			break;
+		case IR_OP_COMPARE_LESS_THAN_EQ:
+			(**dst).opcode = ASM_OP_SET_IF_BE;
+			break;
+		case IR_OP_COMPARE_MORE_THAN:
+			(**dst).opcode = ASM_OP_SET_IF_A;
+			break;
+		case IR_OP_COMPARE_MORE_THAN_EQ:
+			(**dst).opcode = ASM_OP_SET_IF_AE;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		codegen_map_operand(&src->args[2], &(**dst).args[0]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_BITWISE_AND;
+		(**dst).args[0] = OPERAND_RCX_64BIT;
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		break;
+	case IR_OP_COMPARE_NOT_EQUAL:
+		(**dst).opcode = ASM_OP_MOV;
+		codegen_set_operand_immediate_zero(&(**dst).args[0]);
+		(**dst).args[1] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_SET_IF_P;
+		(**dst).args[0] = OPERAND_RCX_64BIT;
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_SET_IF_NEQ;
+		codegen_map_operand(&src->args[2], &(**dst).args[0]);
+		dst = &(**dst).next;
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_BITWISE_OR;
+		(**dst).args[0] = OPERAND_RCX_64BIT;
+		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
 	}
-	return (0 == strncmp(src->args[0].varname.data,
-	                     src->args[result_pos].varname.data,
-	                     src->args[0].varname.sz));
+
+	return RESULT_OK;
 }
 
 static WARN_UNUSED result_t
@@ -546,33 +943,7 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_BINARY_SUBTRACT:
 	case IR_OP_BINARY_MULTIPLY:
 	case IR_OP_BINARY_DIVIDE:
-		check(codegen_alloc_op(arena, dst));
-		if (!in_place_update(src, 2)) {
-			(**dst).opcode = ASM_OP_MOV;
-			codegen_map_operand(&src->args[0], &(**dst).args[0]);
-			codegen_map_operand(&src->args[2], &(**dst).args[1]);
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-		}
-		switch (src->opcode) {
-		case IR_OP_BINARY_ADD:
-			(**dst).opcode = ASM_OP_DOUBLE_BINARY_ADD;
-			break;
-		case IR_OP_BINARY_SUBTRACT:
-			(**dst).opcode = ASM_OP_DOUBLE_BINARY_SUBTRACT;
-			break;
-		case IR_OP_BINARY_MULTIPLY:
-			(**dst).opcode = ASM_OP_DOUBLE_BINARY_MULTIPLY;
-			break;
-		case IR_OP_BINARY_DIVIDE:
-			(**dst).opcode = ASM_OP_DOUBLE_BINARY_DIVIDE;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		check(codegen_statement_fp_arithmetic_op(arena, src, dst));
 		break;
 	case IR_OP_COMPARE_EQUAL:
 	case IR_OP_COMPARE_NOT_EQUAL:
@@ -580,82 +951,7 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 	case IR_OP_COMPARE_LESS_THAN_EQ:
 	case IR_OP_COMPARE_MORE_THAN:
 	case IR_OP_COMPARE_MORE_THAN_EQ:
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_DOUBLE_COMPARE;
-		/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		codegen_map_operand(&src->args[0], &(**dst).args[1]);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_set_operand_immediate_zero(&(**dst).args[0]);
-		codegen_map_operand(&src->args[2], &(**dst).args[1]);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		switch (src->opcode) {
-		case IR_OP_COMPARE_EQUAL:
-		case IR_OP_COMPARE_LESS_THAN:
-		case IR_OP_COMPARE_LESS_THAN_EQ:
-		case IR_OP_COMPARE_MORE_THAN:
-		case IR_OP_COMPARE_MORE_THAN_EQ:
-			(**dst).opcode = ASM_OP_MOV;
-			codegen_set_operand_immediate_zero(&(**dst).args[0]);
-			(**dst).args[1] = OPERAND_RCX_64BIT;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_SET_IF_NP;
-			(**dst).args[0] = OPERAND_RCX_64BIT;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			switch (src->opcode) {
-			case IR_OP_COMPARE_EQUAL:
-				(**dst).opcode = ASM_OP_SET_IF_EQ;
-				break;
-			case IR_OP_COMPARE_LESS_THAN:
-				(**dst).opcode = ASM_OP_SET_IF_B;
-				break;
-			case IR_OP_COMPARE_LESS_THAN_EQ:
-				(**dst).opcode = ASM_OP_SET_IF_BE;
-				break;
-			case IR_OP_COMPARE_MORE_THAN:
-				(**dst).opcode = ASM_OP_SET_IF_A;
-				break;
-			case IR_OP_COMPARE_MORE_THAN_EQ:
-				(**dst).opcode = ASM_OP_SET_IF_AE;
-				break;
-			default:
-				assert(0); /* logic error in caller */
-				break;
-			}
-			codegen_map_operand(&src->args[2], &(**dst).args[0]);
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_BITWISE_AND;
-			(**dst).args[0] = OPERAND_RCX_64BIT;
-			codegen_map_operand(&src->args[2], &(**dst).args[1]);
-			break;
-		case IR_OP_COMPARE_NOT_EQUAL:
-			(**dst).opcode = ASM_OP_MOV;
-			codegen_set_operand_immediate_zero(&(**dst).args[0]);
-			(**dst).args[1] = OPERAND_RCX_64BIT;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_SET_IF_P;
-			(**dst).args[0] = OPERAND_RCX_64BIT;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_SET_IF_NEQ;
-			codegen_map_operand(&src->args[2], &(**dst).args[0]);
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_BITWISE_OR;
-			(**dst).args[0] = OPERAND_RCX_64BIT;
-			codegen_map_operand(&src->args[2], &(**dst).args[1]);
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
+		check(codegen_statement_fp_cmp_op(arena, src, dst));
 		break;
 	case IR_OP_CTYPE_DOUBLE_TO_INT:
 	case IR_OP_CTYPE_INT_TO_DOUBLE:
@@ -904,13 +1200,9 @@ codegen_statement_one(Arena *arena,
 		} /* else, fallthrough to common handling */
 	}
 
-	check(codegen_alloc_op(arena, dst));
-
-	/* guess overall op signedness ahead of time */
-	const bool a_signed = ctype_is_signed(&src->args[0].c89type);
-
 	switch (src->opcode) {
 	case IR_OP_RET:
+		check(codegen_alloc_op(arena, dst));
 		if (!is_return_value_void(src, 0)) {
 			(**dst).opcode = ASM_OP_MOV;
 			codegen_map_operand(&src->args[0], &(**dst).args[0]);
@@ -921,24 +1213,12 @@ codegen_statement_one(Arena *arena,
 		}
 		(**dst).opcode = ASM_OP_RET;
 		break;
-	case IR_OP_UNARY_NEGATE:
 	case IR_OP_UNARY_COMPLEMENT:
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operands_all(src, *dst);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = src->opcode == IR_OP_UNARY_NEGATE
-		                         ? ASM_OP_UNARY_NEG
-		                         : ASM_OP_UNARY_NOT;
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		break;
+	case IR_OP_UNARY_NEGATE:
+	case IR_OP_UNARY_NOT:
 	case IR_OP_UNARY_DECREMENT:
 	case IR_OP_UNARY_INCREMENT:
-		(**dst).opcode = src->opcode == IR_OP_UNARY_DECREMENT
-		                         ? ASM_OP_UNARY_DECREMENT
-		                         : ASM_OP_UNARY_INCREMENT;
-		assert(in_place_update(src, 1));
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
+		check(codegen_statement_unary_op(arena, src, dst));
 		break;
 	case IR_OP_BINARY_ADD:
 	case IR_OP_BINARY_SUBTRACT:
@@ -948,127 +1228,11 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_BITWISE_XOR:
 	case IR_OP_BITWISE_SHIFT_LEFT:
 	case IR_OP_BITWISE_SHIFT_RIGHT:
-		if (!in_place_update(src, 2)) {
-			(**dst).opcode = ASM_OP_MOV;
-			codegen_map_operand(&src->args[0], &(**dst).args[0]);
-			codegen_map_operand(&src->args[2], &(**dst).args[1]);
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-		}
-		switch (src->opcode) {
-		case IR_OP_BINARY_ADD:
-			(**dst).opcode = ASM_OP_BINARY_ADD;
-			break;
-		case IR_OP_BINARY_SUBTRACT:
-			(**dst).opcode = ASM_OP_BINARY_SUBTRACT;
-			break;
-		case IR_OP_BINARY_MULTIPLY:
-			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
-			break;
-		case IR_OP_BITWISE_AND:
-			(**dst).opcode = ASM_OP_BITWISE_AND;
-			break;
-		case IR_OP_BITWISE_OR:
-			(**dst).opcode = ASM_OP_BITWISE_OR;
-			break;
-		case IR_OP_BITWISE_XOR:
-			(**dst).opcode = ASM_OP_BITWISE_XOR;
-			break;
-		case IR_OP_BITWISE_SHIFT_LEFT:
-			(**dst).opcode =
-				a_signed ? ASM_OP_BITWISE_SIGNED_SHIFT_LEFT
-					 : ASM_OP_BITWISE_UNSIGNED_SHIFT_LEFT;
-			break;
-		case IR_OP_BITWISE_SHIFT_RIGHT:
-			(**dst).opcode =
-				a_signed ? ASM_OP_BITWISE_SIGNED_SHIFT_RIGHT
-					 : ASM_OP_BITWISE_UNSIGNED_SHIFT_RIGHT;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		codegen_map_operand(&src->args[2], &(**dst).args[1]);
+		check(codegen_statement_binary_op(arena, src, dst));
 		break;
 	case IR_OP_BINARY_DIVIDE:
 	case IR_OP_BINARY_REMAINDER:
-		/* copy dividend to eax */
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
-		dst = &(**dst).next;
-		/* sign-extend dividend from eax into edx */
-		check(codegen_alloc_op(arena, dst));
-		switch (src->args[0].c89type.t) {
-		case CTYPE_CHAR:
-		case CTYPE_SIGNED_CHAR:
-		case CTYPE_UNSIGNED_CHAR:
-			assert(0 && "char div should have been cast to int");
-			break;
-		case CTYPE_INT:
-			(**dst).opcode = ASM_OP_CDQ;
-			break;
-		case CTYPE_LONG:
-			(**dst).opcode = ASM_OP_CQO;
-			break;
-		case CTYPE_UNSIGNED_INT:
-		case CTYPE_UNSIGNED_LONG:
-			(**dst).opcode = ASM_OP_MOV;
-			codegen_set_operand_immediate_zero(&(**dst).args[0]);
-			(**dst).args[1] = OPERAND_RDX_64BIT;
-			break;
-		case CTYPE_DOUBLE:
-			assert(0 && "double div/rem should lead elsewhere");
-			break;
-		case CTYPE_POINTER_TO:
-		case CTYPE_ARRAY_OF:
-			assert(0 && "ptr div/rem should have been rejected");
-			break;
-		case CTYPE_VOID:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		dst = &(**dst).next;
-		/* prepare divisor and idiv op */
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = a_signed ? ASM_OP_IDIV : ASM_OP_DIV;
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		assert(ctype_is_equal(&src->args[0].c89type,
-		                      &src->args[1].c89type));
-		dst = &(**dst).next;
-		/* copy result from eax (quotient) or edx (remainder) */
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		switch (src->opcode) {
-		case IR_OP_BINARY_DIVIDE:
-			codegen_set_operand_eax(&src->args[0],
-			                        &(**dst).args[0]);
-			break;
-		case IR_OP_BINARY_REMAINDER:
-			codegen_set_operand_register(&src->args[0],
-			                             ASM_REGISTER_DX,
-			                             &(**dst).args[0]);
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		codegen_map_operand(&src->args[2], &(**dst).args[1]);
-		break;
-	case IR_OP_UNARY_NOT:
-		(**dst).opcode = ASM_OP_COMPARE;
-		codegen_set_operand_immediate_zero(&(**dst).args[0]);
-		codegen_map_operand(&src->args[0], &(**dst).args[1]);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_set_operand_immediate_zero(&(**dst).args[0]);
-		codegen_map_operand(&src->args[1], &(**dst).args[1]);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_SET_IF_EQ;
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
+		check(codegen_statement_div_rem(arena, src, dst));
 		break;
 	case IR_OP_COMPARE_EQUAL:
 	case IR_OP_COMPARE_NOT_EQUAL:
@@ -1076,52 +1240,16 @@ codegen_statement_one(Arena *arena,
 	case IR_OP_COMPARE_LESS_THAN_EQ:
 	case IR_OP_COMPARE_MORE_THAN:
 	case IR_OP_COMPARE_MORE_THAN_EQ:
-		(**dst).opcode = ASM_OP_COMPARE;
-		/* note inverted arg order: IR_OP_COMPARE_* -> ASM_OP_COMPARE */
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		codegen_map_operand(&src->args[0], &(**dst).args[1]);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_set_operand_immediate_zero(&(**dst).args[0]);
-		codegen_map_operand(&src->args[2], &(**dst).args[1]);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		switch (src->opcode) {
-		case IR_OP_COMPARE_EQUAL:
-			(**dst).opcode = ASM_OP_SET_IF_EQ;
-			break;
-		case IR_OP_COMPARE_NOT_EQUAL:
-			(**dst).opcode = ASM_OP_SET_IF_NEQ;
-			break;
-		case IR_OP_COMPARE_LESS_THAN:
-			(**dst).opcode =
-				a_signed ? ASM_OP_SET_IF_LT : ASM_OP_SET_IF_B;
-			break;
-		case IR_OP_COMPARE_LESS_THAN_EQ:
-			(**dst).opcode =
-				a_signed ? ASM_OP_SET_IF_LTE : ASM_OP_SET_IF_BE;
-			break;
-		case IR_OP_COMPARE_MORE_THAN:
-			(**dst).opcode =
-				a_signed ? ASM_OP_SET_IF_GT : ASM_OP_SET_IF_A;
-			break;
-		case IR_OP_COMPARE_MORE_THAN_EQ:
-			(**dst).opcode =
-				a_signed ? ASM_OP_SET_IF_GTE : ASM_OP_SET_IF_AE;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		codegen_map_operand(&src->args[2], &(**dst).args[0]);
+		check(codegen_statement_cmp_op(arena, src, dst));
 		break;
 	case IR_OP_COPY:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operands_all(src, *dst);
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
 	case IR_OP_CTYPE_ZERO_EXTEND:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = src->opcode == IR_OP_CTYPE_SIGN_EXTEND
 		                         ? ASM_OP_MOV_WITH_SIGN_EXTENSION
 		                         : ASM_OP_MOV_WITH_ZERO_EXTENSION;
@@ -1130,6 +1258,7 @@ codegen_statement_one(Arena *arena,
 		assert((**dst).args[0].word_type < (**dst).args[1].word_type);
 		break;
 	case IR_OP_CTYPE_TRUNCATE:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operands_all(src, *dst);
 		assert((**dst).args[1].word_type < ASM_WORD_64BIT);
@@ -1144,11 +1273,13 @@ codegen_statement_one(Arena *arena,
 		assert(0); /* should be handled by codegen_statement_fp() */
 		break;
 	case IR_OP_GET_ADDRESS:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_LEA;
 		codegen_map_operands_all(src, *dst);
 		assert((**dst).args[1].word_type == ASM_WORD_64BIT);
 		break;
 	case IR_OP_LOAD:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		codegen_set_operand_eax(&src->args[0], &(**dst).args[1]);
@@ -1164,6 +1295,7 @@ codegen_statement_one(Arena *arena,
 		codegen_map_operand(&src->args[1], &(**dst).args[1]);
 		break;
 	case IR_OP_STORE:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		codegen_set_operand_eax(&src->args[1], &(**dst).args[1]);
@@ -1178,46 +1310,16 @@ codegen_statement_one(Arena *arena,
 		                           &(**dst).args[1]);
 		break;
 	case IR_OP_POINTER_ADD:
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		(**dst).args[1] = OPERAND_RAX_64BIT;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		(**dst).args[1] = OPERAND_RDX_64BIT;
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		assert(src->args[2].subtype == IR_VAL_CONSTANT);
-		if (src->args[2].num == 1 || src->args[2].num == 2 ||
-		    src->args[2].num == 4 || src->args[2].num == 8) {
-			(**dst).opcode = ASM_OP_LEA;
-			codegen_set_operand_indexed(
-				&src->args[0],
-				(long long int)src->args[2].num,
-				&(**dst).args[0]);
-			codegen_map_operand(&src->args[3], &(**dst).args[1]);
-		} else {
-			(**dst).opcode = ASM_OP_BINARY_MULTIPLY;
-			codegen_map_operand(&src->args[2], &(**dst).args[0]);
-			(**dst).args[1] = OPERAND_RDX_64BIT;
-			dst = &(**dst).next;
-			check(codegen_alloc_op(arena, dst));
-			(**dst).opcode = ASM_OP_LEA;
-			codegen_set_operand_indexed(&src->args[0],
-			                            1,
-			                            &(**dst).args[0]);
-			codegen_map_operand(&src->args[3], &(**dst).args[1]);
-		}
-		/* ASM_OP_LEA should produce a 64-bit pointer */
-		(**dst).args[1].word_type = ASM_WORD_64BIT;
+		check(codegen_statement_ptr_add_op(arena, src, dst));
 		break;
 	case IR_OP_JUMP:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_JMP;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		break;
 	case IR_OP_JUMP_IF_ZERO:
 	case IR_OP_JUMP_IF_NOT_ZERO:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_COMPARE;
 		codegen_set_operand_immediate_zero(&(**dst).args[0]);
 		codegen_map_operand(&src->args[0], &(**dst).args[1]);
@@ -1229,6 +1331,7 @@ codegen_statement_one(Arena *arena,
 		codegen_map_operand(&src->args[1], &(**dst).args[0]);
 		break;
 	case IR_OP_LABEL:
+		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_LABEL;
 		codegen_map_operand(&src->args[0], &(**dst).args[0]);
 		break;

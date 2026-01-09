@@ -78,23 +78,18 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 		return make_result(ERR_PARSE_DECL_TYPE_DUPLICATE);
 	}
 
-	if (state->n_void == 0 &&     /* Any particular type may */
-	    state->n_char == 0 &&     /* occur zero times, but   */
-	    state->n_int == 0 &&      /* there must exist at     */
-	    state->n_long == 0 &&     /* least one non-zero type */
-	    state->n_signed == 0 &&   /* count, from the valid   */
-	    state->n_unsigned == 0 && /* options available.      */
-	    state->n_double == 0) {
+	const size_t any = state->n_void + state->n_char + state->n_int +
+	                   state->n_long + state->n_signed + state->n_unsigned +
+	                   state->n_double;
+	if (any == 0) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TYPE);
 	}
 
 	if (state->n_void > 0) {
-		if (state->n_char > 0 ||     /* char void -- invalid     */
-		    state->n_int > 0 ||      /* int void -- invalid      */
-		    state->n_long > 0 ||     /* long void -- invalid     */
-		    state->n_signed > 0 ||   /* signed void -- invalid   */
-		    state->n_unsigned > 0 || /* unsigned void -- invalid */
-		    state->n_double > 0) {   /* double void -- invalid   */
+		size_t others = state->n_char + state->n_int + state->n_long +
+		                state->n_signed + state->n_unsigned +
+		                state->n_double;
+		if (others > 0) {
 			return make_result(ERR_PARSE_DECL_TYPE_VOID_INVALID);
 		}
 		var_type->t = CTYPE_VOID;
@@ -102,11 +97,9 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 	}
 
 	if (state->n_double > 0) {
-		if (state->n_char > 0 ||     /* char double -- invalid     */
-		    state->n_int > 0 ||      /* int double -- invalid      */
-		    state->n_long > 0 ||     /* long double -- unsupported */
-		    state->n_signed > 0 ||   /* signed double -- invalid   */
-		    state->n_unsigned > 0) { /* unsigned double -- invalid */
+		size_t others = state->n_char + state->n_int + state->n_long +
+		                state->n_signed + state->n_unsigned;
+		if (others > 0) {
 			return make_result(ERR_PARSE_DECL_TYPE_DOUBLE_INVALID);
 		}
 		var_type->t = CTYPE_DOUBLE;
@@ -350,14 +343,11 @@ parse_needs_weird_hack_for_paren_lonely_symbol(const struct token *tok)
 	return 0; /* tokens do not match required pattern */
 }
 
-static WARN_UNUSED result_t
-parse_declarator_group_split_impl(Arena *arena,
-                                  uint32_t flags,
-                                  const struct token **tok,
-                                  bool *done,
-                                  bool *got_identifier,
-                                  size_t *closing_paren_countdown,
-                                  struct token_group **dst)
+static void
+parse_declarator_group_split_is_done(uint32_t flags,
+                                     const struct token **tok,
+                                     bool *done,
+                                     size_t *closing_paren_countdown)
 {
 #define FOREACH_LEX_DONE(F)                                                    \
 	FOREACH_LEX_CHAR_REPEAT(F)                                             \
@@ -370,9 +360,48 @@ parse_declarator_group_split_impl(Arena *arena,
 #undef TO_E
 #undef FOREACH_LEX_DONE
 
+	if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
+		if (*closing_paren_countdown == 0) {
+			*done = true;
+		} else {
+			(*closing_paren_countdown)--;
+		}
+	}
+
 	const bool accept_fn_params =
 		(0 != (flags & PARSE_DECLARATOR_ACCEPT_FUNCTION_PARAMS));
 
+	if (is_token_type(*tok, TOKEN_SEMICOLON) ||
+	    is_token_type(*tok, TOKEN_EQUAL_SIGN) ||
+	    is_token_type(*tok, TOKEN_BRACE_OPEN) ||
+	    (is_token_type(*tok, TOKEN_COMMA) && !accept_fn_params)) {
+		*done = true;
+	}
+
+	for (size_t i = 0; i < ARRAY_SIZE(force_done); ++i) {
+		if (is_token_type(*tok, force_done[i])) {
+			*done = true;
+		}
+	}
+
+	if (0 != (flags & PARSE_DECLARATOR_ABSTRACT)) {
+		for (size_t i = 0; i < ARRAY_SIZE(force_done_a); ++i) {
+			if (is_token_type(*tok, force_done_a[i])) {
+				*done = true;
+			}
+		}
+	}
+}
+
+static WARN_UNUSED result_t
+parse_declarator_group_split_impl(Arena *arena,
+                                  uint32_t flags,
+                                  const struct token **tok,
+                                  bool *done,
+                                  bool *got_identifier,
+                                  size_t *closing_paren_countdown,
+                                  struct token_group **dst)
+{
 	while (*tok != NULL) {
 		const size_t unpack_lonely_symbol =
 			parse_needs_weird_hack_for_paren_lonely_symbol(*tok);
@@ -386,35 +415,10 @@ parse_declarator_group_split_impl(Arena *arena,
 			break;
 		}
 
-		if (is_token_type(*tok, TOKEN_PAREN_CLOSE)) {
-			if (*closing_paren_countdown == 0) {
-				*done = true;
-			} else {
-				(*closing_paren_countdown)--;
-			}
-		}
-
-		if (is_token_type(*tok, TOKEN_SEMICOLON) ||
-		    is_token_type(*tok, TOKEN_EQUAL_SIGN) ||
-		    is_token_type(*tok, TOKEN_BRACE_OPEN) ||
-		    (is_token_type(*tok, TOKEN_COMMA) && !accept_fn_params)) {
-			*done = true;
-		}
-
-		for (size_t i = 0; i < ARRAY_SIZE(force_done); ++i) {
-			if (is_token_type(*tok, force_done[i])) {
-				*done = true;
-			}
-		}
-
-		if (0 != (flags & PARSE_DECLARATOR_ABSTRACT)) {
-			for (size_t i = 0; i < ARRAY_SIZE(force_done_a); ++i) {
-				if (is_token_type(*tok, force_done_a[i])) {
-					*done = true;
-				}
-			}
-		}
-
+		parse_declarator_group_split_is_done(flags,
+		                                     tok,
+		                                     done,
+		                                     closing_paren_countdown);
 		if (*done == true) {
 			break;
 		}
@@ -500,65 +504,78 @@ struct token_group_scan {
 };
 
 static WARN_UNUSED result_t
+parse_declarator_group_scan_one(uint32_t flags,
+                                const struct token *t,
+                                bool is_leaf_group,
+                                struct token_group_scan *scan,
+                                size_t *closing_paren_countdown)
+{
+	switch (t->token_type) {
+	case TOKEN_ASTERISK:
+		if (scan->got_params == NULL) {
+			scan->got_indirection++;
+		} /* else ignore function parameter indirection */
+		break;
+	case TOKEN_IDENTIFIER:
+		if (scan->got_identifier == NULL) {
+			if (!is_leaf_group) {
+				return make_result(
+					ERR_PARSE_DECL_ATOM_PARENS_INVALID);
+			}
+			scan->got_identifier = t;
+		} /* else: ignore function parameter identifiers */
+		break;
+	case TOKEN_SQUARE_BRACKET_OPEN:
+		if (*closing_paren_countdown == 0 &&
+		    scan->got_subscript == NULL) {
+			scan->got_subscript = t;
+		} /* else: ignore function parameter subscripts */
+		if (scan->got_subscript != NULL &&
+		    scan->got_identifier == NULL &&
+		    0 == (flags & PARSE_DECLARATOR_ABSTRACT) && is_leaf_group) {
+			return make_result(ERR_PARSE_DECL_ATOM_EARLY_SUBSCRIPT);
+		}
+		break;
+	case TOKEN_PAREN_OPEN:
+		if (scan->got_params == NULL) {
+			scan->got_params = t;
+		} else if (*closing_paren_countdown == 0) {
+			/*
+			 * Treat multiple sets of function parameters
+			 * as function pointer usage, and reject.
+			 */
+			return make_result(
+				ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED);
+		}
+		(*closing_paren_countdown)++;
+		break;
+	case TOKEN_PAREN_CLOSE:
+		if (*closing_paren_countdown > 0) {
+			(*closing_paren_countdown)--;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_declarator_group_scan(uint32_t flags,
                             const struct token_group *group,
                             struct token_group_scan *scan)
 {
 	const bool is_leaf_group = (group->child == NULL);
 	size_t closing_paren_countdown = 0;
-
 	for (const struct token *t = group->tokens; t != NULL; t = t->next) {
-		switch (t->token_type) {
-		case TOKEN_ASTERISK:
-			if (scan->got_params == NULL) {
-				scan->got_indirection++;
-			} /* else ignore function parameter indirection */
-			break;
-		case TOKEN_IDENTIFIER:
-			if (scan->got_identifier == NULL) {
-				if (!is_leaf_group) {
-					return make_result(
-						ERR_PARSE_DECL_ATOM_PARENS_INVALID);
-				}
-				scan->got_identifier = t;
-			} /* else: ignore function parameter identifiers */
-			break;
-		case TOKEN_SQUARE_BRACKET_OPEN:
-			if (closing_paren_countdown == 0 &&
-			    scan->got_subscript == NULL) {
-				scan->got_subscript = t;
-			} /* else: ignore function parameter subscripts */
-			if (scan->got_subscript != NULL &&
-			    scan->got_identifier == NULL &&
-			    0 == (flags & PARSE_DECLARATOR_ABSTRACT) &&
-			    is_leaf_group) {
-				return make_result(
-					ERR_PARSE_DECL_ATOM_EARLY_SUBSCRIPT);
-			}
-			break;
-		case TOKEN_PAREN_OPEN:
-			if (scan->got_params == NULL) {
-				scan->got_params = t;
-			} else if (closing_paren_countdown == 0) {
-				/*
-				 * Treat multiple sets of function parameters
-				 * as function pointer usage, and reject.
-				 */
-				return make_result(
-					ERR_PARSE_DECL_ATOM_FUNC_PTR_UNSUPPORTED);
-			}
-			closing_paren_countdown++;
-			break;
-		case TOKEN_PAREN_CLOSE:
-			if (closing_paren_countdown > 0) {
-				closing_paren_countdown--;
-			}
-			break;
-		default:
-			break;
-		}
+		check(parse_declarator_group_scan_one(
+			flags,
+			t,
+			is_leaf_group,
+			scan,
+			&closing_paren_countdown));
 	}
-
 	return RESULT_OK;
 }
 

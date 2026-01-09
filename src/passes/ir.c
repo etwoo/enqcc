@@ -997,59 +997,6 @@ ir_unary_op(Arena *arena,
 		unary->opcode = IR_OP_GET_ADDRESS;
 		ast_inner = a->u.op_unary.operand;
 		break;
-	case NODE_EXPRESSION_CAST:
-		if (ctype_is_void(&a->u.cast.to_type)) {
-			/* void cast -> ignore return_value of inner expr */
-			return_value->subtype = IR_VAL_DUMMY;
-			struct ir_val ignore = {0};
-			return ir_expr(arena, a->u.cast.expr, ir, dst, &ignore);
-		} else if (ctype_is_equal(&a->u.cast.expr->expr_type,
-		                          &a->u.cast.to_type)) {
-			/* early return if inner expr type makes cast no-op */
-			return ir_expr(arena,
-			               a->u.cast.expr,
-			               ir,
-			               dst,
-			               return_value);
-		} else if (ctype_is_floating_point(
-				   &a->u.cast.expr->expr_type) !=
-		           ctype_is_floating_point(&a->u.cast.to_type)) {
-			const bool src_fp = ctype_is_floating_point(
-				&a->u.cast.expr->expr_type);
-			const bool src_signed =
-				ctype_is_signed(&a->u.cast.expr->expr_type);
-			const bool dst_fp =
-				ctype_is_floating_point(&a->u.cast.to_type);
-			const bool dst_signed =
-				ctype_is_signed(&a->u.cast.to_type);
-			const bool dst_charlike =
-				ctype_is_charlike(&a->u.cast.to_type);
-			if (src_fp && (dst_signed || dst_charlike)) {
-				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_INT;
-			} else if (src_fp && !dst_signed) {
-				unary->opcode = IR_OP_CTYPE_DOUBLE_TO_UINT;
-			} else if (src_signed && dst_fp) {
-				unary->opcode = IR_OP_CTYPE_INT_TO_DOUBLE;
-			} else if (!src_signed && dst_fp) {
-				unary->opcode = IR_OP_CTYPE_UINT_TO_DOUBLE;
-			} else {
-				assert(0); /* mistake in truth table above */
-			}
-		} else if ((ctype_to_size_bytes(&a->u.cast.expr->expr_type) ==
-		            ctype_to_size_bytes(&a->u.cast.to_type)) ||
-		           (ctype_is_pointer(&a->u.cast.expr->expr_type) &&
-		            ctype_is_pointer(&a->u.cast.to_type))) {
-			unary->opcode = IR_OP_COPY;
-		} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) >
-		           ctype_to_size_bytes(&a->u.cast.to_type)) {
-			unary->opcode = IR_OP_CTYPE_TRUNCATE;
-		} else if (ctype_is_signed(&a->u.cast.expr->expr_type)) {
-			unary->opcode = IR_OP_CTYPE_SIGN_EXTEND;
-		} else {
-			unary->opcode = IR_OP_CTYPE_ZERO_EXTEND;
-		}
-		ast_inner = a->u.cast.expr;
-		break;
 	default:
 		assert(0); /* logic error in caller */
 		break;
@@ -1100,6 +1047,78 @@ ir_sizeof(Arena *arena, const struct ast *a, struct ir_val *return_value)
 	assert(ctype_is_integer(&a->expr_type));
 	check(ctype_copy(arena, &a->expr_type, &return_value->c89type));
 
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_cast(Arena *arena,
+        const struct ast *a,
+        struct intermediate *ir,
+        struct ir_op **dst,
+        struct ir_val *return_value)
+{
+	assert(a->node_type == NODE_EXPRESSION_CAST);
+
+	if (ctype_is_void(&a->u.cast.to_type)) {
+		/* void cast -> ignore return_value of inner expr */
+		return_value->subtype = IR_VAL_DUMMY;
+		struct ir_val ignore = {0};
+		return ir_expr(arena, a->u.cast.expr, ir, dst, &ignore);
+	}
+
+	if (ctype_is_equal(&a->u.cast.expr->expr_type, &a->u.cast.to_type)) {
+		/* early return if inner expr type makes cast no-op */
+		return ir_expr(arena, a->u.cast.expr, ir, dst, return_value);
+	}
+
+	struct ir_op *unary = NULL;
+	check(ir_alloc_op(arena, &unary));
+
+	if (ctype_is_floating_point(&a->u.cast.expr->expr_type) !=
+	    ctype_is_floating_point(&a->u.cast.to_type)) {
+		const bool src_fp =
+			ctype_is_floating_point(&a->u.cast.expr->expr_type);
+		const bool src_signed =
+			ctype_is_signed(&a->u.cast.expr->expr_type);
+		const bool dst_fp = ctype_is_floating_point(&a->u.cast.to_type);
+		const bool dst_signed = ctype_is_signed(&a->u.cast.to_type);
+		const bool dst_charlike = ctype_is_charlike(&a->u.cast.to_type);
+		if (src_fp && (dst_signed || dst_charlike)) {
+			unary->opcode = IR_OP_CTYPE_DOUBLE_TO_INT;
+		} else if (src_fp && !dst_signed) {
+			unary->opcode = IR_OP_CTYPE_DOUBLE_TO_UINT;
+		} else if (src_signed && dst_fp) {
+			unary->opcode = IR_OP_CTYPE_INT_TO_DOUBLE;
+		} else if (!src_signed && dst_fp) {
+			unary->opcode = IR_OP_CTYPE_UINT_TO_DOUBLE;
+		} else {
+			assert(0); /* mistake in truth table above */
+		}
+	} else if ((ctype_to_size_bytes(&a->u.cast.expr->expr_type) ==
+	            ctype_to_size_bytes(&a->u.cast.to_type)) ||
+	           (ctype_is_pointer(&a->u.cast.expr->expr_type) &&
+	            ctype_is_pointer(&a->u.cast.to_type))) {
+		unary->opcode = IR_OP_COPY;
+	} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) >
+	           ctype_to_size_bytes(&a->u.cast.to_type)) {
+		unary->opcode = IR_OP_CTYPE_TRUNCATE;
+	} else if (ctype_is_signed(&a->u.cast.expr->expr_type)) {
+		unary->opcode = IR_OP_CTYPE_SIGN_EXTEND;
+	} else {
+		unary->opcode = IR_OP_CTYPE_ZERO_EXTEND;
+	}
+
+	struct ir_op *inner = NULL;
+	struct ir_val inner_return = {0};
+	check(ir_expr(arena, a->u.cast.expr, ir, &inner, &inner_return));
+	assert(inner_return.subtype != IR_VAL_NONE);
+
+	ir_val_copy(&inner_return, &unary->args[0]);
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &unary->args[1]));
+	ctype_array_decay_to_pointer(&unary->args[1].c89type);
+	ir_val_copy(&unary->args[1], return_value);
+
+	*dst = ir_op_list_concat(inner, unary);
 	return RESULT_OK;
 }
 
@@ -1660,7 +1679,6 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
-	case NODE_EXPRESSION_CAST:
 		check(ir_unary_op(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
@@ -1686,6 +1704,9 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_UNARY_SIZE_OF:
 		check(ir_sizeof(arena, a, return_value));
+		break;
+	case NODE_EXPRESSION_CAST:
+		check(ir_cast(arena, a, ir, dst, return_value));
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expr(arena,

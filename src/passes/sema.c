@@ -1768,6 +1768,49 @@ sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+sema_pointer_cmp_ptr_math(struct ast *a)
+{
+	switch (a->node_type) {
+	case NODE_EXPRESSION_BINARY_ADD:
+		if (!ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    !ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			/* no pointer types involved; nothing more to check */
+		} else if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		           ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_BOTH);
+		} else if (ctype_is_ptr_to_incomplete(
+				   &a->u.op_binary.lhs->expr_type) ||
+		           ctype_is_ptr_to_incomplete(
+				   &a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
+		}
+		break;
+	case NODE_EXPRESSION_BINARY_SUBTRACT:
+		if (ctype_is_ptr_to_incomplete(
+			    &a->u.op_binary.lhs->expr_type) ||
+		    ctype_is_ptr_to_incomplete(
+			    &a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
+		}
+		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
+		    ctype_is_integer(&a->u.op_binary.rhs->expr_type)) {
+			assert(ctype_is_equal(&a->expr_type,
+			                      &a->u.op_binary.lhs->expr_type));
+		} else {
+			check(sema_pointer_cmp_impl(
+				&a->u.op_binary.lhs->expr_type,
+				&a->u.op_binary.rhs->expr_type,
+				0));
+		}
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+	return RESULT_OK;
+}
+
 struct sema_pointer_state {
 	Arena *arena;
 	struct ctype expected_return_type;
@@ -1835,36 +1878,8 @@ sema_pointer(struct ast *a, void *userdata)
 		}
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
-		if (!ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
-		    !ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
-			/* no pointer types involved; nothing more to check */
-		} else if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
-		           ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
-			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_BOTH);
-		} else if (ctype_is_ptr_to_incomplete(
-				   &a->u.op_binary.lhs->expr_type) ||
-		           ctype_is_ptr_to_incomplete(
-				   &a->u.op_binary.rhs->expr_type)) {
-			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
-		}
-		break;
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
-		if (ctype_is_ptr_to_incomplete(
-			    &a->u.op_binary.lhs->expr_type) ||
-		    ctype_is_ptr_to_incomplete(
-			    &a->u.op_binary.rhs->expr_type)) {
-			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
-		}
-		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
-		    ctype_is_integer(&a->u.op_binary.rhs->expr_type)) {
-			assert(ctype_is_equal(&a->expr_type,
-			                      &a->u.op_binary.lhs->expr_type));
-		} else {
-			check(sema_pointer_cmp_impl(
-				&a->u.op_binary.lhs->expr_type,
-				&a->u.op_binary.rhs->expr_type,
-				0));
-		}
+		check(sema_pointer_cmp_ptr_math(a));
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
@@ -2186,6 +2201,49 @@ ast_contains(const struct flat *haystack, const struct ast *needle)
 }
 
 static WARN_UNUSED result_t
+sema_fn_signature_matches(
+	struct symbol *dup,    /* declaration/definition to cross-reference */
+	long long int n_args,  /* arg count of current declaration/def/call */
+	struct ctype *p_types, /* arg types of current declaration/def/call */
+	bool is_def_or_decl)   /* treat as fn declaration/def? or fn call?  */
+{
+	bool p_types_match = true;
+	for (long long int i = 0; i < n_args; ++i) {
+		const struct ctype *to_check = NULL;
+		if (is_def_or_decl) {
+			/*
+			 * Require exact parameter type match on redeclaration,
+			 * definition of preceding declaration, etc.
+			 */
+			to_check = &p_types[i];
+		} else {
+			const struct ctype *lhs =
+				&sema_get_auxiliary(dup)->p_types[i];
+			const struct ctype *rhs = &p_types[i];
+			/*
+			 * On function call, try to widen or narrow argument
+			 * expression type to declared parameter type.
+			 */
+			check(sema_pointer_cmp(lhs, rhs));
+			to_check = get_common_ctype(lhs, rhs);
+		}
+		if (!ctype_is_equal(to_check,
+		                    &sema_get_auxiliary(dup)->p_types[i])) {
+			p_types_match = false;
+			break;
+		}
+	}
+
+	if (is_def_or_decl && !p_types_match) {
+		return make_result(ERR_SEMA_FUNCTION_DEFINITION_CONFLICT,
+		                   dup->name.data,
+		                   dup->name.sz);
+	}
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_fn_signature(struct ast *a, void *userdata)
 {
 	struct sema_symbol_state *state = userdata;
@@ -2285,38 +2343,7 @@ sema_fn_signature(struct ast *a, void *userdata)
 		return RESULT_OK;
 	}
 
-	bool p_types_match = true;
-	for (long long int i = 0; i < n_args; ++i) {
-		const struct ctype *to_check = NULL;
-		if (is_def_or_decl) {
-			/*
-			 * Require exact parameter type match on redeclaration,
-			 * definition of preceding declaration, etc.
-			 */
-			to_check = &p_types[i];
-		} else {
-			const struct ctype *lhs =
-				&sema_get_auxiliary(dup)->p_types[i];
-			const struct ctype *rhs = &p_types[i];
-			/*
-			 * On function call, try to widen or narrow argument
-			 * expression type to declared parameter type.
-			 */
-			check(sema_pointer_cmp(lhs, rhs));
-			to_check = get_common_ctype(lhs, rhs);
-		}
-		if (!ctype_is_equal(to_check,
-		                    &sema_get_auxiliary(dup)->p_types[i])) {
-			p_types_match = false;
-			break;
-		}
-	}
-
-	if (is_def_or_decl && !p_types_match) {
-		return make_result(ERR_SEMA_FUNCTION_DEFINITION_CONFLICT,
-		                   dup->name.data,
-		                   dup->name.sz);
-	}
+	check(sema_fn_signature_matches(dup, n_args, p_types, is_def_or_decl));
 
 	if (!is_def_or_decl) {
 		long long int i = 0;
