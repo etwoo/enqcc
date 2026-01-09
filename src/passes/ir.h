@@ -14,6 +14,7 @@ struct ir_val {
 		IR_VAL_JUMP_TARGET_LABEL,
 		IR_VAL_VARIABLE_DATA,
 		IR_VAL_STRING_LITERAL,
+		IR_VAL_DUMMY,
 	} subtype;
 	int128_t num;               /* numeric value, variable ID, etc */
 	double dnum;                /* ... or numeric value as floating point */

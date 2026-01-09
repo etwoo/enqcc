@@ -211,7 +211,15 @@ ir_ret_op(Arena *arena,
 
 	struct ir_op *inner = NULL;
 	struct ir_val inner_return = {0};
-	check(ir_expr(arena, a->u.op_unary.operand, ir, &inner, &inner_return));
+	if (a->u.op_unary.operand->node_type == NODE_EXPRESSION_NULL) {
+		inner_return.subtype = IR_VAL_DUMMY;
+	} else {
+		check(ir_expr(arena,
+		              a->u.op_unary.operand,
+		              ir,
+		              &inner,
+		              &inner_return));
+	}
 	assert(inner_return.subtype != IR_VAL_NONE);
 
 	struct ir_op *returner = NULL;
@@ -452,7 +460,11 @@ ir_if_else(Arena *arena,
 	const long long int cond_jump_to = ir->env.labels++;
 	const long long int end_jump_to = has_else ? ir->env.labels++ : -1;
 	const long long int assign_result_unique =
-		ternary ? ir->env.generator++ : -1;
+		(ternary &&
+	         !ctype_is_void(&a->u.op_ternary.then_expr->expr_type) &&
+	         !ctype_is_void(&a->u.op_ternary.else_expr->expr_type))
+			? ir->env.generator++
+			: -1;
 
 	struct ir_op *cond_ops = NULL;
 	struct ir_val cond_return = {0};
@@ -487,6 +499,10 @@ ir_if_else(Arena *arena,
 		                    assign_result_unique,
 		                    &a->expr_type,
 		                    return_value));
+	} else if (ternary) {
+	         assert(ctype_is_void(&a->u.op_ternary.then_expr->expr_type));
+	         assert(ctype_is_void(&a->u.op_ternary.else_expr->expr_type));
+		 return_value->subtype = IR_VAL_DUMMY;
 	}
 
 	struct ir_op *collect[] = {
@@ -982,8 +998,13 @@ ir_unary_op(Arena *arena,
 		ast_inner = a->u.op_unary.operand;
 		break;
 	case NODE_EXPRESSION_CAST:
-		if (ctype_is_equal(&a->u.cast.expr->expr_type,
-		                   &a->u.cast.to_type)) {
+		if (ctype_is_void(&a->u.cast.to_type)) {
+			/* void cast -> ignore return_value of inner expr */
+			return_value->subtype = IR_VAL_DUMMY;
+			struct ir_val ignore = {0};
+			return ir_expr(arena, a->u.cast.expr, ir, dst, &ignore);
+		} else if (ctype_is_equal(&a->u.cast.expr->expr_type,
+		                          &a->u.cast.to_type)) {
 			/* early return if inner expr type makes cast no-op */
 			return ir_expr(arena,
 			               a->u.cast.expr,
@@ -1451,7 +1472,14 @@ ir_call(Arena *arena,
 		check(ir_call_args(arena, args, ir, &inner, caller, &pos));
 	}
 
-	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &caller->args[pos]));
+	if (ctype_is_void(&a->expr_type)) {
+		caller->args[pos].subtype = IR_VAL_DUMMY;
+	} else {
+		check(ir_val_tmpvar_gen(arena,
+		                        ir,
+		                        &a->expr_type,
+		                        &caller->args[pos]));
+	}
 
 	assert(return_value->subtype == IR_VAL_NONE);
 	ir_val_copy(&caller->args[pos], return_value);
@@ -1736,8 +1764,12 @@ ir_func(Arena *arena,
 		check(ir_alloc_op(arena, return_0));
 		assert(*return_0 != NULL);
 		(**return_0).opcode = IR_OP_RET;
-		(**return_0).args[0].subtype = IR_VAL_CONSTANT;
-		(**return_0).args[0].num = 0;
+		if (ctype_is_void(&a->u.function.return_type)) {
+			(**return_0).args[0].subtype = IR_VAL_DUMMY;
+		} else {
+			(**return_0).args[0].subtype = IR_VAL_CONSTANT;
+			(**return_0).args[0].num = 0;
+		}
 	}
 
 	return RESULT_OK;
@@ -1915,6 +1947,9 @@ ir_debug_print_one(const struct ir_op *op)
 			break;
 		case IR_VAL_STRING_LITERAL:
 			debug("  STRING str.%lld", (long long)op->args[i].num);
+			break;
+		case IR_VAL_DUMMY:
+			debug("  DUMMY void");
 			break;
 		}
 

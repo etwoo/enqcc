@@ -296,6 +296,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		dst->operand_type = ASM_OPERAND_CONSTANT_STRING;
 		dst->u.num = src->num;
 		break;
+	case IR_VAL_DUMMY:
+		assert(0 && "TODO: handle void IR dummy in codegen");
+		break;
 	}
 
 	codegen_map_ctype(src, dst);
