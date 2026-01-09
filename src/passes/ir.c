@@ -500,9 +500,9 @@ ir_if_else(Arena *arena,
 		                    &a->expr_type,
 		                    return_value));
 	} else if (ternary) {
-	         assert(ctype_is_void(&a->u.op_ternary.then_expr->expr_type));
-	         assert(ctype_is_void(&a->u.op_ternary.else_expr->expr_type));
-		 return_value->subtype = IR_VAL_DUMMY;
+		assert(ctype_is_void(&a->u.op_ternary.then_expr->expr_type));
+		assert(ctype_is_void(&a->u.op_ternary.else_expr->expr_type));
+		return_value->subtype = IR_VAL_DUMMY;
 	}
 
 	struct ir_op *collect[] = {
@@ -1088,6 +1088,22 @@ ir_unary_op(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_sizeof(Arena *arena, const struct ast *a, struct ir_val *return_value)
+{
+	return_value->subtype = IR_VAL_CONSTANT;
+
+	assert(a->node_type == NODE_EXPRESSION_UNARY_SIZE_OF);
+	const struct ctype *inner_type = &a->u.op_unary.operand->expr_type;
+	assert(!ctype_is_incomplete(inner_type));
+	return_value->num = ctype_to_size_bytes(inner_type);
+
+	assert(ctype_is_integer(&a->expr_type));
+	check(ctype_copy(arena, &a->expr_type, &return_value->c89type));
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_ptr_ptr_math(Arena *arena,
                 const struct ast *a,
                 struct intermediate *ir,
@@ -1667,6 +1683,9 @@ ir_expr(Arena *arena,
 		} else {
 			check(ir_unary_op(arena, a, ir, dst, return_value));
 		}
+		break;
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
+		check(ir_sizeof(arena, a, return_value));
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 		check(ir_expr(arena,
