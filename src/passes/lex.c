@@ -88,6 +88,15 @@ lex_readahead_one_or_two_chars(struct string_view *pos, struct token *cur)
 		default:
 			break;
 		}
+	} else if (pos->data[1] == '>') {
+		switch (cur->token_type) {
+		case TOKEN_HYPHEN:
+			cur->token_type = TOKEN_ARROW;
+			readahead = 1;
+			break;
+		default:
+			break;
+		}
 	}
 
 	return readahead;
@@ -577,6 +586,9 @@ lex_debug_one(const struct token *tok)
 		break;
 	case TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN:
 		debug("TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN");
+		break;
+	case TOKEN_ARROW:
+		debug("TOKEN_ARROW");
 		break;
 	}
 

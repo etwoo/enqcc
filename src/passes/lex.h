@@ -13,6 +13,7 @@
 	F("signed", TOKEN_KEYWORD_SIGNED)                                      \
 	F("unsigned", TOKEN_KEYWORD_UNSIGNED)                                  \
 	F("double", TOKEN_KEYWORD_DOUBLE)                                      \
+	F("struct", TOKEN_KEYWORD_STRUCT)                                      \
 	F("if", TOKEN_KEYWORD_IF)                                              \
 	F("else", TOKEN_KEYWORD_ELSE)                                          \
 	F("do", TOKEN_KEYWORD_DO)                                              \
@@ -50,7 +51,8 @@
 	F('?', TOKEN_QUESTION)                                                 \
 	F(':', TOKEN_COLON)                                                    \
 	F(',', TOKEN_COMMA)                                                    \
-	F('^', TOKEN_CARET)
+	F('^', TOKEN_CARET)                                                    \
+	F('.', TOKEN_PERIOD)
 
 #define FOREACH_LEX_CHAR_REPEAT(F)                                             \
 	F(TOKEN_HYPHEN, TOKEN_HYPHEN_HYPHEN)                                   \
@@ -87,6 +89,7 @@ enum lex_tokentype {
 	TOKEN_CONSTANT_STR,
 	TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN,
 	TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN,
+	TOKEN_ARROW,
 	FOREACH_LEX_ENUM_VALUE(TO_ENUM_ENTRY)
 };
 #undef FOREACH_LEX_ENUM_VALUE
