@@ -1235,7 +1235,8 @@ sema_label_locations(struct ast *a, void *userdata MAYBE_UNUSED)
 			                   name.data,
 			                   name.sz);
 		}
-		if (cursor->cdr->car->node_type == NODE_DECLARATION) {
+		if (cursor->cdr->car->node_type == NODE_DECLARATION ||
+		    cursor->cdr->car->node_type == NODE_STRUCT) {
 			/* Reject label/case followed by a var declaration! */
 			return make_result(
 				ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION,

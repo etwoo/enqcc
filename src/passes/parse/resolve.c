@@ -331,6 +331,8 @@ resolve_block_with_delimiter(Arena *arena,
 			                          sym,
 			                          SYMBOL_LINKAGE_NONE));
 			break;
+		case NODE_STRUCT: // TODO: resolve_block_with_delimiter()
+			break;
 		case NODE_BLOCK:
 			resetter = *sym;
 			check(resolve_block(arena,

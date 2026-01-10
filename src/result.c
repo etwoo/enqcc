@@ -451,8 +451,8 @@ result_to_str(result_t r)
 		s = my_asprintf("Duplicate label: %s", r.msg);
 		break;
 	case ERR_SEMA_LABEL_FOLLOWED_BY_DECLARATION:
-		s = my_asprintf("Label %s followed by a variable declaration "
-		                "is a C23 extension",
+		s = my_asprintf("Label %s followed by variable or struct "
+		                "declaration is a C23 extension",
 		                r.msg);
 		break;
 	case ERR_SEMA_LABEL_AT_BLOCK_END:
