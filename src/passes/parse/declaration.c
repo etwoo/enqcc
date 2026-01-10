@@ -581,7 +581,6 @@ parse_declarator_group_scan_one(uint32_t flags,
 	case TOKEN_PERIOD:
 	case TOKEN_ARROW:
 		return make_result(ERR_PARSE_DECL_ATOM_MEMBER_ACCESS_INVALID);
-		break;
 	default:
 		break;
 	}
