@@ -237,6 +237,10 @@ result_to_str(result_t r)
 		s = strdup(
 			"Parsing declarator: function pointers not supported");
 		break;
+	case ERR_PARSE_DECL_ATOM_MEMBER_ACCESS_INVALID:
+		s = strdup("Parsing declarator: encounter invalid member "
+		           "access operator . or ->");
+		break;
 	case ERR_PARSE_DECL_ATOM_PARAMS_EXPECT_PAREN_CLOSE:
 		s = strdup("Parsing declarator expects TOKEN_PAREN_CLOSE after "
 		           "TOKEN_PAREN_OPEN and function parameters");
