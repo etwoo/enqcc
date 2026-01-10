@@ -39,6 +39,7 @@ ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 	dst->t = src->t;
 	dst->maybe_null_pointer_constant = src->maybe_null_pointer_constant;
 	dst->sz = src->sz;
+	dst->tag = src->tag;
 
 	if (src->referent != NULL) {
 		dst->referent = NULL;
@@ -111,6 +112,9 @@ ctype_to_size_bytes(const struct ctype *c)
 		assert(c->sz > 0 && c->sz < LLONG_MAX);
 		b = (long long int)c->sz * ctype_to_size_bytes(c->referent);
 		break;
+	case CTYPE_STRUCT:
+		assert(0 && "TODO struct size using type table");
+		break;
 	}
 	return b;
 }
@@ -133,6 +137,7 @@ ctype_is_integer(const struct ctype *c)
 	case CTYPE_DOUBLE:
 	case CTYPE_POINTER_TO:
 	case CTYPE_ARRAY_OF:
+	case CTYPE_STRUCT:
 		b = false;
 		break;
 	}
@@ -157,6 +162,7 @@ ctype_is_signed(const struct ctype *c)
 	case CTYPE_UNSIGNED_LONG:
 	case CTYPE_POINTER_TO:
 	case CTYPE_ARRAY_OF:
+	case CTYPE_STRUCT:
 		b = false;
 		break;
 	}

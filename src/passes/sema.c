@@ -133,6 +133,7 @@ map_numeric_type_scalar(const struct ast *a,
 			tmp = a->u.double_;
 			break;
 		case CTYPE_ARRAY_OF:
+		case CTYPE_STRUCT:
 		case CTYPE_VOID:
 			assert(0); /* logic error in caller */
 			break;
@@ -157,6 +158,7 @@ map_numeric_type_scalar(const struct ast *a,
 		x = (int128_t)a->u.double_;
 		break;
 	case CTYPE_ARRAY_OF:
+	case CTYPE_STRUCT:
 	case CTYPE_VOID:
 		assert(0); /* logic error in caller */
 		break;

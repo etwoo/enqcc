@@ -1600,12 +1600,13 @@ ir_expr(Arena *arena,
 		case CTYPE_LONG:
 		case CTYPE_UNSIGNED_LONG:
 		case CTYPE_POINTER_TO:
-		case CTYPE_ARRAY_OF:
 			return_value->num = a->u.num;
 			break;
 		case CTYPE_DOUBLE:
 			return_value->dnum = a->u.double_;
 			break;
+		case CTYPE_ARRAY_OF:
+		case CTYPE_STRUCT:
 		case CTYPE_VOID:
 			assert(0); /* logic error in caller */
 			break;

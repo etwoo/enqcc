@@ -20,6 +20,7 @@
 	F(DOUBLE)                                                              \
 	F(ARRAY_OF)                                                            \
 	F(POINTER_TO)                                                          \
+	F(STRUCT)                                                              \
 	F(VOID)
 
 struct ctype {
@@ -29,6 +30,7 @@ struct ctype {
 	bool maybe_null_pointer_constant;
 	struct ctype *referent; /* CTYPE_POINTER_TO, CTYPE_ARRAY_OF */
 	long long unsigned sz;  /* CTYPE_ARRAY_OF */
+	long long int tag;      /* CTYPE_STRUCT */
 };
 
 result_t ctype_alloc(Arena *arena, struct ctype **dst) WARN_UNUSED;
