@@ -292,6 +292,10 @@ get_precedence(const struct ast *a)
 {
 	unsigned precedence = 0;
 	switch (a->node_type) {
+	case NODE_EXPRESSION_STRUCT_MEMBER:
+	case NODE_EXPRESSION_STRUCT_POINTER:
+		precedence += PRECEDENCE_INCREMENT;
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:

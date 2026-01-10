@@ -261,7 +261,7 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 		check(sema_walk(a->u.declare.init, ops, u));
 		break;
 	case NODE_STRUCT:
-		assert(0 && "TODO implement sema_walk() for NODE_STRUCT?");
+		// assert(0 && "TODO implement sema_walk() for NODE_STRUCT?");
 		break;
 	case NODE_IF_ELSE:
 		check(sema_walk(a->u.if_.condition, ops, u));
@@ -332,6 +332,8 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
+	case NODE_EXPRESSION_STRUCT_MEMBER:
+	case NODE_EXPRESSION_STRUCT_POINTER:
 	case NODE_EXPRESSION_SUBSCRIPT:
 		check(sema_walk(a->u.op_binary.lhs, ops, u));
 		check(sema_walk(a->u.op_binary.rhs, ops, u));
@@ -943,6 +945,26 @@ sema_subscript(struct ast *a, void *userdata)
 }
 
 static WARN_UNUSED result_t
+sema_struct_pointer(struct ast *a, void *userdata)
+{
+	Arena *arena = userdata;
+
+	if (a->node_type != NODE_EXPRESSION_STRUCT_POINTER) {
+		return RESULT_OK;
+	}
+
+	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	check_if(new_node == NULL, ERR_SEMA_ALLOC);
+	new_node->node_type = NODE_EXPRESSION_UNARY_DEREFERENCE;
+	new_node->u.op_unary.operand = a->u.op_binary.lhs;
+
+	a->node_type = NODE_EXPRESSION_STRUCT_MEMBER;
+	a->u.op_binary.lhs = new_node;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_str_literal_expand(Arena *arena,
                         const struct string_view *lit,
                         const size_t capacity,
@@ -1531,6 +1553,9 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_CAST:
 		check(ctype_copy(arena, &a->u.cast.to_type, &a->expr_type));
 		break;
+	case NODE_EXPRESSION_STRUCT_MEMBER:
+		info("TODO expr_type for member? or is this leaf node?");
+		break;
 	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
@@ -1550,6 +1575,9 @@ sema_expr_types(struct ast *a, void *userdata)
 		break;
 	case NODE_EXPRESSION_SUBSCRIPT:
 		assert(0 && "SUBSCRIPT should have been eliminated");
+		break;
+	case NODE_EXPRESSION_STRUCT_POINTER:
+		assert(0 && "STRUCT_POINTER should have been eliminated");
 		break;
 	case NODE_CONSTANT_STR:
 		assert(0 && "CONSTANT_STR should have been eliminated");
@@ -2711,6 +2739,10 @@ sema_typecheck(Arena *arena,
 
 	debug("Expanding array subscript expressions");
 	ops.node_enter = sema_subscript;
+	check(sema_walk(a, &ops, arena));
+
+	debug("Expanding struct pointer expressions");
+	ops.node_enter = sema_struct_pointer;
 	check(sema_walk(a, &ops, arena));
 
 	debug("Expanding string literals and hoisting if necessary");

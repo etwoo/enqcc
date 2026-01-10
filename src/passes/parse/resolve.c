@@ -186,6 +186,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym));
 		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
 		break;
+	case NODE_EXPRESSION_STRUCT_MEMBER:
+	case NODE_EXPRESSION_STRUCT_POINTER:
+		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
+		// TODO: resolve RHS of struct member access
+		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(arena,
 		                            *sym,

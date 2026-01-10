@@ -382,6 +382,9 @@ parse_init(Arena *arena,
 			                          &symbols,
 			                          SYMBOL_LINKAGE_EXTERNAL));
 			break;
+		case NODE_STRUCT:
+			// assert(0 && "TODO resolve_struct_declaration()");
+			break;
 		default:
 			assert(0); /* logic error in caller */
 			break;
