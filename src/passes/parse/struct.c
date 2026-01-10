@@ -26,8 +26,8 @@ parse_struct_declaration(Arena *arena,
 	token_consume(tok);
 
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
+		assert((**dst_struct).u.struct_.members == NULL);
 		token_consume(tok);
-		// TODO: handle forward declaration of struct
 		return RESULT_OK;
 	}
 
