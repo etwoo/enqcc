@@ -28,9 +28,10 @@ struct ctype {
 	enum { FOREACH_CTYPE(TO_ENUM) } t;
 #undef TO_ENUM
 	bool maybe_null_pointer_constant;
-	struct ctype *referent; /* CTYPE_POINTER_TO, CTYPE_ARRAY_OF */
-	long long unsigned sz;  /* CTYPE_ARRAY_OF */
-	long long int tag;      /* CTYPE_STRUCT */
+	struct ctype *referent;      /* CTYPE_POINTER_TO, CTYPE_ARRAY_OF */
+	long long unsigned sz;       /* CTYPE_ARRAY_OF */
+	struct string_view tag_name; /* CTYPE_STRUCT */
+	long long int tag_unique;    /* CTYPE_STRUCT */
 };
 
 result_t ctype_alloc(Arena *arena, struct ctype **dst) WARN_UNUSED;
@@ -52,6 +53,7 @@ bool ctype_is_strlike_array(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_strlike_ptr(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_void(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_void_ptr(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_struct(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_incomplete(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_ptr_to_incomplete(const struct ctype *c) WARN_UNUSED;
 bool ctype_nullptr_ish(const struct ctype *c) WARN_UNUSED;

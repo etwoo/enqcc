@@ -32,6 +32,11 @@ is_token_variable_type(const struct token *tok)
 	case TOKEN_KEYWORD_UNSIGNED:
 	case TOKEN_KEYWORD_DOUBLE:
 		return true;
+	case TOKEN_KEYWORD_STRUCT:
+		if (is_token_type(tok->next, TOKEN_IDENTIFIER)) {
+			return true;
+		}
+		break;
 	default:
 		break;
 	}

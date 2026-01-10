@@ -23,6 +23,8 @@ struct parse_basic_type_state {
 	size_t n_signed;
 	size_t n_unsigned;
 	size_t n_double;
+	size_t n_struct;
+	struct string_view name;
 };
 
 static void
@@ -56,6 +58,13 @@ parse_basic_type_accumulate(const struct token **tok,
 	case TOKEN_KEYWORD_DOUBLE:
 		state->n_double++;
 		break;
+	case TOKEN_KEYWORD_STRUCT:
+		state->n_struct++;
+		/* is_token_variable_type() guarantees TOKEN_IDENTIFIER next */
+		token_consume(tok);
+		assert(is_token_type(*tok, TOKEN_IDENTIFIER));
+		state->name = (**tok).val;
+		break;
 	default:
 		assert(0); /* logic error in caller */
 		break;
@@ -66,29 +75,45 @@ static WARN_UNUSED result_t
 parse_basic_type_finalize(struct parse_basic_type_state *state,
                           struct ctype *var_type)
 {
-	if (state->n_void > 1 ||     /* void void -- invalid               */
-	    state->n_char > 1 ||     /* char char -- invalid               */
-	    state->n_int > 1 ||      /* int int -- invalid                 */
-	    state->n_long > 1 ||     /* long long -- unsupported           */
-	    state->n_signed > 1 ||   /* signed signed -- invalid           */
-	    state->n_unsigned > 1 || /* unsigned unsigned -- invalid       */
-	    state->n_double > 1 ||   /* double double -- invalid           */
-	    (state->n_signed > 0 &&  /* signed/unsigned mutually exclusive */
-	     state->n_unsigned > 0)) {
+	size_t any = 0;
+#define COUNT_WHILE_REJECTING_DUP(member)                                      \
+	if (state->member > 1) {                                               \
+		return make_result(ERR_PARSE_DECL_TYPE_DUPLICATE);             \
+	}                                                                      \
+	any += state->member;
+	COUNT_WHILE_REJECTING_DUP(n_void);
+	COUNT_WHILE_REJECTING_DUP(n_char);
+	COUNT_WHILE_REJECTING_DUP(n_int);
+	COUNT_WHILE_REJECTING_DUP(n_long); /* "long long" unsupported */
+	COUNT_WHILE_REJECTING_DUP(n_signed);
+	COUNT_WHILE_REJECTING_DUP(n_unsigned);
+	COUNT_WHILE_REJECTING_DUP(n_double);
+	COUNT_WHILE_REJECTING_DUP(n_struct);
+#undef COUNT_WHILE_REJECTING_DUP
+
+	if (state->n_signed > 0 && state->n_unsigned > 0) {
 		return make_result(ERR_PARSE_DECL_TYPE_DUPLICATE);
 	}
 
-	const size_t any = state->n_void + state->n_char + state->n_int +
-	                   state->n_long + state->n_signed + state->n_unsigned +
-	                   state->n_double;
 	if (any == 0) {
 		return make_result(ERR_PARSE_DECL_EXPECT_TYPE);
 	}
 
+	if (state->n_struct > 0) {
+		assert(state->name.sz > 0 && state->name.data != NULL);
+		assert(any >= state->n_struct);
+		const size_t others = any - state->n_struct;
+		if (others > 0) {
+			return make_result(ERR_PARSE_DECL_TYPE_STRUCT_INVALID);
+		}
+		var_type->t = CTYPE_STRUCT;
+		var_type->tag_name = state->name;
+		return RESULT_OK;
+	}
+
 	if (state->n_void > 0) {
-		size_t others = state->n_char + state->n_int + state->n_long +
-		                state->n_signed + state->n_unsigned +
-		                state->n_double;
+		assert(any >= state->n_void);
+		const size_t others = any - state->n_void;
 		if (others > 0) {
 			return make_result(ERR_PARSE_DECL_TYPE_VOID_INVALID);
 		}
@@ -97,8 +122,8 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 	}
 
 	if (state->n_double > 0) {
-		size_t others = state->n_char + state->n_int + state->n_long +
-		                state->n_signed + state->n_unsigned;
+		assert(any >= state->n_double);
+		const size_t others = any - state->n_double;
 		if (others > 0) {
 			return make_result(ERR_PARSE_DECL_TYPE_DOUBLE_INVALID);
 		}
@@ -107,7 +132,9 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 	}
 
 	if (state->n_char > 0) {
-		if (state->n_int > 0 || state->n_long > 0) {
+		assert(any >= state->n_char);
+		const size_t others = any - state->n_char;
+		if (others) {
 			return make_result(ERR_PARSE_DECL_TYPE_CHAR_INVALID);
 		}
 		if (state->n_unsigned > 0) {
@@ -120,27 +147,21 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 		return RESULT_OK;
 	}
 
-	switch (state->n_long) {
-	case 1:
+	if (state->n_long > 0) {
 		if (state->n_unsigned > 0) {
 			var_type->t = CTYPE_UNSIGNED_LONG;
 		} else {
 			var_type->t = CTYPE_LONG;
 		}
-		break;
-	case 0:
-		if (state->n_unsigned > 0) {
-			var_type->t = CTYPE_UNSIGNED_INT;
-		} else {
-			assert(state->n_int == 1 || state->n_signed == 1);
-			var_type->t = CTYPE_INT;
-		}
-		break;
-	default:
-		assert(0); /* logic error in caller */
-		break;
+		return RESULT_OK;
 	}
 
+	if (state->n_unsigned > 0) {
+		var_type->t = CTYPE_UNSIGNED_INT;
+	} else {
+		assert(state->n_int == 1 || state->n_signed == 1);
+		var_type->t = CTYPE_INT;
+	}
 	return RESULT_OK;
 }
 
@@ -778,6 +799,7 @@ map_declarator_to_ctype(Arena *arena,
 static WARN_UNUSED bool
 ctype_has_fragment_array_of_incomplete(const struct ctype *c)
 {
+	// TODO: traverse struct members for incomplete types
 	for (; ctype_is_pointer(c); c = c->referent) {
 		if (ctype_is_array(c) && ctype_is_incomplete(c->referent)) {
 			return true;

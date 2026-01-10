@@ -39,7 +39,8 @@ ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 	dst->t = src->t;
 	dst->maybe_null_pointer_constant = src->maybe_null_pointer_constant;
 	dst->sz = src->sz;
-	dst->tag = src->tag;
+	dst->tag_name = src->tag_name;
+	dst->tag_unique = src->tag_unique;
 
 	if (src->referent != NULL) {
 		dst->referent = NULL;
@@ -62,15 +63,14 @@ ctype_to_str(const struct ctype *c, char *stor, size_t cap)
 
 	size_t copied = strlcpy(stor, CTYPE_AS_STR[c->t], cap);
 
-	if ((c->t == CTYPE_POINTER_TO || c->t == CTYPE_ARRAY_OF) &&
-	    cap > copied + 1) {
+	if ((ctype_is_pointer(c) || ctype_is_struct(c)) && cap > copied + 1) {
 		stor[copied++] = ' ';
-		if (c->t == CTYPE_ARRAY_OF) {
+		if (ctype_is_array(c) || ctype_is_struct(c)) {
 			size_t remaining = cap - copied;
-			int required = snprintf(stor + copied,
-			                        remaining,
-			                        "%llu ",
-			                        c->sz);
+			size_t num = ctype_is_array(c) ? c->sz
+			                               : (size_t)c->tag_unique;
+			int required =
+				snprintf(stor + copied, remaining, "%zu ", num);
 			if (required < 0 || (size_t)required + 1 > remaining) {
 				/* snprintf() indicates insuffient space */
 				return stor;
@@ -225,6 +225,12 @@ bool
 ctype_is_void_ptr(const struct ctype *c)
 {
 	return c->t == CTYPE_POINTER_TO && ctype_is_void(c->referent);
+}
+
+bool
+ctype_is_struct(const struct ctype *c)
+{
+	return c->t == CTYPE_STRUCT;
 }
 
 bool

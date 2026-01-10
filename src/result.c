@@ -291,6 +291,10 @@ result_to_str(result_t r)
 		s = strdup("Duplicate basic type, like `int int` or "
 		           "`signed unsigned`");
 		break;
+	case ERR_PARSE_DECL_TYPE_STRUCT_INVALID:
+		s = strdup("Type 'struct' cannot be combined with "
+		           "void/double/char/int/long/signed/unsigned");
+		break;
 	case ERR_PARSE_DECL_TYPE_VOID_INVALID:
 		s = strdup("Type 'void' cannot be combined with "
 		           "double/char/int/long/signed/unsigned");
