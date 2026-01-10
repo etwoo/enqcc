@@ -150,6 +150,62 @@ parse_postfix(Arena *arena, const struct token **tok, struct ast **dst)
 }
 
 static WARN_UNUSED result_t
+parse_subscript(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	assert(is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN));
+	token_consume(tok);
+
+	struct ast *postfix = NULL;
+	check(parse_alloc(arena, &postfix, NODE_EXPRESSION_SUBSCRIPT));
+
+	/* make array subscript expr into parent of prev/next exprs */
+	postfix->u.op_binary.lhs = *dst;
+	check(parse_expr(arena, tok, &postfix->u.op_binary.rhs, 0));
+	*dst = postfix;
+
+	if (!is_token_type(*tok, TOKEN_SQUARE_BRACKET_CLOSE)) {
+		return make_result(
+			ERR_PARSE_EXPR_EXPECT_TOKEN_SQ_BRACKET_CLOSE);
+	}
+	token_consume(tok);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+parse_member(Arena *arena, const struct token **tok, struct ast **dst)
+{
+	enum ast_nodetype new_type = 0;
+	switch ((**tok).token_type) {
+	case TOKEN_PERIOD:
+		new_type = NODE_EXPRESSION_STRUCT_MEMBER;
+		break;
+	case TOKEN_ARROW:
+		new_type = NODE_EXPRESSION_STRUCT_POINTER;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+	token_consume(tok);
+
+	if (!is_token_type(*tok, TOKEN_IDENTIFIER)) {
+		return make_result(ERR_PARSE_MEMBER_ACCESS_EXPECT_IDENTIFIER);
+	}
+	struct string_view str = (**tok).val;
+	token_consume(tok);
+
+	struct ast *new_node = NULL;
+	check(parse_alloc(arena, &new_node, new_type));
+
+	/* make member access expr into parent of prev/next exprs */
+	new_node->u.member_access.lhs = *dst;
+	new_node->u.member_access.member.name = str;
+	*dst = new_node;
+
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 {
 	assert(dst != NULL && *dst == NULL);
@@ -230,27 +286,27 @@ parse_factor(Arena *arena, const struct token **tok, struct ast **dst)
 	}
 
 	assert(*dst != NULL);
-	check(parse_postfix(arena, tok, dst));
 
-	while (is_token_type(*tok, TOKEN_SQUARE_BRACKET_OPEN)) {
-		token_consume(tok);
+	bool subscript_or_member = true;
+	while (*tok != NULL && subscript_or_member) {
+		check(parse_postfix(arena, tok, dst));
 
-		struct ast *postfix = NULL;
-		check(parse_alloc(arena, &postfix, NODE_EXPRESSION_SUBSCRIPT));
-
-		/* make array subscript expr into parent of prev/next exprs */
-		postfix->u.op_binary.lhs = *dst;
-		check(parse_expr(arena, tok, &postfix->u.op_binary.rhs, 0));
-		*dst = postfix;
-
-		if (!is_token_type(*tok, TOKEN_SQUARE_BRACKET_CLOSE)) {
-			return make_result(
-				ERR_PARSE_EXPR_EXPECT_TOKEN_SQ_BRACKET_CLOSE);
+		switch ((**tok).token_type) {
+		case TOKEN_SQUARE_BRACKET_OPEN:
+			check(parse_subscript(arena, tok, dst));
+			break;
+		case TOKEN_PERIOD:
+		case TOKEN_ARROW:
+			check(parse_member(arena, tok, dst));
+			break;
+		default:
+			subscript_or_member = false;
+			break;
 		}
-		token_consume(tok);
+
+		check(parse_postfix(arena, tok, dst));
 	}
 
-	check(parse_postfix(arena, tok, dst));
 	return RESULT_OK;
 }
 
@@ -292,10 +348,6 @@ get_precedence(const struct ast *a)
 {
 	unsigned precedence = 0;
 	switch (a->node_type) {
-	case NODE_EXPRESSION_STRUCT_MEMBER:
-	case NODE_EXPRESSION_STRUCT_POINTER:
-		precedence += PRECEDENCE_INCREMENT;
-		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BINARY_MULTIPLY:
 	case NODE_EXPRESSION_BINARY_DIVIDE:
 	case NODE_EXPRESSION_BINARY_REMAINDER:
@@ -379,6 +431,8 @@ get_precedence(const struct ast *a)
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 	case NODE_EXPRESSION_SUBSCRIPT:
+	case NODE_EXPRESSION_STRUCT_MEMBER:
+	case NODE_EXPRESSION_STRUCT_POINTER:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_FUNCTION_CALL:
 	case NODE_EXPRESSION_CAST:

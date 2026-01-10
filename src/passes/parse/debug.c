@@ -321,8 +321,6 @@ parse_debug_print(const struct ast *a, size_t indent)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
-	case NODE_EXPRESSION_STRUCT_MEMBER:
-	case NODE_EXPRESSION_STRUCT_POINTER:
 	case NODE_EXPRESSION_SUBSCRIPT:
 		parse_debug_print(a->u.op_binary.lhs, indent + 1);
 		parse_debug_print(a->u.op_binary.rhs, indent + 1);
@@ -354,6 +352,13 @@ parse_debug_print(const struct ast *a, size_t indent)
 		      "",
 		      ctype_to_str(&a->u.cast.to_type, tmp, sizeof(tmp)));
 		parse_debug_print(a->u.cast.expr, indent + 1);
+		break;
+	case NODE_EXPRESSION_STRUCT_MEMBER:
+	case NODE_EXPRESSION_STRUCT_POINTER:
+		parse_debug_print(a->u.member_access.lhs, indent + 1);
+		parse_debug_print_ast_symbol("MEMBER",
+		                             &a->u.member_access.member,
+		                             indent + 1);
 		break;
 	case NODE_CONSTANT:
 		if (ctype_is_floating_point(&a->expr_type)) {

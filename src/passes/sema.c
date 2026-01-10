@@ -260,9 +260,6 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_DECLARATION:
 		check(sema_walk(a->u.declare.init, ops, u));
 		break;
-	case NODE_STRUCT:
-		// assert(0 && "TODO implement sema_walk() for NODE_STRUCT?");
-		break;
 	case NODE_IF_ELSE:
 		check(sema_walk(a->u.if_.condition, ops, u));
 		check(sema_walk_flat(a->u.if_.then_clause, ops, u));
@@ -332,8 +329,6 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_XOR:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SL:
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
-	case NODE_EXPRESSION_STRUCT_MEMBER:
-	case NODE_EXPRESSION_STRUCT_POINTER:
 	case NODE_EXPRESSION_SUBSCRIPT:
 		check(sema_walk(a->u.op_binary.lhs, ops, u));
 		check(sema_walk(a->u.op_binary.rhs, ops, u));
@@ -350,6 +345,9 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_CAST:
 		check(sema_walk(a->u.cast.expr, ops, u));
 		break;
+	case NODE_STRUCT: // TODO sema_walk()
+	case NODE_EXPRESSION_STRUCT_MEMBER: // TODO sema_walk()
+	case NODE_EXPRESSION_STRUCT_POINTER: // TODO sema_walk()
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT:
@@ -956,10 +954,10 @@ sema_struct_pointer(struct ast *a, void *userdata)
 	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
 	check_if(new_node == NULL, ERR_SEMA_ALLOC);
 	new_node->node_type = NODE_EXPRESSION_UNARY_DEREFERENCE;
-	new_node->u.op_unary.operand = a->u.op_binary.lhs;
+	new_node->u.op_unary.operand = a->u.member_access.lhs;
 
 	a->node_type = NODE_EXPRESSION_STRUCT_MEMBER;
-	a->u.op_binary.lhs = new_node;
+	a->u.member_access.lhs = new_node;
 
 	return RESULT_OK;
 }

@@ -63,8 +63,6 @@ struct ast_parameter {
 	F(EXPRESSION_COMPOUND_ASSIGN_XOR, TOKEN_CARET_EQUAL_SIGN)              \
 	F(EXPRESSION_COMPOUND_ASSIGN_SL, TOKEN_LESS_THAN_LESS_THAN_EQUAL_SIGN) \
 	F(EXPRESSION_COMPOUND_ASSIGN_SR, TOKEN_MORE_THAN_MORE_THAN_EQUAL_SIGN) \
-	F(EXPRESSION_STRUCT_MEMBER, TOKEN_PERIOD)                              \
-	F(EXPRESSION_STRUCT_POINTER, TOKEN_ARROW)                              \
 	F(EXPRESSION_TERNARY_CONDITIONAL, TOKEN_QUESTION)
 
 #define FOREACH_AST_NODE_EXPRESSION(F)                                         \
@@ -73,6 +71,8 @@ struct ast_parameter {
 	F(EXPRESSION_PAREN_ENCLOSED)                                           \
 	F(EXPRESSION_POSTDECREMENT)                                            \
 	F(EXPRESSION_POSTINCREMENT)                                            \
+	F(EXPRESSION_STRUCT_MEMBER)                                            \
+	F(EXPRESSION_STRUCT_POINTER)                                           \
 	F(EXPRESSION_SUBSCRIPT)                                                \
 	F(EXPRESSION_VARIABLE_USAGE)                                           \
 	F(EXPRESSION_FUNCTION_CALL)                                            \
@@ -191,6 +191,10 @@ struct ast {
 			struct ctype to_type;
 			struct ast *expr;
 		} cast;
+		struct {
+			struct ast *lhs;
+			struct ast_symbol member;
+		} member_access;
 		struct ast_symbol var;  /* NODE_EXPRESSION_VARIABLE_USAGE */
 		int128_t num;           /* NODE_CONSTANT */
 		double double_;         /* NODE_CONSTANT with CTYPE_DOUBLE */

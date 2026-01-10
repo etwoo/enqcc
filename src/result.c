@@ -370,6 +370,10 @@ result_to_str(result_t r)
 		           "do-loop body and before do-loop controlling "
 		           "expression");
 		break;
+	case ERR_PARSE_MEMBER_ACCESS_EXPECT_IDENTIFIER:
+		s = strdup("Parsing member access operator expects identifier "
+		           "after TOKEN_PERIOD/TOKEN_ARROW");
+		break;
 	case ERR_PARSE_SIZEOF_EXPECT_TOKEN_PAREN_CLOSE:
 		s = strdup("Parsing paren-enclosed sizeof argument expects "
 		           "TOKEN_PAREN_CLOSE after type name or expression");
