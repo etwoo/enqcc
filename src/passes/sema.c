@@ -934,7 +934,6 @@ sema_subscript(struct ast *a, void *userdata)
 	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
 	check_if(new_node == NULL, ERR_SEMA_ALLOC);
 	new_node->node_type = NODE_EXPRESSION_BINARY_ADD;
-	check(ctype_copy(arena, &a->expr_type, &new_node->expr_type));
 	new_node->u.op_binary = a->u.op_binary;
 
 	a->node_type = NODE_EXPRESSION_UNARY_DEREFERENCE;
