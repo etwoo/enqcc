@@ -390,6 +390,11 @@ result_to_str(result_t r)
 		                "on member declaration: %s",
 		                r.msg);
 		break;
+	case ERR_PARSE_STRUCT_DECL_MEMBER_SPEC:
+		s = my_asprintf("struct definition does not allow static or "
+		                "extern specifier on member declaration: %s",
+		                r.msg);
+		break;
 	case ERR_PARSE_STRUCT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing struct definition expects TOKEN_SEMICOLON "
 		           "after member declarations and TOKEN_BRACE_CLOSE");

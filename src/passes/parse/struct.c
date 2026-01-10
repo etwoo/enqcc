@@ -42,9 +42,17 @@ parse_struct_declaration(Arena *arena,
 		                                            0,
 		                                            tok,
 		                                            &(**dst).car));
-		if ((**dst).car->node_type == NODE_DECLARATION &&
-		    (**dst).car->u.declare.init != NULL) {
+		if ((**dst).car->node_type != NODE_DECLARATION) {
+			/*
+			 * For now, ignore nested function declarations and
+			 * nested struct declarations.
+			 */
+		} else if ((**dst).car->u.declare.init != NULL) {
 			return make_result(ERR_PARSE_STRUCT_DECL_MEMBER_INIT,
+			                   name.data,
+			                   name.sz);
+		} else if ((**dst).car->u.declare.specifier != SPECIFIER_NONE) {
+			return make_result(ERR_PARSE_STRUCT_DECL_MEMBER_SPEC,
 			                   name.data,
 			                   name.sz);
 		}
