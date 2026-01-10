@@ -35,20 +35,25 @@ parse_struct_declaration(Arena *arena,
 	token_consume(tok);
 
 	struct flat **dst = &(**dst_struct).u.struct_.members;
-	do {
+	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(flat_alloc(arena, dst));
 		check(parse_fn_or_var_or_struct_declaration(arena,
 		                                            0,
 		                                            tok,
 		                                            &(**dst).car));
 		dst = &(**dst).cdr;
-	} while (!is_token_type(*tok, TOKEN_BRACE_CLOSE));
+	}
+
+	assert(is_token_type(*tok, TOKEN_BRACE_CLOSE));
 	token_consume(tok);
 
 	if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
 		return make_result(ERR_PARSE_STRUCT_EXPECT_TOKEN_SEMICOLON);
 	}
-
 	token_consume(tok);
+
+	if ((**dst_struct).u.struct_.members == NULL) {
+		return make_result(ERR_PARSE_STRUCT_EMPTY_INVALID);
+	}
 	return RESULT_OK;
 }

@@ -378,6 +378,9 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
+	case ERR_PARSE_STRUCT_EMPTY_INVALID:
+		s = strdup("Empty, zero-member struct not supported");
+		break;
 	case ERR_PARSE_STRUCT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing struct definition expects TOKEN_SEMICOLON "
 		           "after member declarations and TOKEN_BRACE_CLOSE");
