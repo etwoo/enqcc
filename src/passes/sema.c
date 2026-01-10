@@ -345,8 +345,8 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_CAST:
 		check(sema_walk(a->u.cast.expr, ops, u));
 		break;
-	case NODE_STRUCT: // TODO sema_walk()
-	case NODE_EXPRESSION_STRUCT_MEMBER: // TODO sema_walk()
+	case NODE_STRUCT:                    // TODO sema_walk()
+	case NODE_EXPRESSION_STRUCT_MEMBER:  // TODO sema_walk()
 	case NODE_EXPRESSION_STRUCT_POINTER: // TODO sema_walk()
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
@@ -1339,7 +1339,8 @@ sema_expr_types_initializer(Arena *arena,
 		return RESULT_OK;
 	}
 
-	if (!ctype_is_pointer(declaration_type)) {
+	if (!ctype_is_pointer(declaration_type) &&
+	    !ctype_is_struct(declaration_type)) {
 		/*
 		 * For now, reject compound initializers for scalar variables.
 		 * In the future, it may make sense to support the special-case
