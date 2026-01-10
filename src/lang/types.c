@@ -79,7 +79,16 @@ ctype_to_str(const struct ctype *c, char *stor, size_t cap)
 		}
 		if (c->referent != NULL) {
 			ctype_to_str(c->referent, stor + copied, cap - copied);
-		} /* else: tolerate incomplete types */
+		} /* else: tolerate pointer types pending referent */
+		if (ctype_is_struct(c)) {
+			size_t remaining = cap - copied;
+			if (c->tag_name.sz + 1 > remaining) {
+				return stor;
+			}
+			memcpy(stor + copied, c->tag_name.data, c->tag_name.sz);
+			copied += c->tag_name.sz;
+			stor[copied++] = '\0';
+		}
 	}
 
 	return stor;

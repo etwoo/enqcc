@@ -1554,7 +1554,7 @@ sema_expr_types(struct ast *a, void *userdata)
 		check(ctype_copy(arena, &a->u.cast.to_type, &a->expr_type));
 		break;
 	case NODE_EXPRESSION_STRUCT_MEMBER:
-		info("TODO expr_type for member? or is this leaf node?");
+		info("TODO expr_type for struct? or will resolve_expr() do?");
 		break;
 	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
