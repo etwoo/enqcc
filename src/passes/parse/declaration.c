@@ -134,7 +134,9 @@ parse_basic_type_finalize(struct parse_basic_type_state *state,
 
 	if (state->n_char > 0) {
 		assert(any >= state->n_char);
-		const size_t others = any - state->n_char;
+		size_t others = any - state->n_char;
+		others -= state->n_signed;
+		others -= state->n_unsigned;
 		if (others) {
 			return make_result(ERR_PARSE_DECL_TYPE_CHAR_INVALID);
 		}
