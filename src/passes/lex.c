@@ -488,11 +488,20 @@ lex_one_token(Arena *arena, struct string_view *pos, struct token **tok)
 	bool early_match = false;
 
 #define TRY_EARLY_MATCH(candidate, enum_value)                                 \
-	if (!early_match && c == (candidate)) {                                \
+	case candidate:                                                        \
 		cur->token_type = enum_value;                                  \
 		early_match = true;                                            \
+		break;
+
+	if (c == '.' && pos->sz > 1 && isdigit(pos->data[1])) {
+		/* suppress single-char match on '.', if followed by digit */
+	} else {
+		switch (c) {
+			FOREACH_LEX_CHAR(TRY_EARLY_MATCH);
+		default:
+			break;
+		}
 	}
-	FOREACH_LEX_CHAR(TRY_EARLY_MATCH);
 
 #undef TRY_EARLY_MATCH
 
