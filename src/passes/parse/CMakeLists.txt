@@ -6,5 +6,6 @@ target_sources(compiler PRIVATE
 	declaration.c
 	expression.c
 	resolve.c
+	struct.c
 	token.c
 )

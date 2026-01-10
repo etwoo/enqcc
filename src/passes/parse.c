@@ -80,7 +80,10 @@ parse_loop_for_init(Arena *arena,
 		check(parse_alloc_null_expr(arena, &(**dst).car));
 		token_consume(tok);
 	} else if (is_token_variable_type(*tok)) {
-		check(parse_fn_or_var_declaration(arena, 0, tok, &(**dst).car));
+		check(parse_fn_or_var_or_struct_declaration(arena,
+		                                            0,
+		                                            tok,
+		                                            &(**dst).car));
 	} else {
 		check(parse_expr(arena, tok, &(**dst).car, 0));
 		if (!is_token_type(*tok, TOKEN_SEMICOLON)) {
@@ -357,7 +360,7 @@ parse_init(Arena *arena,
 	struct flat **dst = &(**a).u.program.globals;
 	for (; tok != NULL; dst = &(**dst).cdr) {
 		check(flat_alloc(arena, dst));
-		check(parse_fn_or_var_declaration(
+		check(parse_fn_or_var_or_struct_declaration(
 			arena,
 			PARSE_DECLARATION_ACCEPT_FUNCTION,
 			&tok,

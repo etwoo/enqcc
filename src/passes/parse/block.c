@@ -29,7 +29,7 @@ parse_block(Arena *arena, const struct token **tok, struct ast **dst_outer)
 	while (!is_token_type(*tok, TOKEN_BRACE_CLOSE)) {
 		check(flat_alloc(arena, dst));
 		if (is_token_maybe_function_prefix(*tok)) {
-			check(parse_fn_or_var_declaration(
+			check(parse_fn_or_var_or_struct_declaration(
 				arena,
 				PARSE_DECLARATION_ACCEPT_FUNCTION,
 				tok,

@@ -150,6 +150,16 @@ parse_debug_print(const struct ast *a, size_t indent)
 			parse_debug_print(a->u.declare.init, indent + 1);
 		}
 		break;
+	case NODE_STRUCT:
+		parse_debug_print_ast_symbol(NULL,
+		                             &a->u.struct_.identifier,
+		                             indent);
+		if (a->u.struct_.members != NULL) {
+			debug("%*sMEMBERS", (int)indent + 1, "");
+			parse_debug_print_flat(a->u.struct_.members,
+			                       indent + 2);
+		}
+		break;
 	case NODE_IF_ELSE:
 		debug("%*sCONDITION", (int)indent + 1, "");
 		parse_debug_print(a->u.if_.condition, indent + 2);

@@ -84,6 +84,7 @@ struct ast_parameter {
 	F(FUNCTION_RETURN_STATEMENT)                                           \
 	F(BLOCK)                                                               \
 	F(DECLARATION)                                                         \
+	F(STRUCT)                                                              \
 	F(IF_ELSE)                                                             \
 	F(LOOP)                                                                \
 	F(BREAK)                                                               \
@@ -131,6 +132,10 @@ struct ast {
 			struct ast *single;
 			struct flat *multi;
 		} init;
+		struct {
+			struct ast_symbol identifier;
+			struct flat *members;
+		} struct_;
 		struct {
 			struct ast *condition;
 			struct flat *then_clause;

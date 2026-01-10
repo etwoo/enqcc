@@ -22,9 +22,9 @@ result_t parse_type(Arena *arena,
 
 extern const uint32_t PARSE_DECLARATION_ACCEPT_FUNCTION;
 
-result_t parse_fn_or_var_declaration(Arena *arena,
-                                     uint32_t flags,
-                                     const struct token **tok,
-                                     struct ast **dst) WARN_UNUSED;
+result_t parse_fn_or_var_or_struct_declaration(Arena *arena,
+                                               uint32_t flags,
+                                               const struct token **tok,
+                                               struct ast **dst) WARN_UNUSED;
 
 #endif

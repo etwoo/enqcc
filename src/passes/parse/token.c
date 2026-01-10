@@ -50,3 +50,12 @@ is_token_maybe_function_prefix(const struct token *tok)
 	       is_token_type(tok, TOKEN_KEYWORD_STATIC) ||
 	       is_token_type(tok, TOKEN_KEYWORD_EXTERN);
 }
+
+bool
+is_token_struct_prefix(const struct token *tok)
+{
+	return is_token_type(tok, TOKEN_KEYWORD_STRUCT) &&
+	       is_token_type(tok->next, TOKEN_IDENTIFIER) &&
+	       (is_token_type(tok->next->next, TOKEN_BRACE_OPEN) ||
+	        is_token_type(tok->next->next, TOKEN_SEMICOLON));
+}

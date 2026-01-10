@@ -260,6 +260,9 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_DECLARATION:
 		check(sema_walk(a->u.declare.init, ops, u));
 		break;
+	case NODE_STRUCT:
+		assert(0 && "TODO implement sema_walk() for NODE_STRUCT?");
+		break;
 	case NODE_IF_ELSE:
 		check(sema_walk(a->u.if_.condition, ops, u));
 		check(sema_walk_flat(a->u.if_.then_clause, ops, u));
@@ -1405,6 +1408,7 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_PROGRAM:
 	case NODE_FUNCTION:
 	case NODE_BLOCK:
+	case NODE_STRUCT:
 	case NODE_IF_ELSE:
 	case NODE_LOOP:
 	case NODE_BREAK:

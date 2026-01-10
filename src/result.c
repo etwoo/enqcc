@@ -378,6 +378,10 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
+	case ERR_PARSE_STRUCT_EXPECT_TOKEN_SEMICOLON:
+		s = strdup("Parsing struct definition expects TOKEN_SEMICOLON "
+		           "after member declarations and TOKEN_BRACE_CLOSE");
+		break;
 	case ERR_PARSE_SWITCH_EXPECT_TOKEN_PAREN_OPEN:
 		s = strdup("Parsing switch statement expects TOKEN_PAREN_OPEN "
 		           "before controlling expression");

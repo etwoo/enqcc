@@ -7,6 +7,7 @@
 #include "passes/parse/block.h"
 #include "passes/parse/constant.h"
 #include "passes/parse/expression.h"
+#include "passes/parse/struct.h"
 #include "passes/parse/token.h"
 #include "sys/array.h"
 #include "sys/debug.h"
@@ -923,11 +924,16 @@ parse_initializer(Arena *arena, const struct token **tok, struct ast **dst)
 const uint32_t PARSE_DECLARATION_ACCEPT_FUNCTION = 0x100;
 
 result_t
-parse_fn_or_var_declaration(Arena *arena,
-                            uint32_t flags,
-                            const struct token **tok,
-                            struct ast **dst)
+parse_fn_or_var_or_struct_declaration(Arena *arena,
+                                      uint32_t flags,
+                                      const struct token **tok,
+                                      struct ast **dst)
 {
+	if (is_token_struct_prefix(*tok)) {
+		check(parse_struct_declaration(arena, tok, dst));
+		return RESULT_OK;
+	}
+
 	enum ast_specifier fn_or_var_specifier = SPECIFIER_NONE;
 	struct ctype fn_return_or_var_type = {0};
 	struct string_view fn_or_var_name = {0};

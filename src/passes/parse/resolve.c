@@ -80,6 +80,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_FUNCTION:
 	case NODE_BLOCK:
 	case NODE_DECLARATION:
+	case NODE_STRUCT:
 		assert(0); /* logic error in caller */
 		break;
 	case NODE_IF_ELSE:
