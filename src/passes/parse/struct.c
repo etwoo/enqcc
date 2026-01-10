@@ -21,8 +21,9 @@ parse_struct_declaration(Arena *arena,
 	token_consume(tok);
 
 	assert(is_token_type(*tok, TOKEN_IDENTIFIER));
+	const struct string_view name = (**tok).val;
 	// TODO: set ast_symbol.stype?
-	(**dst_struct).u.struct_.identifier.name = (**tok).val;
+	(**dst_struct).u.struct_.identifier.name = name;
 	token_consume(tok);
 
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
@@ -41,6 +42,12 @@ parse_struct_declaration(Arena *arena,
 		                                            0,
 		                                            tok,
 		                                            &(**dst).car));
+		if ((**dst).car->node_type == NODE_DECLARATION &&
+		    (**dst).car->u.declare.init != NULL) {
+			return make_result(ERR_PARSE_STRUCT_DECL_MEMBER_INIT,
+			                   name.data,
+			                   name.sz);
+		}
 		dst = &(**dst).cdr;
 	}
 
@@ -53,7 +60,9 @@ parse_struct_declaration(Arena *arena,
 	token_consume(tok);
 
 	if ((**dst_struct).u.struct_.members == NULL) {
-		return make_result(ERR_PARSE_STRUCT_EMPTY_INVALID);
+		return make_result(ERR_PARSE_STRUCT_DECL_EMPTY_INVALID,
+		                   name.data,
+		                   name.sz);
 	}
 	return RESULT_OK;
 }

@@ -382,8 +382,13 @@ result_to_str(result_t r)
 		s = strdup("Parsing statement expects TOKEN_SEMICOLON after "
 		           "expression");
 		break;
-	case ERR_PARSE_STRUCT_EMPTY_INVALID:
-		s = strdup("Empty, zero-member struct not supported");
+	case ERR_PARSE_STRUCT_DECL_EMPTY_INVALID:
+		s = my_asprintf("Invalid zero-member struct: %s", r.msg);
+		break;
+	case ERR_PARSE_STRUCT_DECL_MEMBER_INIT:
+		s = my_asprintf("struct definition does not allow initializer "
+		                "on member declaration: %s",
+		                r.msg);
 		break;
 	case ERR_PARSE_STRUCT_EXPECT_TOKEN_SEMICOLON:
 		s = strdup("Parsing struct definition expects TOKEN_SEMICOLON "
