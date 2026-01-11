@@ -478,15 +478,12 @@ resolve_block(Arena *arena,
 
 static WARN_UNUSED result_t
 resolve_function_params_one(Arena *arena,
+                            bool is_def,
                             struct ast_parameter *a,
-                            struct symbol **sym)
+                            struct symbol **sym,
+                            struct type_table **typ)
 {
-	// TODO: if ast_parameter.parameter_type is struct, look up
-	// parameter_type.tag_name in symbol table, update
-	// ast_parameter.parameter_type.tag_unique accordingly
-	//
-	// TODO: if these params preface a function definition (not just
-	// declaration), raise error if struct type is incomplete
+	check(resolve_type(arena, is_def, &a->parameter_type, sym, typ));
 
 	struct ctype adjust_type = {0};
 	check(ctype_copy(arena, &a->parameter_type, &adjust_type));
@@ -506,11 +503,13 @@ resolve_function_params_one(Arena *arena,
 
 static WARN_UNUSED result_t
 resolve_function_params(Arena *arena,
+                        bool def,
                         struct ast_parameter *a,
-                        struct symbol **sym)
+                        struct symbol **sym,
+                        struct type_table **typ)
 {
 	FOREACH_FUNCTION_PARAMETER (cur, a) {
-		check(resolve_function_params_one(arena, cur, sym));
+		check(resolve_function_params_one(arena, def, cur, sym, typ));
 	}
 	return RESULT_OK;
 }
@@ -540,7 +539,11 @@ resolve_function(Arena *arena,
 	struct symbol *before_params = *symbols;
 	const bool cleanup = level_delimiter_prepare(before_params);
 
-	check(resolve_function_params(arena, a->u.function.params, symbols));
+	check(resolve_function_params(arena,
+	                              is_def,
+	                              a->u.function.params,
+	                              symbols,
+	                              types));
 
 	if (is_def) {
 		assert(a->u.function.block->node_type == NODE_BLOCK);
