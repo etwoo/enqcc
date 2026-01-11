@@ -612,6 +612,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION:
 		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
 		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_STRUCT_DUPLICATE:
+		s = my_asprintf("Duplicate struct declaration: %s", r.msg);
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INCOMPLETE:
 		s = my_asprintf("Invalid variable declaration using incomplete "
 		                "struct type: %s",

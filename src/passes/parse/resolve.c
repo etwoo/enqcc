@@ -544,37 +544,52 @@ resolve_struct(Arena *arena,
 	assert(ctype_is_struct(&a->u.struct_.struct_type));
 	assert(a->u.struct_.struct_type.tag_unique == 0);
 
-	check(types_prepend(arena, types, &a->u.struct_.struct_type));
-	assert(a->u.struct_.struct_type.tag_unique > 0);
+	struct string_view *tag_name = &a->u.struct_.struct_type.tag_name;
+	const bool is_complete = (a->u.struct_.members != NULL);
+	struct type_table *out = NULL;
 
-	struct type_table *head = *types;
-	assert(ctype_is_equal(&a->u.struct_.struct_type, &head->c));
+	const struct symbol *in_scope =
+		symbols_if(*symbols, tag_name, symbols_get_limited, is_struct);
 
-	// TODO: check for existing incomplete declaration (in-scope) that
-	// should be completed in-place, instead of prepending totally new
-	// entry to symbols list
-	// TODO: check for redefinition in same scope (conflict)
-	// TODO: allow redeclaration in same scope if newer declaration has no
-	// members; in this case, do _not_ clobber existing definition, instead
-	// leave n_members>0, members array, etc as-is
-	check(symbols_prepend(arena,
-	                      symbols,
-	                      &head->c.tag_name,
-	                      SYMBOL_STRUCT_DEFINITION,
-	                      &head->c));
+	if (in_scope == NULL) {
+		check(types_prepend(arena, types, &a->u.struct_.struct_type));
+		assert(a->u.struct_.struct_type.tag_unique > 0);
+		out = *types;
+		check(symbols_prepend(arena,
+		                      symbols,
+		                      &out->c.tag_name,
+		                      SYMBOL_STRUCT_DEFINITION,
+		                      &out->c));
+	} else if (!ctype_is_incomplete(&in_scope->c89type, *types) &&
+	           is_complete) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_STRUCT_DUPLICATE,
+			tag_name->data,
+			tag_name->sz);
+	} else {
+		assert(ctype_is_struct(&in_scope->c89type));
+		assert(in_scope->c89type.tag_unique > 0);
+		check(ctype_copy(arena,
+		                 &in_scope->c89type,
+		                 &a->u.struct_.struct_type));
+		out = types_find(*types, &in_scope->c89type);
+		assert(out != NULL);
+	}
+	assert(out != NULL);
+
+	if (!is_complete) {
+		/* nothing more to do for incomplete struct declaration */
+		return RESULT_OK;
+	}
 
 	size_t n_members = 0;
 	for (struct flat *f = a->u.struct_.members; f != NULL; f = f->cdr) {
 		++n_members;
 	}
+	assert(n_members > 0);
 
-	if (n_members == 0) {
-		/* struct definition remains incomplete */
-		return RESULT_OK;
-	}
-
-	head->members = arena_alloc(arena, n_members * sizeof(*head->members));
-	check_if(head->members == NULL, ERR_CTYPE_ALLOC);
+	out->members = arena_alloc(arena, n_members * sizeof(*out->members));
+	check_if(out->members == NULL, ERR_CTYPE_ALLOC);
 
 	struct flat *f = a->u.struct_.members;
 	for (size_t i = 0; i < n_members; ++i) {
@@ -594,15 +609,15 @@ resolve_struct(Arena *arena,
 				ast_member->u.declare.identifier.name.sz);
 		}
 
-		head->members[i].member_name =
+		out->members[i].member_name =
 			ast_member->u.declare.identifier.name;
 		check(ctype_copy(arena,
 		                 &ast_member->u.declare.var_type,
-		                 &head->members[i].member_type));
+		                 &out->members[i].member_type));
 
 		f = f->cdr;
 	}
 
-	head->n_members = n_members;
+	out->n_members = n_members;
 	return RESULT_OK;
 }
