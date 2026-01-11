@@ -384,6 +384,7 @@ parse_init(Arena *arena,
 			check(resolve_declaration(arena,
 			                          cursor->car,
 			                          &symbols,
+			                          types,
 			                          SYMBOL_LINKAGE_EXTERNAL));
 			break;
 		case NODE_STRUCT:

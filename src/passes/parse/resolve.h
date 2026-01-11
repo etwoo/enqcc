@@ -12,6 +12,7 @@ struct ast;
 result_t resolve_declaration(Arena *arena,
                              struct ast *a,
                              struct symbol **symbols,
+                             struct type_table **types,
                              enum symbol_linkage assume_linkage) WARN_UNUSED;
 result_t resolve_function(Arena *arena,
                           struct ast *a,

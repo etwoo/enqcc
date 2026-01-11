@@ -217,6 +217,7 @@ result_t
 resolve_declaration(Arena *arena,
                     struct ast *a,
                     struct symbol **symbols,
+                    struct type_table **types,
                     enum symbol_linkage assume_linkage)
 {
 	assert(a->node_type == NODE_DECLARATION);
@@ -288,7 +289,7 @@ resolve_declaration(Arena *arena,
 	/* sema.c detects if a->u.declare.var_type and expr_type conflict */
 
 	if (a->u.declare.init != NULL) {
-		check(resolve_expr(arena, a->u.declare.init, symbols, NULL));
+		check(resolve_expr(arena, a->u.declare.init, symbols, types));
 	}
 	return RESULT_OK;
 }
@@ -337,6 +338,7 @@ resolve_block_with_delimiter(Arena *arena,
 			check(resolve_declaration(arena,
 			                          cur_item,
 			                          sym,
+			                          types,
 			                          SYMBOL_LINKAGE_NONE));
 			break;
 		case NODE_STRUCT:
