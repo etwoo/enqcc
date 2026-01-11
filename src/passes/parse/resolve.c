@@ -249,40 +249,77 @@ resolve_expr(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-resolve_declaration_type(Arena *arena,
-                         struct ast *a,
-                         struct symbol **symbols,
-                         struct type_table **types)
+resolve_declaration_type_impl(Arena *arena,
+                              bool require_complete,
+                              struct ctype *var_type,
+                              struct symbol **symbols,
+                              struct type_table **types)
 {
-	assert(a->node_type == NODE_DECLARATION);
-
-	if (!ctype_is_struct(&a->u.declare.var_type)) {
-		// TODO: resolve struct tag_unique even if inside ptr/array
+	switch (var_type->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+	case CTYPE_DOUBLE:
+	case CTYPE_VOID:
 		return RESULT_OK;
+	case CTYPE_POINTER_TO:
+		return resolve_declaration_type_impl(arena,
+		                                     false,
+		                                     var_type->referent,
+		                                     symbols,
+		                                     types);
+	case CTYPE_ARRAY_OF:
+		return resolve_declaration_type_impl(arena,
+		                                     true,
+		                                     var_type->referent,
+		                                     symbols,
+		                                     types);
+	case CTYPE_STRUCT:
+		break;
 	}
 
-	const struct string_view *tag_name = &a->u.declare.var_type.tag_name;
+	const struct string_view *tag_name = &var_type->tag_name;
 
-	const struct symbol *tag_lookup =
+	const struct symbol *anywhere =
 		symbols_if(*symbols, tag_name, symbols_get_anywhere, is_struct);
-	if (tag_lookup == NULL) {
+	if (anywhere == NULL) {
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INVALID,
 		                   tag_name->data,
 		                   tag_name->sz);
 	}
 
-	assert(ctype_is_struct(&tag_lookup->c89type));
-	assert(tag_lookup->c89type.tag_unique != 0);
+	assert(ctype_is_struct(&anywhere->c89type));
+	assert(anywhere->c89type.tag_unique != 0);
 
-	if (ctype_is_incomplete(&tag_lookup->c89type, *types) &&
-	    a->u.declare.specifier != SPECIFIER_EXTERN) {
+	if (require_complete &&
+	    ctype_is_incomplete(&anywhere->c89type, *types)) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INCOMPLETE,
 			tag_name->data,
 			tag_name->sz);
 	}
 
-	check(ctype_copy(arena, &tag_lookup->c89type, &a->u.declare.var_type));
+	check(ctype_copy(arena, &anywhere->c89type, var_type));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_declaration_type(Arena *arena,
+                         struct ast *a,
+                         struct symbol **symbols,
+                         struct type_table **types)
+{
+	assert(a->node_type == NODE_DECLARATION);
+	const bool spec_extern = (a->u.declare.specifier == SPECIFIER_EXTERN);
+	check(resolve_declaration_type_impl(arena,
+	                                    !spec_extern,
+	                                    &a->u.declare.var_type,
+	                                    symbols,
+	                                    types));
 	return RESULT_OK;
 }
 
