@@ -367,5 +367,6 @@ ctype_is_incomplete(const struct ctype *c, struct type_table *t)
 		return false;
 	}
 	struct type_table *entry = types_find(t, c);
-	return entry == NULL || entry->n_members == 0;
+	assert(entry != NULL);
+	return entry->n_members == 0;
 }

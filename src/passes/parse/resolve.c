@@ -560,21 +560,21 @@ resolve_struct(Arena *arena,
 	                      SYMBOL_STRUCT_DEFINITION,
 	                      &head->c));
 
+	size_t n_members = 0;
 	for (struct flat *f = a->u.struct_.members; f != NULL; f = f->cdr) {
-		head->n_members++;
+		++n_members;
 	}
 
-	if (head->n_members == 0) {
+	if (n_members == 0) {
 		/* struct definition remains incomplete */
 		return RESULT_OK;
 	}
 
-	head->members =
-		arena_alloc(arena, head->n_members * sizeof(*head->members));
+	head->members = arena_alloc(arena, n_members * sizeof(*head->members));
 	check_if(head->members == NULL, ERR_CTYPE_ALLOC);
 
 	struct flat *f = a->u.struct_.members;
-	for (size_t i = 0; i < head->n_members; ++i) {
+	for (size_t i = 0; i < n_members; ++i) {
 		assert(f != NULL);
 		struct ast *ast_member = f->car;
 
@@ -600,5 +600,6 @@ resolve_struct(Arena *arena,
 		f = f->cdr;
 	}
 
+	head->n_members = n_members;
 	return RESULT_OK;
 }
