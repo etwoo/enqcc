@@ -805,10 +805,7 @@ map_declarator_to_ctype(Arena *arena,
 static WARN_UNUSED bool
 ctype_has_fragment_array_of_incomplete(const struct ctype *c)
 {
-	// TODO: traverse struct members for incomplete types
 	for (; ctype_is_pointer(c); c = c->referent) {
-		// TODO: need ctype_is_incomplete(), not just ctype_is_void()
-		// TODO: move to sema.c and use type_table?
 		if (ctype_is_array(c) && ctype_is_void(c->referent)) {
 			return true;
 		}
