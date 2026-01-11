@@ -2095,7 +2095,7 @@ enum symbol_declaration_scope {
 
 struct sema_symbol_auxiliary {
 	long long int n_args;
-	struct ctype *p_types  __attribute__((counted_by(n_args)));
+	struct ctype *p_types __attribute__((counted_by(n_args)));
 	enum symbol_declaration_scope dscope;
 };
 
