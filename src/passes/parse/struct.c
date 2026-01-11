@@ -22,9 +22,11 @@ parse_struct_declaration(Arena *arena,
 
 	assert(is_token_type(*tok, TOKEN_IDENTIFIER));
 	const struct string_view name = (**tok).val;
-	// TODO: set ast_symbol.stype?
-	(**dst_struct).u.struct_.identifier.name = name;
 	token_consume(tok);
+
+	(**dst_struct).u.struct_.struct_type.t = CTYPE_STRUCT;
+	(**dst_struct).u.struct_.struct_type.tag_name = name;
+	assert((**dst_struct).u.struct_.struct_type.tag_unique == 0);
 
 	if (is_token_type(*tok, TOKEN_SEMICOLON)) {
 		assert((**dst_struct).u.struct_.members == NULL);

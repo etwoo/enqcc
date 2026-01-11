@@ -135,7 +135,7 @@ struct ast {
 			struct flat *multi;
 		} init;
 		struct {
-			struct ast_symbol identifier;
+			struct ctype struct_type;
 			struct flat *members;
 		} struct_;
 		struct {

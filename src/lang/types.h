@@ -66,8 +66,15 @@ void ctype_array_decay_to_pointer(struct ctype *c);
 struct type_table {
 	struct ctype c;
 	size_t n_members;
-	struct ctype *members __attribute__((counted_by(n_members)));
+	struct {
+		struct string_view member_name;
+		struct ctype member_type;
+	} *members __attribute__((counted_by(n_members)));
 	struct type_table *next;
 };
+
+result_t types_prepend(Arena *arena,
+                       struct type_table **head,
+                       struct ctype *new_type) WARN_UNUSED;
 
 #endif

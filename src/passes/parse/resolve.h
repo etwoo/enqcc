@@ -20,7 +20,6 @@ result_t resolve_function(Arena *arena,
                           struct type_table **types) WARN_UNUSED;
 result_t resolve_struct(Arena *arena,
                         struct ast *a,
-                        struct symbol **symbols,
                         struct type_table **types) WARN_UNUSED;
 
 #endif

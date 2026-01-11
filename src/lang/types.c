@@ -281,17 +281,25 @@ ctype_is_equal_impl(const struct ctype *lhs,
 	if (ctype_is_array(lhs) && ctype_is_array(rhs) && lhs->sz != rhs->sz) {
 		return false;
 	}
+
 	if (((ctype_is_array(lhs) && ctype_is_pointer(rhs)) ||
 	     (ctype_is_pointer(lhs) && ctype_is_array(rhs))) &&
 	    array_to_pointer_decay) {
 		return ctype_is_equal(lhs->referent, rhs->referent);
 	}
+
 	if (lhs->t != rhs->t) {
 		return false;
 	}
+
+	if (ctype_is_struct(lhs) && lhs->tag_unique != rhs->tag_unique) {
+		return false;
+	}
+
 	if ((lhs->referent == NULL) != (rhs->referent == NULL)) {
 		return false;
 	}
+
 	return (lhs->referent == NULL && rhs->referent == NULL) ||
 	       /* array_to_pointer_decay==false for referent(s) */
 	       ctype_is_equal_impl(lhs->referent, rhs->referent, false);
@@ -313,4 +321,32 @@ ctype_array_decay_to_pointer(struct ctype *c)
 		/* leave referent as-is */
 	}
 	assert(!ctype_is_array(c));
+}
+
+result_t
+types_prepend(Arena *arena, struct type_table **head, struct ctype *new_type)
+{
+	assert(ctype_is_struct(new_type));
+	assert(new_type->tag_unique == 0);
+
+	struct type_table *node = arena_alloc(arena, sizeof(*node));
+	check_if(node == NULL, ERR_CTYPE_ALLOC);
+	memset(node, 0, sizeof(*node));
+	assert(node->n_members == 0);  /* struct def not yet complete */
+	assert(node->members == NULL); /* struct def not yet complete */
+
+	check(ctype_copy(arena, new_type, &node->c));
+	if (*head == NULL) {
+		node->c.tag_unique = 8192; /* avoid zero as struct tag ID */
+	} else {
+		node->c.tag_unique = (**head).c.tag_unique + 1;
+	}
+
+	/* unique-ify argument copy of new struct ctype, as well */
+	new_type->tag_unique = node->c.tag_unique;
+	assert(ctype_is_equal(new_type, &node->c));
+
+	node->next = *head;
+	*head = node;
+	return RESULT_OK;
 }

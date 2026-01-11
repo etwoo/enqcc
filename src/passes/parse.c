@@ -388,10 +388,7 @@ parse_init(Arena *arena,
 			                          SYMBOL_LINKAGE_EXTERNAL));
 			break;
 		case NODE_STRUCT:
-			check(resolve_struct(arena,
-			                     cursor->car,
-			                     &symbols,
-			                     types));
+			check(resolve_struct(arena, cursor->car, types));
 			break;
 		default:
 			assert(0); /* logic error in caller */

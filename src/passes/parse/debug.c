@@ -151,9 +151,12 @@ parse_debug_print(const struct ast *a, size_t indent)
 		}
 		break;
 	case NODE_STRUCT:
-		parse_debug_print_ast_symbol(NULL,
-		                             &a->u.struct_.identifier,
-		                             indent);
+		debug("%*sSTRUCT.TYPE: %s",
+		      (int)indent + 1,
+		      "",
+		      ctype_to_str(&a->u.struct_.struct_type,
+		                   tmp,
+		                   sizeof(tmp)));
 		if (a->u.struct_.members != NULL) {
 			debug("%*sMEMBERS", (int)indent + 1, "");
 			parse_debug_print_flat(a->u.struct_.members,

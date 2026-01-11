@@ -342,7 +342,7 @@ resolve_block_with_delimiter(Arena *arena,
 			                          SYMBOL_LINKAGE_NONE));
 			break;
 		case NODE_STRUCT:
-			check(resolve_struct(arena, cur_item, sym, types));
+			check(resolve_struct(arena, cur_item, types));
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
@@ -460,11 +460,45 @@ resolve_function(Arena *arena,
 }
 
 result_t
-resolve_struct(Arena *arena,
-               struct ast *a,
-               struct symbol **symbols,
-               struct type_table **types)
+resolve_struct(Arena *arena, struct ast *a, struct type_table **types)
 {
-	(void)arena; (void)a; (void)symbols; (void)types; assert(0);
+	assert(a->node_type == NODE_STRUCT);
+	assert(ctype_is_struct(&a->u.struct_.struct_type));
+	assert(a->u.struct_.struct_type.tag_unique == 0);
+
+	check(types_prepend(arena, types, &a->u.struct_.struct_type));
+	assert(a->u.struct_.struct_type.tag_unique > 0);
+
+	struct type_table *head = *types;
+	assert(ctype_is_equal(&a->u.struct_.struct_type, &head->c));
+
+	for (struct flat *f = a->u.struct_.members; f != NULL; f = f->cdr) {
+		head->n_members++;
+	}
+
+	if (head->n_members == 0) {
+		/* struct definition remains incomplete */
+		return RESULT_OK;
+	}
+
+	head->members =
+		arena_alloc(arena, head->n_members * sizeof(*head->members));
+	check_if(head->members == NULL, ERR_CTYPE_ALLOC);
+
+	struct flat *f = a->u.struct_.members;
+	for (size_t i = 0; i < head->n_members; ++i) {
+		assert(f != NULL);
+
+		struct ast *ast_member = f->car;
+		assert(ast_member->node_type == NODE_DECLARATION);
+		head->members[i].member_name =
+			ast_member->u.declare.identifier.name;
+		check(ctype_copy(arena,
+		                 &ast_member->u.declare.var_type,
+		                 &head->members[i].member_type));
+
+		f = f->cdr;
+	}
+
 	return RESULT_OK;
 }
