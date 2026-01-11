@@ -544,13 +544,12 @@ resolve_struct(Arena *arena,
 	assert(ctype_is_struct(&a->u.struct_.struct_type));
 	assert(a->u.struct_.struct_type.tag_unique == 0);
 
-	struct string_view *tag_name = &a->u.struct_.struct_type.tag_name;
+	const struct string_view *tag_name = &a->u.struct_.struct_type.tag_name;
 	const bool is_complete = (a->u.struct_.members != NULL);
 	struct type_table *out = NULL;
 
 	const struct symbol *in_scope =
 		symbols_if(*symbols, tag_name, symbols_get_limited, is_struct);
-
 	if (in_scope == NULL) {
 		check(types_prepend(arena, types, &a->u.struct_.struct_type));
 		assert(a->u.struct_.struct_type.tag_unique > 0);
@@ -573,7 +572,6 @@ resolve_struct(Arena *arena,
 		                 &in_scope->c89type,
 		                 &a->u.struct_.struct_type));
 		out = types_find(*types, &in_scope->c89type);
-		assert(out != NULL);
 	}
 	assert(out != NULL);
 
