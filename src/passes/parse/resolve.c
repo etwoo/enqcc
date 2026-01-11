@@ -251,11 +251,11 @@ resolve_expr(Arena *arena,
 static WARN_UNUSED result_t
 resolve_type(Arena *arena,
              bool require_complete,
-             struct ctype *var_type,
+             struct ctype *c,
              struct symbol **symbols,
              struct type_table **types)
 {
-	switch (var_type->t) {
+	switch (c->t) {
 	case CTYPE_CHAR:
 	case CTYPE_SIGNED_CHAR:
 	case CTYPE_UNSIGNED_CHAR:
@@ -267,22 +267,14 @@ resolve_type(Arena *arena,
 	case CTYPE_VOID:
 		return RESULT_OK;
 	case CTYPE_POINTER_TO:
-		return resolve_type(arena,
-		                    false,
-		                    var_type->referent,
-		                    symbols,
-		                    types);
+		return resolve_type(arena, false, c->referent, symbols, types);
 	case CTYPE_ARRAY_OF:
-		return resolve_type(arena,
-		                    true,
-		                    var_type->referent,
-		                    symbols,
-		                    types);
+		return resolve_type(arena, true, c->referent, symbols, types);
 	case CTYPE_STRUCT:
 		break;
 	}
 
-	const struct string_view *tag_name = &var_type->tag_name;
+	const struct string_view *tag_name = &c->tag_name;
 
 	const struct symbol *anywhere =
 		symbols_if(*symbols, tag_name, symbols_get_anywhere, is_struct);
@@ -303,7 +295,7 @@ resolve_type(Arena *arena,
 			tag_name->sz);
 	}
 
-	check(ctype_copy(arena, &anywhere->c89type, var_type));
+	check(ctype_copy(arena, &anywhere->c89type, c));
 	return RESULT_OK;
 }
 
