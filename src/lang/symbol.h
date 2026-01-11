@@ -39,7 +39,7 @@ struct constant_bytes {
 
 struct constant_initializer {
 	long long unsigned count;
-	struct constant_bytes *elements;
+	struct constant_bytes *elements __attribute__((counted_by(count)));
 };
 
 long long unsigned get_double_as_quadword(double value) WARN_UNUSED;

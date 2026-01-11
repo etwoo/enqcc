@@ -353,7 +353,8 @@ result_t
 parse_init(Arena *arena,
            const struct token *tok,
            struct ast **a,
-           long long int *generator)
+           long long int *generator,
+           struct type_table **types)
 {
 	check(parse_alloc(arena, a, NODE_PROGRAM));
 
@@ -374,7 +375,10 @@ parse_init(Arena *arena,
 		assert(cursor->car != NULL);
 		switch (cursor->car->node_type) {
 		case NODE_FUNCTION:
-			check(resolve_function(arena, cursor->car, &symbols));
+			check(resolve_function(arena,
+			                       cursor->car,
+			                       &symbols,
+			                       types));
 			break;
 		case NODE_DECLARATION:
 			check(resolve_declaration(arena,
@@ -383,7 +387,10 @@ parse_init(Arena *arena,
 			                          SYMBOL_LINKAGE_EXTERNAL));
 			break;
 		case NODE_STRUCT:
-			// assert(0 && "TODO resolve_struct_declaration()");
+			check(resolve_struct(arena,
+			                     cursor->car,
+			                     &symbols,
+			                     types));
 			break;
 		default:
 			assert(0); /* logic error in caller */

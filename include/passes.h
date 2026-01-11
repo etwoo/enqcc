@@ -11,11 +11,14 @@ result_t lex_init(Arena *arena, const char *src, struct token **tok)
 void lex_debug_print(const struct token *tok);
 
 struct ast;
+struct type_table;
 
 result_t parse_init(Arena *arena,
                     const struct token *tok,
                     struct ast **a,
-                    long long *generator) __attribute__((warn_unused_result));
+                    long long *generator,
+                    struct type_table **types)
+	__attribute__((warn_unused_result));
 void parse_debug_print(const struct ast *a, size_t indent);
 
 struct symbol;

@@ -74,8 +74,9 @@ compile(Arena *arena,
 
 	struct ast *a = NULL;
 	long long int id_generator = 0;
+	struct type_table *t = NULL;
 
-	check(parse_init(arena, tok, &a, skip_sema ? NULL : &id_generator));
+	check(parse_init(arena, tok, &a, skip_sema ? NULL : &id_generator, &t));
 	parse_debug_print(a, 0);
 
 	if (skip_sema) {

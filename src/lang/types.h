@@ -63,4 +63,11 @@ bool ctype_is_equal(const struct ctype *lhs,
                     const struct ctype *rhs) WARN_UNUSED;
 void ctype_array_decay_to_pointer(struct ctype *c);
 
+struct type_table {
+	struct ctype c;
+	size_t n_members;
+	struct ctype *members __attribute__((counted_by(n_members)));
+	struct type_table *next;
+};
+
 #endif

@@ -65,11 +65,16 @@ resolve_function_call(Arena *arena,
 	return RESULT_OK;
 }
 
-static result_t
-resolve_block(Arena *arena, struct flat *a, struct symbol **sym) WARN_UNUSED;
+static result_t resolve_block(Arena *arena,
+                              struct flat *a,
+                              struct symbol **sym,
+                              struct type_table **types) WARN_UNUSED;
 
 static WARN_UNUSED result_t
-resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
+resolve_expr(Arena *arena,
+             struct ast *a,
+             struct symbol **sym,
+             struct type_table **typ)
 {
 	if (a == NULL) {
 		return RESULT_OK;
@@ -84,14 +89,14 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		assert(0); /* logic error in caller */
 		break;
 	case NODE_IF_ELSE:
-		check(resolve_expr(arena, a->u.if_.condition, sym));
-		check(resolve_block(arena, a->u.if_.then_clause, sym));
-		check(resolve_block(arena, a->u.if_.else_clause, sym));
+		check(resolve_expr(arena, a->u.if_.condition, sym, typ));
+		check(resolve_block(arena, a->u.if_.then_clause, sym, typ));
+		check(resolve_block(arena, a->u.if_.else_clause, sym, typ));
 		break;
 	case NODE_LOOP:
-		check(resolve_expr(arena, a->u.loop.precond, sym));
-		check(resolve_expr(arena, a->u.loop.postcond, sym));
-		check(resolve_expr(arena, a->u.loop.incr, sym));
+		check(resolve_expr(arena, a->u.loop.precond, sym, typ));
+		check(resolve_expr(arena, a->u.loop.postcond, sym, typ));
+		check(resolve_expr(arena, a->u.loop.incr, sym, typ));
 		/*
 		 * Recurse into u.loop.body only _after_ resolving variables in
 		 * u.loop.postcond and u.loop.incr. This prevents variables
@@ -109,11 +114,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		 *        int y = 100;
 		 *    }
 		 */
-		check(resolve_block(arena, a->u.loop.body, sym));
+		check(resolve_block(arena, a->u.loop.body, sym, typ));
 		break;
 	case NODE_SWITCH:
-		check(resolve_expr(arena, a->u.switch_.control, sym));
-		check(resolve_block(arena, a->u.switch_.body, sym));
+		check(resolve_expr(arena, a->u.switch_.control, sym, typ));
+		check(resolve_block(arena, a->u.switch_.body, sym, typ));
 		break;
 	case NODE_BREAK:
 	case NODE_CONTINUE:
@@ -126,9 +131,9 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_CONSTANT_STR:
 		break; /* no resolution work to do */
 	case NODE_EXPRESSION_INITIALIZER:
-		check(resolve_expr(arena, a->u.init.single, sym));
+		check(resolve_expr(arena, a->u.init.single, sym, typ));
 		for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
-			check(resolve_expr(arena, f->car, sym));
+			check(resolve_expr(arena, f->car, sym, typ));
 		}
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
@@ -143,7 +148,7 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		check(resolve_expr(arena, a->u.op_unary.operand, sym));
+		check(resolve_expr(arena, a->u.op_unary.operand, sym, typ));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -175,20 +180,20 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 	case NODE_EXPRESSION_COMPOUND_ASSIGN_SR:
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 	case NODE_EXPRESSION_SUBSCRIPT:
-		check(resolve_expr(arena, a->u.op_binary.lhs, sym));
-		check(resolve_expr(arena, a->u.op_binary.rhs, sym));
+		check(resolve_expr(arena, a->u.op_binary.lhs, sym, typ));
+		check(resolve_expr(arena, a->u.op_binary.rhs, sym, typ));
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		check(resolve_var_usage(arena, *sym, &a->u.var, &a->expr_type));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-		check(resolve_expr(arena, a->u.op_ternary.condition, sym));
-		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym));
-		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym));
+		check(resolve_expr(arena, a->u.op_ternary.condition, sym, typ));
+		check(resolve_expr(arena, a->u.op_ternary.then_expr, sym, typ));
+		check(resolve_expr(arena, a->u.op_ternary.else_expr, sym, typ));
 		break;
 	case NODE_EXPRESSION_STRUCT_MEMBER:
 	case NODE_EXPRESSION_STRUCT_POINTER:
-		check(resolve_expr(arena, a->u.member_access.lhs, sym));
+		check(resolve_expr(arena, a->u.member_access.lhs, sym, typ));
 		// TODO: resolve RHS of struct member access
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
@@ -197,11 +202,11 @@ resolve_expr(Arena *arena, struct ast *a, struct symbol **sym)
 		                            &a->u.call.identifier,
 		                            &a->expr_type));
 		for (struct flat *f = a->u.call.args; f != NULL; f = f->cdr) {
-			check(resolve_expr(arena, f->car, sym));
+			check(resolve_expr(arena, f->car, sym, typ));
 		}
 		break;
 	case NODE_EXPRESSION_CAST:
-		check(resolve_expr(arena, a->u.cast.expr, sym));
+		check(resolve_expr(arena, a->u.cast.expr, sym, typ));
 		break;
 	}
 
@@ -242,6 +247,8 @@ resolve_declaration(Arena *arena,
 		}
 	}
 
+	// TODO: propagate struct tag_unique to u.declare.var_type?
+
 	const struct symbol *resolved = NULL;
 	if (in_scope != NULL) {
 		resolved = in_scope;
@@ -281,7 +288,7 @@ resolve_declaration(Arena *arena,
 	/* sema.c detects if a->u.declare.var_type and expr_type conflict */
 
 	if (a->u.declare.init != NULL) {
-		check(resolve_expr(arena, a->u.declare.init, symbols));
+		check(resolve_expr(arena, a->u.declare.init, symbols, NULL));
 	}
 	return RESULT_OK;
 }
@@ -309,7 +316,8 @@ static WARN_UNUSED result_t
 resolve_block_with_delimiter(Arena *arena,
                              struct flat *a,
                              struct symbol **sym,
-                             struct symbol *level_delimiter_point)
+                             struct symbol *level_delimiter_point,
+                             struct type_table **types)
 {
 	assert(*sym != NULL);
 
@@ -323,7 +331,7 @@ resolve_block_with_delimiter(Arena *arena,
 		struct symbol *resetter = NULL;
 		switch (cur_item->node_type) {
 		case NODE_FUNCTION:
-			check(resolve_function(arena, cur_item, sym));
+			check(resolve_function(arena, cur_item, sym, types));
 			break;
 		case NODE_DECLARATION:
 			check(resolve_declaration(arena,
@@ -331,17 +339,19 @@ resolve_block_with_delimiter(Arena *arena,
 			                          sym,
 			                          SYMBOL_LINKAGE_NONE));
 			break;
-		case NODE_STRUCT: // TODO: resolve_block_with_delimiter()
+		case NODE_STRUCT:
+			check(resolve_struct(arena, cur_item, sym, types));
 			break;
 		case NODE_BLOCK:
 			resetter = *sym;
 			check(resolve_block(arena,
 			                    cur_item->u.block.statements,
-			                    sym));
+			                    sym,
+			                    types));
 			symbols_reset_scope(sym, resetter);
 			break;
 		default:
-			check(resolve_expr(arena, cur_item, sym));
+			check(resolve_expr(arena, cur_item, sym, types));
 			break;
 		}
 	}
@@ -354,9 +364,12 @@ resolve_block_with_delimiter(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-resolve_block(Arena *arena, struct flat *a, struct symbol **sym)
+resolve_block(Arena *arena,
+              struct flat *a,
+              struct symbol **sym,
+              struct type_table **types)
 {
-	check(resolve_block_with_delimiter(arena, a, sym, *sym));
+	check(resolve_block_with_delimiter(arena, a, sym, *sym, types));
 	return RESULT_OK;
 }
 
@@ -365,6 +378,13 @@ resolve_function_params_one(Arena *arena,
                             struct ast_parameter *a,
                             struct symbol **sym)
 {
+	// TODO: if ast_parameter.parameter_type is struct, look up
+	// parameter_type.tag_name in symbol table, update
+	// ast_parameter.parameter_type.tag_unique accordingly
+	//
+	// TODO: if these params preface a function definition (not just
+	// declaration), raise error if struct type is incomplete
+
 	struct ctype adjust_type = {0};
 	check(ctype_copy(arena, &a->parameter_type, &adjust_type));
 	ctype_array_decay_to_pointer(&adjust_type);
@@ -393,7 +413,10 @@ resolve_function_params(Arena *arena,
 }
 
 result_t
-resolve_function(Arena *arena, struct ast *a, struct symbol **symbols)
+resolve_function(Arena *arena,
+                 struct ast *a,
+                 struct symbol **symbols,
+                 struct type_table **types)
 {
 	assert(a->node_type == NODE_FUNCTION);
 
@@ -423,12 +446,23 @@ resolve_function(Arena *arena, struct ast *a, struct symbol **symbols)
 		check(resolve_block_with_delimiter(arena,
 		                                   function_body,
 		                                   symbols,
-		                                   before_params));
+		                                   before_params,
+		                                   types));
 	}
 
 	symbols_reset_scope(symbols, before_params);
 	if (cleanup) {
 		before_params->level_delimiter = false;
 	}
+	return RESULT_OK;
+}
+
+result_t
+resolve_struct(Arena *arena,
+               struct ast *a,
+               struct symbol **symbols,
+               struct type_table **types)
+{
+	(void)arena; (void)a; (void)symbols; (void)types; assert(0);
 	return RESULT_OK;
 }
