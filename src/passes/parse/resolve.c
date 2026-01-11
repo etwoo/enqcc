@@ -18,17 +18,52 @@ map_symbol_members(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED struct symbol *
+symbols_if(struct symbol *head,
+           const struct string_view *name,
+           struct symbol *(*find)(struct symbol *, const struct string_view *),
+           bool (*accept)(const struct symbol *))
+{
+	while (true) {
+		struct symbol *candidate = find(head, name);
+		if (candidate == NULL) {
+			break;
+		}
+		if (accept(candidate)) {
+			return candidate;
+		}
+		head = candidate->next;
+	}
+	return NULL;
+}
+
+static WARN_UNUSED bool
+fn_or_var(const struct symbol *sym)
+{
+	return sym->stype == SYMBOL_VARIABLE ||
+	       sym->stype == SYMBOL_FUNCTION_DECLARATION ||
+	       sym->stype == SYMBOL_FUNCTION_DEFINITION;
+}
+
+static WARN_UNUSED bool
+is_struct(const struct symbol *sym)
+{
+	return sym->stype == SYMBOL_STRUCT_DEFINITION;
+}
+
 static WARN_UNUSED result_t
-resolve_symbol(Arena *arena,
-               struct symbol *head,
-               struct ast_symbol *asym,
-               struct ctype *expr_type,
-               unsigned errtype)
+resolve_fn_or_var(Arena *arena,
+                  struct symbol *head,
+                  struct ast_symbol *asym,
+                  struct ctype *expr_type,
+                  unsigned errtype)
 {
 	static_assert(NOT_YET_UNIQUE < 0, "sentinel must be a negative number");
 	assert(asym->unique == NOT_YET_UNIQUE);
 
-	const struct symbol *resolved = symbols_get_anywhere(head, &asym->name);
+	const struct string_view *name = &asym->name;
+	const struct symbol *resolved =
+		symbols_if(head, name, symbols_get_anywhere, &fn_or_var);
 	if (resolved == NULL) {
 		return make_result(errtype, asym->name.data, asym->name.sz);
 	}
@@ -43,11 +78,11 @@ resolve_var_usage(Arena *arena,
                   struct ast_symbol *var,
                   struct ctype *expr_type)
 {
-	check(resolve_symbol(arena,
-	                     head,
-	                     var,
-	                     expr_type,
-	                     ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION));
+	check(resolve_fn_or_var(arena,
+	                        head,
+	                        var,
+	                        expr_type,
+	                        ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION));
 	return RESULT_OK;
 }
 
@@ -57,11 +92,11 @@ resolve_function_call(Arena *arena,
                       struct ast_symbol *callee,
                       struct ctype *return_type)
 {
-	check(resolve_symbol(arena,
-	                     head,
-	                     callee,
-	                     return_type,
-	                     ERR_SEMA_FUNCTION_CALL_UNDECLARED));
+	check(resolve_fn_or_var(arena,
+	                        head,
+	                        callee,
+	                        return_type,
+	                        ERR_SEMA_FUNCTION_CALL_UNDECLARED));
 	return RESULT_OK;
 }
 
@@ -213,6 +248,44 @@ resolve_expr(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+resolve_declaration_type(Arena *arena,
+                         struct ast *a,
+                         struct symbol **symbols,
+                         struct type_table **types)
+{
+	assert(a->node_type == NODE_DECLARATION);
+
+	if (!ctype_is_struct(&a->u.declare.var_type)) {
+		// TODO: resolve struct tag_unique even if inside ptr/array
+		return RESULT_OK;
+	}
+
+	const struct string_view *tag_name = &a->u.declare.var_type.tag_name;
+
+	const struct symbol *tag_lookup =
+		symbols_if(*symbols, tag_name, symbols_get_anywhere, is_struct);
+	if (tag_lookup == NULL) {
+		return make_result(ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INVALID,
+		                   tag_name->data,
+		                   tag_name->sz);
+	}
+
+	assert(ctype_is_struct(&tag_lookup->c89type));
+	assert(tag_lookup->c89type.tag_unique != 0);
+
+	if (ctype_is_incomplete(&tag_lookup->c89type, *types) &&
+	    a->u.declare.specifier != SPECIFIER_EXTERN) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INCOMPLETE,
+			tag_name->data,
+			tag_name->sz);
+	}
+
+	check(ctype_copy(arena, &tag_lookup->c89type, &a->u.declare.var_type));
+	return RESULT_OK;
+}
+
 result_t
 resolve_declaration(Arena *arena,
                     struct ast *a,
@@ -221,6 +294,7 @@ resolve_declaration(Arena *arena,
                     enum symbol_linkage assume_linkage)
 {
 	assert(a->node_type == NODE_DECLARATION);
+	check(resolve_declaration_type(arena, a, symbols, types));
 
 	const struct string_view *varname = &a->u.declare.identifier.name;
 	const enum symbol_linkage linkage =
@@ -229,7 +303,8 @@ resolve_declaration(Arena *arena,
 	                    ? SYMBOL_LINKAGE_EXTERNAL
 	                    : SYMBOL_LINKAGE_NONE);
 
-	const struct symbol *in_scope = symbols_get_limited(*symbols, varname);
+	const struct symbol *in_scope =
+		symbols_if(*symbols, varname, symbols_get_limited, fn_or_var);
 	if (in_scope != NULL) {
 		if (is_external(in_scope->linkage.linkage) &&
 		    is_external(linkage)) {
@@ -248,22 +323,14 @@ resolve_declaration(Arena *arena,
 		}
 	}
 
-	if (ctype_is_struct(&a->u.declare.var_type)) {
-		// TODO: look up struct tag by *name*, obeying scoping rules
-		//   -> use <symbols> (with scoping), not type_table (global)
-		// if no match -> error on nonexistent struct type
-		// if match, check if type complete
-		// if incomplete && !decl_extern -> error
-		// if match && complete -> update u.declare.var_type tag_unique
-		// essentially, propagate value generated by resolve_struct()
-	}
-
 	const struct symbol *resolved = NULL;
 	if (in_scope != NULL) {
 		resolved = in_scope;
 	} else {
-		const struct symbol *anywhere =
-			symbols_get_anywhere(*symbols, varname);
+		const struct symbol *anywhere = symbols_if(*symbols,
+		                                           varname,
+		                                           symbols_get_anywhere,
+		                                           fn_or_var);
 
 		check(symbols_prepend(arena,
 		                      symbols,
@@ -487,10 +554,6 @@ resolve_struct(Arena *arena,
 	// should be completed in-place, instead of prepending totally new
 	// entry to symbols list
 	// TODO: check for redefinition in same scope (conflict)
-	// TODO: update symbols_get_* calls in this file to filter by symbol
-	// type; important for variable lookup to "see past" potential struct
-	// with same tag name as variable name, in order to resolve correctly
-	// to latter instead of spuriously conflicting on the former
 	check(symbols_prepend(arena,
 	                      symbols,
 	                      &head->c.tag_name,
@@ -513,9 +576,21 @@ resolve_struct(Arena *arena,
 	struct flat *f = a->u.struct_.members;
 	for (size_t i = 0; i < head->n_members; ++i) {
 		assert(f != NULL);
-
 		struct ast *ast_member = f->car;
+
 		assert(ast_member->node_type == NODE_DECLARATION);
+		check(resolve_declaration_type(arena,
+		                               ast_member,
+		                               symbols,
+		                               types));
+		if (ctype_is_incomplete(&ast_member->u.declare.var_type,
+		                        *types)) {
+			return make_result(
+				ERR_SEMA_STRUCT_MEMBER_TYPE_INCOMPLETE,
+				ast_member->u.declare.identifier.name.data,
+				ast_member->u.declare.identifier.name.sz);
+		}
+
 		head->members[i].member_name =
 			ast_member->u.declare.identifier.name;
 		check(ctype_copy(arena,

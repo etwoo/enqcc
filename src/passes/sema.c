@@ -1693,7 +1693,8 @@ sema_incomplete_types(struct ast *a, void *userdata MAYBE_UNUSED)
 {
 	if (a->node_type == NODE_EXPRESSION_UNARY_SIZE_OF) {
 		assert(ctype_is_equal(&a->expr_type, &LIKE_SIZE_T));
-		if (ctype_is_incomplete(&a->u.op_unary.operand->expr_type)) {
+		if (ctype_is_incomplete(&a->u.op_unary.operand->expr_type,
+		                        NULL /* TODO: use type_table */)) {
 			return make_result(ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE);
 		}
 	}

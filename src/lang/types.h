@@ -54,7 +54,6 @@ bool ctype_is_strlike_ptr(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_void(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_void_ptr(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_struct(const struct ctype *c) WARN_UNUSED;
-bool ctype_is_incomplete(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_ptr_to_incomplete(const struct ctype *c) WARN_UNUSED;
 bool ctype_nullptr_ish(const struct ctype *c) WARN_UNUSED;
 const struct ctype *get_common_ctype(const struct ctype *lhs,
@@ -76,5 +75,9 @@ struct type_table {
 result_t types_prepend(Arena *arena,
                        struct type_table **head,
                        struct ctype *new_type) WARN_UNUSED;
+struct type_table *types_find(struct type_table *head,
+                              const struct ctype *needle) WARN_UNUSED;
+bool ctype_is_incomplete(const struct ctype *c,
+                         struct type_table *t) WARN_UNUSED;
 
 #endif

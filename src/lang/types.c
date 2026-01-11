@@ -243,12 +243,6 @@ ctype_is_struct(const struct ctype *c)
 }
 
 bool
-ctype_is_incomplete(const struct ctype *c)
-{
-	return ctype_is_void(c);
-}
-
-bool
 ctype_is_ptr_to_incomplete(const struct ctype *c)
 {
 	return ctype_is_void_ptr(c);
@@ -349,4 +343,26 @@ types_prepend(Arena *arena, struct type_table **head, struct ctype *new_type)
 	node->next = *head;
 	*head = node;
 	return RESULT_OK;
+}
+
+struct type_table *
+types_find(struct type_table *head, const struct ctype *needle)
+{
+	while (head != NULL) {
+		if (ctype_is_equal(needle, &head->c)) {
+			return head;
+		}
+		head = head->next;
+	}
+	return NULL;
+}
+
+bool
+ctype_is_incomplete(const struct ctype *c, struct type_table *t)
+{
+	if (ctype_is_void(c)) {
+		return true;
+	}
+	struct type_table *entry = types_find(t, c);
+	return entry == NULL || entry->n_members == 0;
 }

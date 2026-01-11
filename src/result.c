@@ -557,6 +557,10 @@ result_to_str(result_t r)
 	case ERR_SEMA_RETURN_STATEMENT_EXPECT_VOID:
 		s = strdup("void function should not return a value");
 		break;
+	case ERR_SEMA_STRUCT_MEMBER_TYPE_INCOMPLETE:
+		s = my_asprintf("Struct member '%s' has incomplete type",
+		                r.msg);
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE:
 		s = strdup("Invalid lvalue in variable assignment");
 		break;
@@ -607,6 +611,16 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION:
 		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INCOMPLETE:
+		s = my_asprintf("Invalid variable declaration using incomplete "
+		                "struct type: %s",
+		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INVALID:
+		s = my_asprintf("Invalid variable declaration using "
+		                "nonexistent struct type: %s",
+		                r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_STATIC_INIT:
 		s = my_asprintf("Block-scope variable %s with static storage "

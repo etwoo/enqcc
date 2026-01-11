@@ -1041,7 +1041,7 @@ ir_sizeof(Arena *arena, const struct ast *a, struct ir_val *return_value)
 
 	assert(a->node_type == NODE_EXPRESSION_UNARY_SIZE_OF);
 	const struct ctype *inner_type = &a->u.op_unary.operand->expr_type;
-	assert(!ctype_is_incomplete(inner_type));
+	assert(!ctype_is_void(inner_type));
 	return_value->num = ctype_to_size_bytes(inner_type);
 
 	assert(ctype_is_integer(&a->expr_type));
