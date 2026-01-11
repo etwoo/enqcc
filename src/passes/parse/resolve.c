@@ -249,11 +249,11 @@ resolve_expr(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-resolve_declaration_type_impl(Arena *arena,
-                              bool require_complete,
-                              struct ctype *var_type,
-                              struct symbol **symbols,
-                              struct type_table **types)
+resolve_type(Arena *arena,
+             bool require_complete,
+             struct ctype *var_type,
+             struct symbol **symbols,
+             struct type_table **types)
 {
 	switch (var_type->t) {
 	case CTYPE_CHAR:
@@ -267,17 +267,17 @@ resolve_declaration_type_impl(Arena *arena,
 	case CTYPE_VOID:
 		return RESULT_OK;
 	case CTYPE_POINTER_TO:
-		return resolve_declaration_type_impl(arena,
-		                                     false,
-		                                     var_type->referent,
-		                                     symbols,
-		                                     types);
+		return resolve_type(arena,
+		                    false,
+		                    var_type->referent,
+		                    symbols,
+		                    types);
 	case CTYPE_ARRAY_OF:
-		return resolve_declaration_type_impl(arena,
-		                                     true,
-		                                     var_type->referent,
-		                                     symbols,
-		                                     types);
+		return resolve_type(arena,
+		                    true,
+		                    var_type->referent,
+		                    symbols,
+		                    types);
 	case CTYPE_STRUCT:
 		break;
 	}
@@ -315,11 +315,8 @@ resolve_declaration_type(Arena *arena,
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const bool spec_extern = (a->u.declare.specifier == SPECIFIER_EXTERN);
-	check(resolve_declaration_type_impl(arena,
-	                                    !spec_extern,
-	                                    &a->u.declare.var_type,
-	                                    symbols,
-	                                    types));
+	struct ctype *var_type = &a->u.declare.var_type;
+	check(resolve_type(arena, !spec_extern, var_type, symbols, types));
 	return RESULT_OK;
 }
 
