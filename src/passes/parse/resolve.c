@@ -554,6 +554,9 @@ resolve_struct(Arena *arena,
 	// should be completed in-place, instead of prepending totally new
 	// entry to symbols list
 	// TODO: check for redefinition in same scope (conflict)
+	// TODO: allow redeclaration in same scope if newer declaration has no
+	// members; in this case, do _not_ clobber existing definition, instead
+	// leave n_members>0, members array, etc as-is
 	check(symbols_prepend(arena,
 	                      symbols,
 	                      &head->c.tag_name,
