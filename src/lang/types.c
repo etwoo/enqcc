@@ -363,6 +363,9 @@ ctype_is_incomplete(const struct ctype *c, struct type_table *t)
 	if (ctype_is_void(c)) {
 		return true;
 	}
+	if (!ctype_is_struct(c)) {
+		return false;
+	}
 	struct type_table *entry = types_find(t, c);
 	return entry == NULL || entry->n_members == 0;
 }
