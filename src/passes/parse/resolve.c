@@ -593,8 +593,8 @@ resolve_struct(Arena *arena,
 	for (size_t i = 0; i < n_members; ++i) {
 		assert(f != NULL);
 		struct ast *ast_member = f->car;
-
 		assert(ast_member->node_type == NODE_DECLARATION);
+
 		check(resolve_declaration_type(arena,
 		                               ast_member,
 		                               symbols,
