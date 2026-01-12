@@ -458,6 +458,10 @@ result_to_str(result_t r)
 		s = strdup("String literal can only serve as initializor for "
 		           "variable of type char buffer or char pointer");
 		break;
+	case ERR_SEMA_INIT_STRUCT_MISMATCH:
+		s = strdup("Incompatible struct types in variable declaration "
+		           "and initializer");
+		break;
 	case ERR_SEMA_LABEL_DUPLICATE:
 		s = my_asprintf("Duplicate label: %s", r.msg);
 		break;

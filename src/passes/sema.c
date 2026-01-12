@@ -1420,6 +1420,13 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
+{
+	return (ctype_is_struct(lhs) != ctype_is_struct(rhs)) ||
+	       (ctype_is_struct(lhs) && !ctype_is_equal(lhs, rhs));
+}
+
 /*
  * See sema_implicit_cast_initializer() for related logic.
  */
@@ -1440,6 +1447,10 @@ sema_expr_types_initializer(Arena *arena,
 		if (ctype_is_aggregate(declaration_type) &&
 		    !ctype_is_aggregate(&init->u.init.single->expr_type)) {
 			return make_result(ERR_SEMA_INIT_COMPOUND_WITH_SCALAR);
+		}
+		if (ctype_is_struct_mismatch(declaration_type,
+		                             &init->u.init.single->expr_type)) {
+			return make_result(ERR_SEMA_INIT_STRUCT_MISMATCH);
 		}
 		/*
 		 * For scalar init, copy upward from constant to containing
@@ -2177,13 +2188,6 @@ sema_implicit_cast_initializer(Arena *arena,
 		++element_count;
 	}
 	return RESULT_OK;
-}
-
-static WARN_UNUSED bool
-ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
-{
-	return (ctype_is_struct(lhs) != ctype_is_struct(rhs)) ||
-	       (ctype_is_struct(lhs) && !ctype_is_equal(lhs, rhs));
 }
 
 struct sema_implicit_cast_state {
