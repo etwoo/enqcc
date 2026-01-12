@@ -44,7 +44,9 @@ is_node_lvalue(const struct ast *a)
 	}
 	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
 	       (a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE &&
-	        !ctype_is_void_ptr(&a->u.op_unary.operand->expr_type));
+	        !ctype_is_void_ptr(&a->u.op_unary.operand->expr_type)) ||
+	       (a->node_type == NODE_EXPRESSION_STRUCT_MEMBER &&
+	        is_node_lvalue(a->u.member_access.lhs));
 }
 
 static WARN_UNUSED const struct ast *
@@ -1154,7 +1156,7 @@ sema_str_literal(struct ast *a, void *userdata)
 static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
-	bool allow_array = false;
+	bool allow_aggregate = false;
 
 	const struct ast *to_check = NULL;
 	switch (a->node_type) {
@@ -1169,7 +1171,7 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 		break;
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 		to_check = a->u.op_unary.operand;
-		allow_array = true;
+		allow_aggregate = true;
 		break;
 	default:
 		return RESULT_OK;
@@ -1183,9 +1185,13 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE);
 	}
 
-	if (!allow_array && ctype_is_array(&to_check->expr_type)) {
+	if (allow_aggregate) {
+	} else if (ctype_is_array(&to_check->expr_type)) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY);
+	} else if (ctype_is_struct(&to_check->expr_type)) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_STRUCT);
 	}
 
 	return RESULT_OK;

@@ -583,6 +583,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY:
 		s = strdup("Array type is not assignable");
 		break;
+	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_STRUCT:
+		s = strdup("Struct type is not assignable");
+		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE:
 		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
 		break;
