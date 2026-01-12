@@ -256,6 +256,11 @@ resolve_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_CAST:
 		check(resolve_expr(arena, a->u.cast.expr, sym, typ));
+		check(resolve_type(arena,
+		                   ERR_SEMA_OPERAND_CAST_INCOMPLETE,
+		                   &a->u.cast.to_type,
+		                   sym,
+		                   typ));
 		break;
 	}
 

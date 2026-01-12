@@ -513,6 +513,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_OPERAND_ADDRESS_OF_INVALID:
 		s = strdup("Address-of operator & requires lvalue argument");
 		break;
+	case ERR_SEMA_OPERAND_CAST_INCOMPLETE:
+		s = strdup("Cast requires complete type");
+		break;
 	case ERR_SEMA_OPERAND_CHAR_ARRAY_SIZE:
 		s = strdup("String initializer for char array is too long");
 		break;
