@@ -249,12 +249,6 @@ ctype_is_aggregate(const struct ctype *c)
 }
 
 bool
-ctype_is_ptr_to_incomplete(const struct ctype *c)
-{
-	return ctype_is_void_ptr(c);
-}
-
-bool
 ctype_nullptr_ish(const struct ctype *c)
 {
 	return c->maybe_null_pointer_constant;
@@ -393,6 +387,12 @@ ctype_is_incomplete(const struct ctype *c, struct type_table *t)
 	}
 
 	return result;
+}
+
+bool
+ctype_is_ptr_to_incomplete(const struct ctype *c, struct type_table *t)
+{
+	return c->t == CTYPE_POINTER_TO && ctype_is_incomplete(c->referent, t);
 }
 
 struct ctype *

@@ -2023,7 +2023,7 @@ sema_pointer_cmp(const struct ctype *lhs, const struct ctype *rhs)
 }
 
 static WARN_UNUSED result_t
-sema_pointer_cmp_ptr_math(struct ast *a)
+sema_pointer_cmp_ptr_math(struct ast *a, struct type_table *types)
 {
 	switch (a->node_type) {
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -2034,17 +2034,19 @@ sema_pointer_cmp_ptr_math(struct ast *a)
 		           ctype_is_pointer(&a->u.op_binary.rhs->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_BOTH);
 		} else if (ctype_is_ptr_to_incomplete(
-				   &a->u.op_binary.lhs->expr_type) ||
+				   &a->u.op_binary.lhs->expr_type,
+				   types) ||
 		           ctype_is_ptr_to_incomplete(
-				   &a->u.op_binary.rhs->expr_type)) {
+				   &a->u.op_binary.rhs->expr_type,
+				   types)) {
 			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
 		}
 		break;
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
-		if (ctype_is_ptr_to_incomplete(
-			    &a->u.op_binary.lhs->expr_type) ||
-		    ctype_is_ptr_to_incomplete(
-			    &a->u.op_binary.rhs->expr_type)) {
+		if (ctype_is_ptr_to_incomplete(&a->u.op_binary.lhs->expr_type,
+		                               types) ||
+		    ctype_is_ptr_to_incomplete(&a->u.op_binary.rhs->expr_type,
+		                               types)) {
 			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
 		}
 		if (ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
@@ -2067,6 +2069,7 @@ sema_pointer_cmp_ptr_math(struct ast *a)
 
 struct sema_pointer_state {
 	Arena *arena;
+	struct type_table *types;
 	struct ctype expected_return_type;
 };
 
@@ -2075,6 +2078,7 @@ sema_pointer(struct ast *a, void *userdata)
 {
 	struct sema_pointer_state *state = userdata;
 	Arena *arena = state->arena;
+	struct type_table *types = state->types;
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
@@ -2127,13 +2131,14 @@ sema_pointer(struct ast *a, void *userdata)
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		if (ctype_is_ptr_to_incomplete(
-			    &a->u.op_unary.operand->expr_type)) {
+			    &a->u.op_unary.operand->expr_type,
+			    types)) {
 			return make_result(ERR_SEMA_OPERAND_ADD_POINTER_VOID);
 		}
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
-		check(sema_pointer_cmp_ptr_math(a));
+		check(sema_pointer_cmp_ptr_math(a, types));
 		break;
 	case NODE_EXPRESSION_COMPARE_EQUAL:
 	case NODE_EXPRESSION_COMPARE_NOT_EQUAL:
@@ -3070,6 +3075,7 @@ sema_typecheck(Arena *arena,
 	{
 		struct sema_pointer_state pointer_state = {0};
 		pointer_state.arena = arena;
+		pointer_state.types = types;
 		check(sema_walk(a, &ops, &pointer_state));
 	}
 
