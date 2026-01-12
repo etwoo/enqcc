@@ -951,6 +951,7 @@ sema_compound_assignment(struct ast *a, void *userdata)
 	new_node->node_type = new_type;
 	check(ctype_copy(arena, &a->expr_type, &new_node->expr_type));
 	new_node->u.op_binary = a->u.op_binary;
+	/* XXX: copying u.op_binary does *not* deep-copy all descendants */
 
 	a->node_type = NODE_EXPRESSION_VARIABLE_ASSIGNMENT;
 	a->u.op_binary.rhs = new_node;
@@ -1663,7 +1664,8 @@ sema_expr_types(struct ast *a, void *userdata)
 		break;
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 		a->expr_type.t = CTYPE_POINTER_TO;
-		assert(a->expr_type.referent == NULL);
+		/* reset if non-NULL due to sema_compound_assignment() */
+		a->expr_type.referent = NULL;
 		check(ctype_alloc(arena, &a->expr_type.referent));
 		check(ctype_copy(arena,
 		                 &a->u.op_unary.operand->expr_type,
