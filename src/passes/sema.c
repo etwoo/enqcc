@@ -1346,6 +1346,7 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 static WARN_UNUSED result_t
 sema_expr_types_initializer_zero_pad(Arena *arena,
                                      const struct ctype *declaration_type,
+                                     struct type_table *types,
                                      struct ast *init)
 {
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
@@ -1373,34 +1374,46 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 	assert(init->u.init.single == NULL);
 	struct flat **dst = &init->u.init.multi;
 
+	long long unsigned element_limit = 0;
+	struct type_table *type_entry = NULL;
+
 	if (ctype_is_struct(declaration_type)) {
-		assert(declaration_type->tag_unique > 0);
+		type_entry = types_find(types, declaration_type);
+		assert(type_entry != NULL);
+		element_limit = type_entry->n_members;
 		// TODO(compound_init): init zero-padding for struct, instead
 		// of arr (below); several different cases:
-		// 1) extra members not explicitly initialized (like array)
+		// x) extra members not explicitly initialized (like array)
 		// 2) zero padding between members for alignment
 		// 3) zero padding after last member for alignment
-		return RESULT_OK;
+	} else {
+		assert(ctype_is_pointer(declaration_type));
+		assert(declaration_type->referent != NULL);
+		element_limit = declaration_type->sz;
 	}
 
-	assert(ctype_is_pointer(declaration_type));
-	assert(declaration_type->referent != NULL);
-
 	long long unsigned element_count = 0;
-	for (; element_count < declaration_type->sz; ++element_count) {
+	for (; element_count < element_limit; ++element_count) {
+		const struct ctype *c = NULL;
+		if (ctype_is_struct(declaration_type)) {
+			assert(type_entry != NULL);
+			c = &type_entry->members[element_count].member_type;
+		} else {
+			c = declaration_type->referent;
+		}
+
 		if (*dst == NULL) {
 			check(flat_alloc(arena, dst));
 			check(parse_alloc(arena,
 			                  &(**dst).car,
 			                  NODE_EXPRESSION_INITIALIZER));
-			check(ctype_copy(arena,
-			                 declaration_type->referent,
-			                 &(**dst).car->expr_type));
+			check(ctype_copy(arena, c, &(**dst).car->expr_type));
 		}
-		check(sema_expr_types_initializer_zero_pad(
-			arena,
-			declaration_type->referent,
-			(**dst).car));
+
+		check(sema_expr_types_initializer_zero_pad(arena,
+		                                           c,
+		                                           types,
+		                                           (**dst).car));
 		dst = &(**dst).cdr;
 	}
 
@@ -1502,6 +1515,7 @@ sema_expr_types_initializer(Arena *arena,
 	 */
 	check(sema_expr_types_initializer_zero_pad(arena,
 	                                           declaration_type,
+	                                           types,
 	                                           init));
 	return RESULT_OK;
 }
