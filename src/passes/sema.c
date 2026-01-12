@@ -345,9 +345,11 @@ sema_walk(struct ast *a, const struct sema_ops *ops, void *u)
 	case NODE_EXPRESSION_CAST:
 		check(sema_walk(a->u.cast.expr, ops, u));
 		break;
-	case NODE_STRUCT:                    // TODO sema_walk()
-	case NODE_EXPRESSION_STRUCT_MEMBER:  // TODO sema_walk()
-	case NODE_EXPRESSION_STRUCT_POINTER: // TODO sema_walk()
+	case NODE_EXPRESSION_STRUCT_MEMBER:
+	case NODE_EXPRESSION_STRUCT_POINTER:
+		check(sema_walk(a->u.member_access.lhs, ops, u));
+		break;
+	case NODE_STRUCT:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 	case NODE_EXPRESSION_NULL:
 	case NODE_CONSTANT:
@@ -1394,6 +1396,37 @@ sema_expr_types_initializer(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+sema_expr_types_struct_member(Arena *arena,
+                              struct ast *a,
+                              struct type_table *types)
+{
+	assert(a->node_type == NODE_EXPRESSION_STRUCT_MEMBER);
+	const struct ctype *lhs_type = &a->u.member_access.lhs->expr_type;
+	const struct string_view *member_name = &a->u.member_access.member.name;
+
+	if (!ctype_is_struct(lhs_type)) {
+		return make_result(ERR_SEMA_OPERAND_MEMBER_INVALID);
+	}
+
+	if (ctype_is_incomplete(lhs_type, types)) {
+		return make_result(ERR_SEMA_OPERAND_MEMBER_INCOMPLETE);
+	}
+
+	struct type_table *type_entry = types_find(types, lhs_type);
+	assert(type_entry != NULL); /* guaranteed by !ctype_is_incomplete() */
+
+	struct ctype *member_type = ctype_of_member(type_entry, member_name);
+	if (member_type == NULL) {
+		return make_result(ERR_SEMA_OPERAND_MEMBER_NONEXISTENT,
+		                   member_name->data,
+		                   member_name->sz);
+	}
+
+	check(ctype_copy(arena, member_type, &a->expr_type));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
 {
 	if (*a == NULL || ctype_is_equal(&(**a).expr_type, cast_to)) {
@@ -1420,10 +1453,17 @@ promote_if_char(Arena *arena, struct ast **a)
 	return RESULT_OK;
 }
 
+struct sema_expr_state {
+	Arena *arena;
+	struct type_table *types;
+};
+
 static WARN_UNUSED result_t
 sema_expr_types(struct ast *a, void *userdata)
 {
-	Arena *arena = userdata;
+	struct sema_expr_state *state = userdata;
+	Arena *arena = state->arena;
+	struct type_table *types = state->types;
 
 	switch (a->node_type) {
 	case NODE_PROGRAM:
@@ -1554,7 +1594,7 @@ sema_expr_types(struct ast *a, void *userdata)
 		check(ctype_copy(arena, &a->u.cast.to_type, &a->expr_type));
 		break;
 	case NODE_EXPRESSION_STRUCT_MEMBER:
-		info("TODO expr_type for struct? or will resolve_expr() do?");
+		check(sema_expr_types_struct_member(arena, a, types));
 		break;
 	case NODE_EXPRESSION_NULL:
 	case NODE_EXPRESSION_VARIABLE_USAGE:
@@ -2730,7 +2770,8 @@ result_t
 sema_typecheck(Arena *arena,
                struct ast *a,
                long long int *label_generator,
-               struct symbol_table *s)
+               struct symbol_table *s,
+               struct type_table *types)
 {
 	struct sema_ops ops = {0};
 
@@ -2771,7 +2812,12 @@ sema_typecheck(Arena *arena,
 	debug("Propagating expression types");
 	ops.node_enter = NULL;
 	ops.node_exit = sema_expr_types;
-	check(sema_walk(a, &ops, arena));
+	{
+		struct sema_expr_state expr_state = {0};
+		expr_state.arena = arena;
+		expr_state.types = types;
+		check(sema_walk(a, &ops, &expr_state));
+	}
 	ops.node_exit = NULL;
 
 	debug("Checking for invalid lvalues");

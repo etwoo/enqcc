@@ -31,7 +31,8 @@ struct symbol_table {
 result_t sema_typecheck(Arena *arena,
                         struct ast *a,
                         long long int *label_generator,
-                        struct symbol_table *s)
+                        struct symbol_table *s,
+                        struct type_table *types)
 	__attribute__((warn_unused_result));
 
 struct intermediate;

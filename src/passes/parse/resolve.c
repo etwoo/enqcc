@@ -229,7 +229,6 @@ resolve_expr(Arena *arena,
 	case NODE_EXPRESSION_STRUCT_MEMBER:
 	case NODE_EXPRESSION_STRUCT_POINTER:
 		check(resolve_expr(arena, a->u.member_access.lhs, sym, typ));
-		// TODO: resolve RHS of struct member access
 		break;
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(arena,

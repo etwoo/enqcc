@@ -522,6 +522,17 @@ result_to_str(result_t r)
 			"of type 'double' cannot be cast to pointer type, and "
 			"pointer values cannot be cast to type 'double'");
 		break;
+	case ERR_SEMA_OPERAND_MEMBER_INCOMPLETE:
+		s = strdup("Member access operator requires complete type");
+		break;
+	case ERR_SEMA_OPERAND_MEMBER_INVALID:
+		s = strdup("Member access operator requires struct or union");
+		break;
+	case ERR_SEMA_OPERAND_MEMBER_NONEXISTENT:
+		s = my_asprintf(
+			"Not a member name for this struct or union type: %s",
+			r.msg);
+		break;
 	case ERR_SEMA_OPERAND_ADD_POINTER_BOTH:
 		s = strdup("Addition cannot take two pointer operands");
 		break;

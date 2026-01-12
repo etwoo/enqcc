@@ -86,7 +86,7 @@ compile(Arena *arena,
 	long long int label_generator = 0;
 	struct symbol_table from_sema = {0};
 
-	check(sema_typecheck(arena, a, &label_generator, &from_sema));
+	check(sema_typecheck(arena, a, &label_generator, &from_sema, t));
 	parse_debug_print(a, 0);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA_IR) {

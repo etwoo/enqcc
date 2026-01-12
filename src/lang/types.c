@@ -370,3 +370,20 @@ ctype_is_incomplete(const struct ctype *c, struct type_table *t)
 	assert(entry != NULL);
 	return entry->n_members == 0;
 }
+
+struct ctype *
+ctype_of_member(struct type_table *type_entry,
+                const struct string_view *member_name)
+{
+	for (size_t i = 0; i < type_entry->n_members; ++i) {
+		const struct string_view *candidate =
+			&type_entry->members[i].member_name;
+		if (member_name->sz == candidate->sz &&
+		    0 == strncmp(member_name->data,
+		                 candidate->data,
+		                 candidate->sz)) {
+			return &type_entry->members[i].member_type;
+		}
+	}
+	return NULL;
+}

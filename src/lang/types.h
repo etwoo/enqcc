@@ -79,5 +79,8 @@ struct type_table *types_find(struct type_table *head,
                               const struct ctype *needle) WARN_UNUSED;
 bool ctype_is_incomplete(const struct ctype *c,
                          struct type_table *t) WARN_UNUSED;
+struct ctype *
+ctype_of_member(struct type_table *type_entry,
+                const struct string_view *member_name) WARN_UNUSED;
 
 #endif
