@@ -1386,11 +1386,13 @@ sema_expr_types_initializer(Arena *arena,
 	if (element_count == 0) {
 		return make_result(ERR_SEMA_INIT_COMPOUND_EMPTY);
 	}
-	if (element_count > init->expr_type.sz) {
+	if (ctype_is_pointer(&init->expr_type) &&
+	    element_count > init->expr_type.sz) {
 		return make_result(ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS,
 		                   varname->name.data,
 		                   varname->name.sz);
 	}
+	// TODO: check element_count vs number of struct members?
 
 	/*
 	 * Pad compound initializer with zeros as necessary.
