@@ -3,6 +3,7 @@
 #include "passes/parse.h"
 
 #include <assert.h>
+#include <string.h>    /* for strncmp() */
 #include <sys/param.h> /* for MAX() */
 
 static WARN_UNUSED result_t
@@ -645,6 +646,20 @@ resolve_struct(Arena *arena,
 		assert(f != NULL);
 		struct ast *ast_member = f->car;
 		assert(ast_member->node_type == NODE_DECLARATION);
+		const struct string_view *new_name =
+			&ast_member->u.declare.identifier.name;
+
+		for (size_t j = 0; j < i; ++j) {
+			if (new_name->sz == out->members[j].member_name.sz &&
+			    0 == strncmp(out->members[j].member_name.data,
+			                 new_name->data,
+			                 new_name->sz)) {
+				return make_result(
+					ERR_SEMA_STRUCT_MEMBER_NAME_DUPLICATE,
+					new_name->data,
+					new_name->sz);
+			}
+		}
 
 		check(resolve_declaration_type(arena,
 		                               ast_member,
@@ -654,12 +669,11 @@ resolve_struct(Arena *arena,
 		                        *types)) {
 			return make_result(
 				ERR_SEMA_STRUCT_MEMBER_TYPE_INCOMPLETE,
-				ast_member->u.declare.identifier.name.data,
-				ast_member->u.declare.identifier.name.sz);
+				new_name->data,
+				new_name->sz);
 		}
 
-		out->members[i].member_name =
-			ast_member->u.declare.identifier.name;
+		out->members[i].member_name = *new_name;
 		check(ctype_copy(arena,
 		                 &ast_member->u.declare.var_type,
 		                 &out->members[i].member_type));

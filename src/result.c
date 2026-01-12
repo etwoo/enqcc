@@ -576,6 +576,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_RETURN_STATEMENT_EXPECT_VOID:
 		s = strdup("void function should not return a value");
 		break;
+	case ERR_SEMA_STRUCT_MEMBER_NAME_DUPLICATE:
+		s = my_asprintf("Duplicate struct member: %s", r.msg);
+		break;
 	case ERR_SEMA_STRUCT_MEMBER_TYPE_INCOMPLETE:
 		s = my_asprintf("Struct member '%s' has incomplete type",
 		                r.msg);
