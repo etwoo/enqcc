@@ -42,8 +42,8 @@ ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
 	dst->tag_name = src->tag_name;
 	dst->tag_unique = src->tag_unique;
 
+	dst->referent = NULL;
 	if (src->referent != NULL) {
-		dst->referent = NULL;
 		check(ctype_alloc(arena, &dst->referent));
 		check(ctype_copy(arena, src->referent, dst->referent));
 	}

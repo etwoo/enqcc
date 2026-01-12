@@ -1663,9 +1663,9 @@ sema_expr_types(struct ast *a, void *userdata)
 		                 &a->expr_type));
 		break;
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+		/* reset if non-NULL referent -- sema_compound_assignment() */
+		memset(&a->expr_type, 0, sizeof(a->expr_type));
 		a->expr_type.t = CTYPE_POINTER_TO;
-		/* reset if non-NULL due to sema_compound_assignment() */
-		a->expr_type.referent = NULL;
 		check(ctype_alloc(arena, &a->expr_type.referent));
 		check(ctype_copy(arena,
 		                 &a->u.op_unary.operand->expr_type,
