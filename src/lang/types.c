@@ -388,7 +388,7 @@ ctype_is_incomplete(const struct ctype *c, struct type_table *t)
 		result = (entry == NULL || entry->n_members == 0);
 		break;
 	case CTYPE_VOID:
-		result =  true;
+		result = true;
 		break;
 	}
 

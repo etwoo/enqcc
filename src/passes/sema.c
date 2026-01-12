@@ -2111,6 +2111,13 @@ sema_implicit_cast_initializer(Arena *arena,
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
+{
+	return (ctype_is_struct(lhs) != ctype_is_struct(rhs)) ||
+	       (ctype_is_struct(lhs) && !ctype_is_equal(lhs, rhs));
+}
+
 struct sema_implicit_cast_state {
 	Arena *arena;
 	struct type_table *types;
@@ -2132,8 +2139,13 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		                 &state->expected_return_type));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
-		if (ctype_is_void(&state->expected_return_type) ==
-		    ctype_is_void(&a->u.op_unary.operand->expr_type)) {
+		if (ctype_is_struct_mismatch(
+			    &state->expected_return_type,
+			    &a->u.op_unary.operand->expr_type)) {
+			return make_result(
+				ERR_SEMA_RETURN_STATEMENT_STRUCT_MISMATCH);
+		} else if (ctype_is_void(&state->expected_return_type) ==
+		           ctype_is_void(&a->u.op_unary.operand->expr_type)) {
 			/* void function XOR void return statement */
 		} else if (ctype_is_void(&state->expected_return_type)) {
 			return make_result(
@@ -2195,12 +2207,9 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              &a->u.op_binary.rhs));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-		if ((ctype_is_struct(&a->u.op_ternary.then_expr->expr_type) !=
-		     ctype_is_struct(&a->u.op_ternary.else_expr->expr_type)) ||
-		    (ctype_is_struct(&a->u.op_ternary.then_expr->expr_type) &&
-		     ctype_is_struct(&a->u.op_ternary.else_expr->expr_type) &&
-		     !ctype_is_equal(&a->u.op_ternary.then_expr->expr_type,
-		                     &a->u.op_ternary.else_expr->expr_type))) {
+		if (ctype_is_struct_mismatch(
+			    &a->u.op_ternary.then_expr->expr_type,
+			    &a->u.op_ternary.else_expr->expr_type)) {
 			return make_result(ERR_SEMA_OPERAND_TERNARY_MISMATCH);
 		}
 		common =

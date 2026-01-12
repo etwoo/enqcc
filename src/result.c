@@ -489,8 +489,11 @@ result_to_str(result_t r)
 		s = my_asprintf("Duplicate function parameter: %s", r.msg);
 		break;
 	case ERR_SEMA_FUNCTION_DEFINITION_PARAM_INCOMPLETE:
-		s = my_asprintf("Parameter '%s' of function definition has "
-		                "incomplete type",
+		s = my_asprintf("Function parameter type is incomplete: %s",
+		                r.msg);
+		break;
+	case ERR_SEMA_FUNCTION_DEFINITION_RETURN_INCOMPLETE:
+		s = my_asprintf("Function return type is incomplete: %s",
 		                r.msg);
 		break;
 	case ERR_SEMA_FUNCTION_LINKAGE_BLOCK_SCOPE:
@@ -575,6 +578,9 @@ result_to_str(result_t r)
 		break;
 	case ERR_SEMA_RETURN_STATEMENT_EXPECT_VOID:
 		s = strdup("void function should not return a value");
+		break;
+	case ERR_SEMA_RETURN_STATEMENT_STRUCT_MISMATCH:
+		s = strdup("Incompatible struct return type");
 		break;
 	case ERR_SEMA_STRUCT_MEMBER_NAME_DUPLICATE:
 		s = my_asprintf("Duplicate struct member: %s", r.msg);

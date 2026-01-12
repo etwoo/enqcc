@@ -546,6 +546,14 @@ resolve_function(Arena *arena,
 	assert(a->node_type == NODE_FUNCTION);
 
 	const bool is_def = (a->u.function.block != NULL);
+	const unsigned error_if_incomplete =
+		is_def ? ERR_SEMA_FUNCTION_DEFINITION_RETURN_INCOMPLETE : OK;
+	check(resolve_type(arena,
+	                   error_if_incomplete,
+	                   &a->u.function.return_type,
+	                   symbols,
+	                   types));
+
 	check(symbols_prepend(arena,
 	                      symbols,
 	                      &a->u.function.identifier.name,
