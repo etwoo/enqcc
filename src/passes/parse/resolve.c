@@ -303,7 +303,7 @@ resolve_type(Arena *arena,
 	}
 
 	assert(ctype_is_struct(&anywhere->c89type));
-	assert(anywhere->c89type.tag_unique != 0);
+	assert(anywhere->c89type.tag_unique > 0);
 
 	if (error_if_incomplete != OK &&
 	    ctype_is_incomplete(&anywhere->c89type, *types)) {

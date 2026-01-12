@@ -1280,7 +1280,8 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 		return RESULT_OK;
 	}
 
-	if (!ctype_is_array(declaration_type)) {
+	if (!ctype_is_array(declaration_type) &&
+	    !ctype_is_struct(declaration_type)) {
 		if (init->u.init.single == NULL) {
 			check(parse_alloc(arena,
 			                  &init->u.init.single,
@@ -1296,10 +1297,16 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 	}
 
 	assert(init->u.init.single == NULL);
+	struct flat **dst = &init->u.init.multi;
+
+	if (ctype_is_struct(declaration_type)) {
+		assert(declaration_type->tag_unique > 0);
+		assert(0 && "TODO init zero-padding for struct instead of arr");
+		return RESULT_OK;
+	}
+
 	assert(ctype_is_pointer(declaration_type));
 	assert(declaration_type->referent != NULL);
-
-	struct flat **dst = &init->u.init.multi;
 
 	long long unsigned element_count = 0;
 	for (; element_count < declaration_type->sz; ++element_count) {
