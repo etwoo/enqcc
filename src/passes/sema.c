@@ -1343,6 +1343,13 @@ sema_fn_call(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED bool
+ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
+{
+	return (ctype_is_struct(lhs) != ctype_is_struct(rhs)) ||
+	       (ctype_is_struct(lhs) && !ctype_is_equal(lhs, rhs));
+}
+
 static WARN_UNUSED result_t
 sema_expr_types_initializer_zero_pad(Arena *arena,
                                      const struct ctype *declaration_type,
@@ -1368,6 +1375,14 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 			init->expr_type.t = CTYPE_INT;
 			init->expr_type.maybe_null_pointer_constant = true;
 		}
+		return RESULT_OK;
+	}
+
+	if (init->u.init.single != NULL) {
+		assert(ctype_is_aggregate(&init->u.init.single->expr_type));
+		assert(!ctype_is_struct_mismatch(
+			declaration_type,
+			&init->u.init.single->expr_type));
 		return RESULT_OK;
 	}
 
@@ -1418,13 +1433,6 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 	}
 
 	return RESULT_OK;
-}
-
-static WARN_UNUSED bool
-ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
-{
-	return (ctype_is_struct(lhs) != ctype_is_struct(rhs)) ||
-	       (ctype_is_struct(lhs) && !ctype_is_equal(lhs, rhs));
 }
 
 /*
