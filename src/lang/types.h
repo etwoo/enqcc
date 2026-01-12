@@ -54,6 +54,7 @@ bool ctype_is_strlike_ptr(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_void(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_void_ptr(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_struct(const struct ctype *c) WARN_UNUSED;
+bool ctype_is_aggregate(const struct ctype *c) WARN_UNUSED;
 bool ctype_is_ptr_to_incomplete(const struct ctype *c) WARN_UNUSED;
 bool ctype_nullptr_ish(const struct ctype *c) WARN_UNUSED;
 const struct ctype *get_common_ctype(const struct ctype *lhs,

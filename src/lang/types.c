@@ -243,6 +243,12 @@ ctype_is_struct(const struct ctype *c)
 }
 
 bool
+ctype_is_aggregate(const struct ctype *c)
+{
+	return ctype_is_array(c) || ctype_is_struct(c);
+}
+
+bool
 ctype_is_ptr_to_incomplete(const struct ctype *c)
 {
 	return ctype_is_void_ptr(c);

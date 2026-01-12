@@ -115,7 +115,7 @@ map_numeric_type_scalar(const struct ast *a,
                         struct constant_bytes *out)
 {
 	assert(a->node_type == NODE_CONSTANT);
-	assert(!ctype_is_array(dst_type));
+	assert(!ctype_is_aggregate(dst_type));
 	out->byte_count = ctype_to_size_bytes(dst_type);
 
 	if (dst_type->t == CTYPE_DOUBLE) {
@@ -210,6 +210,8 @@ populate_initializer_elements(const struct ast *a,
 	assert(a->u.init.multi != NULL);
 
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		// TODO: for struct, iterate over member types instead of
+		// referent, which is only valid for array/pointer types
 		populate_initializer_elements(f->car, dst_type->referent, pos);
 	}
 }
@@ -1280,8 +1282,7 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 		return RESULT_OK;
 	}
 
-	if (!ctype_is_array(declaration_type) &&
-	    !ctype_is_struct(declaration_type)) {
+	if (!ctype_is_aggregate(declaration_type)) {
 		if (init->u.init.single == NULL) {
 			check(parse_alloc(arena,
 			                  &init->u.init.single,
@@ -1301,7 +1302,11 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 
 	if (ctype_is_struct(declaration_type)) {
 		assert(declaration_type->tag_unique > 0);
-		assert(0 && "TODO init zero-padding for struct instead of arr");
+		// TODO: init zero-padding for struct, instead of arr (below)
+		// several different cases:
+		// 1) extra members not explicitly initialized (like array)
+		// 2) zero padding between members for alignment
+		// 3) zero padding after last member for alignment
 		return RESULT_OK;
 	}
 
@@ -1711,8 +1716,7 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 		}
 		break;
 	case NODE_EXPRESSION_CAST:
-		if (ctype_is_array(&a->u.cast.to_type) ||
-		    ctype_is_struct(&a->u.cast.to_type)) {
+		if (ctype_is_aggregate(&a->u.cast.to_type)) {
 			return make_result(
 				ERR_SEMA_CAST_TO_ARRAY_OR_STRUCT_INVALID);
 		}
@@ -2037,9 +2041,8 @@ sema_implicit_cast_initializer(Arena *arena,
 
 	/* single XOR multi */
 	assert((**init).u.init.multi != NULL);
-	/* array (multi) initializor must correspond to array type */
-	assert(ctype_is_array(expected_type));
-	assert(ctype_is_array(&(**init).expr_type));
+	assert(ctype_is_aggregate(expected_type));
+	assert(ctype_is_aggregate(&(**init).expr_type));
 
 	for (struct flat *f = (**init).u.init.multi; f != NULL; f = f->cdr) {
 		check(sema_implicit_cast_initializer(arena,
