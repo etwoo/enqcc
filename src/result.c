@@ -429,8 +429,8 @@ result_to_str(result_t r)
 	case ERR_SEMA_CASE_OUTSIDE:
 		s = strdup("Invalid case with no enclosing switch");
 		break;
-	case ERR_SEMA_CAST_TO_ARRAY_TYPE_INVALID:
-		s = strdup("Cannot cast to array type");
+	case ERR_SEMA_CAST_TO_ARRAY_OR_STRUCT_INVALID:
+		s = strdup("Cannot cast to array or struct type");
 		break;
 	case ERR_SEMA_GOTO_NONEXISTENT_LABEL:
 		s = my_asprintf("goto targets non-existent label: %s", r.msg);

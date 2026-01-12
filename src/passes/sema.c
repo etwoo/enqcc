@@ -1698,9 +1698,10 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 		}
 		break;
 	case NODE_EXPRESSION_CAST:
-		if (ctype_is_array(&a->u.cast.to_type)) {
-			// TODO: reject cast to struct type (ch18)
-			return make_result(ERR_SEMA_CAST_TO_ARRAY_TYPE_INVALID);
+		if (ctype_is_array(&a->u.cast.to_type) ||
+		    ctype_is_struct(&a->u.cast.to_type)) {
+			return make_result(
+				ERR_SEMA_CAST_TO_ARRAY_OR_STRUCT_INVALID);
 		}
 		if (is_scalar(&a->u.cast.to_type)) {
 			scalar = is_scalar(&a->u.cast.expr->expr_type);
