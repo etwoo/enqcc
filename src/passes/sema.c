@@ -1854,7 +1854,6 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-	// case NODE_EXPRESSION_UNARY_ADDRESS_OF: // TODO rm?
 		/* guaranteed by sema_lvalue(), is_node_lvalue() */
 		assert(is_scalar(&a->u.op_unary.operand->expr_type));
 		break;
@@ -1872,17 +1871,53 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+struct sema_incomplete_state {
+	struct type_table *types;
+	struct ast *prev;
+};
+
 static WARN_UNUSED result_t
-sema_incomplete_types(struct ast *a, void *userdata MAYBE_UNUSED)
+sema_incomplete(struct ast *a, void *userdata MAYBE_UNUSED)
 {
-	struct type_table *types = userdata;
-	if (a->node_type == NODE_EXPRESSION_UNARY_SIZE_OF) {
+	struct sema_incomplete_state *state = userdata;
+	struct type_table *types = state->types;
+
+	const bool parent_is_addr_of =
+		(state->prev != NULL &&
+	         state->prev->node_type == NODE_EXPRESSION_UNARY_ADDRESS_OF &&
+	         state->prev->u.op_unary.operand == a);
+
+	switch (a->node_type) {
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
 		assert(ctype_is_equal(&a->expr_type, &LIKE_SIZE_T));
 		if (ctype_is_incomplete(&a->u.op_unary.operand->expr_type,
 		                        types)) {
 			return make_result(ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE);
 		}
+		break;
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+		if (!parent_is_addr_of &&
+		    ctype_is_pointer(&a->u.op_unary.operand->expr_type) &&
+		    ctype_is_incomplete(
+			    a->u.op_unary.operand->expr_type.referent,
+			    types)) {
+			return make_result(ERR_SEMA_OPERAND_DEREF_INCOMPLETE);
+		}
+		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+		if (!parent_is_addr_of &&
+		    ctype_is_incomplete(&a->expr_type, types)) {
+			return make_result(
+				ERR_SEMA_VARIABLE_USAGE_TYPE_INCOMPLETE,
+				a->u.var.name.data,
+				a->u.var.name.sz);
+		}
+		break;
+	default:
+		break;
 	}
+
+	state->prev = a;
 	return RESULT_OK;
 }
 
@@ -3019,8 +3054,12 @@ sema_typecheck(Arena *arena,
 	check(sema_walk(a, &ops, NULL));
 
 	debug("Checking for invalid usage of incomplete types");
-	ops.node_enter = sema_incomplete_types;
-	check(sema_walk(a, &ops, types));
+	ops.node_enter = sema_incomplete;
+	{
+		struct sema_incomplete_state incomplete_state = {0};
+		incomplete_state.types = types;
+		check(sema_walk(a, &ops, &incomplete_state));
+	}
 
 	debug("Checking for invalid double usage");
 	ops.node_enter = sema_double;

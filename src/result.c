@@ -530,6 +530,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_OPERAND_CHAR_ARRAY_SIZE:
 		s = strdup("String initializer for char array is too long");
 		break;
+	case ERR_SEMA_OPERAND_DEREF_INCOMPLETE:
+		s = strdup("Cannot dereference pointer to incomplete type");
+		break;
 	case ERR_SEMA_OPERAND_DEREF_INVALID:
 		s = strdup("Pointer dereference operator * requires argument "
 		           "of type CTYPE_POINTER_TO");
@@ -653,6 +656,11 @@ result_to_str(result_t r)
 		                "rvalue; cannot assign value to function or "
 		                "use function as a value",
 		                r.msg);
+		break;
+	case ERR_SEMA_VARIABLE_USAGE_TYPE_INCOMPLETE:
+		s = my_asprintf(
+			"Invalid use of variable '%s' with incomplete type",
+			r.msg);
 		break;
 	case ERR_SEMA_VARIABLE_USAGE_WITHOUT_DECLARATION:
 		s = my_asprintf("Reference to undeclared variable: %s", r.msg);
