@@ -276,11 +276,12 @@ resolve_expr(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-resolve_type(Arena *arena,
-             unsigned error_if_incomplete,
-             struct ctype *c,
-             struct symbol **symbols,
-             struct type_table **types)
+resolve_type_impl(Arena *arena,
+                  unsigned error_if_incomplete,
+                  bool allow_one_degree_incomplete,
+                  struct ctype *c,
+                  struct symbol **symbols,
+                  struct type_table **types)
 {
 	switch (c->t) {
 	case CTYPE_CHAR:
@@ -294,13 +295,19 @@ resolve_type(Arena *arena,
 	case CTYPE_VOID:
 		return RESULT_OK;
 	case CTYPE_POINTER_TO:
-		return resolve_type(arena, OK, c->referent, symbols, types);
+		return resolve_type_impl(arena,
+		                         error_if_incomplete,
+		                         true,
+		                         c->referent,
+		                         symbols,
+		                         types);
 	case CTYPE_ARRAY_OF:
-		return resolve_type(arena,
-		                    error_if_incomplete,
-		                    c->referent,
-		                    symbols,
-		                    types);
+		return resolve_type_impl(arena,
+		                         error_if_incomplete,
+		                         false,
+		                         c->referent,
+		                         symbols,
+		                         types);
 	case CTYPE_STRUCT:
 		break;
 	}
@@ -319,13 +326,30 @@ resolve_type(Arena *arena,
 	assert(anywhere->c89type.tag_unique > 0);
 
 	if (error_if_incomplete != OK &&
-	    ctype_is_incomplete(&anywhere->c89type, *types)) {
+	    ctype_is_incomplete(&anywhere->c89type, *types) &&
+	    allow_one_degree_incomplete == false) {
 		return make_result(error_if_incomplete,
 		                   tag_name->data,
 		                   tag_name->sz);
 	}
 
 	check(ctype_copy(arena, &anywhere->c89type, c));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+resolve_type(Arena *arena,
+             unsigned error_if_incomplete,
+             struct ctype *c,
+             struct symbol **symbols,
+             struct type_table **types)
+{
+	check(resolve_type_impl(arena,
+	                        error_if_incomplete,
+	                        false,
+	                        c,
+	                        symbols,
+	                        types));
 	return RESULT_OK;
 }
 
