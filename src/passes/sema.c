@@ -2106,6 +2106,7 @@ sema_implicit_cast_initializer(Arena *arena,
 			c = expected_type->referent;
 		}
 		check(sema_implicit_cast_initializer(arena, c, &f->car, typ));
+		++element_count;
 	}
 	return RESULT_OK;
 }
