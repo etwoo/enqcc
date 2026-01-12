@@ -439,9 +439,9 @@ result_to_str(result_t r)
 		s = strdup("Empty compound initializer is a C23 extension");
 		break;
 	case ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS:
-		s = my_asprintf(
-			"Excess elements in compound initializer for array %s",
-			r.msg);
+		s = my_asprintf("Excess elements in compound initializer for "
+		                "aggregate type: %s",
+		                r.msg);
 		break;
 	case ERR_SEMA_INIT_SCALAR_WITH_COMPOUND:
 		s = strdup("Scalar variable given compound initializer "
