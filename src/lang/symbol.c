@@ -52,6 +52,9 @@ get_initializer_element_size_bytes(const struct ctype *c)
 	if (ctype_is_array(c)) {
 		return get_initializer_element_size_bytes(c->referent);
 	}
+	if (ctype_is_struct(c)) {
+		return 8; // TODO: rm tmp hack; do struct to ctype_to_size_bytes
+	}
 	return ctype_to_size_bytes(c);
 }
 
