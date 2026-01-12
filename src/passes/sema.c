@@ -2402,7 +2402,7 @@ sema_fn_signature_matches(
 			continue;
 		}
 
-		if (!ctype_is_equal(rhs, lhs)) { // TODO: swap? NOLINT
+		if (!ctype_is_equal(lhs, rhs)) {
 			p_types_match = false;
 			break;
 		}
