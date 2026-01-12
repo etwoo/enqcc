@@ -210,8 +210,8 @@ populate_initializer_elements(const struct ast *a,
 	assert(a->u.init.multi != NULL);
 
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
-		// TODO: for struct, iterate over member types instead of
-		// referent, which is only valid for array/pointer types
+		// TODO(compound_init): for struct, iterate over member types
+		// instead of referent (only valid for array/pointer types)
 		populate_initializer_elements(f->car, dst_type->referent, pos);
 	}
 }
@@ -1302,8 +1302,8 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 
 	if (ctype_is_struct(declaration_type)) {
 		assert(declaration_type->tag_unique > 0);
-		// TODO: init zero-padding for struct, instead of arr (below)
-		// several different cases:
+		// TODO(compound_init): init zero-padding for struct, instead
+		// of arr (below); several different cases:
 		// 1) extra members not explicitly initialized (like array)
 		// 2) zero padding between members for alignment
 		// 3) zero padding after last member for alignment
@@ -1404,7 +1404,7 @@ sema_expr_types_initializer(Arena *arena,
 		                   varname->name.data,
 		                   varname->name.sz);
 	}
-	// TODO: check element_count vs number of struct members?
+	// TODO(compound_init): check element_count vs number of struct members
 
 	/*
 	 * Pad compound initializer with zeros as necessary.
