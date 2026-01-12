@@ -84,7 +84,9 @@ is_node_constant(const struct ast *a)
 }
 
 static WARN_UNUSED long long unsigned
-count_initializer_elements(const struct ctype *dst_type, const struct ast *a)
+count_initializer_elements(const struct ctype *dst_type,
+                           struct type_table *types,
+                           const struct ast *a)
 {
 	assert(dst_type != NULL);
 
@@ -97,12 +99,32 @@ count_initializer_elements(const struct ctype *dst_type, const struct ast *a)
 		return 1;
 	}
 	assert(a->u.init.multi != NULL);
-	assert(ctype_is_pointer(dst_type));
 
-	long long unsigned count = 0;
-	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
-		count += count_initializer_elements(dst_type->referent, f->car);
+	struct type_table *type_entry = NULL;
+	if (ctype_is_struct(dst_type)) {
+		type_entry = types_find(types, dst_type);
+		assert(type_entry != NULL);
+	} else {
+		assert(ctype_is_pointer(dst_type));
+		assert(dst_type->referent != NULL);
 	}
+
+	long long unsigned element_count = 0;
+	long long unsigned count = 0;
+
+	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		const struct ctype *c = NULL;
+		if (ctype_is_struct(dst_type)) {
+			assert(type_entry != NULL);
+			c = &type_entry->members[element_count].member_type;
+		} else {
+			c = dst_type->referent;
+		}
+
+		count += count_initializer_elements(c, types, f->car);
+		++element_count;
+	}
+
 	return count;
 }
 
@@ -184,6 +206,7 @@ map_numeric_type_scalar(const struct ast *a,
 static void
 populate_initializer_elements(const struct ast *a,
                               const struct ctype *dst_type,
+                              struct type_table *types,
                               struct constant_bytes **pos)
 {
 	a = unpack_cast(a);
@@ -209,10 +232,26 @@ populate_initializer_elements(const struct ast *a,
 	}
 	assert(a->u.init.multi != NULL);
 
+	struct type_table *type_entry = NULL;
+	if (ctype_is_struct(dst_type)) {
+		type_entry = types_find(types, dst_type);
+		assert(type_entry != NULL);
+	} else {
+		assert(ctype_is_pointer(dst_type));
+		assert(dst_type->referent != NULL);
+	}
+
+	long long unsigned element_count = 0;
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
-		// TODO(compound_init): for struct, iterate over member types
-		// instead of referent (only valid for array/pointer types)
-		populate_initializer_elements(f->car, dst_type->referent, pos);
+		const struct ctype *c = NULL;
+		if (ctype_is_struct(dst_type)) {
+			assert(type_entry != NULL);
+			c = &type_entry->members[element_count].member_type;
+		} else {
+			c = dst_type->referent;
+		}
+		populate_initializer_elements(f->car, c, types, pos);
+		++element_count;
 	}
 }
 
@@ -220,14 +259,15 @@ static WARN_UNUSED result_t
 map_numeric_type(Arena *arena,
                  const struct ast *init,
                  const struct ctype *dst_type,
+                 struct type_table *types,
                  struct constant_initializer *out)
 {
-	out->count = count_initializer_elements(dst_type, init);
+	out->count = count_initializer_elements(dst_type, types, init);
 	assert(out->count > 0);
 	out->elements = arena_alloc(arena, out->count * sizeof(*out->elements));
 	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
 	struct constant_bytes *cursor = out->elements;
-	populate_initializer_elements(init, dst_type, &cursor);
+	populate_initializer_elements(init, dst_type, types, &cursor);
 	assert((size_t)(cursor - out->elements) == out->count);
 	return RESULT_OK;
 }
@@ -1011,6 +1051,7 @@ sema_str_literal_hoist(Arena *arena,
                        const struct ctype *var_type,
                        struct ast *init,
                        struct symbol **s,
+                       struct type_table *types,
                        struct ast **new_node)
 {
 	struct ctype array_type = {0};
@@ -1021,7 +1062,7 @@ sema_str_literal_hoist(Arena *arena,
 	/* translate u.init.multi into equivalent constant_initializer */
 	assert(init->u.init.multi != NULL);
 	struct constant_initializer initializer = {0};
-	check(map_numeric_type(arena, init, &array_type, &initializer));
+	check(map_numeric_type(arena, init, &array_type, types, &initializer));
 
 	array_type.sz = initializer.count;
 
@@ -1098,6 +1139,7 @@ sema_str_literal_as_init(Arena *arena,
 		                             declaration_type,
 		                             init,
 		                             sym,
+		                             typ,
 		                             &new_node));
 		init->u.init.single = new_node;
 		assert(init->u.init.multi == NULL);
@@ -1163,6 +1205,7 @@ sema_str_literal(struct ast *a, void *userdata)
 		                             &a->expr_type,
 		                             fake_init,
 		                             symbols,
+		                             types,
 		                             &new_node));
 		assert(new_node != NULL);
 		memcpy(a, new_node, sizeof(*a));
@@ -2241,6 +2284,7 @@ struct sema_symbol_state {
 	struct flat *ast_program_globals;
 	struct symbol *function_symbols;
 	struct symbol *variable_symbols;
+	struct type_table *types;
 };
 
 enum symbol_declaration_scope {
@@ -2596,6 +2640,7 @@ sema_declare_file_scope(struct ast *a,
 			check(map_numeric_type(state->arena,
 			                       a->u.declare.init,
 			                       &a->u.declare.var_type,
+			                       state->types,
 			                       &linkage_state->initializer));
 			/*
 			 * Remove init expression from AST. We will initialize
@@ -2728,6 +2773,7 @@ sema_declare_block_scope(struct ast *a,
 			check(map_numeric_type(state->arena,
 			                       a->u.declare.init,
 			                       &a->u.declare.var_type,
+			                       state->types,
 			                       &linkage_state->initializer));
 			/*
 			 * Remove init expression from AST. We will initialize
@@ -2985,6 +3031,7 @@ sema_typecheck(Arena *arena,
 	state.arena = arena;
 	state.function_symbols = s->functions;
 	state.variable_symbols = s->variables;
+	state.types = types;
 
 	debug("Checking function signatures");
 	ops.node_enter = sema_fn_signature;
