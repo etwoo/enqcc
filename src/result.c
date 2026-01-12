@@ -478,6 +478,11 @@ result_to_str(result_t r)
 	case ERR_SEMA_CONTINUE_OUTSIDE:
 		s = strdup("Invalid continue with no enclosing loop");
 		break;
+	case ERR_SEMA_FUNCTION_CALL_RETURN_INCOMPLETE:
+		s = my_asprintf(
+			"Call of function with incomplete return type: %s",
+			r.msg);
+		break;
 	case ERR_SEMA_FUNCTION_CALL_UNCALLABLE:
 		s = my_asprintf("Call of non-function variable: %s", r.msg);
 		break;

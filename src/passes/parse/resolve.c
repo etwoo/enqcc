@@ -90,6 +90,7 @@ resolve_var_usage(Arena *arena,
 static WARN_UNUSED result_t
 resolve_function_call(Arena *arena,
                       struct symbol *head,
+                      struct type_table *types,
                       struct ast_symbol *callee,
                       struct ctype *return_type)
 {
@@ -98,6 +99,12 @@ resolve_function_call(Arena *arena,
 	                        callee,
 	                        return_type,
 	                        ERR_SEMA_FUNCTION_CALL_UNDECLARED));
+	if (!ctype_is_void(return_type) &&
+	    ctype_is_incomplete(return_type, types)) {
+		return make_result(ERR_SEMA_FUNCTION_CALL_RETURN_INCOMPLETE,
+		                   callee->name.data,
+		                   callee->name.sz);
+	}
 	return RESULT_OK;
 }
 
@@ -248,6 +255,7 @@ resolve_expr(Arena *arena,
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(resolve_function_call(arena,
 		                            *sym,
+		                            *typ,
 		                            &a->u.call.identifier,
 		                            &a->expr_type));
 		for (struct flat *f = a->u.call.args; f != NULL; f = f->cdr) {
