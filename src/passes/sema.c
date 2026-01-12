@@ -1388,6 +1388,8 @@ sema_expr_types_initializer(Arena *arena,
 	 * Recurse into compound initializer elements.
 	 */
 	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
+		// TODO(compound_init): for struct, iterate over member types
+		// instead of referent (only valid for array/pointer types)
 		check(sema_expr_types_initializer(arena,
 		                                  varname,
 		                                  declaration_type->referent,
@@ -1733,7 +1735,7 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+	// case NODE_EXPRESSION_UNARY_ADDRESS_OF: // TODO rm?
 		/* guaranteed by sema_lvalue(), is_node_lvalue() */
 		assert(is_scalar(&a->u.op_unary.operand->expr_type));
 		break;
