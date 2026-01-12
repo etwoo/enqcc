@@ -1181,22 +1181,28 @@ sema_str_literal(struct ast *a, void *userdata)
 static WARN_UNUSED result_t
 sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 {
-	bool allow_aggregate = false;
+	bool allow_array = false;
+	bool allow_struct = false;
 
 	const struct ast *to_check = NULL;
 	switch (a->node_type) {
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		to_check = a->u.op_binary.lhs;
+		allow_array = false;
+		allow_struct = true;
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		to_check = a->u.op_unary.operand;
+		allow_array = false;
+		allow_struct = false;
 		break;
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 		to_check = a->u.op_unary.operand;
-		allow_aggregate = true;
+		allow_array = true;
+		allow_struct = true;
 		break;
 	default:
 		return RESULT_OK;
@@ -1210,11 +1216,12 @@ sema_lvalue(struct ast *a, void *userdata MAYBE_UNUSED)
 		return make_result(ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE);
 	}
 
-	if (allow_aggregate) {
-	} else if (ctype_is_array(&to_check->expr_type)) {
+	if (!allow_array && ctype_is_array(&to_check->expr_type)) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY);
-	} else if (ctype_is_struct(&to_check->expr_type)) {
+	}
+
+	if (!allow_struct && ctype_is_struct(&to_check->expr_type)) {
 		return make_result(
 			ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_STRUCT);
 	}
@@ -1767,9 +1774,9 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		scalar = is_scalar(&a->u.op_binary.rhs->expr_type);
-		/* guaranteed by sema_lvalue(), is_node_lvalue() */
-		assert(is_scalar(&a->u.op_binary.lhs->expr_type));
+		// assignment actually allows structs; TODO: refactor
+		scalar = !ctype_is_void(&a->u.op_binary.lhs->expr_type) &&
+		         !ctype_is_void(&a->u.op_binary.rhs->expr_type);
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -2199,9 +2206,14 @@ sema_implicit_cast(struct ast *a, void *userdata)
 			check(cast_if(arena, common, &a->u.op_binary.rhs));
 		}
 		break;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		if (ctype_is_struct_mismatch(&a->u.op_binary.lhs->expr_type,
+		                             &a->u.op_binary.rhs->expr_type)) {
+			return make_result(ERR_SEMA_ASSIGNMENT_STRUCT_MISMATCH);
+		}
+		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(cast_if(arena,
 		              &a->u.op_binary.lhs->expr_type,
 		              &a->u.op_binary.rhs));

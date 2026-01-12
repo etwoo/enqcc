@@ -414,6 +414,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_ALLOC:
 		s = strdup("Cannot allocate sema data");
 		break;
+	case ERR_SEMA_ASSIGNMENT_STRUCT_MISMATCH:
+		s = strdup("Incompatible struct types in assignment");
+		break;
 	case ERR_SEMA_BREAK_OUTSIDE:
 		s = strdup("Invalid break with no enclosing loop");
 		break;
@@ -596,10 +599,10 @@ result_to_str(result_t r)
 		s = strdup("Invalid lvalue in variable assignment");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_ARRAY:
-		s = strdup("Array type is not assignable");
+		s = strdup("Invalid lvalue of array type");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_BAD_LVALUE_STRUCT:
-		s = strdup("Struct type is not assignable");
+		s = strdup("Invalid lvalue of struct type");
 		break;
 	case ERR_SEMA_VARIABLE_DECLARATION_DUPLICATE:
 		s = my_asprintf("Duplicate variable declaration: %s", r.msg);
