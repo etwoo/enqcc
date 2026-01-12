@@ -1671,8 +1671,6 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_UNARY_NEGATE:
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
-	case NODE_EXPRESSION_UNARY_DEREFERENCE:
-	// case NODE_EXPRESSION_UNARY_ADDRESS_OF: // TODO: ok to rm?
 		scalar = is_scalar(&a->u.op_unary.operand->expr_type);
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -1722,7 +1720,12 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
+	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
 		/* guaranteed by sema_lvalue(), is_node_lvalue() */
+		assert(is_scalar(&a->u.op_unary.operand->expr_type));
+		break;
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+		/* sema_pointer_cmp() already guarantees ctype_is_pointer() */
 		assert(is_scalar(&a->u.op_unary.operand->expr_type));
 		break;
 	default:
