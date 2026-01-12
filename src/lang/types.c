@@ -360,15 +360,33 @@ types_find(struct type_table *head, const struct ctype *needle)
 bool
 ctype_is_incomplete(const struct ctype *c, struct type_table *t)
 {
-	if (ctype_is_void(c)) {
-		return true;
+	struct type_table *entry = NULL;
+
+	bool result = false;
+	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+	case CTYPE_DOUBLE:
+	case CTYPE_POINTER_TO:
+		break;
+	case CTYPE_ARRAY_OF:
+		result = ctype_is_incomplete(c->referent, t);
+		break;
+	case CTYPE_STRUCT:
+		entry = types_find(t, c);
+		result = (entry == NULL || entry->n_members == 0);
+		break;
+	case CTYPE_VOID:
+		result =  true;
+		break;
 	}
-	if (!ctype_is_struct(c)) {
-		return false;
-	}
-	struct type_table *entry = types_find(t, c);
-	assert(entry != NULL);
-	return entry->n_members == 0;
+
+	return result;
 }
 
 struct ctype *
