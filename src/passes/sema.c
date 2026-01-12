@@ -1640,7 +1640,7 @@ is_scalar(const struct ctype *c)
 	 * Allow CTYPE_ARRAY_OF, despite it not truly being scalar, assuming
 	 * other code will perform array-to-pointer decay.
 	 */
-	return !ctype_is_void(c);
+	return !ctype_is_void(c) && !ctype_is_struct(c);
 }
 
 static WARN_UNUSED result_t
@@ -1672,7 +1672,7 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 	case NODE_EXPRESSION_UNARY_NOT:
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
-	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
+	// case NODE_EXPRESSION_UNARY_ADDRESS_OF: // TODO: ok to rm?
 		scalar = is_scalar(&a->u.op_unary.operand->expr_type);
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
@@ -1700,7 +1700,7 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 		scalar = is_scalar(&a->u.op_ternary.condition->expr_type);
 		if (is_scalar(&a->u.op_ternary.then_expr->expr_type) !=
 		    is_scalar(&a->u.op_ternary.else_expr->expr_type)) {
-			scalar = false;
+			return make_result(ERR_SEMA_OPERAND_TERNARY_MISMATCH);
 		}
 		break;
 	case NODE_EXPRESSION_CAST:
@@ -2118,6 +2118,14 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              &a->u.op_binary.rhs));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
+		if ((ctype_is_struct(&a->u.op_ternary.then_expr->expr_type) !=
+		     ctype_is_struct(&a->u.op_ternary.else_expr->expr_type)) ||
+		    (ctype_is_struct(&a->u.op_ternary.then_expr->expr_type) &&
+		     ctype_is_struct(&a->u.op_ternary.else_expr->expr_type) &&
+		     !ctype_is_equal(&a->u.op_ternary.then_expr->expr_type,
+		                     &a->u.op_ternary.else_expr->expr_type))) {
+			return make_result(ERR_SEMA_OPERAND_TERNARY_MISMATCH);
+		}
 		common =
 			get_common_ctype(&a->u.op_ternary.then_expr->expr_type,
 		                         &a->u.op_ternary.else_expr->expr_type);

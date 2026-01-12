@@ -567,6 +567,9 @@ result_to_str(result_t r)
 	case ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE:
 		s = strdup("Cannot get sizeof() incomplete type");
 		break;
+	case ERR_SEMA_OPERAND_TERNARY_MISMATCH:
+		s = strdup("Incompatible operand types to ternary operand ?");
+		break;
 	case ERR_SEMA_RETURN_STATEMENT_EXPECT_VALUE:
 		s = strdup("non-void function should return a value");
 		break;
