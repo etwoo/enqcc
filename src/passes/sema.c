@@ -2376,32 +2376,39 @@ sema_fn_signature_matches(
 {
 	bool p_types_match = true;
 	for (long long int i = 0; i < n_args; ++i) {
-		const struct ctype *to_check = NULL;
-		if (is_def_or_decl) {
-			/*
-			 * Require exact parameter type match on redeclaration,
-			 * definition of preceding declaration, etc.
-			 */
-			to_check = &p_types[i];
-		} else {
-			const struct ctype *lhs =
-				&sema_get_auxiliary(dup)->p_types[i];
-			const struct ctype *rhs = &p_types[i];
+		const struct ctype *lhs = &sema_get_auxiliary(dup)->p_types[i];
+		const struct ctype *rhs = &p_types[i];
+
+		/*
+		 * Require exact parameter type match on redeclaration,
+		 * definition of preceding declaration, etc.
+		 *
+		 * Also require exact match between function call and function
+		 * definition when passing struct by value.
+		 *
+		 * Otherwise, allow conversion between function call argument
+		 * type and function definition parameter type.
+		 */
+		const bool try_convert = !is_def_or_decl &&
+		                         !ctype_is_struct(lhs) &&
+		                         !ctype_is_struct(rhs);
+
+		if (try_convert) {
 			/*
 			 * On function call, try to widen or narrow argument
 			 * expression type to declared parameter type.
 			 */
 			check(sema_pointer_cmp(lhs, rhs));
-			to_check = get_common_ctype(lhs, rhs);
+			continue;
 		}
-		if (!ctype_is_equal(to_check,
-		                    &sema_get_auxiliary(dup)->p_types[i])) {
+
+		if (!ctype_is_equal(rhs, lhs)) { // TODO: swap? NOLINT
 			p_types_match = false;
 			break;
 		}
 	}
 
-	if (is_def_or_decl && !p_types_match) {
+	if (!p_types_match) {
 		return make_result(ERR_SEMA_FUNCTION_DEFINITION_CONFLICT,
 		                   dup->name.data,
 		                   dup->name.sz);
