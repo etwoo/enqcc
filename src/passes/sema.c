@@ -1731,10 +1731,11 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 static WARN_UNUSED result_t
 sema_incomplete_types(struct ast *a, void *userdata MAYBE_UNUSED)
 {
+	struct type_table *types = userdata;
 	if (a->node_type == NODE_EXPRESSION_UNARY_SIZE_OF) {
 		assert(ctype_is_equal(&a->expr_type, &LIKE_SIZE_T));
 		if (ctype_is_incomplete(&a->u.op_unary.operand->expr_type,
-		                        NULL /* TODO: use type_table */)) {
+		                        types)) {
 			return make_result(ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE);
 		}
 	}
@@ -2830,7 +2831,7 @@ sema_typecheck(Arena *arena,
 
 	debug("Checking for invalid usage of incomplete types");
 	ops.node_enter = sema_incomplete_types;
-	check(sema_walk(a, &ops, NULL));
+	check(sema_walk(a, &ops, types));
 
 	debug("Checking for invalid double usage");
 	ops.node_enter = sema_double;

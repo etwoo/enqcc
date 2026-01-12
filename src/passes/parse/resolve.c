@@ -100,6 +100,11 @@ resolve_function_call(Arena *arena,
 	return RESULT_OK;
 }
 
+static result_t resolve_type(Arena *arena,
+                             unsigned error_if_incomplete,
+                             struct ctype *c,
+                             struct symbol **symbols,
+                             struct type_table **types) WARN_UNUSED;
 static result_t resolve_block(Arena *arena,
                               struct flat *a,
                               struct symbol **sym,
@@ -177,13 +182,22 @@ resolve_expr(Arena *arena,
 	case NODE_EXPRESSION_UNARY_COMPLEMENT:
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
 	case NODE_EXPRESSION_UNARY_ADDRESS_OF:
-	case NODE_EXPRESSION_UNARY_SIZE_OF:
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
 		check(resolve_expr(arena, a->u.op_unary.operand, sym, typ));
+		break;
+	case NODE_EXPRESSION_UNARY_SIZE_OF:
+		check(resolve_expr(arena, a->u.op_unary.operand, sym, typ));
+		if (a->u.op_unary.operand->node_type == NODE_EXPRESSION_NULL) {
+			check(resolve_type(arena,
+			                   ERR_SEMA_OPERAND_SIZEOF_INCOMPLETE,
+			                   &a->u.op_unary.operand->expr_type,
+			                   sym,
+			                   typ));
+		}
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -249,7 +263,7 @@ resolve_expr(Arena *arena,
 
 static WARN_UNUSED result_t
 resolve_type(Arena *arena,
-             bool require_complete,
+             unsigned error_if_incomplete,
              struct ctype *c,
              struct symbol **symbols,
              struct type_table **types)
@@ -266,9 +280,13 @@ resolve_type(Arena *arena,
 	case CTYPE_VOID:
 		return RESULT_OK;
 	case CTYPE_POINTER_TO:
-		return resolve_type(arena, false, c->referent, symbols, types);
+		return resolve_type(arena, OK, c->referent, symbols, types);
 	case CTYPE_ARRAY_OF:
-		return resolve_type(arena, true, c->referent, symbols, types);
+		return resolve_type(arena,
+		                    error_if_incomplete,
+		                    c->referent,
+		                    symbols,
+		                    types);
 	case CTYPE_STRUCT:
 		break;
 	}
@@ -286,12 +304,11 @@ resolve_type(Arena *arena,
 	assert(ctype_is_struct(&anywhere->c89type));
 	assert(anywhere->c89type.tag_unique != 0);
 
-	if (require_complete &&
+	if (error_if_incomplete != OK &&
 	    ctype_is_incomplete(&anywhere->c89type, *types)) {
-		return make_result(
-			ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INCOMPLETE,
-			tag_name->data,
-			tag_name->sz);
+		return make_result(error_if_incomplete,
+		                   tag_name->data,
+		                   tag_name->sz);
 	}
 
 	check(ctype_copy(arena, &anywhere->c89type, c));
@@ -301,13 +318,16 @@ resolve_type(Arena *arena,
 static WARN_UNUSED result_t
 resolve_declaration_type(Arena *arena,
                          struct ast *a,
-                         struct symbol **symbols,
-                         struct type_table **types)
+                         struct symbol **sym,
+                         struct type_table **typ)
 {
 	assert(a->node_type == NODE_DECLARATION);
-	const bool spec_extern = (a->u.declare.specifier == SPECIFIER_EXTERN);
+	const unsigned error_if_incomplete =
+		(a->u.declare.specifier == SPECIFIER_EXTERN)
+			? OK
+			: ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INCOMPLETE;
 	struct ctype *var_type = &a->u.declare.var_type;
-	check(resolve_type(arena, !spec_extern, var_type, symbols, types));
+	check(resolve_type(arena, error_if_incomplete, var_type, sym, typ));
 	return RESULT_OK;
 }
 
@@ -482,10 +502,13 @@ resolve_function_params_one(Arena *arena,
                             struct symbol **sym,
                             struct type_table **typ)
 {
-	check(resolve_type(arena, is_def, &a->parameter_type, sym, typ));
+	const unsigned error_if_incomplete =
+		is_def ? ERR_SEMA_FUNCTION_DEFINITION_PARAM_INCOMPLETE : OK;
+	struct ctype *ptype = &a->parameter_type;
+	check(resolve_type(arena, error_if_incomplete, ptype, sym, typ));
 
 	struct ctype adjust_type = {0};
-	check(ctype_copy(arena, &a->parameter_type, &adjust_type));
+	check(ctype_copy(arena, ptype, &adjust_type));
 	ctype_array_decay_to_pointer(&adjust_type);
 
 	check(symbols_prepend(arena,

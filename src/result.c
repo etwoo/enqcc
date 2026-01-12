@@ -488,6 +488,11 @@ result_to_str(result_t r)
 	case ERR_SEMA_FUNCTION_DEFINITION_PARAM_DUPLICATE:
 		s = my_asprintf("Duplicate function parameter: %s", r.msg);
 		break;
+	case ERR_SEMA_FUNCTION_DEFINITION_PARAM_INCOMPLETE:
+		s = my_asprintf("Parameter '%s' of function definition has "
+		                "incomplete type",
+		                r.msg);
+		break;
 	case ERR_SEMA_FUNCTION_LINKAGE_BLOCK_SCOPE:
 		s = my_asprintf("Block-scope declaration of function %s cannot "
 		                "have static storage class",
