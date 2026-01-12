@@ -337,7 +337,8 @@ resolve_declaration_type(Arena *arena,
 {
 	assert(a->node_type == NODE_DECLARATION);
 	const unsigned error_if_incomplete =
-		(a->u.declare.specifier == SPECIFIER_EXTERN)
+		(a->u.declare.specifier == SPECIFIER_EXTERN &&
+	         a->u.declare.init == NULL)
 			? OK
 			: ERR_SEMA_VARIABLE_DECLARATION_STRUCT_INCOMPLETE;
 	struct ctype *var_type = &a->u.declare.var_type;
