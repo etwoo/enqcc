@@ -1437,6 +1437,10 @@ sema_expr_types_initializer(Arena *arena,
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	if (init->u.init.single != NULL) {
+		if (ctype_is_aggregate(declaration_type) &&
+		    !ctype_is_aggregate(&init->u.init.single->expr_type)) {
+			return make_result(ERR_SEMA_INIT_COMPOUND_WITH_SCALAR);
+		}
 		/*
 		 * For scalar init, copy upward from constant to containing
 		 * NODE_EXPRESSION_INITIALIZER.

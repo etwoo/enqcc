@@ -446,6 +446,10 @@ result_to_str(result_t r)
 		                "aggregate type: %s",
 		                r.msg);
 		break;
+	case ERR_SEMA_INIT_COMPOUND_WITH_SCALAR:
+		s = strdup("Aggregate variable given scalar initializer "
+		           "expression");
+		break;
 	case ERR_SEMA_INIT_SCALAR_WITH_COMPOUND:
 		s = strdup("Scalar variable given compound initializer "
 		           "expression");
