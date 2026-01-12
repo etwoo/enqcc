@@ -1725,7 +1725,7 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 		assert(is_scalar(&a->u.op_unary.operand->expr_type));
 		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
-		/* sema_pointer_cmp() already guarantees ctype_is_pointer() */
+		/* sema_expr_types() already guarantees ctype_is_pointer() */
 		assert(is_scalar(&a->u.op_unary.operand->expr_type));
 		break;
 	default:
