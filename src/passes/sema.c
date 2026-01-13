@@ -1180,25 +1180,10 @@ visit_literal(struct ast *init,
 }
 
 static WARN_UNUSED result_t
-sema_str_literal_as_init(struct ast *init,
-                         const struct ctype *declaration_type,
-                         struct sema_str_literal_state *state)
-{
-	check(foreach_initializer_element(init,
-	                                  declaration_type,
-	                                  state->types,
-	                                  visit_literal,
-	                                  state));
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 sema_str_literal(struct ast *a, void *userdata)
 {
 	struct sema_str_literal_state *state = userdata;
 	Arena *arena = state->arena;
-	struct symbol **symbols = state->symbols;
-	struct type_table *types = state->types;
 
 	if (a->node_type == NODE_CONSTANT_STR) {
 		struct ast *fake_init = NULL;
@@ -1213,16 +1198,18 @@ sema_str_literal(struct ast *a, void *userdata)
 		check(sema_str_literal_hoist(arena,
 		                             &a->expr_type,
 		                             fake_init,
-		                             symbols,
-		                             types,
+		                             state->symbols,
+		                             state->types,
 		                             &new_node));
 		assert(new_node != NULL);
 		memcpy(a, new_node, sizeof(*a));
 	} else if (a->node_type == NODE_DECLARATION &&
 	           a->u.declare.init != NULL) {
-		check(sema_str_literal_as_init(a->u.declare.init,
-		                               &a->u.declare.var_type,
-		                               state));
+		check(foreach_initializer_element(a->u.declare.init,
+		                                  &a->u.declare.var_type,
+		                                  state->types,
+		                                  visit_literal,
+		                                  state));
 	}
 
 	return RESULT_OK;
