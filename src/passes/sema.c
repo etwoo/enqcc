@@ -114,6 +114,15 @@ foreach_initializer_element(struct ast *a,
 
 	long long unsigned element_count = 0;
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+		if (type_entry != NULL &&
+		    element_count >= type_entry->n_members) {
+			/*
+			 * See sema_expr_types(), visit_expr(), and
+			 * ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS.
+			 */
+			break;
+		}
+
 		const struct ctype *c = NULL;
 		if (ctype_is_struct(dst_type)) {
 			assert(type_entry != NULL);
@@ -121,6 +130,7 @@ foreach_initializer_element(struct ast *a,
 		} else {
 			c = dst_type->referent;
 		}
+
 		check(foreach_initializer_element(f->car, c, types, visit, ud));
 		++element_count;
 	}
@@ -129,14 +139,17 @@ foreach_initializer_element(struct ast *a,
 }
 
 static WARN_UNUSED result_t
-visit_count(struct ast *a MAYBE_UNUSED,
+visit_count(struct ast *a,
             const struct ctype *dst_type MAYBE_UNUSED,
             void *userdata)
 {
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+
 	long long unsigned *count = userdata;
 	if (a->u.init.single != NULL) {
 		(*count)++;
 	}
+
 	return RESULT_OK;
 }
 
@@ -233,6 +246,8 @@ map_numeric_type_scalar(const struct ast *a,
 static WARN_UNUSED result_t
 visit_populate(struct ast *a, const struct ctype *dst_type, void *userdata)
 {
+	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+
 	const struct ast *s = a->u.init.single;
 	if (s == NULL) {
 		return RESULT_OK;
@@ -1131,6 +1146,7 @@ visit_literal(struct ast *init,
 
 	bool expanded = false;
 
+	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 	if (init->u.init.single != NULL &&
 	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
 		if (!ctype_is_strlike_ptr(declaration_type) &&
@@ -1346,9 +1362,9 @@ ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
 
 static WARN_UNUSED result_t
 sema_expr_types_initializer_zero_pad(Arena *arena,
+                                     struct ast *init,
                                      const struct ctype *declaration_type,
-                                     struct type_table *types,
-                                     struct ast *init)
+                                     struct type_table *types)
 {
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
@@ -1415,34 +1431,30 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 		}
 
 		check(sema_expr_types_initializer_zero_pad(arena,
+		                                           (**dst).car,
 		                                           c,
-		                                           types,
-		                                           (**dst).car));
+		                                           types));
 		dst = &(**dst).cdr;
 	}
 
 	return RESULT_OK;
 }
 
-/*
- * See sema_implicit_cast_initializer() for related logic.
- */
+struct sema_expr_state {
+	Arena *arena;
+	struct type_table *types;
+};
+
 static WARN_UNUSED result_t
-sema_expr_types_initializer(Arena *arena,
-                            struct ast_symbol *varname,
-                            const struct ctype *declaration_type,
-                            struct ast *init,
-                            struct type_table *types)
+visit_expr(struct ast *init,
+           const struct ctype *declaration_type,
+           void *userdata)
 {
-	if (init == NULL) {
-		return RESULT_OK;
-	}
+	struct sema_expr_state *state = userdata;
+	Arena *arena = state->arena;
+	struct type_table *types = state->types;
 
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
-
-	// TODO: convert sema_expr_types_initializer() to use foreach()
-	// leave sema_expr_types_initializer_zero_pad() as-is since it iterates
-	// based on expected number of elements, rather than u.init.multi as-is
 
 	if (init->u.init.single != NULL) {
 		if (ctype_is_aggregate(declaration_type) &&
@@ -1484,11 +1496,19 @@ sema_expr_types_initializer(Arena *arena,
 	 */
 	check(ctype_copy(arena, declaration_type, &init->expr_type));
 
-	long long unsigned element_limit = 0;
-	struct type_table *type_entry = NULL;
+	long long unsigned element_count = 0;
+	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
+		++element_count;
+	}
 
+	if (element_count == 0) {
+		return make_result(ERR_SEMA_INIT_COMPOUND_EMPTY);
+	}
+
+	long long unsigned element_limit = 0;
 	if (ctype_is_struct(declaration_type)) {
-		type_entry = types_find(types, declaration_type);
+		struct type_table *type_entry =
+			types_find(types, declaration_type);
 		assert(type_entry != NULL);
 		element_limit = type_entry->n_members;
 	} else {
@@ -1496,43 +1516,32 @@ sema_expr_types_initializer(Arena *arena,
 		element_limit = declaration_type->sz;
 	}
 
-	long long unsigned element_count = 0;
-
-	/*
-	 * Recurse into compound initializer elements.
-	 */
-	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
-		const struct ctype *c = NULL;
-		if (ctype_is_struct(declaration_type)) {
-			assert(type_entry != NULL);
-			c = &type_entry->members[element_count].member_type;
-		} else {
-			c = declaration_type->referent;
-		}
-		check(sema_expr_types_initializer(arena,
-		                                  varname,
-		                                  c,
-		                                  f->car,
-		                                  types));
-		++element_count;
-	}
-
-	if (element_count == 0) {
-		return make_result(ERR_SEMA_INIT_COMPOUND_EMPTY);
-	}
 	if (element_count > element_limit) {
-		return make_result(ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS,
-		                   varname->name.data,
-		                   varname->name.sz);
+		return make_result(ERR_SEMA_INIT_COMPOUND_EXCESS_ELEMENTS);
 	}
 
-	/*
-	 * Pad compound initializer with zeros as necessary.
-	 */
-	check(sema_expr_types_initializer_zero_pad(arena,
-	                                           declaration_type,
-	                                           types,
-	                                           init));
+	return RESULT_OK;
+}
+
+/*
+ * See sema_implicit_cast_initializer() for related logic.
+ */
+static WARN_UNUSED result_t
+sema_expr_types_initializer(struct ast *a, struct sema_expr_state *state)
+{
+	assert(a->node_type == NODE_DECLARATION);
+	if (a->u.declare.init == NULL) {
+		return RESULT_OK;
+	}
+	check(foreach_initializer_element(a->u.declare.init,
+	                                  &a->u.declare.var_type,
+	                                  state->types,
+	                                  visit_expr,
+	                                  state));
+	check(sema_expr_types_initializer_zero_pad(state->arena,
+	                                           a->u.declare.init,
+	                                           &a->u.declare.var_type,
+	                                           state->types));
 	return RESULT_OK;
 }
 
@@ -1594,11 +1603,6 @@ promote_if_char(Arena *arena, struct ast **a)
 	return RESULT_OK;
 }
 
-struct sema_expr_state {
-	Arena *arena;
-	struct type_table *types;
-};
-
 static WARN_UNUSED result_t
 sema_expr_types(struct ast *a, void *userdata)
 {
@@ -1621,11 +1625,7 @@ sema_expr_types(struct ast *a, void *userdata)
 	case NODE_CASE_DEFAULT:
 		break; /* expr_type has no meaning in this context */
 	case NODE_DECLARATION:
-		check(sema_expr_types_initializer(arena,
-		                                  &a->u.declare.identifier,
-		                                  &a->u.declare.var_type,
-		                                  a->u.declare.init,
-		                                  types));
+		check(sema_expr_types_initializer(a, state));
 		break;
 	case NODE_EXPRESSION_INITIALIZER:
 		break; /* handled by NODE_DECLARATION case */
