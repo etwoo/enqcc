@@ -143,7 +143,7 @@ sema_walk(struct ast *a, struct sema_ops *ops, void *u)
 	return RESULT_OK;
 }
 
-// TODO: dedup unpack_cast() with linkage.c
+// TODO: dedup unpack_cast() with linkage.c; move to implicit_cast.h?
 static WARN_UNUSED struct ast **
 unpack_cast(struct ast **a)
 {

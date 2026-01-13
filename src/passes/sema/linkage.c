@@ -11,7 +11,7 @@
 #include <string.h>    /* for memset() */
 #include <sys/param.h> /* for MAX() */
 
-// TODO: dedup unpack_cast() with walk.c
+// TODO: dedup unpack_cast() with walk.c; move to implicit_cast.h?
 static WARN_UNUSED struct ast **
 unpack_cast(struct ast **a)
 {

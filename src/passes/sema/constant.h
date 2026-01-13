@@ -12,7 +12,7 @@ struct ctype;
 struct type_table;
 
 // TODO: rename map_numeric_type() to be descriptive
-// maybbe something like calculate_constant_initializer()
+// maybe something like make_constant_initializer()
 result_t map_numeric_type(Arena *arena,
                           struct ast *init,
                           const struct ctype *dst_type,
