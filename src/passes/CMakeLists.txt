@@ -1,4 +1,5 @@
 add_subdirectory(parse)
+add_subdirectory(sema)
 
 target_sources(compiler PRIVATE
 	codegen.c
