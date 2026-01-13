@@ -1530,16 +1530,6 @@ codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 	return RESULT_OK;
 }
 
-static WARN_UNUSED long long int
-round_up_to_multiple_of(long long int n, long long int base)
-{
-	const long long int rounded = (((n + base - 1) / base)) * base;
-	assert(rounded >= n);
-	assert(rounded - n < base);
-	assert(rounded % base == 0);
-	return rounded;
-}
-
 static WARN_UNUSED result_t
 codegen_replace_pseudo_fn(struct asm_function *cg,
                           long long int range[2],

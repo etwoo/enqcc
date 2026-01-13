@@ -651,8 +651,9 @@ resolve_struct_members(Arena *arena,
 	out->members = arena_alloc(arena, n_members * sizeof(*out->members));
 	check_if(out->members == NULL, ERR_CTYPE_ALLOC);
 
-	out->aggregate_size = 0;      // TODO
-	out->aggregate_alignment = 1; // TODO
+	out->aggregate_size = 0;
+	out->aggregate_alignment = 1;
+	out->n_members = n_members;
 
 	struct flat *f = a->u.struct_.members;
 	for (long long unsigned i = 0; i < n_members; ++i) {
@@ -678,8 +679,10 @@ resolve_struct_members(Arena *arena,
 		                               ast_member,
 		                               symbols,
 		                               types));
-		if (ctype_is_incomplete(&ast_member->u.declare.var_type,
-		                        *types)) {
+
+		const struct ctype *member_type =
+			&ast_member->u.declare.var_type;
+		if (ctype_is_incomplete(member_type, *types)) {
 			return make_result(
 				ERR_SEMA_STRUCT_MEMBER_TYPE_INCOMPLETE,
 				new_name->data,
@@ -688,14 +691,28 @@ resolve_struct_members(Arena *arena,
 
 		out->members[i].member_name = *new_name;
 		check(ctype_copy(arena,
-		                 &ast_member->u.declare.var_type,
+		                 member_type,
 		                 &out->members[i].member_type));
-		out->members[i].member_offset = 0; // TODO
+
+		const long long int member_alignment =
+			ctype_to_alignment(member_type, *types);
+		out->members[i].member_offset =
+			round_up_to_multiple_of(out->aggregate_size,
+		                                member_alignment);
+
+		out->aggregate_alignment =
+			MAX(out->aggregate_alignment, member_alignment);
+
+		const long long int member_size =
+			ctype_to_size_bytes_with_types(member_type, *types);
+		out->aggregate_size =
+			out->members[i].member_offset + member_size;
 
 		f = f->cdr;
 	}
 
-	out->n_members = n_members;
+	out->aggregate_size = round_up_to_multiple_of(out->aggregate_size,
+	                                              out->aggregate_alignment);
 	return RESULT_OK;
 }
 

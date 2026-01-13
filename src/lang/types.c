@@ -142,6 +142,18 @@ ctype_to_size_bytes(const struct ctype *c)
 	return ctype_to_size_bytes_with_types(c, NULL);
 }
 
+long long int
+ctype_to_alignment(const struct ctype *c, struct type_table *t)
+{
+	long long a = 0;
+	if (ctype_is_array(c)) {
+		a = ctype_to_size_bytes_with_types(c->referent, t);
+	} else {
+		a = ctype_to_size_bytes_with_types(c, t);
+	}
+	return a;
+}
+
 bool
 ctype_is_integer(const struct ctype *c)
 {
@@ -424,4 +436,14 @@ ctype_of_member(struct type_table *type_entry,
 		}
 	}
 	return NULL;
+}
+
+long long int
+round_up_to_multiple_of(long long int n, long long int base)
+{
+	const long long int rounded = (((n + base - 1) / base)) * base;
+	assert(rounded >= n);
+	assert(rounded - n < base);
+	assert(rounded % base == 0);
+	return rounded;
 }

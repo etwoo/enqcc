@@ -64,13 +64,13 @@ void ctype_array_decay_to_pointer(struct ctype *c);
 
 struct type_table {
 	struct ctype c;
-	long long unsigned aggregate_size;
-	long long unsigned aggregate_alignment;
+	long long int aggregate_size;
+	long long int aggregate_alignment;
 	long long unsigned n_members;
 	struct {
 		struct string_view member_name;
 		struct ctype member_type;
-		long long unsigned member_offset;
+		long long int member_offset;
 	} *members __attribute__((counted_by(n_members)));
 	struct type_table *next;
 };
@@ -82,6 +82,8 @@ struct type_table *types_find(struct type_table *head,
                               const struct ctype *needle) WARN_UNUSED;
 long long int ctype_to_size_bytes_with_types(const struct ctype *c,
                                              struct type_table *t) WARN_UNUSED;
+long long int ctype_to_alignment(const struct ctype *c,
+                                 struct type_table *t) WARN_UNUSED;
 bool ctype_is_incomplete(const struct ctype *c,
                          struct type_table *t) WARN_UNUSED;
 bool ctype_is_ptr_to_incomplete(const struct ctype *c,
@@ -89,5 +91,8 @@ bool ctype_is_ptr_to_incomplete(const struct ctype *c,
 struct ctype *
 ctype_of_member(struct type_table *type_entry,
                 const struct string_view *member_name) WARN_UNUSED;
+
+long long int round_up_to_multiple_of(long long int n,
+                                      long long int base) WARN_UNUSED;
 
 #endif
