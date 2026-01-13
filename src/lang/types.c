@@ -95,9 +95,11 @@ ctype_to_str(const struct ctype *c, char *stor, size_t cap)
 }
 
 long long int
-ctype_to_size_bytes(const struct ctype *c)
+ctype_to_size_bytes_with_types(const struct ctype *c, struct type_table *t)
 {
-	long long int b = 0;
+	long long unsigned b = 0;
+	struct type_table *type_entry = NULL;
+
 	switch (c->t) {
 	case CTYPE_VOID:
 		b = 0;
@@ -119,13 +121,25 @@ ctype_to_size_bytes(const struct ctype *c)
 		break;
 	case CTYPE_ARRAY_OF:
 		assert(c->sz > 0 && c->sz < LLONG_MAX);
-		b = (long long int)c->sz * ctype_to_size_bytes(c->referent);
+		b = c->sz * ctype_to_size_bytes(c->referent);
 		break;
 	case CTYPE_STRUCT:
-		assert(0 && "TODO struct size using type table");
+		assert(t && "struct size lookup requires type table");
+		type_entry = types_find(t, c);
+		assert(type_entry != NULL); /* caller ensures complete type */
+		assert(type_entry->n_members > 0);
+		b = type_entry->aggregate_size;
 		break;
 	}
-	return b;
+
+	assert(b < LLONG_MAX);
+	return (long long int)b;
+}
+
+long long int
+ctype_to_size_bytes(const struct ctype *c)
+{
+	return ctype_to_size_bytes_with_types(c, NULL);
 }
 
 bool

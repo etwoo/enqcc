@@ -64,12 +64,13 @@ void ctype_array_decay_to_pointer(struct ctype *c);
 
 struct type_table {
 	struct ctype c;
-	// TODO: total size of this struct
+	long long unsigned aggregate_size;
+	long long unsigned aggregate_alignment;
 	long long unsigned n_members;
 	struct {
 		struct string_view member_name;
 		struct ctype member_type;
-		// TODO: alignment of each member
+		long long unsigned member_offset;
 	} *members __attribute__((counted_by(n_members)));
 	struct type_table *next;
 };
@@ -79,6 +80,8 @@ result_t types_prepend(Arena *arena,
                        struct ctype *new_type) WARN_UNUSED;
 struct type_table *types_find(struct type_table *head,
                               const struct ctype *needle) WARN_UNUSED;
+long long int ctype_to_size_bytes_with_types(const struct ctype *c,
+                                             struct type_table *t) WARN_UNUSED;
 bool ctype_is_incomplete(const struct ctype *c,
                          struct type_table *t) WARN_UNUSED;
 bool ctype_is_ptr_to_incomplete(const struct ctype *c,

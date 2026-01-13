@@ -42,6 +42,7 @@ result_t ir_init(Arena *arena,
                  long long int base_id,
                  long long int base_label,
                  struct symbol_table *sym,
+                 struct type_table *typ,
                  struct intermediate **ir) __attribute__((warn_unused_result));
 void ir_debug_print(const struct intermediate *ir);
 

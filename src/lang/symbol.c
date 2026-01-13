@@ -47,20 +47,19 @@ get_initializer_element_count(const struct ctype *c)
 }
 
 static WARN_UNUSED long long unsigned
-get_initializer_element_size_bytes(const struct ctype *c)
+get_initializer_element_size_bytes(const struct ctype *c,
+                                   struct type_table *types)
 {
 	if (ctype_is_array(c)) {
-		return get_initializer_element_size_bytes(c->referent);
+		return get_initializer_element_size_bytes(c->referent, types);
 	}
-	if (ctype_is_struct(c)) {
-		return 8; // TODO: rm tmp hack; do struct to ctype_to_size_bytes
-	}
-	return ctype_to_size_bytes(c);
+	return ctype_to_size_bytes_with_types(c, types);
 }
 
 result_t
 constant_set_zero(Arena *arena,
                   const struct ctype *c89type,
+                  struct type_table *types,
                   struct constant_initializer *ci)
 {
 	ci->count = get_initializer_element_count(c89type);
@@ -69,7 +68,7 @@ constant_set_zero(Arena *arena,
 	memset(ci->elements, 0, ci->count * sizeof(*ci->elements));
 
 	const long long unsigned element_size_bytes =
-		get_initializer_element_size_bytes(c89type);
+		get_initializer_element_size_bytes(c89type, types);
 
 	for (long long unsigned i = 0; i < ci->count; ++i) {
 		ci->elements[i].byte_count = element_size_bytes;
@@ -81,11 +80,12 @@ constant_set_zero(Arena *arena,
 result_t
 constant_make_zero(Arena *arena,
                    const struct ctype *c89type,
+                   struct type_table *types,
                    struct constant_initializer **dst)
 {
 	*dst = arena_alloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_SYMBOL_ALLOC);
-	check(constant_set_zero(arena, c89type, *dst));
+	check(constant_set_zero(arena, c89type, types, *dst));
 	return RESULT_OK;
 }
 

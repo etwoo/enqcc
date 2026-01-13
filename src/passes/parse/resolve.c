@@ -651,6 +651,9 @@ resolve_struct_members(Arena *arena,
 	out->members = arena_alloc(arena, n_members * sizeof(*out->members));
 	check_if(out->members == NULL, ERR_CTYPE_ALLOC);
 
+	out->aggregate_size = 0;      // TODO
+	out->aggregate_alignment = 1; // TODO
+
 	struct flat *f = a->u.struct_.members;
 	for (long long unsigned i = 0; i < n_members; ++i) {
 		assert(f != NULL);
@@ -687,6 +690,7 @@ resolve_struct_members(Arena *arena,
 		check(ctype_copy(arena,
 		                 &ast_member->u.declare.var_type,
 		                 &out->members[i].member_type));
+		out->members[i].member_offset = 0; // TODO
 
 		f = f->cdr;
 	}

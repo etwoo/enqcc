@@ -1817,7 +1817,10 @@ ir_func(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
+ir_var(Arena *arena,
+       struct symbol *s,
+       struct type_table *types,
+       struct ir_variable **dst)
 {
 	assert(dst != NULL);
 	*dst = arena_alloc(arena, sizeof(**dst));
@@ -1834,6 +1837,7 @@ ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 	case INITIAL_VALUE_TENTATIVE:
 		check(constant_make_zero(arena,
 		                         &s->c89type,
+		                         types, // TODO
 		                         &(**dst).initializer));
 		break;
 	case INITIAL_VALUE_CONSTANT:
@@ -1863,6 +1867,7 @@ static WARN_UNUSED result_t
 ir_program(Arena *arena,
            const struct ast *a,
            struct symbol_table *sym,
+           struct type_table *types,
            struct intermediate *ir)
 {
 	assert(a->node_type == NODE_PROGRAM);
@@ -1912,7 +1917,7 @@ ir_program(Arena *arena,
 		if (s->linkage.initial == INITIAL_VALUE_NO_INITIALIZER) {
 			continue;
 		}
-		check(ir_var(arena, s, dst_var));
+		check(ir_var(arena, s, types, dst_var));
 		assert(*dst_var != NULL);
 		dst_var = &(**dst_var).next;
 	}
@@ -1934,6 +1939,7 @@ ir_init(Arena *arena,
         long long int base_id,
         long long int base_label,
         struct symbol_table *sym,
+        struct type_table *typ,
         struct intermediate **ir)
 {
 	*ir = arena_alloc(arena, sizeof(**ir));
@@ -1941,7 +1947,7 @@ ir_init(Arena *arena,
 	memset(*ir, 0, sizeof(**ir));
 	(**ir).env.generator = base_id;
 	(**ir).env.labels = base_label;
-	check(ir_program(arena, a, sym, *ir));
+	check(ir_program(arena, a, sym, typ, *ir));
 	return RESULT_OK;
 }
 
