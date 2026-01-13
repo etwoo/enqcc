@@ -333,6 +333,13 @@ ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
 	return ctype_is_equal_impl(lhs, rhs, true);
 }
 
+bool
+ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
+{
+	return (ctype_is_struct(lhs) != ctype_is_struct(rhs)) ||
+	       (ctype_is_struct(lhs) && !ctype_is_equal(lhs, rhs));
+}
+
 void
 ctype_array_decay_to_pointer(struct ctype *c)
 {

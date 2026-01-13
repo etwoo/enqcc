@@ -17,14 +17,6 @@
  */
 static const struct ctype LIKE_SIZE_T = {.t = CTYPE_UNSIGNED_LONG};
 
-// TODO: dedup ctype_is_struct_mismatch(), multiple copies
-static WARN_UNUSED bool
-ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
-{
-	return (ctype_is_struct(lhs) != ctype_is_struct(rhs)) ||
-	       (ctype_is_struct(lhs) && !ctype_is_equal(lhs, rhs));
-}
-
 static WARN_UNUSED result_t
 promote_if_char(Arena *arena, struct ast **a)
 {

@@ -7,14 +7,6 @@
 
 #include <assert.h>
 
-// TODO: dedup ctype_is_struct_mismatch(), multiple copies
-static WARN_UNUSED bool
-ctype_is_struct_mismatch(const struct ctype *lhs, const struct ctype *rhs)
-{
-	return (ctype_is_struct(lhs) != ctype_is_struct(rhs)) ||
-	       (ctype_is_struct(lhs) && !ctype_is_equal(lhs, rhs));
-}
-
 struct sema_implicit_cast_state {
 	Arena *arena;
 	struct type_table *types;

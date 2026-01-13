@@ -60,6 +60,8 @@ const struct ctype *get_common_ctype(const struct ctype *lhs,
                                      const struct ctype *rhs) WARN_UNUSED;
 bool ctype_is_equal(const struct ctype *lhs,
                     const struct ctype *rhs) WARN_UNUSED;
+bool ctype_is_struct_mismatch(const struct ctype *lhs,
+                              const struct ctype *rhs) WARN_UNUSED;
 void ctype_array_decay_to_pointer(struct ctype *c);
 
 /*
