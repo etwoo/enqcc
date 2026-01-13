@@ -533,7 +533,7 @@ sema_typecheck(Arena *arena,
 	debug("Labeling goto statements and labels");
 	check(sema_label_gotos(arena, a, label_generator));
 
-	debug("Checking linkage for function/variable symbols");
+	debug("Determining linkage for function and variable symbols");
 	check(sema_typecheck_linkage(arena, a, s, types));
 
 	return RESULT_OK;
