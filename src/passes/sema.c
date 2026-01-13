@@ -98,7 +98,7 @@ foreach_initializer_element(struct ast **ast_handle,
 	a = unpack_cast(a);
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
-	check(visit(ast_handle, dst_type, ud));
+	check(visit(&a, dst_type, ud));
 
 	if (a->u.init.single != NULL) {
 		return RESULT_OK;
