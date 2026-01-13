@@ -97,7 +97,7 @@ ctype_to_str(const struct ctype *c, char *stor, size_t cap)
 long long int
 ctype_to_size_bytes_with_types(const struct ctype *c, struct type_table *t)
 {
-	long long unsigned b = 0;
+	long long int b = 0;
 	struct type_table *type_entry = NULL;
 
 	switch (c->t) {
@@ -121,7 +121,8 @@ ctype_to_size_bytes_with_types(const struct ctype *c, struct type_table *t)
 		break;
 	case CTYPE_ARRAY_OF:
 		assert(c->sz > 0 && c->sz < LLONG_MAX);
-		b = c->sz * ctype_to_size_bytes_with_types(c->referent, t);
+		b = (long long int)c->sz;
+		b *= ctype_to_size_bytes_with_types(c->referent, t);
 		break;
 	case CTYPE_STRUCT:
 		assert(t && "struct size lookup requires type table");
@@ -132,8 +133,7 @@ ctype_to_size_bytes_with_types(const struct ctype *c, struct type_table *t)
 		break;
 	}
 
-	assert(b < LLONG_MAX);
-	return (long long int)b;
+	return b;
 }
 
 long long int
@@ -145,13 +145,13 @@ ctype_to_size_bytes(const struct ctype *c)
 long long int
 ctype_to_alignment(const struct ctype *c, struct type_table *t)
 {
-	long long a = 0;
+	long long int align = 0;
 	if (ctype_is_array(c)) {
-		a = ctype_to_size_bytes_with_types(c->referent, t);
+		align = ctype_to_size_bytes_with_types(c->referent, t);
 	} else {
-		a = ctype_to_size_bytes_with_types(c, t);
+		align = ctype_to_size_bytes_with_types(c, t);
 	}
-	return a;
+	return align;
 }
 
 bool
