@@ -1397,11 +1397,6 @@ sema_expr_types_initializer_zero_pad(Arena *arena,
 		type_entry = types_find(types, declaration_type);
 		assert(type_entry != NULL);
 		element_limit = type_entry->n_members;
-		// TODO(compound_init): init zero-padding for struct, instead
-		// of arr (below); several different cases:
-		// x) extra members not explicitly initialized (like array)
-		// 2) zero padding between members for alignment
-		// 3) zero padding after last member for alignment
 	} else {
 		assert(ctype_is_pointer(declaration_type));
 		assert(declaration_type->referent != NULL);
@@ -1856,7 +1851,7 @@ sema_non_scalar(struct ast *a, void *userdata MAYBE_UNUSED)
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		// assignment actually allows structs; TODO: refactor
+		/* assignment allows struct, in addition to scalar values */
 		scalar = !ctype_is_void(&a->u.op_binary.lhs->expr_type) &&
 		         !ctype_is_void(&a->u.op_binary.rhs->expr_type);
 		break;
