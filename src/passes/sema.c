@@ -1,8 +1,5 @@
-#include "lang/symbol.h"
 #include "passes.h"
 #include "passes/parse.h"
-#include "passes/parse/alloc.h"
-#include "passes/sema/constant.h"
 #include "passes/sema/expression.h"
 #include "passes/sema/flow.h"
 #include "passes/sema/implicit_cast.h"
@@ -14,22 +11,6 @@
 #include "sys/debug.h"
 
 #include <assert.h>
-#include <stdint.h>    /* for SIZE_MAX */
-#include <stdlib.h>    /* for strtoll() */
-#include <sys/param.h> /* for MAX() */
-
-static WARN_UNUSED bool
-is_node_lvalue(const struct ast *a)
-{
-	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
-		a = a->u.op_unary.operand;
-	}
-	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-	       (a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE &&
-	        !ctype_is_void_ptr(&a->u.op_unary.operand->expr_type)) ||
-	       (a->node_type == NODE_EXPRESSION_STRUCT_MEMBER &&
-	        is_node_lvalue(a->u.member_access.lhs));
-}
 
 static WARN_UNUSED result_t
 sema_compound_assignment(struct ast *a, void *userdata)
@@ -133,6 +114,19 @@ sema_struct_pointer(struct ast *a, void *userdata)
 	a->u.member_access.lhs = new_node;
 
 	return RESULT_OK;
+}
+
+static WARN_UNUSED bool
+is_node_lvalue(const struct ast *a)
+{
+	while (a->node_type == NODE_EXPRESSION_PAREN_ENCLOSED) {
+		a = a->u.op_unary.operand;
+	}
+	return a->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+	       (a->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE &&
+	        !ctype_is_void_ptr(&a->u.op_unary.operand->expr_type)) ||
+	       (a->node_type == NODE_EXPRESSION_STRUCT_MEMBER &&
+	        is_node_lvalue(a->u.member_access.lhs));
 }
 
 static WARN_UNUSED result_t
@@ -468,9 +462,6 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
-// TODO: split out helper functions into src/passes/sema/{walk,literal,...}.c
-// this file is too confusing to navigate
-// should be clearer once logic for lvalues/literals/pointers/etc are separate
 result_t
 sema_typecheck(Arena *arena,
                struct ast *a,
