@@ -48,6 +48,8 @@ sema_conversion_initializer(struct ast *a, struct sema_conversion_state *state)
 	return RESULT_OK;
 }
 
+// TODO: move ctype_is_struct_mismatch() calls in this fn to dedicated pass
+// similar to sema_pointer(), but like sema_struct()
 static WARN_UNUSED result_t
 sema_conversion(struct ast *a, void *userdata)
 {
