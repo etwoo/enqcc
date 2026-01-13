@@ -97,7 +97,7 @@ compile(Arena *arena,
 	const long long int base_label = label_generator + 1;
 
 	struct intermediate *ir = NULL;
-	check(ir_init(arena, a, base_id, base_label, &from_sema, t, &ir));
+	check(ir_init(arena, a, base_id, base_label, &from_sema, &ir));
 	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES &&
@@ -128,7 +128,7 @@ compile(Arena *arena,
 		;
 	int fd = open(dst, O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR);
 	check_if(fd < 0, ERR_EMIT_FILE_OPEN, errno);
-	check(emit_asm(arena, cg, platform_choice, fd));
+	check(emit_asm(arena, cg, &from_sema, platform_choice, fd));
 	close(fd);
 
 	return RESULT_OK;

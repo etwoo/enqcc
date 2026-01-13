@@ -1817,57 +1817,9 @@ ir_func(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_var(Arena *arena,
-       struct symbol *s,
-       struct type_table *types, // TODO: mv elsewhere, don't pass types to IR
-       struct ir_variable **dst)
-{
-	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
-	check_if(*dst == NULL, ERR_IR_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
-
-	(**dst).identifier = s->name;
-	(**dst).linkage = ir_map_linkage(s->linkage.linkage);
-
-	switch (s->linkage.initial) {
-	case INITIAL_VALUE_NO_INITIALIZER:
-		assert(0); /* logic error in caller */
-		break;
-	case INITIAL_VALUE_TENTATIVE:
-		check(constant_make_zero(arena,
-		                         &s->c89type,
-		                         types,
-		                         &(**dst).initializer));
-		break;
-	case INITIAL_VALUE_CONSTANT:
-		(**dst).initializer = &s->linkage.initializer;
-		break;
-	}
-
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-ir_string_literal(Arena *arena, struct symbol *s, struct ir_str **dst)
-{
-	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
-	check_if(*dst == NULL, ERR_IR_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
-
-	(**dst).string_unique = s->unique;
-	assert(s->linkage.initial == INITIAL_VALUE_CONSTANT);
-	(**dst).initializer = &s->linkage.initializer;
-
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 ir_program(Arena *arena,
            const struct ast *a,
            struct symbol_table *sym,
-           struct type_table *types,
            struct intermediate *ir)
 {
 	assert(a->node_type == NODE_PROGRAM);
@@ -1911,25 +1863,6 @@ ir_program(Arena *arena,
 		}
 	}
 
-	struct ir_variable **dst_var = &ir->variables;
-	for (struct symbol *s = sym->variables; s != NULL; s = s->next) {
-		assert(s->stype == SYMBOL_VARIABLE);
-		if (s->linkage.initial == INITIAL_VALUE_NO_INITIALIZER) {
-			continue;
-		}
-		check(ir_var(arena, s, types, dst_var));
-		assert(*dst_var != NULL);
-		dst_var = &(**dst_var).next;
-	}
-
-	struct ir_str **dst_str = &ir->string_literals;
-	for (struct symbol *s = sym->string_literals; s != NULL; s = s->next) {
-		assert(s->stype == SYMBOL_STRING_LITERAL);
-		check(ir_string_literal(arena, s, dst_str));
-		assert(*dst_str != NULL);
-		dst_str = &(**dst_str).next;
-	}
-
 	return RESULT_OK;
 }
 
@@ -1939,7 +1872,6 @@ ir_init(Arena *arena,
         long long int base_id,
         long long int base_label,
         struct symbol_table *sym,
-        struct type_table *typ,
         struct intermediate **ir)
 {
 	*ir = arena_alloc(arena, sizeof(**ir));
@@ -1947,7 +1879,7 @@ ir_init(Arena *arena,
 	memset(*ir, 0, sizeof(**ir));
 	(**ir).env.generator = base_id;
 	(**ir).env.labels = base_label;
-	check(ir_program(arena, a, sym, typ, *ir));
+	check(ir_program(arena, a, sym, *ir));
 	return RESULT_OK;
 }
 
@@ -2023,17 +1955,6 @@ void
 ir_debug_print(const struct intermediate *ir)
 {
 	debug("PROGRAM");
-
-	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
-		const struct string_view *vname = &v->identifier;
-		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		debug("  LINKAGE %s",
-		      v->linkage == IR_LINKAGE_INTERNAL ? "EXTERNAL"
-		                                        : "INTERNAL");
-		debug("  INITIALIZER");
-		constant_debug_print(v->initializer, 4);
-	}
-
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);

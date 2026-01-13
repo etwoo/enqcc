@@ -88,19 +88,6 @@ struct ir_function {
 	struct ir_function *next;
 };
 
-struct ir_variable { // TODO: rm unnecessary intermediate struct?
-	struct string_view identifier;
-	enum ir_linkage linkage;
-	struct constant_initializer *initializer;
-	struct ir_variable *next;
-};
-
-struct ir_str { // TODO: rm unnecessary intermediate struct?
-	long long int string_unique;
-	struct constant_initializer *initializer;
-	struct ir_str *next;
-};
-
 struct ir_env {
 	long long int generator;
 	long long int labels;
@@ -108,8 +95,6 @@ struct ir_env {
 
 struct intermediate {
 	struct ir_function *functions;
-	struct ir_variable *variables;
-	struct ir_str *string_literals;
 	struct ir_env env;
 };
 

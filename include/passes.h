@@ -42,7 +42,6 @@ result_t ir_init(Arena *arena,
                  long long int base_id,
                  long long int base_label,
                  struct symbol_table *sym,
-                 struct type_table *typ,
                  struct intermediate **ir) __attribute__((warn_unused_result));
 void ir_debug_print(const struct intermediate *ir);
 
@@ -62,8 +61,10 @@ enum platform {
 	PLATFORM_LINUX,
 };
 
-result_t
-emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
-	__attribute__((warn_unused_result));
+result_t emit_asm(Arena *arena,
+                  const struct assembly *cg,
+                  struct symbol_table *s,
+                  enum platform plat,
+                  int fd) __attribute__((warn_unused_result));
 
 #endif

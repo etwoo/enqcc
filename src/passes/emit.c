@@ -637,12 +637,12 @@ emit_asm_fn(const struct asm_function *fn, enum platform plat, int fd)
 static const long long unsigned MAX_ALIGNMENT = 16;
 
 static void
-emit_asm_initializer(const struct string_view *name,
-                     const char *section,
-                     const char *linkage, /* prefix, if symbol has linkage */
-                     const struct constant_initializer *initializer,
-                     enum platform plat,
-                     int fd)
+emit_asm_init(const struct string_view *name,
+              const char *section,
+              const char *linkage, /* prefix, if symbol has linkage */
+              const struct constant_initializer *initializer,
+              enum platform plat,
+              int fd)
 {
 	const char *label_prefix = get_label_prefix(plat);
 
@@ -692,13 +692,13 @@ emit_asm_initializer(const struct string_view *name,
 }
 
 static void
-emit_asm_str(const struct asm_str *s, enum platform plat, int fd)
+emit_asm_str(const struct symbol *s, enum platform plat, int fd)
 {
 	const char *label_prefix = get_label_prefix(plat);
 	assert(label_prefix != NULL);
 
 	char *str = NULL;
-	int rc = asprintf(&str, "%s.str.%lld", label_prefix, s->string_unique);
+	int rc = asprintf(&str, "%s.str.%lld", label_prefix, s->unique);
 	assert(rc >= 0);
 
 	const struct string_view sv = {
@@ -706,26 +706,26 @@ emit_asm_str(const struct asm_str *s, enum platform plat, int fd)
 		.sz = strlen(str),
 	};
 	const char *section_cstr = get_section_string_literals(plat);
-	emit_asm_initializer(&sv, section_cstr, "", s->initializer, plat, fd);
+	emit_asm_init(&sv, section_cstr, "", &s->linkage.initializer, plat, fd);
 
 	free(str);
 }
 
 static void
-emit_asm_var(const struct asm_variable *v, enum platform plat, int fd)
+emit_asm_var(const struct symbol *v, enum platform plat, int fd)
 {
-	const struct string_view *vname = &v->identifier;
-	const char *vprefix = get_symbol_with_linkage_prefix(plat);
+	const struct string_view *name = &v->name;
+	const char *prefix = get_symbol_with_linkage_prefix(plat);
 
-	if (v->linkage == ASM_LINKAGE_EXTERNAL) {
+	if (v->linkage.linkage == SYMBOL_LINKAGE_EXTERNAL) {
 		dprintf(fd,
 		        "\t.globl %s%.*s\n",
 		        get_symbol_with_linkage_prefix(plat),
-		        (int)vname->sz,
-		        vname->data);
+		        (int)name->sz,
+		        name->data);
 	}
 
-	emit_asm_initializer(vname, ".data", vprefix, v->initializer, plat, fd);
+	emit_asm_init(name, ".data", prefix, &v->linkage.initializer, plat, fd);
 }
 
 /*
@@ -867,17 +867,21 @@ emit_asm_fp_constants(Arena *arena,
 }
 
 result_t
-emit_asm(Arena *arena, const struct assembly *cg, enum platform plat, int fd)
+emit_asm(Arena *arena,
+         const struct assembly *cg,
+         struct symbol_table *s,
+         enum platform plat,
+         int fd)
 {
 	if (cg == NULL) {
 		return RESULT_OK;
 	}
 
-	for (struct asm_str *s = cg->string_literals; s != NULL; s = s->next) {
-		emit_asm_str(s, plat, fd);
+	for (struct symbol *l = s->string_literals; l != NULL; l = l->next) {
+		emit_asm_str(l, plat, fd);
 	}
 
-	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
+	for (struct symbol *v = s->variables; v != NULL; v = v->next) {
 		emit_asm_var(v, plat, fd);
 	}
 

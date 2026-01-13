@@ -1461,37 +1461,6 @@ codegen_function(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-codegen_variable(Arena *arena,
-                 const struct ir_variable *ir,
-                 struct asm_variable **dst)
-{
-	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
-	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
-
-	(**dst).identifier = ir->identifier;
-	(**dst).linkage = codegen_map_linkage(ir->linkage);
-	(**dst).initializer = ir->initializer;
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
-codegen_string_literal(Arena *arena,
-                       const struct ir_str *ir,
-                       struct asm_str **dst)
-{
-	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
-	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
-
-	(**dst).string_unique = ir->string_unique;
-	(**dst).initializer = ir->initializer;
-	return RESULT_OK;
-}
-
-static WARN_UNUSED result_t
 codegen_program(Arena *arena,
                 const struct intermediate *ir,
                 struct assembly **dst)
@@ -1502,21 +1471,6 @@ codegen_program(Arena *arena,
 		assert(*dst_fun != NULL);
 		dst_fun = &(**dst_fun).next;
 	}
-
-	struct asm_variable **dst_var = &(**dst).variables;
-	for (struct ir_variable *v = ir->variables; v != NULL; v = v->next) {
-		check(codegen_variable(arena, v, dst_var));
-		assert(*dst_var != NULL);
-		dst_var = &(**dst_var).next;
-	}
-
-	struct asm_str **dst_str = &(**dst).string_literals;
-	for (struct ir_str *s = ir->string_literals; s != NULL; s = s->next) {
-		check(codegen_string_literal(arena, s, dst_str));
-		assert(*dst_str != NULL);
-		dst_str = &(**dst_str).next;
-	}
-
 	return RESULT_OK;
 }
 
@@ -2360,17 +2314,6 @@ void
 codegen_debug_print(const struct assembly *cg)
 {
 	debug("PROGRAM");
-
-	for (struct asm_variable *v = cg->variables; v != NULL; v = v->next) {
-		const struct string_view *vname = &v->identifier;
-		debug("VARIABLE %.*s", (int)vname->sz, vname->data);
-		debug("  LINKAGE %s",
-		      v->linkage == ASM_LINKAGE_EXTERNAL ? "EXTERNAL"
-		                                         : "INTERNAL");
-		debug("  INITIALIZER");
-		constant_debug_print(v->initializer, 4);
-	}
-
 	for (struct asm_function *f = cg->functions; f != NULL; f = f->next) {
 		const struct string_view *fname = &f->identifier;
 		debug("FUNCTION %.*s", (int)fname->sz, fname->data);
