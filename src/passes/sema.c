@@ -3000,6 +3000,9 @@ sema_mangle_internal_linkage_names(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
+// TODO: split out helper functions into src/passes/sema/{walk,literal,...}.c
+// this file is too confusing to navigate
+// should be clearer once logic for lvalues/literals/pointers/etc are separate
 result_t
 sema_typecheck(Arena *arena,
                struct ast *a,
