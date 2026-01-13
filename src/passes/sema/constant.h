@@ -11,15 +11,13 @@ struct constant_initializer;
 struct ctype;
 struct type_table;
 
-// TODO: rename map_numeric_type() to be descriptive
-// maybe something like make_constant_initializer()
-result_t map_numeric_type(Arena *arena,
+result_t make_initializer(Arena *arena,
                           struct ast *init,
                           const struct ctype *dst_type,
                           struct type_table *types,
                           struct constant_initializer *out) WARN_UNUSED;
-void map_numeric_type_scalar(const struct ast *a,
-                             const struct ctype *dst_type,
-                             struct constant_bytes *out);
+void make_initializer_bytes(const struct ast *a,
+                            const struct ctype *dst_type,
+                            struct constant_bytes *out);
 
 #endif

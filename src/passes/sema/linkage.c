@@ -408,7 +408,7 @@ sema_declare_file_scope(struct ast *a,
 	if (a->u.declare.init != NULL) {
 		if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			check(map_numeric_type(state->arena,
+			check(make_initializer(state->arena,
 			                       a->u.declare.init,
 			                       &a->u.declare.var_type,
 			                       state->types,
@@ -542,7 +542,7 @@ sema_declare_block_scope(struct ast *a,
 			                        &linkage_state->initializer));
 		} else if (is_node_constant(a->u.declare.init)) {
 			linkage_state->initial = INITIAL_VALUE_CONSTANT;
-			check(map_numeric_type(state->arena,
+			check(make_initializer(state->arena,
 			                       a->u.declare.init,
 			                       &a->u.declare.var_type,
 			                       state->types,

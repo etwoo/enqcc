@@ -64,7 +64,7 @@ sema_str_literal_hoist(Arena *arena,
 	/* translate u.init.multi into equivalent constant_initializer */
 	assert(init->u.init.multi != NULL);
 	struct constant_initializer initializer = {0};
-	check(map_numeric_type(arena, init, &array_type, types, &initializer));
+	check(make_initializer(arena, init, &array_type, types, &initializer));
 
 	array_type.sz = initializer.count;
 

@@ -38,9 +38,9 @@ static const long long int INT_TO_CHAR_TRUNCATOR = 256;
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
 void
-map_numeric_type_scalar(const struct ast *a,
-                        const struct ctype *dst_type,
-                        struct constant_bytes *out)
+make_initializer_bytes(const struct ast *a,
+                       const struct ctype *dst_type,
+                       struct constant_bytes *out)
 {
 	assert(a->node_type == NODE_CONSTANT);
 	assert(!ctype_is_aggregate(dst_type));
@@ -123,7 +123,7 @@ visit_pop(struct ast **ast_handle, const struct ctype *dst_type, void *userdata)
 	struct constant_bytes **pos = (struct constant_bytes **)userdata;
 	switch (s->node_type) {
 	case NODE_CONSTANT:
-		map_numeric_type_scalar(s, dst_type, *pos);
+		make_initializer_bytes(s, dst_type, *pos);
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(s->u.var.stype == SYMBOL_STRING_LITERAL);
@@ -152,7 +152,7 @@ populate_initializer_elements(struct ast *a,
 }
 
 result_t
-map_numeric_type(Arena *arena,
+make_initializer(Arena *arena,
                  struct ast *init,
                  const struct ctype *dst_type,
                  struct type_table *types,

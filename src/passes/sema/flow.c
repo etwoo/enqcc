@@ -51,7 +51,7 @@ guess(const struct ast *a, const struct ctype *expected_type)
 
 	switch (a->node_type) {
 	case NODE_CONSTANT:
-		map_numeric_type_scalar(a, expected_type, &tmp);
+		make_initializer_bytes(a, expected_type, &tmp);
 		value = tmp.byte_value;
 		break;
 	case NODE_EXPRESSION_PAREN_ENCLOSED:
