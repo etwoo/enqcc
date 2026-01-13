@@ -121,7 +121,7 @@ ctype_to_size_bytes_with_types(const struct ctype *c, struct type_table *t)
 		break;
 	case CTYPE_ARRAY_OF:
 		assert(c->sz > 0 && c->sz < LLONG_MAX);
-		b = c->sz * ctype_to_size_bytes(c->referent);
+		b = c->sz * ctype_to_size_bytes_with_types(c->referent, t);
 		break;
 	case CTYPE_STRUCT:
 		assert(t && "struct size lookup requires type table");
