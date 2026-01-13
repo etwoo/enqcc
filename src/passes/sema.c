@@ -1470,6 +1470,10 @@ sema_expr_types_initializer(Arena *arena,
 
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
+	// TODO: convert sema_expr_types_initializer() to use foreach()
+	// leave sema_expr_types_initializer_zero_pad() as-is since it iterates
+	// based on expected number of elements, rather than u.init.multi as-is
+
 	if (init->u.init.single != NULL) {
 		if (ctype_is_aggregate(declaration_type) &&
 		    !ctype_is_aggregate(&init->u.init.single->expr_type)) {
@@ -2222,6 +2226,8 @@ sema_implicit_cast_initializer(Arena *arena,
 	}
 
 	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
+
+	// TODO: convert sema_implicit_cast_initializer() to use foreach()
 
 	if ((**init).u.init.single != NULL) {
 		check(sema_pointer_cmp(expected_type, &(**init).expr_type));
