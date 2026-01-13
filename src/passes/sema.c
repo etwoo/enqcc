@@ -231,9 +231,7 @@ map_numeric_type_scalar(const struct ast *a,
 }
 
 static WARN_UNUSED result_t
-visit_populate(struct ast *a,
-               const struct ctype *dst_type,
-               void *userdata)
+visit_populate(struct ast *a, const struct ctype *dst_type, void *userdata)
 {
 	const struct ast *s = a->u.init.single;
 	if (s == NULL) {
@@ -269,7 +267,7 @@ populate_initializer_elements(struct ast *a,
 	                                              dst_type,
 	                                              types,
 	                                              visit_populate,
-	                                              (void*)pos);
+	                                              (void *)pos);
 	assert(err.err == OK); /* infallible visitor callback */
 }
 
@@ -1115,7 +1113,7 @@ sema_str_literal_hoist(Arena *arena,
 	return RESULT_OK;
 }
 
-struct visit_literal_state {
+struct sema_str_literal_state {
 	Arena *arena;
 	struct symbol **symbols;
 	struct type_table *types;
@@ -1126,7 +1124,7 @@ visit_literal(struct ast *init,
               const struct ctype *declaration_type,
               void *userdata)
 {
-	struct visit_literal_state *state = userdata;
+	struct sema_str_literal_state *state = userdata;
 	Arena *arena = state->arena;
 	struct symbol **sym = state->symbols;
 	struct type_table *typ = state->types;
@@ -1182,37 +1180,24 @@ visit_literal(struct ast *init,
 }
 
 static WARN_UNUSED result_t
-sema_str_literal_as_init(Arena *arena,
+sema_str_literal_as_init(struct ast *init,
                          const struct ctype *declaration_type,
-                         struct ast *init,
-                         struct symbol **sym,
-                         struct type_table *typ)
+                         struct sema_str_literal_state *state)
 {
-	struct visit_literal_state state = {
-		.arena = arena,
-		.symbols = sym,
-		.types = typ,
-	};
 	check(foreach_initializer_element(init,
 	                                  declaration_type,
-	                                  typ,
+	                                  state->types,
 	                                  visit_literal,
-	                                  &state));
+	                                  state));
 	return RESULT_OK;
 }
-
-struct sema_str_literal_state {
-	Arena *arena;
-	struct symbol *string_literal_symbols;
-	struct type_table *types;
-};
 
 static WARN_UNUSED result_t
 sema_str_literal(struct ast *a, void *userdata)
 {
 	struct sema_str_literal_state *state = userdata;
 	Arena *arena = state->arena;
-	struct symbol **symbols = &state->string_literal_symbols;
+	struct symbol **symbols = state->symbols;
 	struct type_table *types = state->types;
 
 	if (a->node_type == NODE_CONSTANT_STR) {
@@ -1235,11 +1220,9 @@ sema_str_literal(struct ast *a, void *userdata)
 		memcpy(a, new_node, sizeof(*a));
 	} else if (a->node_type == NODE_DECLARATION &&
 	           a->u.declare.init != NULL) {
-		check(sema_str_literal_as_init(arena,
+		check(sema_str_literal_as_init(a->u.declare.init,
 		                               &a->u.declare.var_type,
-		                               a->u.declare.init,
-		                               symbols,
-		                               types));
+		                               state));
 	}
 
 	return RESULT_OK;
@@ -3056,10 +3039,10 @@ sema_typecheck(Arena *arena,
 	{
 		struct sema_str_literal_state str_state = {0};
 		str_state.arena = arena;
-		str_state.string_literal_symbols = s->string_literals;
+		str_state.symbols = &s->string_literals;
 		str_state.types = types;
 		check(sema_walk(a, &ops, &str_state));
-		s->string_literals = str_state.string_literal_symbols;
+		s->string_literals = *str_state.symbols;
 	}
 
 	debug("Checking variable usage");
