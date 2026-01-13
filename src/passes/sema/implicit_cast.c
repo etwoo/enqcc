@@ -175,16 +175,29 @@ sema_typecheck_implicit_cast(Arena *arena,
 }
 
 result_t
-cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a)
+cast_if(Arena *arena, const struct ctype *cast_to, struct ast **ast_handle)
 {
-	if (*a == NULL || ctype_is_equal(&(**a).expr_type, cast_to)) {
+	struct ast *a = *ast_handle;
+	if (a == NULL || ctype_is_equal(&a->expr_type, cast_to)) {
 		return RESULT_OK;
 	}
+
 	struct ast *cast_wrap = NULL;
 	check(parse_alloc(arena, &cast_wrap, NODE_EXPRESSION_CAST));
 	check(ctype_copy(arena, cast_to, &cast_wrap->expr_type));
 	check(ctype_copy(arena, cast_to, &cast_wrap->u.cast.to_type));
-	cast_wrap->u.cast.expr = *a;
-	*a = cast_wrap;
+	cast_wrap->u.cast.expr = a;
+
+	*ast_handle = cast_wrap;
 	return RESULT_OK;
+}
+
+struct ast **
+cast_unpack(struct ast **a)
+{
+	while ((**a).node_type == NODE_EXPRESSION_CAST) {
+		/* unpack nodes inserted by sema_implicit_cast() */
+		a = &(**a).u.cast.expr;
+	}
+	return a;
 }

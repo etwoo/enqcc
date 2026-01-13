@@ -11,7 +11,9 @@ struct ast;
 result_t sema_typecheck_implicit_cast(Arena *arena,
                                       struct ast *a,
                                       struct type_table *types) WARN_UNUSED;
-result_t
-cast_if(Arena *arena, const struct ctype *cast_to, struct ast **a) WARN_UNUSED;
+result_t cast_if(Arena *arena,
+                 const struct ctype *cast_to,
+                 struct ast **ast_handle) WARN_UNUSED;
+struct ast **cast_unpack(struct ast **a) WARN_UNUSED;
 
 #endif

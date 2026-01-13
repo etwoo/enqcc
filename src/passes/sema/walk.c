@@ -1,6 +1,7 @@
 #include "passes/sema/walk.h"
 
 #include "passes/parse.h"
+#include "passes/sema/implicit_cast.h"
 
 #include <assert.h>
 
@@ -143,17 +144,6 @@ sema_walk(struct ast *a, struct sema_ops *ops, void *u)
 	return RESULT_OK;
 }
 
-// TODO: dedup unpack_cast() with linkage.c; move to implicit_cast.h?
-static WARN_UNUSED struct ast **
-unpack_cast(struct ast **a)
-{
-	while ((**a).node_type == NODE_EXPRESSION_CAST) {
-		/* unpack nodes inserted by sema_implicit_cast() */
-		a = &(**a).u.cast.expr;
-	}
-	return a;
-}
-
 result_t
 sema_walk_initializer(struct ast **ast_handle,
                       const struct ctype *dst_type,
@@ -165,7 +155,7 @@ sema_walk_initializer(struct ast **ast_handle,
 {
 	assert(dst_type != NULL);
 
-	ast_handle = unpack_cast(ast_handle);
+	ast_handle = cast_unpack(ast_handle);
 	assert((**ast_handle).node_type == NODE_EXPRESSION_INITIALIZER);
 	const bool early_return = ((**ast_handle).u.init.single != NULL);
 

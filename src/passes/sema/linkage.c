@@ -11,22 +11,11 @@
 #include <string.h>    /* for memset() */
 #include <sys/param.h> /* for MAX() */
 
-// TODO: dedup unpack_cast() with walk.c; move to implicit_cast.h?
-static WARN_UNUSED struct ast **
-unpack_cast(struct ast **a)
-{
-	while ((**a).node_type == NODE_EXPRESSION_CAST) {
-		/* unpack nodes inserted by sema_implicit_cast() */
-		a = &(**a).u.cast.expr;
-	}
-	return a;
-}
-
 static WARN_UNUSED bool
 is_node_constant(struct ast *a)
 {
 	{
-		struct ast **tmp = unpack_cast(&a);
+		struct ast **tmp = cast_unpack(&a);
 		a = *tmp;
 	}
 
