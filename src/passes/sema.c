@@ -49,8 +49,8 @@ is_node_lvalue(const struct ast *a)
 	        is_node_lvalue(a->u.member_access.lhs));
 }
 
-static WARN_UNUSED const struct ast *
-unpack_cast(const struct ast *a)
+static WARN_UNUSED struct ast *
+unpack_cast(struct ast *a)
 {
 	while (a->node_type == NODE_EXPRESSION_CAST) {
 		/* unpack nodes inserted by sema_implicit_cast() */
@@ -60,7 +60,7 @@ unpack_cast(const struct ast *a)
 }
 
 static WARN_UNUSED bool
-is_node_constant(const struct ast *a)
+is_node_constant(struct ast *a)
 {
 	a = unpack_cast(a);
 	if (a == NULL || a->node_type != NODE_EXPRESSION_INITIALIZER) {
@@ -83,22 +83,25 @@ is_node_constant(const struct ast *a)
 	return true;
 }
 
-static WARN_UNUSED long long unsigned
-count_initializer_elements(const struct ctype *dst_type,
-                           struct type_table *types,
-                           const struct ast *a)
+static WARN_UNUSED result_t
+foreach_initializer_element(struct ast *a,
+                            const struct ctype *dst_type,
+                            struct type_table *types,
+                            result_t (*visit)(struct ast *,
+                                              const struct ctype *,
+                                              void *),
+                            void *ud) /* visitor callback userdata */
 {
 	assert(dst_type != NULL);
 
 	a = unpack_cast(a);
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
-	const struct ast *s = a->u.init.single;
-	if (s != NULL) {
-		assert(is_node_constant(a));
-		return 1;
+	check(visit(a, dst_type, ud));
+
+	if (a->u.init.single != NULL) {
+		return RESULT_OK;
 	}
-	assert(a->u.init.multi != NULL);
 
 	struct type_table *type_entry = NULL;
 	if (ctype_is_struct(dst_type)) {
@@ -110,8 +113,6 @@ count_initializer_elements(const struct ctype *dst_type,
 	}
 
 	long long unsigned element_count = 0;
-	long long unsigned count = 0;
-
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
 		const struct ctype *c = NULL;
 		if (ctype_is_struct(dst_type)) {
@@ -120,11 +121,37 @@ count_initializer_elements(const struct ctype *dst_type,
 		} else {
 			c = dst_type->referent;
 		}
-
-		count += count_initializer_elements(c, types, f->car);
+		check(foreach_initializer_element(f->car, c, types, visit, ud));
 		++element_count;
 	}
 
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+visit_count(struct ast *a MAYBE_UNUSED,
+            const struct ctype *dst_type MAYBE_UNUSED,
+            void *userdata)
+{
+	long long unsigned *count = userdata;
+	if (a->u.init.single != NULL) {
+		(*count)++;
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED long long unsigned
+count_initializer_elements(struct ast *a,
+                           const struct ctype *dst_type,
+                           struct type_table *types)
+{
+	long long unsigned count = 0;
+	auto_result err = foreach_initializer_element(a,
+	                                              dst_type,
+	                                              types,
+	                                              &visit_count,
+	                                              &count);
+	assert(err.err == OK); /* infallible visitor callback */
 	return count;
 }
 
@@ -203,66 +230,57 @@ map_numeric_type_scalar(const struct ast *a,
 	out->byte_value = x;
 }
 
+static WARN_UNUSED result_t
+visit_populate(struct ast *a,
+               const struct ctype *dst_type,
+               void *userdata)
+{
+	const struct ast *s = a->u.init.single;
+	if (s == NULL) {
+		return RESULT_OK;
+	}
+
+	struct constant_bytes **pos = (struct constant_bytes **)userdata;
+	switch (s->node_type) {
+	case NODE_CONSTANT:
+		map_numeric_type_scalar(s, dst_type, *pos);
+		break;
+	case NODE_EXPRESSION_VARIABLE_USAGE:
+		assert(s->u.var.stype == SYMBOL_STRING_LITERAL);
+		(**pos).unique = s->u.var.unique;
+		(**pos).byte_count = 8; /* set .quad for str literal */
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+	(*pos)++;
+
+	return RESULT_OK;
+}
+
 static void
-populate_initializer_elements(const struct ast *a,
+populate_initializer_elements(struct ast *a,
                               const struct ctype *dst_type,
                               struct type_table *types,
                               struct constant_bytes **pos)
 {
-	a = unpack_cast(a);
-	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
-
-	if (a->u.init.single != NULL) {
-		const struct ast *s = a->u.init.single;
-		switch (s->node_type) {
-		case NODE_CONSTANT:
-			map_numeric_type_scalar(s, dst_type, *pos);
-			break;
-		case NODE_EXPRESSION_VARIABLE_USAGE:
-			assert(s->u.var.stype == SYMBOL_STRING_LITERAL);
-			(**pos).unique = s->u.var.unique;
-			(**pos).byte_count = 8; /* set .quad for str literal */
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
-		(*pos)++;
-		return;
-	}
-	assert(a->u.init.multi != NULL);
-
-	struct type_table *type_entry = NULL;
-	if (ctype_is_struct(dst_type)) {
-		type_entry = types_find(types, dst_type);
-		assert(type_entry != NULL);
-	} else {
-		assert(ctype_is_pointer(dst_type));
-		assert(dst_type->referent != NULL);
-	}
-
-	long long unsigned element_count = 0;
-	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
-		const struct ctype *c = NULL;
-		if (ctype_is_struct(dst_type)) {
-			assert(type_entry != NULL);
-			c = &type_entry->members[element_count].member_type;
-		} else {
-			c = dst_type->referent;
-		}
-		populate_initializer_elements(f->car, c, types, pos);
-		++element_count;
-	}
+	auto_result err = foreach_initializer_element(a,
+	                                              dst_type,
+	                                              types,
+	                                              visit_populate,
+	                                              (void*)pos);
+	assert(err.err == OK); /* infallible visitor callback */
 }
 
 static WARN_UNUSED result_t
 map_numeric_type(Arena *arena,
-                 const struct ast *init,
+                 struct ast *init,
                  const struct ctype *dst_type,
                  struct type_table *types,
                  struct constant_initializer *out)
 {
-	out->count = count_initializer_elements(dst_type, types, init);
+	out->count = count_initializer_elements(init, dst_type, types);
 	assert(out->count > 0);
 	out->elements = arena_alloc(arena, out->count * sizeof(*out->elements));
 	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
@@ -1097,15 +1115,21 @@ sema_str_literal_hoist(Arena *arena,
 	return RESULT_OK;
 }
 
+struct visit_literal_state {
+	Arena *arena;
+	struct symbol **symbols;
+	struct type_table *types;
+};
+
 static WARN_UNUSED result_t
-sema_str_literal_as_init(Arena *arena,
-                         const struct ctype *declaration_type,
-                         struct ast *init,
-                         struct symbol **sym,
-                         struct type_table *typ)
+visit_literal(struct ast *init,
+              const struct ctype *declaration_type,
+              void *userdata)
 {
-	assert(init != NULL);
-	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
+	struct visit_literal_state *state = userdata;
+	Arena *arena = state->arena;
+	struct symbol **sym = state->symbols;
+	struct type_table *typ = state->types;
 
 	bool expanded = false;
 
@@ -1154,27 +1178,26 @@ sema_str_literal_as_init(Arena *arena,
 		return make_result(ERR_SEMA_INIT_SCALAR_WITH_COMPOUND);
 	}
 
-	struct type_table *type_entry = NULL;
-	if (ctype_is_struct(declaration_type)) {
-		type_entry = types_find(typ, declaration_type);
-		assert(type_entry != NULL);
-	} else {
-		assert(ctype_is_pointer(declaration_type));
-		assert(declaration_type->referent != NULL);
-	}
+	return RESULT_OK;
+}
 
-	long long unsigned element_count = 0;
-	for (struct flat *f = init->u.init.multi; f != NULL; f = f->cdr) {
-		const struct ctype *c = NULL;
-		if (ctype_is_struct(declaration_type)) {
-			assert(type_entry != NULL);
-			c = &type_entry->members[element_count].member_type;
-		} else {
-			c = declaration_type->referent;
-		}
-		check(sema_str_literal_as_init(arena, c, f->car, sym, typ));
-		++element_count;
-	}
+static WARN_UNUSED result_t
+sema_str_literal_as_init(Arena *arena,
+                         const struct ctype *declaration_type,
+                         struct ast *init,
+                         struct symbol **sym,
+                         struct type_table *typ)
+{
+	struct visit_literal_state state = {
+		.arena = arena,
+		.symbols = sym,
+		.types = typ,
+	};
+	check(foreach_initializer_element(init,
+	                                  declaration_type,
+	                                  typ,
+	                                  visit_literal,
+	                                  &state));
 	return RESULT_OK;
 }
 
