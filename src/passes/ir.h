@@ -88,14 +88,14 @@ struct ir_function {
 	struct ir_function *next;
 };
 
-struct ir_variable {
+struct ir_variable { // TODO: rm unnecessary intermediate struct?
 	struct string_view identifier;
 	enum ir_linkage linkage;
 	struct constant_initializer *initializer;
 	struct ir_variable *next;
 };
 
-struct ir_str {
+struct ir_str { // TODO: rm unnecessary intermediate struct?
 	long long int string_unique;
 	struct constant_initializer *initializer;
 	struct ir_str *next;
