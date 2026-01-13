@@ -3,6 +3,7 @@ target_sources(compiler PRIVATE
 	expression.c
 	flow.c
 	implicit_cast.c
+	linkage.c
 	pointer.c
 	string.c
 	walk.c

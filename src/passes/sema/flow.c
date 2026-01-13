@@ -1,6 +1,5 @@
 #include "passes/sema/flow.h"
 
-#include "lang/symbol.h"
 #include "passes/parse.h"
 #include "passes/sema/constant.h"
 #include "passes/sema/walk.h"
