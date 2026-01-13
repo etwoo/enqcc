@@ -1837,7 +1837,7 @@ ir_var(Arena *arena,
 	case INITIAL_VALUE_TENTATIVE:
 		check(constant_make_zero(arena,
 		                         &s->c89type,
-		                         types, // TODO
+		                         types,
 		                         &(**dst).initializer));
 		break;
 	case INITIAL_VALUE_CONSTANT:
