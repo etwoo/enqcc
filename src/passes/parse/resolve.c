@@ -653,7 +653,6 @@ resolve_struct_members(Arena *arena,
 
 	out->aggregate_size = 0;
 	out->aggregate_alignment = 1;
-	out->n_members = n_members;
 
 	struct flat *f = a->u.struct_.members;
 	for (long long unsigned i = 0; i < n_members; ++i) {
@@ -713,6 +712,7 @@ resolve_struct_members(Arena *arena,
 
 	out->aggregate_size = round_up_to_multiple_of(out->aggregate_size,
 	                                              out->aggregate_alignment);
+	out->n_members = n_members; /* mark as complete in type_table */
 	return RESULT_OK;
 }
 
