@@ -882,7 +882,14 @@ emit_asm(Arena *arena,
 	}
 
 	for (struct symbol *v = s->variables; v != NULL; v = v->next) {
-		emit_asm_var(v, plat, fd);
+		switch (v->linkage.initial) {
+		case INITIAL_VALUE_NO_INITIALIZER:
+			break;
+		case INITIAL_VALUE_TENTATIVE:
+		case INITIAL_VALUE_CONSTANT:
+			emit_asm_var(v, plat, fd);
+			break;
+		}
 	}
 
 	check(emit_asm_fp_vector_constants(cg->functions, plat, fd));

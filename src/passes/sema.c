@@ -463,6 +463,20 @@ sema_double(struct ast *a, void *userdata MAYBE_UNUSED)
 	return RESULT_OK;
 }
 
+static WARN_UNUSED result_t
+symbols_finalize(Arena *arena, struct symbol_table *s, struct type_table *types)
+{
+	for (struct symbol *v = s->variables; v != NULL; v = v->next) {
+		if (v->linkage.initial == INITIAL_VALUE_TENTATIVE) {
+			check(constant_set_zero(arena,
+			                        &v->c89type,
+			                        types,
+			                        &v->linkage.initializer));
+		}
+	}
+	return RESULT_OK;
+}
+
 result_t
 sema_typecheck(Arena *arena,
                struct ast *a,
@@ -539,6 +553,9 @@ sema_typecheck(Arena *arena,
 
 	debug("Determining linkage for function and variable symbols");
 	check(sema_typecheck_linkage(arena, a, s, types));
+
+	debug("Finalizing initializers for symbols with linkage");
+	check(symbols_finalize(arena, s, types));
 
 	return RESULT_OK;
 }

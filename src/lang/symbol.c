@@ -77,18 +77,6 @@ constant_set_zero(Arena *arena,
 	return RESULT_OK;
 }
 
-result_t
-constant_make_zero(Arena *arena,
-                   const struct ctype *c89type,
-                   struct type_table *types,
-                   struct constant_initializer **dst)
-{
-	*dst = arena_alloc(arena, sizeof(**dst));
-	check_if(*dst == NULL, ERR_SYMBOL_ALLOC);
-	check(constant_set_zero(arena, c89type, types, *dst));
-	return RESULT_OK;
-}
-
 bool
 constant_is_zero(const struct constant_initializer *ci)
 {

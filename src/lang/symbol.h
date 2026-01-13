@@ -48,10 +48,6 @@ result_t constant_set_zero(Arena *arena,
                            const struct ctype *c89type,
                            struct type_table *types,
                            struct constant_initializer *ci) WARN_UNUSED;
-result_t constant_make_zero(Arena *arena,
-                            const struct ctype *c89type,
-                            struct type_table *types,
-                            struct constant_initializer **dst) WARN_UNUSED;
 bool constant_is_zero(const struct constant_initializer *ci) WARN_UNUSED;
 long long unsigned constant_byte_count(const struct constant_initializer *ci);
 void constant_debug_print(const struct constant_initializer *ci, size_t indent);
