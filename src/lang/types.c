@@ -399,7 +399,7 @@ struct ctype *
 ctype_of_member(struct type_table *type_entry,
                 const struct string_view *member_name)
 {
-	for (size_t i = 0; i < type_entry->n_members; ++i) {
+	for (long long unsigned i = 0; i < type_entry->n_members; ++i) {
 		const struct string_view *candidate =
 			&type_entry->members[i].member_name;
 		if (member_name->sz == candidate->sz &&

@@ -642,7 +642,7 @@ resolve_struct_members(Arena *arena,
 	assert(a->node_type == NODE_STRUCT);
 	assert(a->u.struct_.members != NULL);
 
-	size_t n_members = 0;
+	long long unsigned n_members = 0;
 	for (struct flat *f = a->u.struct_.members; f != NULL; f = f->cdr) {
 		++n_members;
 	}
@@ -652,14 +652,14 @@ resolve_struct_members(Arena *arena,
 	check_if(out->members == NULL, ERR_CTYPE_ALLOC);
 
 	struct flat *f = a->u.struct_.members;
-	for (size_t i = 0; i < n_members; ++i) {
+	for (long long unsigned i = 0; i < n_members; ++i) {
 		assert(f != NULL);
 		struct ast *ast_member = f->car;
 		assert(ast_member->node_type == NODE_DECLARATION);
 		const struct string_view *new_name =
 			&ast_member->u.declare.identifier.name;
 
-		for (size_t j = 0; j < i; ++j) {
+		for (long long unsigned j = 0; j < i; ++j) {
 			if (new_name->sz == out->members[j].member_name.sz &&
 			    0 == strncmp(out->members[j].member_name.data,
 			                 new_name->data,

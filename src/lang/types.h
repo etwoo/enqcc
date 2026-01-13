@@ -65,7 +65,7 @@ void ctype_array_decay_to_pointer(struct ctype *c);
 struct type_table {
 	struct ctype c;
 	// TODO: total size of this struct
-	size_t n_members;
+	long long unsigned n_members;
 	struct {
 		struct string_view member_name;
 		struct ctype member_type;
