@@ -57,9 +57,11 @@ sema_conversion(struct ast *a, void *userdata)
 
 	switch (a->node_type) {
 	case NODE_FUNCTION:
-		check(ctype_copy(arena,
-		                 &a->u.function.return_type,
-		                 &state->expected_return_type));
+		if (a->u.function.block != NULL) {
+			check(ctype_copy(arena,
+			                 &a->u.function.return_type,
+			                 &state->expected_return_type));
+		}
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
 		if (ctype_is_void(&state->expected_return_type) ==
