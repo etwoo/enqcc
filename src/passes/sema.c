@@ -49,12 +49,12 @@ is_node_lvalue(const struct ast *a)
 	        is_node_lvalue(a->u.member_access.lhs));
 }
 
-static WARN_UNUSED struct ast *
-unpack_cast(struct ast *a)
+static WARN_UNUSED struct ast **
+unpack_cast(struct ast **a)
 {
-	while (a->node_type == NODE_EXPRESSION_CAST) {
+	while ((**a).node_type == NODE_EXPRESSION_CAST) {
 		/* unpack nodes inserted by sema_implicit_cast() */
-		a = a->u.cast.expr;
+		a = &(**a).u.cast.expr;
 	}
 	return a;
 }
@@ -62,7 +62,11 @@ unpack_cast(struct ast *a)
 static WARN_UNUSED bool
 is_node_constant(struct ast *a)
 {
-	a = unpack_cast(a);
+	{
+		struct ast **tmp = unpack_cast(&a);
+		a = *tmp;
+	}
+
 	if (a == NULL || a->node_type != NODE_EXPRESSION_INITIALIZER) {
 		return false;
 	}
@@ -94,13 +98,13 @@ foreach_initializer_element(struct ast **ast_handle,
 {
 	assert(dst_type != NULL);
 
-	struct ast *a = *ast_handle;
-	a = unpack_cast(a);
-	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
+	ast_handle = unpack_cast(ast_handle);
+	assert((**ast_handle).node_type == NODE_EXPRESSION_INITIALIZER);
+	const bool early_return = ((**ast_handle).u.init.single != NULL);
 
-	check(visit(&a, dst_type, ud));
+	check(visit(ast_handle, dst_type, ud));
 
-	if (a->u.init.single != NULL) {
+	if (early_return) {
 		return RESULT_OK;
 	}
 
@@ -113,7 +117,9 @@ foreach_initializer_element(struct ast **ast_handle,
 		assert(dst_type->referent != NULL);
 	}
 
+	struct ast *a = *ast_handle;
 	long long unsigned element_count = 0;
+
 	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
 		if (type_entry != NULL &&
 		    element_count >= type_entry->n_members) {
@@ -144,7 +150,7 @@ visit_count(struct ast **ast_handle,
             const struct ctype *dst_type MAYBE_UNUSED,
             void *userdata)
 {
-	struct ast *a = *ast_handle;
+	const struct ast *a = *ast_handle;
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	long long unsigned *count = userdata;
@@ -250,7 +256,7 @@ visit_populate(struct ast **ast_handle,
                const struct ctype *dst_type,
                void *userdata)
 {
-	struct ast *a = *ast_handle;
+	const struct ast *a = *ast_handle;
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	const struct ast *s = a->u.init.single;
@@ -2189,58 +2195,6 @@ sema_pointer(struct ast *a, void *userdata)
 	return RESULT_OK;
 }
 
-/*
- * See sema_expr_types_initializer() for related logic.
- */
-static WARN_UNUSED result_t
-sema_implicit_cast_initializer(Arena *arena,
-                               const struct ctype *expected_type,
-                               struct ast **init,
-                               struct type_table *typ)
-{
-	if (*init == NULL) {
-		return RESULT_OK;
-	}
-
-	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
-
-	// TODO: convert sema_implicit_cast_initializer() to use foreach()
-
-	if ((**init).u.init.single != NULL) {
-		check(sema_pointer_cmp(expected_type, &(**init).expr_type));
-		check(cast_if(arena, expected_type, init));
-		return RESULT_OK;
-	}
-
-	/* single XOR multi */
-	assert((**init).u.init.multi != NULL);
-	assert(ctype_is_aggregate(expected_type));
-	assert(ctype_is_aggregate(&(**init).expr_type));
-
-	struct type_table *type_entry = NULL;
-	if (ctype_is_struct(expected_type)) {
-		type_entry = types_find(typ, expected_type);
-		assert(type_entry != NULL);
-	} else {
-		assert(ctype_is_pointer(expected_type));
-		assert(expected_type->referent != NULL);
-	}
-
-	long long unsigned element_count = 0;
-	for (struct flat *f = (**init).u.init.multi; f != NULL; f = f->cdr) {
-		const struct ctype *c = NULL;
-		if (ctype_is_struct(expected_type)) {
-			assert(type_entry != NULL);
-			c = &type_entry->members[element_count].member_type;
-		} else {
-			c = expected_type->referent;
-		}
-		check(sema_implicit_cast_initializer(arena, c, &f->car, typ));
-		++element_count;
-	}
-	return RESULT_OK;
-}
-
 struct sema_implicit_cast_state {
 	Arena *arena;
 	struct type_table *types;
@@ -2248,11 +2202,46 @@ struct sema_implicit_cast_state {
 };
 
 static WARN_UNUSED result_t
+visit_implicit_cast(struct ast **init,
+                    const struct ctype *expected_type,
+                    void *userdata)
+{
+	struct sema_implicit_cast_state *state = userdata;
+	Arena *arena = state->arena;
+
+	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
+	if ((**init).u.init.single != NULL) {
+		check(sema_pointer_cmp(expected_type, &(**init).expr_type));
+		check(cast_if(arena, expected_type, init));
+	}
+
+	return RESULT_OK;
+}
+
+/*
+ * See sema_expr_types_initializer() for related logic.
+ */
+static WARN_UNUSED result_t
+sema_implicit_cast_initializer(struct ast *a,
+                               struct sema_implicit_cast_state *state)
+{
+	assert(a->node_type == NODE_DECLARATION);
+	if (a->u.declare.init == NULL) {
+		return RESULT_OK;
+	}
+	check(foreach_initializer_element(&a->u.declare.init,
+	                                  &a->u.declare.var_type,
+	                                  state->types,
+	                                  visit_implicit_cast,
+	                                  state));
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 sema_implicit_cast(struct ast *a, void *userdata)
 {
 	struct sema_implicit_cast_state *state = userdata;
 	Arena *arena = state->arena;
-	struct type_table *types = state->types;
 	const struct ctype *common = NULL;
 
 	switch (a->node_type) {
@@ -2282,10 +2271,7 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              &a->u.op_unary.operand));
 		break;
 	case NODE_DECLARATION:
-		check(sema_implicit_cast_initializer(arena,
-		                                     &a->u.declare.var_type,
-		                                     &a->u.declare.init,
-		                                     types));
+		check(sema_implicit_cast_initializer(a, state));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
