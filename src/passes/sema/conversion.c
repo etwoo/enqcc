@@ -14,9 +14,9 @@ struct sema_conversion_state {
 };
 
 static WARN_UNUSED result_t
-visit_implicit_cast(struct ast **init,
-                    const struct ctype *expected_type,
-                    void *userdata)
+visit_conversion(struct ast **init,
+                 const struct ctype *expected_type,
+                 void *userdata)
 {
 	struct sema_conversion_state *state = userdata;
 	Arena *arena = state->arena;
@@ -34,8 +34,7 @@ visit_implicit_cast(struct ast **init,
  * See sema_expr_types_initializer() for related logic.
  */
 static WARN_UNUSED result_t
-sema_conversion_initializer(struct ast *a,
-                               struct sema_conversion_state *state)
+sema_conversion_initializer(struct ast *a, struct sema_conversion_state *state)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	if (a->u.declare.init == NULL) {
@@ -44,7 +43,7 @@ sema_conversion_initializer(struct ast *a,
 	check(sema_walk_initializer(&a->u.declare.init,
 	                            &a->u.declare.var_type,
 	                            state->types,
-	                            visit_implicit_cast,
+	                            visit_conversion,
 	                            state));
 	return RESULT_OK;
 }
