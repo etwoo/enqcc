@@ -632,51 +632,15 @@ resolve_function(Arena *arena,
 	return RESULT_OK;
 }
 
-result_t
-resolve_struct(Arena *arena,
-               struct ast *a,
-               struct symbol **symbols,
-               struct type_table **types)
+static WARN_UNUSED result_t
+resolve_struct_members(Arena *arena,
+                       struct ast *a,
+                       struct symbol **symbols,
+                       struct type_table **types,
+                       struct type_table *out)
 {
 	assert(a->node_type == NODE_STRUCT);
-	assert(ctype_is_struct(&a->u.struct_.struct_type));
-	assert(a->u.struct_.struct_type.tag_unique == 0);
-
-	const struct string_view *tag_name = &a->u.struct_.struct_type.tag_name;
-	const bool is_complete = (a->u.struct_.members != NULL);
-	struct type_table *out = NULL;
-
-	const struct symbol *in_scope =
-		symbols_if(*symbols, tag_name, symbols_get_limited, is_struct);
-	if (in_scope == NULL) {
-		check(types_prepend(arena, types, &a->u.struct_.struct_type));
-		assert(a->u.struct_.struct_type.tag_unique > 0);
-		out = *types;
-		check(symbols_prepend(arena,
-		                      symbols,
-		                      &out->c.tag_name,
-		                      SYMBOL_STRUCT_DEFINITION,
-		                      &out->c));
-	} else if (!ctype_is_incomplete(&in_scope->c89type, *types) &&
-	           is_complete) {
-		return make_result(
-			ERR_SEMA_VARIABLE_DECLARATION_STRUCT_DUPLICATE,
-			tag_name->data,
-			tag_name->sz);
-	} else {
-		assert(ctype_is_struct(&in_scope->c89type));
-		assert(in_scope->c89type.tag_unique > 0);
-		check(ctype_copy(arena,
-		                 &in_scope->c89type,
-		                 &a->u.struct_.struct_type));
-		out = types_find(*types, &in_scope->c89type);
-	}
-	assert(out != NULL);
-
-	if (!is_complete) {
-		/* nothing more to do for incomplete struct declaration */
-		return RESULT_OK;
-	}
+	assert(a->u.struct_.members != NULL);
 
 	size_t n_members = 0;
 	for (struct flat *f = a->u.struct_.members; f != NULL; f = f->cdr) {
@@ -728,5 +692,52 @@ resolve_struct(Arena *arena,
 	}
 
 	out->n_members = n_members;
+	return RESULT_OK;
+}
+
+result_t
+resolve_struct(Arena *arena,
+               struct ast *a,
+               struct symbol **symbols,
+               struct type_table **types)
+{
+	assert(a->node_type == NODE_STRUCT);
+	assert(ctype_is_struct(&a->u.struct_.struct_type));
+	assert(a->u.struct_.struct_type.tag_unique == 0);
+
+	const struct string_view *tag_name = &a->u.struct_.struct_type.tag_name;
+	const bool is_complete = (a->u.struct_.members != NULL);
+	struct type_table *out = NULL;
+
+	const struct symbol *in_scope =
+		symbols_if(*symbols, tag_name, symbols_get_limited, is_struct);
+	if (in_scope == NULL) {
+		check(types_prepend(arena, types, &a->u.struct_.struct_type));
+		assert(a->u.struct_.struct_type.tag_unique > 0);
+		out = *types;
+		check(symbols_prepend(arena,
+		                      symbols,
+		                      &out->c.tag_name,
+		                      SYMBOL_STRUCT_DEFINITION,
+		                      &out->c));
+	} else if (!ctype_is_incomplete(&in_scope->c89type, *types) &&
+	           is_complete) {
+		return make_result(
+			ERR_SEMA_VARIABLE_DECLARATION_STRUCT_DUPLICATE,
+			tag_name->data,
+			tag_name->sz);
+	} else {
+		assert(ctype_is_struct(&in_scope->c89type));
+		assert(in_scope->c89type.tag_unique > 0);
+		check(ctype_copy(arena,
+		                 &in_scope->c89type,
+		                 &a->u.struct_.struct_type));
+		out = types_find(*types, &in_scope->c89type);
+	}
+	assert(out != NULL);
+
+	if (is_complete) {
+		check(resolve_struct_members(arena, a, symbols, types, out));
+	}
 	return RESULT_OK;
 }
