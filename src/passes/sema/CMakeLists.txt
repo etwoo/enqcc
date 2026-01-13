@@ -6,5 +6,6 @@ target_sources(compiler PRIVATE
 	linkage.c
 	pointer.c
 	string.c
+	struct.c
 	walk.c
 )

@@ -48,8 +48,6 @@ sema_conversion_initializer(struct ast *a, struct sema_conversion_state *state)
 	return RESULT_OK;
 }
 
-// TODO: move ctype_is_struct_mismatch() calls in this fn to dedicated pass
-// similar to sema_typecheck_ptr(), like sema_typecheck_struct()
 static WARN_UNUSED result_t
 sema_conversion(struct ast *a, void *userdata)
 {
@@ -64,13 +62,8 @@ sema_conversion(struct ast *a, void *userdata)
 		                 &state->expected_return_type));
 		break;
 	case NODE_FUNCTION_RETURN_STATEMENT:
-		if (ctype_is_struct_mismatch(
-			    &state->expected_return_type,
-			    &a->u.op_unary.operand->expr_type)) {
-			return make_result(
-				ERR_SEMA_RETURN_STATEMENT_STRUCT_MISMATCH);
-		} else if (ctype_is_void(&state->expected_return_type) ==
-		           ctype_is_void(&a->u.op_unary.operand->expr_type)) {
+		if (ctype_is_void(&state->expected_return_type) ==
+		    ctype_is_void(&a->u.op_unary.operand->expr_type)) {
 			/* void function XOR void return statement */
 		} else if (ctype_is_void(&state->expected_return_type)) {
 			return make_result(
@@ -122,11 +115,6 @@ sema_conversion(struct ast *a, void *userdata)
 		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		if (ctype_is_struct_mismatch(&a->u.op_binary.lhs->expr_type,
-		                             &a->u.op_binary.rhs->expr_type)) {
-			return make_result(ERR_SEMA_ASSIGNMENT_STRUCT_MISMATCH);
-		}
-		__attribute__((fallthrough));
 	case NODE_EXPRESSION_BITWISE_SHIFT_LEFT:
 	case NODE_EXPRESSION_BITWISE_SHIFT_RIGHT:
 		check(cast_if(arena,
@@ -134,11 +122,6 @@ sema_conversion(struct ast *a, void *userdata)
 		              &a->u.op_binary.rhs));
 		break;
 	case NODE_EXPRESSION_TERNARY_CONDITIONAL:
-		if (ctype_is_struct_mismatch(
-			    &a->u.op_ternary.then_expr->expr_type,
-			    &a->u.op_ternary.else_expr->expr_type)) {
-			return make_result(ERR_SEMA_OPERAND_TERNARY_MISMATCH);
-		}
 		common =
 			get_common_ctype(&a->u.op_ternary.then_expr->expr_type,
 		                         &a->u.op_ternary.else_expr->expr_type);
@@ -148,6 +131,7 @@ sema_conversion(struct ast *a, void *userdata)
 	default:
 		break;
 	}
+
 	return RESULT_OK;
 }
 

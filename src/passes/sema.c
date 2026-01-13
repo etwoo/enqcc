@@ -6,6 +6,7 @@
 #include "passes/sema/linkage.h"
 #include "passes/sema/pointer.h"
 #include "passes/sema/string.h"
+#include "passes/sema/struct.h"
 #include "passes/sema/walk.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
@@ -523,6 +524,9 @@ sema_typecheck(Arena *arena,
 
 	debug("Checking for invalid pointer usage");
 	check(sema_typecheck_ptr(arena, a, types));
+
+	debug("Checking for invalid struct usage");
+	check(sema_typecheck_struct(arena, a));
 
 	debug("Inserting cast expressions for implicit conversions");
 	check(sema_typecheck_conversion(arena, a, types));
