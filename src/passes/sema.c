@@ -84,20 +84,21 @@ is_node_constant(struct ast *a)
 }
 
 static WARN_UNUSED result_t
-foreach_initializer_element(struct ast *a,
+foreach_initializer_element(struct ast **ast_handle,
                             const struct ctype *dst_type,
-                            struct type_table *types,
-                            result_t (*visit)(struct ast *,
+                            struct type_table *tt,
+                            result_t (*visit)(struct ast **,
                                               const struct ctype *,
                                               void *),
                             void *ud) /* visitor callback userdata */
 {
 	assert(dst_type != NULL);
 
+	struct ast *a = *ast_handle;
 	a = unpack_cast(a);
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
-	check(visit(a, dst_type, ud));
+	check(visit(ast_handle, dst_type, ud));
 
 	if (a->u.init.single != NULL) {
 		return RESULT_OK;
@@ -105,7 +106,7 @@ foreach_initializer_element(struct ast *a,
 
 	struct type_table *type_entry = NULL;
 	if (ctype_is_struct(dst_type)) {
-		type_entry = types_find(types, dst_type);
+		type_entry = types_find(tt, dst_type);
 		assert(type_entry != NULL);
 	} else {
 		assert(ctype_is_pointer(dst_type));
@@ -131,7 +132,7 @@ foreach_initializer_element(struct ast *a,
 			c = dst_type->referent;
 		}
 
-		check(foreach_initializer_element(f->car, c, types, visit, ud));
+		check(foreach_initializer_element(&f->car, c, tt, visit, ud));
 		++element_count;
 	}
 
@@ -139,10 +140,11 @@ foreach_initializer_element(struct ast *a,
 }
 
 static WARN_UNUSED result_t
-visit_count(struct ast *a,
+visit_count(struct ast **ast_handle,
             const struct ctype *dst_type MAYBE_UNUSED,
             void *userdata)
 {
+	struct ast *a = *ast_handle;
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	long long unsigned *count = userdata;
@@ -159,7 +161,7 @@ count_initializer_elements(struct ast *a,
                            struct type_table *types)
 {
 	long long unsigned count = 0;
-	auto_result err = foreach_initializer_element(a,
+	auto_result err = foreach_initializer_element(&a,
 	                                              dst_type,
 	                                              types,
 	                                              &visit_count,
@@ -244,8 +246,11 @@ map_numeric_type_scalar(const struct ast *a,
 }
 
 static WARN_UNUSED result_t
-visit_populate(struct ast *a, const struct ctype *dst_type, void *userdata)
+visit_populate(struct ast **ast_handle,
+               const struct ctype *dst_type,
+               void *userdata)
 {
+	struct ast *a = *ast_handle;
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	const struct ast *s = a->u.init.single;
@@ -278,7 +283,7 @@ populate_initializer_elements(struct ast *a,
                               struct type_table *types,
                               struct constant_bytes **pos)
 {
-	auto_result err = foreach_initializer_element(a,
+	auto_result err = foreach_initializer_element(&a,
 	                                              dst_type,
 	                                              types,
 	                                              visit_populate,
@@ -1135,7 +1140,7 @@ struct sema_str_literal_state {
 };
 
 static WARN_UNUSED result_t
-visit_literal(struct ast *init,
+visit_literal(struct ast **ast_handle,
               const struct ctype *declaration_type,
               void *userdata)
 {
@@ -1146,6 +1151,7 @@ visit_literal(struct ast *init,
 
 	bool expanded = false;
 
+	struct ast *init = *ast_handle;
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 	if (init->u.init.single != NULL &&
 	    init->u.init.single->node_type == NODE_CONSTANT_STR) {
@@ -1221,7 +1227,7 @@ sema_str_literal(struct ast *a, void *userdata)
 		memcpy(a, new_node, sizeof(*a));
 	} else if (a->node_type == NODE_DECLARATION &&
 	           a->u.declare.init != NULL) {
-		check(foreach_initializer_element(a->u.declare.init,
+		check(foreach_initializer_element(&a->u.declare.init,
 		                                  &a->u.declare.var_type,
 		                                  state->types,
 		                                  visit_literal,
@@ -1446,7 +1452,7 @@ struct sema_expr_state {
 };
 
 static WARN_UNUSED result_t
-visit_expr(struct ast *init,
+visit_expr(struct ast **ast_handle,
            const struct ctype *declaration_type,
            void *userdata)
 {
@@ -1454,6 +1460,7 @@ visit_expr(struct ast *init,
 	Arena *arena = state->arena;
 	struct type_table *types = state->types;
 
+	struct ast *init = *ast_handle;
 	assert(init->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	if (init->u.init.single != NULL) {
@@ -1533,7 +1540,7 @@ sema_expr_types_initializer(struct ast *a, struct sema_expr_state *state)
 	if (a->u.declare.init == NULL) {
 		return RESULT_OK;
 	}
-	check(foreach_initializer_element(a->u.declare.init,
+	check(foreach_initializer_element(&a->u.declare.init,
 	                                  &a->u.declare.var_type,
 	                                  state->types,
 	                                  visit_expr,
