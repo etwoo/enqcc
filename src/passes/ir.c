@@ -1819,7 +1819,7 @@ ir_func(Arena *arena,
 static WARN_UNUSED result_t
 ir_var(Arena *arena,
        struct symbol *s,
-       struct type_table *types,
+       struct type_table *types, // TODO: mv elsewhere, don't pass types to IR
        struct ir_variable **dst)
 {
 	assert(dst != NULL);
