@@ -88,13 +88,13 @@ is_node_constant(struct ast *a)
 }
 
 static WARN_UNUSED result_t
-foreach_initializer_element(struct ast **ast_handle,
-                            const struct ctype *dst_type,
-                            struct type_table *tt,
-                            result_t (*visit)(struct ast **,
-                                              const struct ctype *,
-                                              void *),
-                            void *ud) /* visitor callback userdata */
+sema_walk_initializer(struct ast **ast_handle,
+                      const struct ctype *dst_type,
+                      struct type_table *tt,
+                      result_t (*visit)(struct ast **,
+                                        const struct ctype *,
+                                        void *),
+                      void *userdata)
 {
 	assert(dst_type != NULL);
 
@@ -102,12 +102,11 @@ foreach_initializer_element(struct ast **ast_handle,
 	assert((**ast_handle).node_type == NODE_EXPRESSION_INITIALIZER);
 	const bool early_return = ((**ast_handle).u.init.single != NULL);
 
-	check(visit(ast_handle, dst_type, ud));
+	check(visit(ast_handle, dst_type, userdata));
 
 	if (early_return) {
 		return RESULT_OK;
 	}
-
 	struct type_table *type_entry = NULL;
 	if (ctype_is_struct(dst_type)) {
 		type_entry = types_find(tt, dst_type);
@@ -138,7 +137,7 @@ foreach_initializer_element(struct ast **ast_handle,
 			c = dst_type->referent;
 		}
 
-		check(foreach_initializer_element(&f->car, c, tt, visit, ud));
+		check(sema_walk_initializer(&f->car, c, tt, visit, userdata));
 		++element_count;
 	}
 
@@ -146,9 +145,9 @@ foreach_initializer_element(struct ast **ast_handle,
 }
 
 static WARN_UNUSED result_t
-visit_count(struct ast **ast_handle,
-            const struct ctype *dst_type MAYBE_UNUSED,
-            void *userdata)
+visit_cnt(struct ast **ast_handle,
+          const struct ctype *dst_type MAYBE_UNUSED,
+          void *userdata)
 {
 	const struct ast *a = *ast_handle;
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
@@ -167,11 +166,8 @@ count_initializer_elements(struct ast *a,
                            struct type_table *types)
 {
 	long long unsigned count = 0;
-	auto_result err = foreach_initializer_element(&a,
-	                                              dst_type,
-	                                              types,
-	                                              &visit_count,
-	                                              &count);
+	auto_result err =
+		sema_walk_initializer(&a, dst_type, types, &visit_cnt, &count);
 	assert(err.err == OK); /* infallible visitor callback */
 	return count;
 }
@@ -252,9 +248,7 @@ map_numeric_type_scalar(const struct ast *a,
 }
 
 static WARN_UNUSED result_t
-visit_populate(struct ast **ast_handle,
-               const struct ctype *dst_type,
-               void *userdata)
+visit_pop(struct ast **ast_handle, const struct ctype *dst_type, void *userdata)
 {
 	const struct ast *a = *ast_handle;
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
@@ -289,11 +283,9 @@ populate_initializer_elements(struct ast *a,
                               struct type_table *types,
                               struct constant_bytes **pos)
 {
-	auto_result err = foreach_initializer_element(&a,
-	                                              dst_type,
-	                                              types,
-	                                              visit_populate,
-	                                              (void *)pos);
+	void *userdata = (void *)pos;
+	auto_result err =
+		sema_walk_initializer(&a, dst_type, types, visit_pop, userdata);
 	assert(err.err == OK); /* infallible visitor callback */
 }
 
@@ -1233,11 +1225,11 @@ sema_str_literal(struct ast *a, void *userdata)
 		memcpy(a, new_node, sizeof(*a));
 	} else if (a->node_type == NODE_DECLARATION &&
 	           a->u.declare.init != NULL) {
-		check(foreach_initializer_element(&a->u.declare.init,
-		                                  &a->u.declare.var_type,
-		                                  state->types,
-		                                  visit_literal,
-		                                  state));
+		check(sema_walk_initializer(&a->u.declare.init,
+		                            &a->u.declare.var_type,
+		                            state->types,
+		                            visit_literal,
+		                            state));
 	}
 
 	return RESULT_OK;
@@ -1546,11 +1538,11 @@ sema_expr_types_initializer(struct ast *a, struct sema_expr_state *state)
 	if (a->u.declare.init == NULL) {
 		return RESULT_OK;
 	}
-	check(foreach_initializer_element(&a->u.declare.init,
-	                                  &a->u.declare.var_type,
-	                                  state->types,
-	                                  visit_expr,
-	                                  state));
+	check(sema_walk_initializer(&a->u.declare.init,
+	                            &a->u.declare.var_type,
+	                            state->types,
+	                            visit_expr,
+	                            state));
 	check(sema_expr_types_initializer_zero_pad(state->arena,
 	                                           a->u.declare.init,
 	                                           &a->u.declare.var_type,
@@ -2229,11 +2221,11 @@ sema_implicit_cast_initializer(struct ast *a,
 	if (a->u.declare.init == NULL) {
 		return RESULT_OK;
 	}
-	check(foreach_initializer_element(&a->u.declare.init,
-	                                  &a->u.declare.var_type,
-	                                  state->types,
-	                                  visit_implicit_cast,
-	                                  state));
+	check(sema_walk_initializer(&a->u.declare.init,
+	                            &a->u.declare.var_type,
+	                            state->types,
+	                            visit_implicit_cast,
+	                            state));
 	return RESULT_OK;
 }
 
