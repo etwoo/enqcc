@@ -62,6 +62,24 @@ bool ctype_is_equal(const struct ctype *lhs,
                     const struct ctype *rhs) WARN_UNUSED;
 void ctype_array_decay_to_pointer(struct ctype *c);
 
+/*
+ * From "Writing a C Compiler" by Nora Sandler, Chapter 15, Section "Type
+ * Checking Pointer Arithmetic":
+ *
+ *   To type check addition involving a pointer and an integer, we first
+ *   convert the integer operand to a long. This will simplify later
+ *   compiler passes, when pointer indices will need to be 8 bytes wide
+ *   so that we can add them to 8-byte memory addresses. This conversion
+ *   doesn't come from the C standard; we're just adding it for our own
+ *   convenience. But it also doesn’t violate the standard; converting a
+ *   valid array index to long won't change its value, so the result of
+ *   the whole expression is the same either way. (If an integer is too
+ *   big to represent as a long, we can safely assume that it's not a
+ *   valid array index, since no hardware supports arrays with anywhere
+ *   close to 263 elements.)
+ */
+extern const struct ctype LIKE_PTRDIFF_T;
+
 struct type_table {
 	struct ctype c;
 	long long int aggregate_size;
