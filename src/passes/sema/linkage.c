@@ -3,7 +3,7 @@
 #include "passes.h"
 #include "passes/parse.h"
 #include "passes/sema/constant.h"
-#include "passes/sema/implicit_cast.h"
+#include "passes/sema/conversion.h"
 #include "passes/sema/pointer.h"
 #include "passes/sema/walk.h"
 

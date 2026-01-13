@@ -135,7 +135,7 @@ ir_assignment_lvalue(Arena *arena,
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		assert(candidate != NULL);
 		if (candidate->node_type == NODE_EXPRESSION_CAST) {
-			/* unpack nodes inserted by sema_implicit_cast() */
+			/* unpack nodes inserted by sema_conversion() */
 			const struct ast *inner = candidate->u.cast.expr;
 			assert(inner->node_type ==
 			       NODE_EXPRESSION_VARIABLE_USAGE);
@@ -284,7 +284,7 @@ ir_decl_init_multi(Arena *arena,
 	{
 		const struct ast *unpack = a;
 		while (unpack->node_type == NODE_EXPRESSION_CAST) {
-			/* unpack nodes inserted by sema_implicit_cast() */
+			/* unpack nodes inserted by sema_conversion() */
 			unpack = unpack->u.cast.expr;
 		}
 		assert(unpack->node_type == NODE_EXPRESSION_INITIALIZER);

@@ -1,7 +1,7 @@
 #include "passes/sema/walk.h"
 
 #include "passes/parse.h"
-#include "passes/sema/implicit_cast.h"
+#include "passes/sema/conversion.h"
 
 #include <assert.h>
 

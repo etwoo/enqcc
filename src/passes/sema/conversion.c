@@ -1,4 +1,4 @@
-#include "passes/sema/implicit_cast.h"
+#include "passes/sema/conversion.h"
 
 #include "passes/parse.h"
 #include "passes/parse/alloc.h"
@@ -7,7 +7,7 @@
 
 #include <assert.h>
 
-struct sema_implicit_cast_state {
+struct sema_conversion_state {
 	Arena *arena;
 	struct type_table *types;
 	struct ctype expected_return_type;
@@ -18,7 +18,7 @@ visit_implicit_cast(struct ast **init,
                     const struct ctype *expected_type,
                     void *userdata)
 {
-	struct sema_implicit_cast_state *state = userdata;
+	struct sema_conversion_state *state = userdata;
 	Arena *arena = state->arena;
 
 	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
@@ -34,8 +34,8 @@ visit_implicit_cast(struct ast **init,
  * See sema_expr_types_initializer() for related logic.
  */
 static WARN_UNUSED result_t
-sema_implicit_cast_initializer(struct ast *a,
-                               struct sema_implicit_cast_state *state)
+sema_conversion_initializer(struct ast *a,
+                               struct sema_conversion_state *state)
 {
 	assert(a->node_type == NODE_DECLARATION);
 	if (a->u.declare.init == NULL) {
@@ -50,9 +50,9 @@ sema_implicit_cast_initializer(struct ast *a,
 }
 
 static WARN_UNUSED result_t
-sema_implicit_cast(struct ast *a, void *userdata)
+sema_conversion(struct ast *a, void *userdata)
 {
-	struct sema_implicit_cast_state *state = userdata;
+	struct sema_conversion_state *state = userdata;
 	Arena *arena = state->arena;
 	const struct ctype *common = NULL;
 
@@ -83,7 +83,7 @@ sema_implicit_cast(struct ast *a, void *userdata)
 		              &a->u.op_unary.operand));
 		break;
 	case NODE_DECLARATION:
-		check(sema_implicit_cast_initializer(a, state));
+		check(sema_conversion_initializer(a, state));
 		break;
 	case NODE_EXPRESSION_BINARY_ADD:
 	case NODE_EXPRESSION_BINARY_SUBTRACT:
@@ -151,14 +151,12 @@ sema_implicit_cast(struct ast *a, void *userdata)
 }
 
 result_t
-sema_typecheck_implicit_cast(Arena *arena,
-                             struct ast *a,
-                             struct type_table *types)
+sema_typecheck_conversion(Arena *arena, struct ast *a, struct type_table *types)
 {
 	struct sema_ops ops = {
-		.node_enter = sema_implicit_cast,
+		.node_enter = sema_conversion,
 	};
-	struct sema_implicit_cast_state state = {
+	struct sema_conversion_state state = {
 		.arena = arena,
 		.types = types,
 	};
@@ -188,7 +186,7 @@ struct ast **
 cast_unpack(struct ast **a)
 {
 	while ((**a).node_type == NODE_EXPRESSION_CAST) {
-		/* unpack nodes inserted by sema_implicit_cast() */
+		/* unpack nodes inserted by sema_conversion() */
 		a = &(**a).u.cast.expr;
 	}
 	return a;

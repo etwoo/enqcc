@@ -2,7 +2,7 @@
 
 #include "passes/parse.h"
 #include "passes/parse/alloc.h"
-#include "passes/sema/implicit_cast.h"
+#include "passes/sema/conversion.h"
 #include "passes/sema/walk.h"
 
 #include <assert.h>
@@ -194,7 +194,7 @@ visit_expr(struct ast **ast_handle,
 }
 
 /*
- * See sema_implicit_cast_initializer() for related logic.
+ * See sema_conversion_initializer() for related logic.
  */
 static WARN_UNUSED result_t
 sema_expr_types_initializer(struct ast *a, struct sema_expr_state *state)

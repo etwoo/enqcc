@@ -1,8 +1,8 @@
 #include "passes.h"
 #include "passes/parse.h"
+#include "passes/sema/conversion.h"
 #include "passes/sema/expression.h"
 #include "passes/sema/flow.h"
-#include "passes/sema/implicit_cast.h"
 #include "passes/sema/linkage.h"
 #include "passes/sema/pointer.h"
 #include "passes/sema/string.h"
@@ -524,8 +524,8 @@ sema_typecheck(Arena *arena,
 	debug("Checking for invalid pointer usage");
 	check(sema_typecheck_ptr(arena, a, types));
 
-	debug("Inserting cast expressions");
-	check(sema_typecheck_implicit_cast(arena, a, types));
+	debug("Inserting cast expressions for implicit conversions");
+	check(sema_typecheck_conversion(arena, a, types));
 
 	debug("Labeling loops, loop breaks, and continues");
 	check(sema_label_loops(arena, a, label_generator));
