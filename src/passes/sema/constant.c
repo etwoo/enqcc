@@ -153,6 +153,7 @@ populate_initializer_elements(struct ast *a,
 
 // TODO: add zeros for any padding between members
 // TODO: add zeros for any padding after final member
+// TODO: use type_table aggregate_size, member_offset
 result_t
 make_initializer(Arena *arena,
                  struct ast *init,
