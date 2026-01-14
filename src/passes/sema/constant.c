@@ -138,7 +138,7 @@ make_initializer(Arena *arena,
                  struct constant_initializer *out)
 {
 	long long unsigned count = 0;
-	check(sema_walk_initializer(&a, dst_type, t, &visit_cnt, &count));
+	check(sema_walk_initializer(&a, dst_type, t, visit_cnt, &count));
 	assert(count > 0);
 
 	out->count = count;
