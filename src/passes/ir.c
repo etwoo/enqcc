@@ -8,6 +8,7 @@
 #include "sys/debug.h"
 
 #include <assert.h>
+#include <limits.h> /* for LLONG_MAX */
 #include <stdbool.h>
 
 static WARN_UNUSED result_t
@@ -71,6 +72,13 @@ ir_val_tmpvar_gen(Arena *arena,
 {
 	check(ir_val_tmpvar(arena, ir->env.generator++, vtype, dst));
 	return RESULT_OK;
+}
+
+static void
+ir_val_jump_label(long long int jump_label, struct ir_val *dst)
+{
+	dst->subtype = IR_VAL_JUMP_TARGET_LABEL;
+	dst->num = jump_label;
 }
 
 static void
@@ -405,12 +413,10 @@ ir_if_else_prepare(Arena *arena,
 	if (jump_operand != NULL) {
 		out->jumper->opcode = IR_OP_JUMP_IF_ZERO;
 		ir_val_copy(jump_operand, &out->jumper->args[0]);
-		out->jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
-		out->jumper->args[1].num = jump_label;
+		ir_val_jump_label(jump_label, &out->jumper->args[1]);
 	} else {
 		out->jumper->opcode = IR_OP_JUMP;
-		out->jumper->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-		out->jumper->args[0].num = jump_label;
+		ir_val_jump_label(jump_label, &out->jumper->args[0]);
 	}
 
 	struct ir_val body_return = {0};
@@ -438,8 +444,7 @@ ir_if_else_prepare(Arena *arena,
 
 	check(ir_alloc_op(arena, &out->jump_target));
 	out->jump_target->opcode = IR_OP_LABEL;
-	out->jump_target->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	out->jump_target->args[0].num = jump_label;
+	ir_val_jump_label(jump_label, &out->jump_target->args[0]);
 	return RESULT_OK;
 }
 
@@ -539,16 +544,13 @@ ir_loop(Arena *arena,
 	assert(a->node_type == NODE_LOOP);
 
 	struct ir_val go_start = {0};
-	go_start.subtype = IR_VAL_JUMP_TARGET_LABEL;
-	go_start.num = a->u.loop.label_start;
+	ir_val_jump_label(a->u.loop.label_start, &go_start);
 
 	struct ir_val go_continue = {0};
-	go_continue.subtype = IR_VAL_JUMP_TARGET_LABEL;
-	go_continue.num = a->u.loop.label_continue;
+	ir_val_jump_label(a->u.loop.label_continue, &go_continue);
 
 	struct ir_val go_end = {0};
-	go_end.subtype = IR_VAL_JUMP_TARGET_LABEL;
-	go_end.num = a->u.loop.label_end;
+	ir_val_jump_label(a->u.loop.label_end, &go_end);
 
 	struct ir_op *start_label = NULL;
 	check(ir_alloc_op(arena, &start_label));
@@ -633,8 +635,8 @@ ir_loop_control_op(Arena *arena, const struct ast *a, struct ir_op **dst)
 	check(ir_alloc_op(arena, dst));
 	assert(*dst != NULL);
 	(**dst).opcode = IR_OP_JUMP;
-	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	(**dst).args[0].num = a->u.num;
+	assert(a->u.num < LLONG_MAX);
+	ir_val_jump_label((long long int)a->u.num, &(**dst).args[0]);
 
 	return RESULT_OK;
 }
@@ -647,8 +649,7 @@ ir_goto(Arena *arena, const struct ast *a, struct ir_op **dst)
 	check(ir_alloc_op(arena, dst));
 	assert(*dst != NULL);
 	(**dst).opcode = IR_OP_JUMP;
-	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	(**dst).args[0].num = a->u.goto_.target_unique;
+	ir_val_jump_label(a->u.goto_.target_unique, &(**dst).args[0]);
 
 	return RESULT_OK;
 }
@@ -659,8 +660,7 @@ ir_label(Arena *arena, long long int label_unique, struct ir_op **dst)
 	check(ir_alloc_op(arena, dst));
 	assert(*dst != NULL);
 	(**dst).opcode = IR_OP_LABEL;
-	(**dst).args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	(**dst).args[0].num = label_unique;
+	ir_val_jump_label(label_unique, &(**dst).args[0]);
 	return RESULT_OK;
 }
 
@@ -709,8 +709,7 @@ ir_switch(Arena *arena,
 		check(ir_alloc_op(arena, &jumper));
 		jumper->opcode = IR_OP_JUMP_IF_NOT_ZERO;
 		ir_val_copy(&case_cmp->args[2], &jumper->args[0]);
-		jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
-		jumper->args[1].num = f->car->u.case_.unique;
+		ir_val_jump_label(f->car->u.case_.unique, &jumper->args[1]);
 
 		case_jumpers = ir_op_list_concat(
 			ir_op_list_concat(case_expr, case_cmp),
@@ -721,8 +720,8 @@ ir_switch(Arena *arena,
 	if (a->u.switch_.label_default >= 0) {
 		check(ir_alloc_op(arena, &default_jumper));
 		default_jumper->opcode = IR_OP_JUMP;
-		default_jumper->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-		default_jumper->args[0].num = a->u.switch_.label_default;
+		ir_val_jump_label(a->u.switch_.label_default,
+		                  &default_jumper->args[0]);
 	}
 
 	struct ir_op *body = NULL;
@@ -731,8 +730,7 @@ ir_switch(Arena *arena,
 	struct ir_op *end_jumper = NULL;
 	check(ir_alloc_op(arena, &end_jumper));
 	end_jumper->opcode = IR_OP_JUMP;
-	end_jumper->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	end_jumper->args[0].num = a->u.switch_.label_end;
+	ir_val_jump_label(a->u.switch_.label_end, &end_jumper->args[0]);
 
 	struct ir_op *end_label = NULL;
 	check(ir_alloc_op(arena, &end_label));
@@ -1386,8 +1384,7 @@ ir_logical_op_arm(Arena *arena,
 	check(ir_alloc_op(arena, &jumper));
 	jumper->opcode = jz ? IR_OP_JUMP_IF_ZERO : IR_OP_JUMP_IF_NOT_ZERO;
 	ir_val_copy(&inner_return, &jumper->args[0]);
-	jumper->args[1].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	jumper->args[1].num = jump_label;
+	ir_val_jump_label(jump_label, &jumper->args[1]);
 
 	*dst = ir_op_list_concat(inner, jumper);
 	return RESULT_OK;
@@ -1430,15 +1427,13 @@ ir_logical_op(Arena *arena,
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_JUMP;
-	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	foot_pos->args[0].num = label_end;
+	ir_val_jump_label(label_end, &foot_pos->args[0]);
 
 	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_LABEL;
-	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	foot_pos->args[0].num = lf;
+	ir_val_jump_label(lf, &foot_pos->args[0]);
 
 	check(ir_alloc_op(arena, &foot_pos->next));
 	foot_pos = foot_pos->next;
@@ -1452,8 +1447,7 @@ ir_logical_op(Arena *arena,
 	foot_pos = foot_pos->next;
 
 	foot_pos->opcode = IR_OP_LABEL;
-	foot_pos->args[0].subtype = IR_VAL_JUMP_TARGET_LABEL;
-	foot_pos->args[0].num = label_end;
+	ir_val_jump_label(label_end, &foot_pos->args[0]);
 
 	*dst = ir_op_list_concat(left, ir_op_list_concat(right, footer));
 	return RESULT_OK;
@@ -1808,6 +1802,7 @@ ir_func(Arena *arena,
 		} else {
 			(**return_0).args[0].subtype = IR_VAL_CONSTANT;
 			(**return_0).args[0].num = 0;
+			(**return_0).args[0].c89type.t = CTYPE_INT;
 		}
 	}
 
