@@ -151,6 +151,8 @@ populate_initializer_elements(struct ast *a,
 	assert(err.err == OK); /* infallible visitor callback */
 }
 
+// TODO: add zeros for any padding between members
+// TODO: add zeros for any padding after final member
 result_t
 make_initializer(Arena *arena,
                  struct ast *init,
