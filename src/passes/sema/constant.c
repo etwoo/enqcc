@@ -22,18 +22,6 @@ visit_cnt(struct ast **ast_handle,
 	return RESULT_OK;
 }
 
-static WARN_UNUSED long long unsigned
-count_initializer_elements(struct ast *a,
-                           const struct ctype *dst_type,
-                           struct type_table *types)
-{
-	long long unsigned count = 0;
-	auto_result err =
-		sema_walk_initializer(&a, dst_type, types, &visit_cnt, &count);
-	assert(err.err == OK); /* infallible visitor callback */
-	return count;
-}
-
 static const long long int INT_TO_CHAR_TRUNCATOR = 256;
 static const long long int LONG_TO_INT_TRUNCATOR = 4294967296;
 
@@ -139,34 +127,27 @@ visit_pop(struct ast **ast_handle, const struct ctype *dst_type, void *userdata)
 	return RESULT_OK;
 }
 
-static void
-populate_initializer_elements(struct ast *a,
-                              const struct ctype *dst_type,
-                              struct type_table *types,
-                              struct constant_bytes **pos)
-{
-	void *userdata = (void *)pos;
-	auto_result err =
-		sema_walk_initializer(&a, dst_type, types, visit_pop, userdata);
-	assert(err.err == OK); /* infallible visitor callback */
-}
-
 // TODO: add zeros for any padding between members
 // TODO: add zeros for any padding after final member
 // TODO: use type_table aggregate_size, member_offset
 result_t
 make_initializer(Arena *arena,
-                 struct ast *init,
+                 struct ast *a,
                  const struct ctype *dst_type,
-                 struct type_table *types,
+                 struct type_table *t,
                  struct constant_initializer *out)
 {
-	out->count = count_initializer_elements(init, dst_type, types);
-	assert(out->count > 0);
+	long long unsigned count = 0;
+	check(sema_walk_initializer(&a, dst_type, t, &visit_cnt, &count));
+	assert(count > 0);
+
+	out->count = count;
 	out->elements = arena_alloc(arena, out->count * sizeof(*out->elements));
 	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
-	struct constant_bytes *cursor = out->elements;
-	populate_initializer_elements(init, dst_type, types, &cursor);
-	assert((size_t)(cursor - out->elements) == out->count);
+
+	struct constant_bytes *pos = out->elements;
+	check(sema_walk_initializer(&a, dst_type, t, visit_pop, (void *)&pos));
+	assert((size_t)(pos - out->elements) == out->count);
+
 	return RESULT_OK;
 }

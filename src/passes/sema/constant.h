@@ -12,9 +12,9 @@ struct ctype;
 struct type_table;
 
 result_t make_initializer(Arena *arena,
-                          struct ast *init,
+                          struct ast *a,
                           const struct ctype *dst_type,
-                          struct type_table *types,
+                          struct type_table *t,
                           struct constant_initializer *out) WARN_UNUSED;
 void make_initializer_bytes(const struct ast *a,
                             const struct ctype *dst_type,
