@@ -145,7 +145,7 @@ sema_walk(struct ast *a, struct sema_ops *ops, void *u)
 }
 
 result_t
-sema_walk_initializer(struct ast **ast_handle,
+sema_walk_initializer(struct ast **ast_pp,
                       const struct ctype *dst_type,
                       struct type_table *tt,
                       result_t (*visit)(struct ast **,
@@ -155,15 +155,16 @@ sema_walk_initializer(struct ast **ast_handle,
 {
 	assert(dst_type != NULL);
 
-	ast_handle = cast_unpack(ast_handle);
-	assert((**ast_handle).node_type == NODE_EXPRESSION_INITIALIZER);
-	const bool early_return = ((**ast_handle).u.init.single != NULL);
+	ast_pp = cast_unpack(ast_pp);
+	assert((**ast_pp).node_type == NODE_EXPRESSION_INITIALIZER);
+	const bool early_return = ((**ast_pp).u.init.single != NULL);
 
-	check(visit(ast_handle, dst_type, userdata));
+	check(visit(ast_pp, dst_type, userdata));
 
 	if (early_return) {
 		return RESULT_OK;
 	}
+
 	struct type_table *type_entry = NULL;
 	if (ctype_is_struct(dst_type)) {
 		type_entry = types_find(tt, dst_type);
@@ -173,10 +174,9 @@ sema_walk_initializer(struct ast **ast_handle,
 		assert(dst_type->referent != NULL);
 	}
 
-	struct ast *a = *ast_handle;
 	long long unsigned element_count = 0;
 
-	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
+	for (struct flat *f = (**ast_pp).u.init.multi; f != NULL; f = f->cdr) {
 		if (type_entry != NULL &&
 		    element_count >= type_entry->n_members) {
 			/*

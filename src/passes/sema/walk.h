@@ -14,7 +14,7 @@ struct sema_ops {
 };
 result_t sema_walk(struct ast *a, struct sema_ops *ops, void *u) WARN_UNUSED;
 
-result_t sema_walk_initializer(struct ast **ast_handle,
+result_t sema_walk_initializer(struct ast **ast_pp,
                                const struct ctype *dst_type,
                                struct type_table *tt,
                                result_t (*visit)(struct ast **,
