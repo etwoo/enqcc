@@ -130,6 +130,15 @@ visit_pop(struct ast **ast_handle, const struct ctype *dst_type, void *userdata)
 // TODO: add zeros for any padding between members
 // TODO: add zeros for any padding after final member
 // TODO: use type_table aggregate_size, member_offset
+//
+// maybe make sema_walk_initializer() callback take type_table entry including
+// ctype as member, instead of taking just the ctype; convert existing callers
+// to access ctype member, then change make_initializer() to use type_entry to
+// access member_offset, accumulate as necessary, add zero padding to
+// constant_initializer (while leaving AST as-is)
+//
+// ^^^ above should handle inter-member padding; can then handle final
+// aggregate_size - offset -> ending padding in a final step
 result_t
 make_initializer(Arena *arena,
                  struct ast *a,
