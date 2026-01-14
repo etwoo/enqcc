@@ -73,6 +73,14 @@ ir_val_tmpvar_gen(Arena *arena,
 	return RESULT_OK;
 }
 
+static void
+ir_val_ctype_to_size(const struct ctype *c, struct ir_val *dst)
+{
+	dst->subtype = IR_VAL_CONSTANT;
+	dst->num = ctype_to_size_bytes(c);
+	dst->c89type = LIKE_SIZE_T;
+}
+
 /*
  * Related: sema_lvalue() in src/passes/sema.c
  */
@@ -907,10 +915,8 @@ ir_incr_decr(Arena *arena,
 	} else {
 		incr->args[1].subtype = IR_VAL_CONSTANT;
 		incr->args[1].num = pointer_index;
-		incr->args[1].c89type.t = CTYPE_LONG; /* LIKE_PTRDIFF_T */
-		incr->args[2].subtype = IR_VAL_CONSTANT;
-		incr->args[2].num = ctype_to_size_bytes(a->expr_type.referent);
-		incr->args[2].c89type.t = CTYPE_LONG; /* LIKE_PTRDIFF_T */
+		incr->args[1].c89type = LIKE_PTRDIFF_T;
+		ir_val_ctype_to_size(a->expr_type.referent, &incr->args[2]);
 		ir_val_copy(&incr->args[0], &incr->args[3]);
 	}
 
@@ -1035,18 +1041,15 @@ ir_unary_op(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-ir_sizeof(Arena *arena, const struct ast *a, struct ir_val *return_value)
+ir_sizeof(const struct ast *a, struct ir_val *return_value)
 {
-	return_value->subtype = IR_VAL_CONSTANT;
-
 	assert(a->node_type == NODE_EXPRESSION_UNARY_SIZE_OF);
+	assert(ctype_is_equal(&a->expr_type, &LIKE_SIZE_T));
+
 	const struct ctype *inner_type = &a->u.op_unary.operand->expr_type;
 	assert(!ctype_is_void(inner_type));
-	return_value->num = ctype_to_size_bytes(inner_type);
 
-	assert(ctype_is_integer(&a->expr_type));
-	check(ctype_copy(arena, &a->expr_type, &return_value->c89type));
-
+	ir_val_ctype_to_size(inner_type, return_value);
 	return RESULT_OK;
 }
 
@@ -1130,7 +1133,7 @@ ir_ptr_ptr_math(Arena *arena,
                 struct ir_val *return_value)
 {
 	assert(a->node_type == NODE_EXPRESSION_BINARY_SUBTRACT &&
-	       ctype_is_integer(&a->expr_type) &&
+	       ctype_is_equal(&a->expr_type, &LIKE_PTRDIFF_T) &&
 	       ctype_is_pointer(&a->u.op_binary.lhs->expr_type) &&
 	       ctype_is_pointer(&a->u.op_binary.rhs->expr_type));
 
@@ -1159,14 +1162,12 @@ ir_ptr_ptr_math(Arena *arena,
 	divide->opcode = IR_OP_BINARY_DIVIDE;
 	ir_val_copy(&binary_return, &divide->args[0]);
 
-	const long long int scale =
-		ctype_to_size_bytes(a->u.op_binary.lhs->expr_type.referent);
-	assert(scale > 0);
-	divide->args[1].subtype = IR_VAL_CONSTANT;
-	divide->args[1].num = scale;
+	ir_val_ctype_to_size(a->u.op_binary.lhs->expr_type.referent,
+	                     &divide->args[1]);
+	assert(ctype_is_equal(&divide->args[1].c89type, &LIKE_SIZE_T));
 	check(ctype_copy(arena,
 	                 &binary_return.c89type,
-	                 &divide->args[1].c89type));
+	                 &divide->args[1].c89type)); /* override LIKE_SIZE_T */
 
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &divide->args[2]));
 	ir_val_copy(&divide->args[2], return_value);
@@ -1241,10 +1242,7 @@ ir_ptr_math(Arena *arena,
 	}
 	assert(pos == 2);
 
-	long long int scale = ctype_to_size_bytes(pointer->expr_type.referent);
-	assert(scale > 0);
-	ptr_plus->args[2].subtype = IR_VAL_CONSTANT;
-	ptr_plus->args[2].num = scale;
+	ir_val_ctype_to_size(pointer->expr_type.referent, &ptr_plus->args[2]);
 
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &ptr_plus->args[3]));
 	ctype_array_decay_to_pointer(&ptr_plus->args[3].c89type);
@@ -1704,7 +1702,7 @@ ir_expr(Arena *arena,
 		}
 		break;
 	case NODE_EXPRESSION_UNARY_SIZE_OF:
-		check(ir_sizeof(arena, a, return_value));
+		check(ir_sizeof(a, return_value));
 		break;
 	case NODE_EXPRESSION_CAST:
 		check(ir_cast(arena, a, ir, dst, return_value));

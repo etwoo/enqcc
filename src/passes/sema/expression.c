@@ -8,15 +8,6 @@
 #include <assert.h>
 #include <string.h> /* for memset() */
 
-/*
- * From "Writing a C Compiler" by Nora Sandler, Chapter 17, Section "sizeof
- * Expressions":
- *
- *   A sizeof expression has type size_t; in our implementation, that's
- *   just unsigned long.
- */
-static const struct ctype LIKE_SIZE_T = {.t = CTYPE_UNSIGNED_LONG};
-
 static WARN_UNUSED result_t
 promote_if_char(Arena *arena, struct ast **a)
 {

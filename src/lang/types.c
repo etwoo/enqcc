@@ -8,6 +8,7 @@
 #include <sys/param.h> /* for MIN() and MAX() */
 
 const struct ctype LIKE_PTRDIFF_T = {.t = CTYPE_LONG};
+const struct ctype LIKE_SIZE_T = {.t = CTYPE_UNSIGNED_LONG};
 
 result_t
 ctype_alloc(Arena *arena, struct ctype **dst)

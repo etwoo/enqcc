@@ -82,6 +82,15 @@ void ctype_array_decay_to_pointer(struct ctype *c);
  */
 extern const struct ctype LIKE_PTRDIFF_T;
 
+/*
+ * From "Writing a C Compiler" by Nora Sandler, Chapter 17, Section "sizeof
+ * Expressions":
+ *
+ *   A sizeof expression has type size_t; in our implementation, that's
+ *   just unsigned long.
+ */
+extern const struct ctype LIKE_SIZE_T;
+
 struct type_table {
 	struct ctype c;
 	long long int aggregate_size;
