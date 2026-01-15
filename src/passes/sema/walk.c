@@ -177,22 +177,17 @@ sema_walk_initializer(struct ast **ast_pp,
 		.inner = visit,
 		.inner_userdata = ud,
 	};
-	check(sema_walk_initializer_scope(ast_pp,
-	                                  dst_type,
-	                                  NULL,
-	                                  tt,
-	                                  &ops,
-	                                  &state));
+	check(sema_walk_initializer_scope(ast_pp, dst_type, tt, &ops, &state));
 	return RESULT_OK;
 }
 
-result_t
-sema_walk_initializer_scope(struct ast **ast_pp,
-                            const struct ctype *dst_type,
-                            const struct type_member *dst_member,
-                            struct type_table *tt,
-                            struct sema_initializer_ops *ops,
-                            void *ud)
+static WARN_UNUSED result_t
+sema_walk_initializer_s_impl(struct ast **ast_pp,
+                             const struct ctype *dst_type,
+                             const struct type_member *dst_member,
+                             struct type_table *tt,
+                             struct sema_initializer_ops *ops,
+                             void *ud)
 {
 	assert(dst_type != NULL);
 
@@ -243,12 +238,24 @@ sema_walk_initializer_scope(struct ast **ast_pp,
 			c = dst_type->referent;
 		}
 
-		check(sema_walk_initializer_scope(&f->car, c, m, tt, ops, ud));
+		check(sema_walk_initializer_s_impl(&f->car, c, m, tt, ops, ud));
 		++element_count;
 	}
 
 	if (ctype_is_struct(dst_type) && ops->struct_exit != NULL) {
 		check(ops->struct_exit(type_entry, ud));
 	}
+	return RESULT_OK;
+}
+
+result_t
+sema_walk_initializer_scope(struct ast **ast_pp,
+                            const struct ctype *dst_type,
+                            struct type_table *tt,
+                            struct sema_initializer_ops *ops,
+                            void *ud)
+{
+	const struct type_member *tm = NULL;
+	check(sema_walk_initializer_s_impl(ast_pp, dst_type, tm, tt, ops, ud));
 	return RESULT_OK;
 }

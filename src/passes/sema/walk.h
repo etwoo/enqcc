@@ -32,7 +32,6 @@ struct sema_initializer_ops {
 };
 result_t sema_walk_initializer_scope(struct ast **ast_pp,
                                      const struct ctype *dst_type,
-                                     const struct type_member *dst_member,
                                      struct type_table *tt,
                                      struct sema_initializer_ops *ops,
                                      void *ud) WARN_UNUSED;
