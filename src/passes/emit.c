@@ -663,6 +663,7 @@ emit_asm_init(const struct string_view *name,
 		}
 		dprintf(fd, "%s%.*s:\n", linkage, (int)name->sz, name->data);
 		for (long long unsigned i = 0; i < initializer->count; ++i) {
+			bool got_arbitrary_byte_count = false;
 			switch (initializer->elements[i].byte_count) {
 			case 1:
 				dprintf(fd, "\t.byte ");
@@ -674,10 +675,19 @@ emit_asm_init(const struct string_view *name,
 				dprintf(fd, "\t.quad ");
 				break;
 			default:
-				assert(0); /* logic error in caller */
+				dprintf(fd, "\t.zero ");
+				got_arbitrary_byte_count = true;
 				break;
 			}
-			if (initializer->elements[i].unique > 0) {
+			if (got_arbitrary_byte_count) {
+				long long unsigned byte_value =
+					initializer->elements[i].byte_value;
+				assert(byte_value == 0);
+				assert(initializer->elements[i].unique == 0);
+				dprintf(fd,
+				        "%llu\n",
+				        initializer->elements[i].byte_count);
+			} else if (initializer->elements[i].unique > 0) {
 				dprintf(fd,
 				        "%s.str.%lld\n",
 				        label_prefix,
