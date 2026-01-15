@@ -44,7 +44,7 @@ count_exit(const struct type_table *t, void *userdata)
 
 static WARN_UNUSED result_t
 count_visit(struct ast **ast_handle,
-            const struct ctype *dst_type MAYBE_UNUSED,
+            const struct ctype *dst_type,
             const struct type_member *dst_member,
             void *userdata)
 {
@@ -66,9 +66,9 @@ count_visit(struct ast **ast_handle,
 	state->count++;
 
 	if (dst_member != NULL) {
-		state->offset[state->depth] =
-			dst_member->member_offset + dst_member->member_size;
+		state->offset[state->depth] = dst_member->member_offset;
 	}
+	state->offset[state->depth] += ctype_to_size_bytes(dst_type);
 
 	return RESULT_OK;
 }
@@ -224,12 +224,10 @@ populate_visit(struct ast **ast_handle,
 	}
 
 	if (dst_member != NULL) {
-		state->offset[state->depth] =
-			dst_member->member_offset + dst_member->member_size;
-	} else {
-		assert(state->pos->byte_count < LLONG_MAX);
-		state->offset[state->depth] += (long long)state->pos->byte_count;
+		state->offset[state->depth] = dst_member->member_offset;
 	}
+	assert(state->pos->byte_count < LLONG_MAX);
+	state->offset[state->depth] += (long long int)state->pos->byte_count;
 
 	state->pos++;
 	return RESULT_OK;

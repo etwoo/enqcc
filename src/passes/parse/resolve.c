@@ -701,10 +701,10 @@ resolve_struct_members(Arena *arena,
 		out->aggregate_alignment =
 			MAX(out->aggregate_alignment, member_alignment);
 
-		out->members[i].member_size =
+		const long long int member_size =
 			ctype_to_size_bytes_with_types(member_type, *types);
-		out->aggregate_size = out->members[i].member_offset +
-		                      out->members[i].member_size;
+		out->aggregate_size =
+			out->members[i].member_offset + member_size;
 
 		f = f->cdr;
 	}

@@ -95,7 +95,6 @@ struct type_member {
 	struct string_view member_name;
 	struct ctype member_type;
 	long long int member_offset;
-	long long int member_size;
 };
 
 struct type_table {
