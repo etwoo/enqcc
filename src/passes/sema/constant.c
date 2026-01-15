@@ -152,7 +152,6 @@ struct sema_populate_state {
 	long long int offset[STRUCT_NESTING_LIMIT];
 	size_t depth;
 	struct constant_bytes *pos;
-	struct type_table *types;
 };
 
 static WARN_UNUSED result_t
@@ -262,7 +261,6 @@ make_initializer(Arena *arena,
 	};
 	struct sema_populate_state pop = {
 		.pos = out->elements,
-		.types = t,
 	};
 	check(sema_walk_initializer_scope(&a, dst_type, t, &populater, &pop));
 	assert(pop.pos >= out->elements);
