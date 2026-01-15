@@ -232,8 +232,6 @@ populate_visit(struct ast **ast_handle,
 	return RESULT_OK;
 }
 
-// TODO: maybe possible to convert sema_expr_types_initializer_zero_pad() to
-// walk API, using new struct_enter() callback, instead of visit()
 result_t
 make_initializer(Arena *arena,
                  struct ast *a,
