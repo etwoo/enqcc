@@ -222,13 +222,16 @@ populate_visit(struct ast **ast_handle,
 		assert(0); /* logic error in caller */
 		break;
 	}
-	state->pos++;
 
 	if (dst_member != NULL) {
 		state->offset[state->depth] =
 			dst_member->member_offset + dst_member->member_size;
+	} else {
+		assert(state->pos->byte_count < LLONG_MAX);
+		state->offset[state->depth] += (long long)state->pos->byte_count;
 	}
 
+	state->pos++;
 	return RESULT_OK;
 }
 
