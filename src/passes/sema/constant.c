@@ -139,6 +139,28 @@ visit_pop(struct ast **ast_handle, const struct ctype *dst_type, void *userdata)
 //
 // ^^^ above should handle inter-member padding; can then handle final
 // aggregate_size - offset -> ending padding in a final step
+//
+// TODO: add callbacks to complement visit(), something like
+//
+// struct sema_initializer_ops {
+//     result_t (*struct_enter)(const struct type_entry *struct_info);
+//     result_t (*member_visit)(struct ast **a,
+//                              const struct type_member *member_info,
+//                              void *userdata);
+//     result_t (*struct_exit)(const struct type_entry *struct_info);
+// };
+//
+// each time we recurse into any member that is itself a struct, so that we can
+// push() onto stack maintained in userdata that holds a new variable tracking
+// offset into current object, which then allows exit() to add final padding on
+// structs-within-structs and then pop() that sub-struct's offset, allowing
+// recursive caller to continue at its respective offset
+//
+//   -> alternative: use fixed-size array and track recursion depth, similar to
+//   sema_label_loops_state container array + depth size_t
+//
+// TODO: maybe possible to convert sema_expr_types_initializer_zero_pad() to
+// walk API, using new struct_enter() callback, instead of visit()
 result_t
 make_initializer(Arena *arena,
                  struct ast *a,

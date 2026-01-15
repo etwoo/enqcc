@@ -91,16 +91,18 @@ extern const struct ctype LIKE_PTRDIFF_T;
  */
 extern const struct ctype LIKE_SIZE_T;
 
+struct type_member {
+	struct string_view member_name;
+	struct ctype member_type;
+	long long int member_offset;
+};
+
 struct type_table {
 	struct ctype c;
 	long long int aggregate_size;
 	long long int aggregate_alignment;
 	long long unsigned n_members;
-	struct {
-		struct string_view member_name;
-		struct ctype member_type;
-		long long int member_offset;
-	} *members __attribute__((counted_by(n_members)));
+	struct type_member *members __attribute__((counted_by(n_members)));
 	struct type_table *next;
 };
 

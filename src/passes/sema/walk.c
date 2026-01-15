@@ -144,6 +144,23 @@ sema_walk(struct ast *a, struct sema_ops *ops, void *u)
 	return RESULT_OK;
 }
 
+struct sema_trampoline_state {
+	result_t (*inner)(struct ast **, const struct ctype *, void *);
+	void *inner_userdata;
+};
+
+static WARN_UNUSED result_t
+sema_walk_initializer_trampoline(struct ast **ast_pp,
+                                 const struct ctype *dst_type,
+                                 const struct type_member *member_info
+                                         MAYBE_UNUSED,
+                                 void *userdata)
+{
+	struct sema_trampoline_state *state = userdata;
+	check(state->inner(ast_pp, dst_type, state->inner_userdata));
+	return RESULT_OK;
+}
+
 result_t
 sema_walk_initializer(struct ast **ast_pp,
                       const struct ctype *dst_type,
@@ -151,7 +168,31 @@ sema_walk_initializer(struct ast **ast_pp,
                       result_t (*visit)(struct ast **,
                                         const struct ctype *,
                                         void *),
-                      void *userdata)
+                      void *ud)
+{
+	struct sema_initializer_ops ops = {
+		.visit = sema_walk_initializer_trampoline,
+	};
+	struct sema_trampoline_state state = {
+		.inner = visit,
+		.inner_userdata = ud,
+	};
+	check(sema_walk_initializer_scope(ast_pp,
+	                                  dst_type,
+	                                  NULL,
+	                                  tt,
+	                                  &ops,
+	                                  &state));
+	return RESULT_OK;
+}
+
+result_t
+sema_walk_initializer_scope(struct ast **ast_pp,
+                            const struct ctype *dst_type,
+                            const struct type_member *dst_member,
+                            struct type_table *tt,
+                            struct sema_initializer_ops *ops,
+                            void *ud)
 {
 	assert(dst_type != NULL);
 
@@ -159,7 +200,9 @@ sema_walk_initializer(struct ast **ast_pp,
 	assert((**ast_pp).node_type == NODE_EXPRESSION_INITIALIZER);
 	const bool early_return = ((**ast_pp).u.init.single != NULL);
 
-	check(visit(ast_pp, dst_type, userdata));
+	if (ops->visit != NULL) {
+		check(ops->visit(ast_pp, dst_type, dst_member, ud));
+	}
 
 	if (early_return) {
 		return RESULT_OK;
@@ -172,6 +215,10 @@ sema_walk_initializer(struct ast **ast_pp,
 	} else {
 		assert(ctype_is_pointer(dst_type));
 		assert(dst_type->referent != NULL);
+	}
+
+	if (ctype_is_struct(dst_type) && ops->struct_enter != NULL) {
+		check(ops->struct_enter(type_entry, ud));
 	}
 
 	long long unsigned element_count = 0;
@@ -187,16 +234,21 @@ sema_walk_initializer(struct ast **ast_pp,
 		}
 
 		const struct ctype *c = NULL;
+		const struct type_member *m = NULL;
 		if (ctype_is_struct(dst_type)) {
 			assert(type_entry != NULL);
-			c = &type_entry->members[element_count].member_type;
+			m = &type_entry->members[element_count];
+			c = &m->member_type;
 		} else {
 			c = dst_type->referent;
 		}
 
-		check(sema_walk_initializer(&f->car, c, tt, visit, userdata));
+		check(sema_walk_initializer_scope(&f->car, c, m, tt, ops, ud));
 		++element_count;
 	}
 
+	if (ctype_is_struct(dst_type) && ops->struct_exit != NULL) {
+		check(ops->struct_exit(type_entry, ud));
+	}
 	return RESULT_OK;
 }

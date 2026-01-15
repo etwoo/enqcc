@@ -20,6 +20,21 @@ result_t sema_walk_initializer(struct ast **ast_pp,
                                result_t (*visit)(struct ast **,
                                                  const struct ctype *,
                                                  void *),
-                               void *userdata) WARN_UNUSED;
+                               void *ud) WARN_UNUSED;
+
+struct sema_initializer_ops {
+	result_t (*struct_enter)(const struct type_table *, void *);
+	result_t (*visit)(struct ast **a,
+	                  const struct ctype *,
+	                  const struct type_member *,
+	                  void *);
+	result_t (*struct_exit)(const struct type_table *, void *);
+};
+result_t sema_walk_initializer_scope(struct ast **ast_pp,
+                                     const struct ctype *dst_type,
+                                     const struct type_member *dst_member,
+                                     struct type_table *tt,
+                                     struct sema_initializer_ops *ops,
+                                     void *ud) WARN_UNUSED;
 
 #endif
