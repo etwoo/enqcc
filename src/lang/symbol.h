@@ -50,7 +50,7 @@ result_t constant_set_zero(Arena *arena,
                            struct constant_initializer *ci) WARN_UNUSED;
 bool constant_is_zero(const struct constant_initializer *ci) WARN_UNUSED;
 long long unsigned constant_byte_count(const struct constant_initializer *ci);
-void constant_debug_print(const struct constant_initializer *ci, size_t indent);
+void constant_debug_print(const struct constant_initializer *ci);
 
 struct symbol_linkage_state {
 	enum symbol_linkage linkage;

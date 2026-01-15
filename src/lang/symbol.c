@@ -101,29 +101,18 @@ constant_byte_count(const struct constant_initializer *ci)
 }
 
 void
-constant_debug_print(const struct constant_initializer *ci, size_t indent)
+constant_debug_print(const struct constant_initializer *ci)
 {
 	if (constant_is_zero(ci)) {
-		debug("%*sZERO:  %llu bytes",
-		      (int)indent,
-		      "",
-		      constant_byte_count(ci));
+		debug("ZERO:  %llu bytes", constant_byte_count(ci));
 		return;
 	}
 
 	for (long long unsigned i = 0; i < ci->count; ++i) {
-		debug("%*sSIZE:  %llu",
-		      (int)indent,
-		      "",
-		      ci->elements[i].byte_count);
-		debug("%*sVALUE: 0x%llx",
-		      (int)indent,
-		      "",
-		      ci->elements[i].byte_value);
+		debug("SIZE:  %llu", ci->elements[i].byte_count);
+		debug("VALUE: 0x%llx", ci->elements[i].byte_value);
 		if (ci->elements[i].unique > 0) {
-			debug("%*sREFERENCE TO STRING: str.%lld",
-			      (int)indent,
-			      "",
+			debug("REFERENCE TO STRING: str.%lld",
 			      ci->elements[i].unique);
 		}
 	}

@@ -559,3 +559,19 @@ sema_typecheck(Arena *arena,
 
 	return RESULT_OK;
 }
+
+void sema_debug_print_variables(const struct symbol_table *s)
+{
+	for (struct symbol *v = s->variables; v != NULL; v = v->next) {
+		debug("SYMBOL.NAME: %.*s", (int)v->name.sz, v->name.data);
+		debug("SYMBOL.INITIALIZER:");
+		switch (v->linkage.initial) {
+		case INITIAL_VALUE_NO_INITIALIZER:
+			break;
+		case INITIAL_VALUE_TENTATIVE:
+		case INITIAL_VALUE_CONSTANT:
+			constant_debug_print(&v->linkage.initializer);
+			break;
+		}
+	}
+}

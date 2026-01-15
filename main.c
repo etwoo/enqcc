@@ -88,6 +88,7 @@ compile(Arena *arena,
 
 	check(sema_typecheck(arena, a, &label_generator, &from_sema, t));
 	parse_debug_print(a, 0);
+	sema_debug_print_variables(&from_sema);
 
 	if (action != ACTION_ALL_PASSES && action < ACTION_LEX_PARSE_SEMA_IR) {
 		return RESULT_OK;

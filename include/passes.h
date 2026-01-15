@@ -34,6 +34,7 @@ result_t sema_typecheck(Arena *arena,
                         struct symbol_table *s,
                         struct type_table *types)
 	__attribute__((warn_unused_result));
+void sema_debug_print_variables(const struct symbol_table *s);
 
 struct intermediate;
 
