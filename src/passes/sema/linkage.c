@@ -547,12 +547,8 @@ sema_declare_block_scope(struct ast *a,
 		assert(linkage_state->initial == INITIAL_VALUE_CONSTANT);
 		break;
 	case SPECIFIER_NONE:
-		/*
-		 * Omit variables with no linkage from the symbol table. Future
-		 * IR and codegen passes only care about variables bound for
-		 * the data and BSS sections of the resulting binary.
-		 */
-		return RESULT_OK;
+		assert(0); /* logic error in caller */
+		break;
 	}
 
 	return RESULT_OK;
@@ -569,6 +565,15 @@ sema_declare_apply(struct ast *a,
 
 	switch (dscope) {
 	case SCOPE_BLOCK:
+		if (a->u.declare.specifier == SPECIFIER_NONE) {
+			/*
+			 * Omit variables with no linkage from the symbol table.
+			 *
+			 * Future IR and codegen passes only care about
+			 * variables bound for the data and BSS sections.
+			 */
+			return RESULT_OK;
+		}
 		check(sema_declare_block_scope(a, state, &dup, &linkage_state));
 		break;
 	case SCOPE_FILE:
