@@ -3,6 +3,7 @@
 #include "lang/symbol.h"
 #include "passes.h"
 #include "passes/parse.h"
+#include "passes/sema/walk.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
@@ -315,6 +316,44 @@ ir_block(Arena *arena,
 	return RESULT_OK;
 }
 
+struct ir_decl_init_multi_state {
+	Arena *arena;
+	struct intermediate *ir;
+	const struct ir_val *lvalue_base;
+	long long int *pos;
+	struct ir_op **dst;
+};
+
+static WARN_UNUSED result_t
+visit_decl_init_multi(struct ast **init,
+                      const struct ctype *declaration_type,
+                      void *userdata)
+{
+	struct ir_decl_init_multi_state *state = userdata;
+	Arena *arena = state->arena;
+
+	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
+	if ((**init).u.init.single == NULL) {
+		return RESULT_OK;
+	}
+
+	struct ir_op *element = NULL;
+	struct ir_val element_return = {0};
+	check(ir_expr(arena, *init, state->ir, &element, &element_return));
+
+	struct ir_op *copier = NULL;
+	check(ir_alloc_op(arena, &copier));
+	copier->opcode = IR_OP_COPY;
+	ir_val_copy(&element_return, &copier->args[0]);
+	ir_val_copy(state->lvalue_base, &copier->args[1]);
+	copier->args[1].offset = *state->pos;
+
+	*state->dst = ir_op_list_concat(*state->dst,
+	                                ir_op_list_concat(element, copier));
+	*state->pos += ctype_to_size_bytes(declaration_type);
+	return RESULT_OK;
+}
+
 static WARN_UNUSED result_t
 ir_decl_init_multi(Arena *arena,
                    const struct ctype *declaration_type,
@@ -324,50 +363,19 @@ ir_decl_init_multi(Arena *arena,
                    long long int *pos,
                    struct ir_op **dst)
 {
-	bool single_within = false;
-	{
-		const struct ast *unpack = a;
-		while (unpack->node_type == NODE_EXPRESSION_CAST) {
-			/* unpack nodes inserted by sema_conversion() */
-			unpack = unpack->u.cast.expr;
-		}
-		assert(unpack->node_type == NODE_EXPRESSION_INITIALIZER);
-		single_within = (unpack->u.init.single != NULL);
-	}
-
-	if (single_within) {
-		struct ir_op *element = NULL;
-		struct ir_val element_return = {0};
-		check(ir_expr(arena, a, ir, &element, &element_return));
-
-		struct ir_op *copier = NULL;
-		check(ir_alloc_op(arena, &copier));
-		copier->opcode = IR_OP_COPY;
-		ir_val_copy(&element_return, &copier->args[0]);
-		ir_val_copy(lvalue_base, &copier->args[1]);
-		copier->args[1].offset = *pos;
-
-		*dst = ir_op_list_concat(element, copier);
-		*pos += ctype_to_size_bytes(declaration_type);
-		return RESULT_OK;
-	}
-
-	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
-	assert(a->u.init.multi != NULL);
-	assert(ctype_is_pointer(declaration_type));
-	assert(declaration_type->referent != NULL);
-
-	for (struct flat *f = a->u.init.multi; f != NULL; f = f->cdr) {
-		struct ir_op *tmp = NULL;
-		check(ir_decl_init_multi(arena,
-		                         declaration_type->referent,
-		                         f->car,
-		                         ir,
-		                         lvalue_base,
-		                         pos,
-		                         &tmp));
-		*dst = ir_op_list_concat(*dst, tmp);
-	}
+	struct ir_decl_init_multi_state state = {
+		.arena = arena,
+		.ir = ir,
+		.lvalue_base = lvalue_base,
+		.pos = pos,
+		.dst = dst,
+	};
+	struct ast *cast_away_const = (struct ast *)a;
+	check(sema_walk_initializer(&cast_away_const,
+	                            declaration_type,
+	                            ir->env.types,
+	                            visit_decl_init_multi,
+	                            &state));
 	return RESULT_OK;
 }
 
