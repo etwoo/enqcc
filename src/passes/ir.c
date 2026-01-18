@@ -1563,6 +1563,7 @@ ir_call(Arena *arena,
 		struct flat *args = a->u.call.args;
 		check(ir_call_args(arena, args, ir, &inner, caller, &pos));
 	}
+	assert(pos < FUNCTION_PARAMETER_LIMIT);
 
 	if (ctype_is_void(&a->expr_type)) {
 		caller->args[pos].subtype = IR_VAL_DUMMY;
