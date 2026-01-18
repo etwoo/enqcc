@@ -1528,7 +1528,6 @@ ir_member(Arena *arena,
 	struct ir_val left_return = {0};
 	check(ir_expr(arena, a->u.member_access.lhs, ir, &left, &left_return));
 	assert(left_return.subtype != IR_VAL_NONE);
-	// TODO: handle LHS -> nested member_access operators
 
 	struct ctype *lhs_type = &a->u.member_access.lhs->expr_type;
 	assert(ctype_is_struct(lhs_type));
@@ -1542,7 +1541,7 @@ ir_member(Arena *arena,
 	check(ir_alloc_op(arena, &copier));
 	copier->opcode = IR_OP_COPY;
 	ir_val_copy(&left_return, &copier->args[0]);
-	copier->args[0].offset = tm->member_offset;
+	copier->args[0].offset += tm->member_offset;
 	check(ctype_copy(arena, &tm->member_type, &copier->args[0].c89type));
 
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &copier->args[1]));
