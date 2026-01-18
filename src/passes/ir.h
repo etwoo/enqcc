@@ -4,7 +4,7 @@
 #include "lang/symbol.h"
 #include "sys/string_view.h"
 
-#define FUNCTION_PARAMETER_LIMIT 32
+#define FUNCTION_PARAMETER_LIMIT 48
 
 struct ir_val {
 	enum {

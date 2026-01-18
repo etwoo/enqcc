@@ -128,10 +128,18 @@ ir_assignment_lvalue_parts(const struct ast *a,
 		*var = &a->u.var;
 		return 0;
 	}
-	struct type_member *tm = ir_member_lookup(a, ir);
-	const struct ast *lhs = a->u.member_access.lhs;
-	const long long int base = ir_assignment_lvalue_parts(lhs, ir, var);
-	return base + tm->member_offset;
+
+	if (a->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
+		struct type_member *tm = ir_member_lookup(a, ir);
+		const struct ast *lhs = a->u.member_access.lhs;
+		long long int base = ir_assignment_lvalue_parts(lhs, ir, var);
+		return base + tm->member_offset;
+	}
+
+	// TODO: deal with arrays, like x.arr[0].y
+	// this turns into intermediate pointer math expressions
+	// switch to lvalue_indirect to handle this ...?
+	assert(0 && "nested array in struct not yet implemented");
 }
 
 static WARN_UNUSED result_t
