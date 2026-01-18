@@ -560,7 +560,8 @@ sema_typecheck(Arena *arena,
 	return RESULT_OK;
 }
 
-void sema_debug_print_variables(const struct symbol_table *s)
+void
+sema_debug_print_variables(const struct symbol_table *s)
 {
 	for (struct symbol *v = s->variables; v != NULL; v = v->next) {
 		debug("SYMBOL.NAME: %.*s", (int)v->name.sz, v->name.data);
