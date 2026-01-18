@@ -119,6 +119,9 @@ bool ctype_is_incomplete(const struct ctype *c,
                          struct type_table *t) WARN_UNUSED;
 bool ctype_is_ptr_to_incomplete(const struct ctype *c,
                                 struct type_table *t) WARN_UNUSED;
+struct type_member *
+ctype_find_member(struct type_table *type_entry,
+                  const struct string_view *member_name) WARN_UNUSED;
 struct ctype *
 ctype_of_member(struct type_table *type_entry,
                 const struct string_view *member_name) WARN_UNUSED;

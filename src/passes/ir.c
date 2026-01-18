@@ -152,15 +152,11 @@ ir_assignment_lvalue(Arena *arena,
 		assert(candidate != NULL);
 		if (candidate->node_type == NODE_EXPRESSION_CAST) {
 			/* unpack nodes inserted by sema_conversion() */
-			const struct ast *inner = candidate->u.cast.expr;
-			assert(inner->node_type ==
-			       NODE_EXPRESSION_VARIABLE_USAGE);
-			direct = &inner->u.var;
-		} else {
-			assert(candidate->node_type ==
-			       NODE_EXPRESSION_VARIABLE_USAGE);
-			direct = &candidate->u.var;
+			candidate = candidate->u.cast.expr;
 		}
+		assert(candidate->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
+		// TODO: handle NODE_EXPRESSION_STRUCT_MEMBER -> offset
+		direct = &candidate->u.var;
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		direct = &src->u.var;
@@ -1022,6 +1018,10 @@ ir_unary_op(Arena *arena,
 		return RESULT_OK;
 	}
 
+	// TODO: do IR_OP_GET_ADDRESS && ctype_is_struct(&ast_inner->expr_type)
+	// by having result of IR_OP_GET_ADDRESS then act as oeprand to
+	// IR_OP_POINTER_ADD with member offset
+
 	ir_val_copy(&inner_return, &unary->args[0]);
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &unary->args[1]));
 	ctype_array_decay_to_pointer(&unary->args[1].c89type);
@@ -1516,6 +1516,43 @@ ir_call(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_member(Arena *arena,
+          const struct ast *a,
+          struct intermediate *ir,
+          struct ir_op **dst,
+          struct ir_val *return_value)
+{
+	assert(a->node_type == NODE_EXPRESSION_STRUCT_MEMBER);
+
+	struct ir_op *left = NULL;
+	struct ir_val left_return = {0};
+	check(ir_expr(arena, a->u.member_access.lhs, ir, &left, &left_return));
+	assert(left_return.subtype != IR_VAL_NONE);
+	// TODO: handle LHS -> nested member_access operators
+
+	struct ctype *lhs_type = &a->u.member_access.lhs->expr_type;
+	assert(ctype_is_struct(lhs_type));
+	struct type_table *type_entry = types_find(ir->env.types, lhs_type);
+	assert(type_entry != NULL);
+	struct type_member *tm =
+		ctype_find_member(type_entry, &a->u.member_access.member.name);
+	assert(tm != NULL);
+
+	struct ir_op *copier = NULL;
+	check(ir_alloc_op(arena, &copier));
+	copier->opcode = IR_OP_COPY;
+	ir_val_copy(&left_return, &copier->args[0]);
+	copier->args[0].offset = tm->member_offset;
+	check(ctype_copy(arena, &tm->member_type, &copier->args[0].c89type));
+
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &copier->args[1]));
+	ir_val_copy(&copier->args[1], return_value);
+
+	*dst = ir_op_list_concat(left, copier);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_expr_get_addr_implicit(Arena *arena,
                           struct intermediate *ir,
                           struct ir_op **dst,
@@ -1735,6 +1772,9 @@ ir_expr(Arena *arena,
 	case NODE_EXPRESSION_FUNCTION_CALL:
 		check(ir_call(arena, a, ir, dst, return_value));
 		break;
+	case NODE_EXPRESSION_STRUCT_MEMBER:
+		check(ir_member(arena, a, ir, dst, return_value));
+		break;
 	default:
 		return make_result(ERR_IR_EXPECT_AST_NODE_EXPRESSION,
 		                   (int)a->node_type);
@@ -1818,7 +1858,8 @@ ir_program(Arena *arena,
 	assert(a->node_type == NODE_PROGRAM);
 	assert(a->u.program.globals == NULL ||
 	       a->u.program.globals->car->node_type == NODE_FUNCTION ||
-	       a->u.program.globals->car->node_type == NODE_DECLARATION);
+	       a->u.program.globals->car->node_type == NODE_DECLARATION ||
+	       a->u.program.globals->car->node_type == NODE_STRUCT);
 
 	struct ir_function **dst_fun = &ir->functions;
 	struct flat *cursor = a->u.program.globals;
@@ -1832,7 +1873,8 @@ ir_program(Arena *arena,
 			}
 			break;
 		case NODE_DECLARATION:
-			/* skip variables, and use symbol_table instead */
+		case NODE_STRUCT:
+			/* skip entities already covered by symbol_table */
 			break;
 		default:
 			assert(0); /* logic error in caller */
@@ -1865,6 +1907,7 @@ ir_init(Arena *arena,
         long long int base_id,
         long long int base_label,
         struct symbol_table *sym,
+        struct type_table *types,
         struct intermediate **ir)
 {
 	*ir = arena_alloc(arena, sizeof(**ir));
@@ -1872,6 +1915,7 @@ ir_init(Arena *arena,
 	memset(*ir, 0, sizeof(**ir));
 	(**ir).env.generator = base_id;
 	(**ir).env.labels = base_label;
+	(**ir).env.types = types;
 	check(ir_program(arena, a, sym, *ir));
 	return RESULT_OK;
 }

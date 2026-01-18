@@ -91,6 +91,7 @@ struct ir_function {
 struct ir_env {
 	long long int generator;
 	long long int labels;
+	struct type_table *types;
 };
 
 struct intermediate {

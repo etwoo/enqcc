@@ -98,7 +98,7 @@ compile(Arena *arena,
 	const long long int base_label = label_generator + 1;
 
 	struct intermediate *ir = NULL;
-	check(ir_init(arena, a, base_id, base_label, &from_sema, &ir));
+	check(ir_init(arena, a, base_id, base_label, &from_sema, t, &ir));
 	ir_debug_print(ir);
 
 	if (action != ACTION_ALL_PASSES &&

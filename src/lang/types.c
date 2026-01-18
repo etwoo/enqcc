@@ -431,9 +431,11 @@ ctype_is_ptr_to_incomplete(const struct ctype *c, struct type_table *t)
 	return c->t == CTYPE_POINTER_TO && ctype_is_incomplete(c->referent, t);
 }
 
-struct ctype *
-ctype_of_member(struct type_table *type_entry,
-                const struct string_view *member_name)
+
+struct type_member *
+ctype_find_member(struct type_table *type_entry,
+                  const struct string_view *member_name)
+
 {
 	for (long long unsigned i = 0; i < type_entry->n_members; ++i) {
 		const struct string_view *candidate =
@@ -442,10 +444,18 @@ ctype_of_member(struct type_table *type_entry,
 		    0 == strncmp(member_name->data,
 		                 candidate->data,
 		                 candidate->sz)) {
-			return &type_entry->members[i].member_type;
+			return &type_entry->members[i];
 		}
 	}
 	return NULL;
+}
+
+struct ctype *
+ctype_of_member(struct type_table *type_entry,
+                const struct string_view *member_name)
+{
+	struct type_member *member = ctype_find_member(type_entry, member_name);
+	return (member == NULL) ? NULL : &member->member_type;
 }
 
 long long int
