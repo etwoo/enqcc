@@ -353,7 +353,8 @@ visit_decl_init_multi(struct ast **init,
 
 	*state->dst = ir_op_list_concat(*state->dst,
 	                                ir_op_list_concat(element, copier));
-	*state->pos += ctype_to_size_bytes(declaration_type);
+	*state->pos += ctype_to_size_bytes_with_types(declaration_type,
+	                                              state->ir->env.types);
 	return RESULT_OK;
 }
 
