@@ -101,9 +101,40 @@ ir_unpack_parens(const struct ast *a)
 	return a;
 }
 
+static WARN_UNUSED struct type_member *
+ir_member_lookup(const struct ast *a, struct intermediate *ir)
+{
+	assert(a->node_type == NODE_EXPRESSION_STRUCT_MEMBER);
+	struct ctype *lhs_type = &a->u.member_access.lhs->expr_type;
+	assert(ctype_is_struct(lhs_type));
+	struct type_table *type_entry = types_find(ir->env.types, lhs_type);
+	assert(type_entry != NULL);
+	const struct string_view *member_name = &a->u.member_access.member.name;
+	struct type_member *tm = ctype_get_member(type_entry, member_name);
+	assert(tm != NULL);
+	assert(ctype_is_equal(&tm->member_type, &a->expr_type));
+	return tm;
+}
+
+static WARN_UNUSED long long int
+ir_assignment_lvalue_parts(const struct ast *a,
+                           struct intermediate *ir,
+                           const struct ast_symbol **var)
+{
+	if (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE) {
+		*var = &a->u.var;
+		return 0;
+	}
+	struct type_member *tm = ir_member_lookup(a, ir);
+	const struct ast *lhs = a->u.member_access.lhs;
+	const long long int base = ir_assignment_lvalue_parts(lhs, ir, var);
+	return base + tm->member_offset;
+}
+
 static WARN_UNUSED result_t
 ir_assignment_lvalue(Arena *arena,
                      const struct ast *src,
+                     struct intermediate *ir,
                      const struct ast **lvalue_indirect,
                      struct ir_val *lvalue_direct)
 {
@@ -136,6 +167,8 @@ ir_assignment_lvalue(Arena *arena,
 	}
 
 	const struct ast_symbol *direct = NULL;
+	long long int offset = 0;
+
 	switch (src->node_type) {
 	case NODE_DECLARATION:
 		direct = &src->u.declare.identifier;
@@ -144,19 +177,17 @@ ir_assignment_lvalue(Arena *arena,
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-		assert(candidate != NULL);
-		assert(candidate->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
-		direct = &candidate->u.var;
-		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		assert(candidate != NULL);
 		if (candidate->node_type == NODE_EXPRESSION_CAST) {
+			assert(src->node_type ==
+			       NODE_EXPRESSION_VARIABLE_ASSIGNMENT);
 			/* unpack nodes inserted by sema_conversion() */
 			candidate = candidate->u.cast.expr;
 		}
-		assert(candidate->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
-		// TODO: handle NODE_EXPRESSION_STRUCT_MEMBER -> offset
-		direct = &candidate->u.var;
+		assert(candidate->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
+		       candidate->node_type == NODE_EXPRESSION_STRUCT_MEMBER);
+		offset = ir_assignment_lvalue_parts(candidate, ir, &direct);
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		direct = &src->u.var;
@@ -176,6 +207,7 @@ ir_assignment_lvalue(Arena *arena,
 	}
 
 	lvalue_direct->num = direct->unique;
+	lvalue_direct->offset = offset;
 	check(ctype_copy(arena, &src->expr_type, &lvalue_direct->c89type));
 	return RESULT_OK;
 }
@@ -349,7 +381,11 @@ ir_decl_init(Arena *arena,
 
 	const struct ast *dummy_indirect = NULL;
 	struct ir_val lvalue_direct = {0};
-	check(ir_assignment_lvalue(arena, a, &dummy_indirect, &lvalue_direct));
+	check(ir_assignment_lvalue(arena,
+	                           a,
+	                           ir,
+	                           &dummy_indirect,
+	                           &lvalue_direct));
 	assert(dummy_indirect == NULL);
 	assert(lvalue_direct.subtype != IR_VAL_NONE);
 
@@ -759,7 +795,11 @@ ir_assignment(Arena *arena,
 
 	const struct ast *lvalue_indirect = NULL;
 	struct ir_val lvalue_direct = {0};
-	check(ir_assignment_lvalue(arena, a, &lvalue_indirect, &lvalue_direct));
+	check(ir_assignment_lvalue(arena,
+	                           a,
+	                           ir,
+	                           &lvalue_indirect,
+	                           &lvalue_direct));
 
 	struct ir_op *lvalue_addr_for_store = NULL;
 	struct ir_val lvalue_addr_for_store_return = {0};
@@ -836,7 +876,11 @@ ir_incr_decr(Arena *arena,
 {
 	const struct ast *lvalue_indirect = NULL;
 	struct ir_val lvalue_direct = {0};
-	check(ir_assignment_lvalue(arena, a, &lvalue_indirect, &lvalue_direct));
+	check(ir_assignment_lvalue(arena,
+	                           a,
+	                           ir,
+	                           &lvalue_indirect,
+	                           &lvalue_direct));
 
 	struct ir_op *lvalue_addr_for_store = NULL;
 	struct ir_val lvalue_addr_for_store_return = {0};
@@ -1527,21 +1571,14 @@ ir_member(Arena *arena,
 	assert(ctype_is_pointer(&left_return.c89type));
 	assert(ctype_is_struct(left_return.c89type.referent));
 
-	struct ctype *lhs_type = &a->u.member_access.lhs->expr_type;
-	assert(ctype_is_struct(lhs_type));
-	struct type_table *type_entry = types_find(ir->env.types, lhs_type);
-	assert(type_entry != NULL);
-	const struct string_view *member_name = &a->u.member_access.member.name;
-	struct type_member *tm = ctype_get_member(type_entry, member_name);
-	assert(tm != NULL);
-
 	struct ir_op *loader = NULL;
 	check(ir_alloc_op(arena, &loader));
 	loader->opcode = IR_OP_LOAD;
 	ir_val_copy(&left_return, &loader->args[0]);
+
+	struct type_member *tm = ir_member_lookup(a, ir);
 	loader->args[0].offset += tm->member_offset;
 
-	assert(ctype_is_equal(&tm->member_type, &a->expr_type));
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &loader->args[1]));
 	ir_val_copy(&loader->args[1], return_value);
 
@@ -1692,6 +1729,7 @@ ir_expr(Arena *arena,
 			const struct ast *dummy = NULL;
 			check(ir_assignment_lvalue(arena,
 			                           a,
+			                           ir,
 			                           &dummy,
 			                           return_value));
 			assert(dummy == NULL);
