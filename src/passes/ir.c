@@ -290,10 +290,11 @@ ir_block(Arena *arena,
 	for (; cursor != NULL; cursor = cursor->cdr) {
 		assert(cursor->car != NULL);
 
-		if (cursor->car->node_type == NODE_FUNCTION) {
+		if (cursor->car->node_type == NODE_FUNCTION ||
+		    cursor->car->node_type == NODE_STRUCT) {
 			/*
-			 * For IR purposes, ignore function declarations that
-			 * appear inside other blocks.
+			 * For IR purposes, ignore function/struct declarations
+			 * that appear inside other blocks.
 			 */
 			continue;
 		}
