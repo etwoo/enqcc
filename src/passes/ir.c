@@ -1018,10 +1018,6 @@ ir_unary_op(Arena *arena,
 		return RESULT_OK;
 	}
 
-	// TODO: do IR_OP_GET_ADDRESS && ctype_is_struct(&ast_inner->expr_type)
-	// by having result of IR_OP_GET_ADDRESS then act as oeprand to
-	// IR_OP_POINTER_ADD with member offset
-
 	ir_val_copy(&inner_return, &unary->args[0]);
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &unary->args[1]));
 	ctype_array_decay_to_pointer(&unary->args[1].c89type);
@@ -1528,6 +1524,8 @@ ir_member(Arena *arena,
 	struct ir_val left_return = {0};
 	check(ir_expr(arena, a->u.member_access.lhs, ir, &left, &left_return));
 	assert(left_return.subtype != IR_VAL_NONE);
+	assert(ctype_is_pointer(&left_return.c89type));
+	assert(ctype_is_struct(left_return.c89type.referent));
 
 	struct ctype *lhs_type = &a->u.member_access.lhs->expr_type;
 	assert(ctype_is_struct(lhs_type));
@@ -1537,17 +1535,17 @@ ir_member(Arena *arena,
 	struct type_member *tm = ctype_get_member(type_entry, member_name);
 	assert(tm != NULL);
 
-	struct ir_op *copier = NULL;
-	check(ir_alloc_op(arena, &copier));
-	copier->opcode = IR_OP_COPY;
-	ir_val_copy(&left_return, &copier->args[0]);
-	copier->args[0].offset += tm->member_offset;
-	check(ctype_copy(arena, &tm->member_type, &copier->args[0].c89type));
+	struct ir_op *loader = NULL;
+	check(ir_alloc_op(arena, &loader));
+	loader->opcode = IR_OP_LOAD;
+	ir_val_copy(&left_return, &loader->args[0]);
+	loader->args[0].offset += tm->member_offset;
 
-	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &copier->args[1]));
-	ir_val_copy(&copier->args[1], return_value);
+	assert(ctype_is_equal(&tm->member_type, &a->expr_type));
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &loader->args[1]));
+	ir_val_copy(&loader->args[1], return_value);
 
-	*dst = ir_op_list_concat(left, copier);
+	*dst = ir_op_list_concat(left, loader);
 	return RESULT_OK;
 }
 
@@ -1557,7 +1555,7 @@ ir_expr_get_addr_implicit(Arena *arena,
                           struct ir_op **dst,
                           struct ir_val *return_value)
 {
-	if (!ctype_is_array(&return_value->c89type)) {
+	if (!ctype_is_aggregate(&return_value->c89type)) {
 		return RESULT_OK;
 	}
 
@@ -1596,7 +1594,17 @@ ir_expr_get_addr_implicit(Arena *arena,
 	                        &return_value->c89type,
 	                        &get_addr->args[1]));
 
-	ctype_array_decay_to_pointer(&get_addr->args[1].c89type);
+	if (ctype_is_struct(&get_addr->args[1].c89type)) {
+		struct ctype *referent = NULL;
+		check(ctype_alloc(arena, &referent));
+		struct ctype *c = &get_addr->args[1].c89type;
+		check(ctype_copy(arena, c, referent));
+		memset(c, 0, sizeof(*c));
+		c->t = CTYPE_POINTER_TO;
+		c->referent = referent;
+	} else {
+		ctype_array_decay_to_pointer(&get_addr->args[1].c89type);
+	}
 	ir_val_copy(&get_addr->args[1], return_value);
 
 	*dst = ir_op_list_concat(*dst, get_addr);
@@ -1972,7 +1980,8 @@ ir_debug_print_one(const struct ir_op *op)
 		debug("    TYPE %s",
 		      ctype_to_str(&op->args[i].c89type, tmp, sizeof(tmp)));
 
-		if (ctype_is_array(&op->args[i].c89type)) {
+		if (ctype_is_aggregate(&op->args[i].c89type) ||
+		    op->args[i].offset > 0) {
 			debug("    OFFSET %lld", op->args[i].offset);
 		}
 	}
