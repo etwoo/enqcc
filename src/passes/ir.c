@@ -1533,8 +1533,8 @@ ir_member(Arena *arena,
 	assert(ctype_is_struct(lhs_type));
 	struct type_table *type_entry = types_find(ir->env.types, lhs_type);
 	assert(type_entry != NULL);
-	struct type_member *tm =
-		ctype_find_member(type_entry, &a->u.member_access.member.name);
+	const struct string_view *member_name = &a->u.member_access.member.name;
+	struct type_member *tm = ctype_get_member(type_entry, member_name);
 	assert(tm != NULL);
 
 	struct ir_op *copier = NULL;
