@@ -117,8 +117,8 @@ codegen_set_operand_memory(const struct ir_val *basis,
                            struct asm_operand *dst)
 {
 	dst->operand_type = ASM_OPERAND_MEMORY;
-	dst->u.mem.offset = offset;
-	dst->u.mem.reg = reg;
+	dst->offset = offset;
+	dst->u.reg = reg;
 	codegen_map_ctype(basis, dst);
 }
 
@@ -239,11 +239,12 @@ static const struct asm_operand OPERAND_XMM15 = {
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
+	dst->offset = src->offset;
+
 	if (ctype_is_array(&src->c89type) &&
 	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
 		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
 		dst->u.pseudo_mem.num = src->num;
-		dst->u.pseudo_mem.offset = src->offset;
 		dst->u.pseudo_mem.total_bytes =
 			ctype_to_size_bytes(&src->c89type);
 		const struct ctype *innermost = &src->c89type;
@@ -1544,13 +1545,13 @@ codegen_replace_pseudo_fn(struct asm_function *cg,
 
 			long long int computed_offset = offsets[idx];
 			if (arg->operand_type == ASM_OPERAND_PSEUDO_MEMORY) {
-				computed_offset -= arg->u.pseudo_mem.offset;
+				computed_offset -= arg->offset;
 				assert(computed_offset > 0);
 			}
 
 			arg->operand_type = ASM_OPERAND_MEMORY;
-			arg->u.mem.offset = -1 * computed_offset;
-			arg->u.mem.reg = ASM_REGISTER_RBP;
+			arg->offset = -1 * computed_offset;
+			arg->u.reg = ASM_REGISTER_RBP;
 			/* leave arg->word_type as-is */
 		}
 	}
@@ -2233,16 +2234,22 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		debug("  REGISTER %s", REGISTER_NAMES[operand->u.reg]);
 		break;
 	case ASM_OPERAND_PSEUDO_REGISTER:
-		debug("  PSEUDO %lld", (long long)operand->u.num);
+		if (operand->offset > 0) {
+			debug("  PSEUDO %lld(%lld)",
+			      operand->offset,
+			      (long long)operand->u.num);
+		} else {
+			debug("  PSEUDO %lld", (long long)operand->u.num);
+		}
 		break;
 	case ASM_OPERAND_MEMORY:
 		debug("  MEMORY %lld(%s)",
-		      operand->u.mem.offset,
-		      REGISTER_NAMES[operand->u.mem.reg]);
+		      operand->offset,
+		      REGISTER_NAMES[operand->u.reg]);
 		break;
 	case ASM_OPERAND_PSEUDO_MEMORY:
 		debug("  PSEUDOMEM %lld(%lld)",
-		      operand->u.pseudo_mem.offset,
+		      operand->offset,
 		      (long long)operand->u.pseudo_mem.num);
 		break;
 	case ASM_OPERAND_INDEXED:
@@ -2260,9 +2267,10 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		      operand->u.function.data);
 		break;
 	case ASM_OPERAND_VARIABLE_DATA:
-		debug("  DATA %.*s",
+		debug("  DATA %.*s+%lld",
 		      (int)operand->u.variable.sz,
-		      operand->u.variable.data);
+		      operand->u.variable.data,
+		      operand->offset);
 		break;
 	case ASM_OPERAND_CONSTANT_DATA_DOUBLE:
 		debug("  CONSTANT DOUBLE %f", operand->u.dnum);

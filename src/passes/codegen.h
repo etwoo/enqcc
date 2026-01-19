@@ -63,12 +63,7 @@ struct asm_operand {
 		int128_t num;
 		enum asm_register reg;
 		struct {
-			long long int offset;
-			enum asm_register reg;
-		} mem;
-		struct {
 			int128_t num;
-			long long int offset;
 			long long int total_bytes;
 		} pseudo_mem;
 		struct {
@@ -82,6 +77,7 @@ struct asm_operand {
 		long unsigned longs[4];      /* CONSTANT_DATA_VEC_LONGS */
 		long long unsigned quads[2]; /* CONSTANT_DATA_VEC_QUADS */
 	} u;
+	long long int offset;
 };
 
 bool is_xmm_register(const struct asm_operand *o) WARN_UNUSED;

@@ -141,8 +141,8 @@ emit_asm_operand(const struct asm_operand *o,
 	case ASM_OPERAND_MEMORY:
 		dprintf(fd,
 		        "%lld(%s)",
-		        o->u.mem.offset,
-		        REGISTER_AS_STR[o->u.mem.reg][REGISTER_ALIAS_8BYTE]);
+		        o->offset,
+		        REGISTER_AS_STR[o->u.reg][REGISTER_ALIAS_8BYTE]);
 		break;
 	case ASM_OPERAND_PSEUDO_MEMORY:
 		assert(0 && "PSEUDOMEMORY should have been eliminated");
@@ -182,10 +182,11 @@ emit_asm_operand(const struct asm_operand *o,
 		break;
 	case ASM_OPERAND_VARIABLE_DATA:
 		dprintf(fd,
-		        "%s%.*s(%s)",
+		        "%s%.*s+%lld(%s)",
 		        fprefix,
 		        (int)o->u.variable.sz,
 		        o->u.variable.data,
+		        o->offset,
 		        STR_REG_RIP);
 		break;
 	case ASM_OPERAND_CONSTANT_DATA_DOUBLE:
