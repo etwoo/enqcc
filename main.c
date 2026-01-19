@@ -198,7 +198,7 @@ main(int argc, char *argv[])
 			char *src = argv[optind];
 			const char *dst = argv[optind + 1];
 
-			size_t arena_size = 8388608; /* 8MB */
+			size_t arena_size = 16777216; /* 16MB */
 			if (0 == strcmp(basename(src), "sizeof_extern.i")) {
 				/* kludge: high RSS for large array init sema */
 				arena_size = 268435456; /* 256MB */

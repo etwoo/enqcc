@@ -1622,31 +1622,6 @@ ir_expr_get_addr_implicit(Arena *arena,
 		return RESULT_OK;
 	}
 
-	struct ir_op *prev = NULL;
-	struct ir_op *dst_last = *dst;
-	while (dst_last != NULL && dst_last->next != NULL) {
-		prev = dst_last;
-		dst_last = dst_last->next;
-	}
-
-	if (prev != NULL && dst_last->opcode == IR_OP_LOAD) {
-		assert(prev->next == dst_last);
-		assert(dst_last->next == NULL);
-		/*
-		 * IR_OP_LOAD + IR_OP_GET_ADDRESS == noop
-		 */
-		prev->next = NULL;
-		/*
-		 * Redirect <return_value> to dst ir_val of remaining <prev>.
-		 */
-		for (size_t i = 0; i < ARRAY_SIZE(prev->args); ++i) {
-			if (prev->args[i].subtype != IR_VAL_NONE) {
-				ir_val_copy(&prev->args[i], return_value);
-			}
-		}
-		return RESULT_OK;
-	}
-
 	struct ir_op *get_addr = NULL;
 	check(ir_alloc_op(arena, &get_addr));
 	get_addr->opcode = IR_OP_GET_ADDRESS;
