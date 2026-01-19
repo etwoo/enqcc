@@ -1,6 +1,7 @@
 #include "passes/sema/constant.h"
 
 #include "passes/parse.h"
+#include "passes/sema/conversion.h"
 #include "passes/sema/walk.h"
 
 #include <assert.h>
@@ -49,10 +50,11 @@ count_visit(struct ast **ast_handle,
             void *userdata)
 {
 	struct sema_count_state *state = userdata;
-	const struct ast *a = *ast_handle;
+	const struct ast *a = *cast_unpack(ast_handle);
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
-	if (a->u.init.single == NULL) {
+	const struct ast *s = a->u.init.single;
+	if (s == NULL) {
 		return RESULT_OK;
 	}
 
@@ -189,8 +191,7 @@ populate_visit(struct ast **ast_handle,
                void *userdata)
 {
 	struct sema_populate_state *state = userdata;
-
-	const struct ast *a = *ast_handle;
+	const struct ast *a = *cast_unpack(ast_handle);
 	assert(a->node_type == NODE_EXPRESSION_INITIALIZER);
 
 	const struct ast *s = a->u.init.single;

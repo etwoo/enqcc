@@ -191,12 +191,13 @@ sema_walk_initializer_s_impl(struct ast **ast_pp,
 {
 	assert(dst_type != NULL);
 
+	struct ast **original_pp = ast_pp;
 	ast_pp = cast_unpack(ast_pp);
 	assert((**ast_pp).node_type == NODE_EXPRESSION_INITIALIZER);
 	const bool early_return = ((**ast_pp).u.init.single != NULL);
 
 	if (ops->visit != NULL) {
-		check(ops->visit(ast_pp, dst_type, dst_member, ud));
+		check(ops->visit(original_pp, dst_type, dst_member, ud));
 	}
 
 	if (early_return) {

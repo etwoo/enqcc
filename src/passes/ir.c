@@ -3,6 +3,7 @@
 #include "lang/symbol.h"
 #include "passes.h"
 #include "passes/parse.h"
+#include "passes/sema/conversion.h"
 #include "passes/sema/walk.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
@@ -343,8 +344,13 @@ visit_decl_init_multi(struct ast **init,
 	struct ir_decl_init_multi_state *state = userdata;
 	Arena *arena = state->arena;
 
-	assert((**init).node_type == NODE_EXPRESSION_INITIALIZER);
-	if ((**init).u.init.single == NULL) {
+	bool single_within = false;
+	{
+		const struct ast *unpack = *cast_unpack(init);
+		assert(unpack->node_type == NODE_EXPRESSION_INITIALIZER);
+		single_within = (unpack->u.init.single != NULL);
+	}
+	if (!single_within) {
 		return RESULT_OK;
 	}
 
