@@ -1609,16 +1609,10 @@ ir_member(Arena *arena,
 	struct ir_val left_return = {0};
 	check(ir_expr(arena, a->u.member_access.lhs, ir, &left, &left_return));
 	assert(left_return.subtype != IR_VAL_NONE);
-	assert(ctype_is_pointer(&left_return.c89type));
-	assert(ctype_is_struct(left_return.c89type.referent));
 
 	struct ir_op *loader = NULL;
 	check(ir_alloc_op(arena, &loader));
-	if (ctype_is_aggregate(&a->expr_type)) {
-		loader->opcode = IR_OP_COPY;
-	} else {
-		loader->opcode = IR_OP_LOAD;
-	}
+	loader->opcode = IR_OP_LOAD;
 	ir_val_copy(&left_return, &loader->args[0]);
 
 	struct type_member *tm = ir_member_lookup(a, ir);
@@ -1639,6 +1633,40 @@ ir_expr_get_addr_implicit(Arena *arena,
                           struct ir_val *return_value)
 {
 	if (!ctype_is_aggregate(&return_value->c89type)) {
+		return RESULT_OK;
+	}
+
+	struct ir_op *prev = NULL;
+	struct ir_op *dst_last = *dst;
+	while (dst_last != NULL && dst_last->next != NULL) {
+		prev = dst_last;
+		dst_last = dst_last->next;
+	}
+
+	if (prev != NULL && dst_last->opcode == IR_OP_LOAD) {
+		assert(prev->next == dst_last);
+		assert(dst_last->next == NULL);
+		/*
+		 * Remember offset of preceding IR_OP_LOAD, prior to noop-ing.
+		 */
+		const long long int total_offset =
+			return_value->offset + dst_last->args[0].offset;
+		/*
+		 * IR_OP_LOAD + IR_OP_GET_ADDRESS == noop
+		 */
+		prev->next = NULL;
+		/*
+		 * Redirect <return_value> to dst ir_val of remaining <prev>.
+		 */
+		for (size_t i = 0; i < ARRAY_SIZE(prev->args); ++i) {
+			if (prev->args[i].subtype != IR_VAL_NONE) {
+				ir_val_copy(&prev->args[i], return_value);
+			}
+		}
+		/*
+		 * Preserve cumulative offset of fused operands.
+		 */
+		return_value->offset = total_offset;
 		return RESULT_OK;
 	}
 
