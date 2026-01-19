@@ -1124,6 +1124,7 @@ ir_cast(Arena *arena,
         struct ir_val *return_value)
 {
 	assert(a->node_type == NODE_EXPRESSION_CAST);
+	struct type_table *typ = ir->env.types;
 
 	if (ctype_is_void(&a->u.cast.to_type)) {
 		/* void cast -> ignore return_value of inner expr */
@@ -1139,6 +1140,11 @@ ir_cast(Arena *arena,
 
 	struct ir_op *unary = NULL;
 	check(ir_alloc_op(arena, &unary));
+
+	const long long int from_type_size_bytes =
+		ctype_to_size_bytes_with_types(&a->u.cast.expr->expr_type, typ);
+	const long long int to_type_size_bytes =
+		ctype_to_size_bytes_with_types(&a->u.cast.to_type, typ);
 
 	if (ctype_is_floating_point(&a->u.cast.expr->expr_type) !=
 	    ctype_is_floating_point(&a->u.cast.to_type)) {
@@ -1160,13 +1166,11 @@ ir_cast(Arena *arena,
 		} else {
 			assert(0); /* mistake in truth table above */
 		}
-	} else if ((ctype_to_size_bytes(&a->u.cast.expr->expr_type) ==
-	            ctype_to_size_bytes(&a->u.cast.to_type)) ||
+	} else if ((from_type_size_bytes == to_type_size_bytes) ||
 	           (ctype_is_pointer(&a->u.cast.expr->expr_type) &&
 	            ctype_is_pointer(&a->u.cast.to_type))) {
 		unary->opcode = IR_OP_COPY;
-	} else if (ctype_to_size_bytes(&a->u.cast.expr->expr_type) >
-	           ctype_to_size_bytes(&a->u.cast.to_type)) {
+	} else if (from_type_size_bytes > to_type_size_bytes) {
 		unary->opcode = IR_OP_CTYPE_TRUNCATE;
 	} else if (ctype_is_signed(&a->u.cast.expr->expr_type)) {
 		unary->opcode = IR_OP_CTYPE_SIGN_EXTEND;
