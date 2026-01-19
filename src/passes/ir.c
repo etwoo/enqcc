@@ -170,15 +170,23 @@ ir_assignment_lvalue(Arena *arena,
 	    candidate->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
 		const struct ast *inner =
 			ir_unpack_parens(candidate->u.op_unary.operand);
-		if (inner->node_type != NODE_EXPRESSION_UNARY_ADDRESS_OF) {
+		if (inner->node_type == NODE_EXPRESSION_UNARY_ADDRESS_OF) {
+			/* treat *& as no-op */
+			check(ir_assignment_lvalue(arena,
+			                           inner->u.op_unary.operand,
+			                           ir,
+			                           lvalue_indirect,
+			                           lvalue_direct,
+			                           do_indirect));
+		} else {
 			*do_indirect = true;
 			check(ir_expr(arena,
 			              inner,
 			              ir,
 			              lvalue_indirect,
 			              lvalue_direct));
-			return RESULT_OK;
 		}
+		return RESULT_OK;
 	}
 
 	const struct ast_symbol *direct = NULL;
