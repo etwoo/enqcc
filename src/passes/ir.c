@@ -126,29 +126,6 @@ ir_member_lookup(const struct ast *a, struct intermediate *ir)
 	return tm;
 }
 
-static WARN_UNUSED long long int
-ir_assignment_lvalue_parts(const struct ast *a,
-                           struct intermediate *ir,
-                           const struct ast_symbol **var)
-{
-	if (a->node_type == NODE_EXPRESSION_VARIABLE_USAGE) {
-		*var = &a->u.var;
-		return 0;
-	}
-
-	if (a->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
-		struct type_member *tm = ir_member_lookup(a, ir);
-		const struct ast *lhs = a->u.member_access.lhs;
-		long long int base = ir_assignment_lvalue_parts(lhs, ir, var);
-		return base + tm->member_offset;
-	}
-
-	// TODO: deal with arrays, like x.arr[0].y
-	// this turns into intermediate pointer math expressions
-	// switch to lvalue_indirect to handle this ...?
-	assert(0 && "nested array in struct not yet implemented");
-}
-
 static WARN_UNUSED result_t
 ir_assignment_lvalue(Arena *arena,
                      const struct ast *src,
@@ -158,6 +135,20 @@ ir_assignment_lvalue(Arena *arena,
                      bool *do_indirect)
 {
 	assert(lvalue_indirect != NULL && *lvalue_indirect == NULL);
+
+	if (src->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
+		struct type_member *m = ir_member_lookup(src, ir);
+		const struct ast *lhs = src->u.member_access.lhs;
+		check(ir_assignment_lvalue(arena,
+		                           lhs,
+		                           ir,
+		                           lvalue_indirect,
+		                           lvalue_direct,
+		                           do_indirect));
+		assert(lvalue_direct->subtype != IR_VAL_NONE);
+		lvalue_direct->offset += m->member_offset;
+		return RESULT_OK;
+	}
 
 	const struct ast *candidate = NULL;
 	switch (src->node_type) {
@@ -171,6 +162,7 @@ ir_assignment_lvalue(Arena *arena,
 		candidate = ir_unpack_parens(src->u.op_binary.lhs);
 		break;
 	default:
+		candidate = src;
 		break;
 	}
 
@@ -190,7 +182,6 @@ ir_assignment_lvalue(Arena *arena,
 	}
 
 	const struct ast_symbol *direct = NULL;
-	long long int offset = 0;
 
 	switch (src->node_type) {
 	case NODE_DECLARATION:
@@ -203,14 +194,30 @@ ir_assignment_lvalue(Arena *arena,
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		assert(candidate != NULL);
 		if (candidate->node_type == NODE_EXPRESSION_CAST) {
-			assert(src->node_type ==
-			       NODE_EXPRESSION_VARIABLE_ASSIGNMENT);
 			/* unpack nodes inserted by sema_conversion() */
 			candidate = candidate->u.cast.expr;
 		}
-		assert(candidate->node_type == NODE_EXPRESSION_VARIABLE_USAGE ||
-		       candidate->node_type == NODE_EXPRESSION_STRUCT_MEMBER);
-		offset = ir_assignment_lvalue_parts(candidate, ir, &direct);
+		switch (candidate->node_type) {
+		case NODE_EXPRESSION_VARIABLE_USAGE:
+			direct = &candidate->u.var;
+			break;
+		case NODE_EXPRESSION_STRUCT_MEMBER: {
+			struct type_member *m = ir_member_lookup(candidate, ir);
+			const struct ast *lhs = candidate->u.member_access.lhs;
+			check(ir_assignment_lvalue(arena,
+			                           lhs,
+			                           ir,
+			                           lvalue_indirect,
+			                           lvalue_direct,
+			                           do_indirect));
+			assert(lvalue_direct->subtype != IR_VAL_NONE);
+			lvalue_direct->offset += m->member_offset;
+			return RESULT_OK;
+		}
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		direct = &src->u.var;
@@ -230,7 +237,6 @@ ir_assignment_lvalue(Arena *arena,
 	}
 
 	lvalue_direct->num = direct->unique;
-	lvalue_direct->offset = offset;
 	check(ctype_copy(arena, &src->expr_type, &lvalue_direct->c89type));
 	return RESULT_OK;
 }
@@ -1596,13 +1602,18 @@ ir_member(Arena *arena,
 
 	struct ir_op *loader = NULL;
 	check(ir_alloc_op(arena, &loader));
-	loader->opcode = IR_OP_LOAD;
+	if (ctype_is_aggregate(&a->expr_type)) {
+		loader->opcode = IR_OP_COPY;
+	} else {
+		loader->opcode = IR_OP_LOAD;
+	}
 	ir_val_copy(&left_return, &loader->args[0]);
 
 	struct type_member *tm = ir_member_lookup(a, ir);
 	loader->args[0].offset += tm->member_offset;
 
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &loader->args[1]));
+	ctype_array_decay_to_pointer(&loader->args[1].c89type);
 	ir_val_copy(&loader->args[1], return_value);
 
 	*dst = ir_op_list_concat(left, loader);
