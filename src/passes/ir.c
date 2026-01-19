@@ -332,8 +332,8 @@ struct ir_decl_init_multi_state {
 	Arena *arena;
 	struct intermediate *ir;
 	const struct ir_val *lvalue_base;
-	long long int *pos;
-	struct ir_op **dst;
+	long long int pos;
+	struct ir_op *dst;
 };
 
 static WARN_UNUSED result_t
@@ -343,6 +343,7 @@ visit_decl_init_multi(struct ast **init,
 {
 	struct ir_decl_init_multi_state *state = userdata;
 	Arena *arena = state->arena;
+	struct type_table *types = state->ir->env.types;
 
 	bool single_within = false;
 	{
@@ -363,12 +364,11 @@ visit_decl_init_multi(struct ast **init,
 	copier->opcode = IR_OP_COPY;
 	ir_val_copy(&element_return, &copier->args[0]);
 	ir_val_copy(state->lvalue_base, &copier->args[1]);
-	copier->args[1].offset = *state->pos;
+	copier->args[1].offset = state->pos;
+	state->pos += ctype_to_size_bytes_with_types(declaration_type, types);
 
-	*state->dst = ir_op_list_concat(*state->dst,
-	                                ir_op_list_concat(element, copier));
-	*state->pos += ctype_to_size_bytes_with_types(declaration_type,
-	                                              state->ir->env.types);
+	struct ir_op *to_append = ir_op_list_concat(element, copier);
+	state->dst = ir_op_list_concat(state->dst, to_append);
 	return RESULT_OK;
 }
 
@@ -385,8 +385,6 @@ ir_decl_init_multi(Arena *arena,
 		.arena = arena,
 		.ir = ir,
 		.lvalue_base = lvalue_base,
-		.pos = pos,
-		.dst = dst,
 	};
 	struct ast *cast_away_const = (struct ast *)a;
 	check(sema_walk_initializer(&cast_away_const,
@@ -394,6 +392,8 @@ ir_decl_init_multi(Arena *arena,
 	                            ir->env.types,
 	                            visit_decl_init_multi,
 	                            &state));
+	*pos = state.pos;
+	*dst = state.dst;
 	return RESULT_OK;
 }
 
