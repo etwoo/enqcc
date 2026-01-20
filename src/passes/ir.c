@@ -855,7 +855,10 @@ ir_assignment(Arena *arena,
 	struct ir_op *compound_assign_glue = NULL;
 
 	if (do_indirect) {
-		assert(ctype_is_pointer(&lvalue_direct.c89type));
+		// TODO: loosen assert below to accept struct+offset
+		// corresponding to member of type pointer, in addition to
+		// simple/direct pointer type
+		// assert(ctype_is_pointer(&lvalue_direct.c89type));
 		assigner->opcode = IR_OP_STORE;
 		ir_val_copy(&lvalue_direct, &assigner->args[1]);
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
@@ -1641,38 +1644,14 @@ ir_member(Arena *arena,
           struct ir_val *return_value)
 {
 	assert(a->node_type == NODE_EXPRESSION_STRUCT_MEMBER);
+
+	check(ir_expr(arena, a->u.member_access.lhs, ir, dst, return_value));
+	assert(return_value->subtype != IR_VAL_NONE);
+	assert(ctype_is_struct(&return_value->c89type));
+
 	struct type_member *tm = ir_member_lookup(a, ir);
+	return_value->offset += tm->member_offset;
 
-	struct ir_op *left = NULL;
-	struct ir_val left_return = {0};
-	check(ir_expr(arena, a->u.member_access.lhs, ir, &left, &left_return));
-	assert(left_return.subtype != IR_VAL_NONE);
-
-	assert(ctype_is_pointer(&left_return.c89type));
-	/* ^^^ guaranteed by ir_expr_get_addr_implicit() */
-
-	struct ir_op *ptr_plus = NULL;
-	check(ir_alloc_op(arena, &ptr_plus));
-	ptr_plus->opcode = IR_OP_POINTER_ADD;
-	ir_val_copy(&left_return, &ptr_plus->args[0]);
-	ptr_plus->args[1].subtype = IR_VAL_CONSTANT;
-	ptr_plus->args[1].num = tm->member_offset;
-	ptr_plus->args[1].c89type = LIKE_PTRDIFF_T;
-	ptr_plus->args[2].subtype = IR_VAL_CONSTANT;
-	ptr_plus->args[2].num = 1;
-	ptr_plus->args[2].c89type = LIKE_SIZE_T;
-
-	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &ptr_plus->args[3]));
-	check(ir_type_add_indirection(arena, &ptr_plus->args[3].c89type));
-
-	struct ir_op *loader = NULL;
-	check(ir_alloc_op(arena, &loader));
-	loader->opcode = IR_OP_LOAD;
-	ir_val_copy(&ptr_plus->args[3], &loader->args[0]);
-	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &loader->args[1]));
-	ir_val_copy(&loader->args[1], return_value);
-
-	*dst = ir_op_list_concat(left, ir_op_list_concat(ptr_plus, loader));
 	return RESULT_OK;
 }
 
@@ -1682,6 +1661,8 @@ ir_expr_get_addr_implicit(Arena *arena,
                           struct ir_op **dst,
                           struct ir_val *return_value)
 {
+	return RESULT_OK; // TODO: rm whole function?
+
 	if (!ctype_is_aggregate(&return_value->c89type)) {
 		return RESULT_OK;
 	}
