@@ -850,10 +850,6 @@ ir_assignment(Arena *arena,
 	struct ir_op *compound_assign_glue = NULL;
 
 	if (do_indirect) {
-		// TODO: loosen assert below to accept struct+offset
-		// corresponding to member of type pointer, in addition to
-		// simple/direct pointer type
-		// assert(ctype_is_pointer(&lvalue_result.c89type));
 		assigner->opcode = IR_OP_STORE;
 		ir_val_copy(&lvalue_result, &assigner->args[1]);
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
@@ -927,10 +923,6 @@ ir_incr_decr(Arena *arena,
 	struct ir_val load_working_copy_return = {0};
 
 	if (do_indirect) {
-		// TODO: loosen assert below to accept struct+offset
-		// corresponding to member of type pointer, in addition to
-		// simple/direct pointer type
-		// assert(ctype_is_pointer(&lvalue_result.c89type));
 		check(ir_assignment_lvalue_load_before_store(
 			arena,
 			ir,
