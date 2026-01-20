@@ -148,7 +148,7 @@ ir_assignment_lvalue(Arena *arena,
 		candidate = ir_unpack_parens(src->u.op_binary.lhs);
 		break;
 	default:
-		candidate = src;
+		candidate = src; // TODO: rm, narrow STRUCT_MEMBER check
 		break;
 	}
 
