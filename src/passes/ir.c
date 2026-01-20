@@ -155,38 +155,30 @@ ir_lvalue_eval(Arena *arena,
                struct ir_val *lvalue_direct,
                bool *do_indirect)
 {
-	assert(lvalue_indirect != NULL && *lvalue_indirect == NULL);
-
-	if (src->node_type == NODE_EXPRESSION_VARIABLE_USAGE) {
+	switch (src->node_type) {
+	case NODE_EXPRESSION_VARIABLE_USAGE:
 		check(ir_lvalue_map(arena,
 		                    &src->u.var,
 		                    &src->expr_type,
 		                    lvalue_direct));
-		return RESULT_OK;
-	}
-
-	if (src->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
-		struct type_member *m = ir_member_lookup(src, ir);
-		const struct ast *lhs = src->u.member_access.lhs;
+		break;
+	case NODE_EXPRESSION_STRUCT_MEMBER:
 		check(ir_lvalue_eval(arena,
-		                     lhs,
+		                     src->u.member_access.lhs,
 		                     ir,
 		                     lvalue_indirect,
 		                     lvalue_direct,
 		                     do_indirect));
 		assert(lvalue_direct->subtype != IR_VAL_NONE);
-		lvalue_direct->offset += m->member_offset;
-		return RESULT_OK;
-	}
-
-	if (src->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
-		const struct ast *inner =
-			ir_unpack_parens(src->u.op_unary.operand);
-		if (inner->node_type == NODE_EXPRESSION_UNARY_ADDRESS_OF) {
-			const struct ast *operand = inner->u.op_unary.operand;
+		lvalue_direct->offset +=
+			ir_member_lookup(src, ir)->member_offset;
+		break;
+	case NODE_EXPRESSION_UNARY_DEREFERENCE:
+		src = ir_unpack_parens(src->u.op_unary.operand);
+		if (src->node_type == NODE_EXPRESSION_UNARY_ADDRESS_OF) {
 			/* treat *& as no-op */
 			check(ir_lvalue_eval(arena,
-			                     operand,
+			                     src->u.op_unary.operand,
 			                     ir,
 			                     lvalue_indirect,
 			                     lvalue_direct,
@@ -194,15 +186,16 @@ ir_lvalue_eval(Arena *arena,
 		} else {
 			*do_indirect = true;
 			check(ir_expr(arena,
-			              inner,
+			              src,
 			              ir,
 			              lvalue_indirect,
 			              lvalue_direct));
 		}
-		return RESULT_OK;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
 	}
-
-	assert(0); /* logic error in caller */
 	return RESULT_OK;
 }
 
