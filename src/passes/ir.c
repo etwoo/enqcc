@@ -855,7 +855,7 @@ ir_assignment(Arena *arena,
 				arena,
 				ir,
 				&lvalue_direct,
-				lvalue_direct.c89type.referent,
+				&a->expr_type,
 				&compound_assign_glue,
 				&compound_assign_glue_return));
 			/*
@@ -917,12 +917,12 @@ ir_incr_decr(Arena *arena,
 		// TODO: loosen assert below to accept struct+offset
 		// corresponding to member of type pointer, in addition to
 		// simple/direct pointer type
-		assert(ctype_is_pointer(&lvalue_direct.c89type));
+		// assert(ctype_is_pointer(&lvalue_direct.c89type));
 		check(ir_assignment_lvalue_load_before_store(
 			arena,
 			ir,
 			&lvalue_direct,
-			lvalue_direct.c89type.referent,
+			&a->expr_type,
 			&load_working_copy,
 			&load_working_copy_return));
 	}
