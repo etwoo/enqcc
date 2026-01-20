@@ -868,27 +868,6 @@ ir_assignment(Arena *arena,
 			a->u.op_binary.lhs->kludge.userdata = ud;
 		}
 	} else {
-		// TODO: ir_assignment_lvalue() + IR_OP_COPY looks weird on
-		// struct assignment, like:
-		//
-		//   struct foo x;
-		//   struct foo y;
-		//   x = y;
-		//
-		// produces IR:
-		//
-		//   GET_ADDRESS
-		//     VAR tmp.4
-		//       TYPE STRUCT 8193 s
-		//       OFFSET 0
-		//     VAR tmp.5
-		//       TYPE POINTER_TO STRUCT 8193 s
-		//   COPY
-		//     VAR tmp.5
-		//       TYPE POINTER_TO STRUCT 8193 s
-		//     VAR tmp.3
-		//       TYPE STRUCT 8193 s
-		//       OFFSET 0
 		assigner->opcode = IR_OP_COPY;
 		ir_val_copy(&lvalue_direct, &assigner->args[1]);
 	}
@@ -935,6 +914,9 @@ ir_incr_decr(Arena *arena,
 	struct ir_val load_working_copy_return = {0};
 
 	if (do_indirect) {
+		// TODO: loosen assert below to accept struct+offset
+		// corresponding to member of type pointer, in addition to
+		// simple/direct pointer type
 		assert(ctype_is_pointer(&lvalue_direct.c89type));
 		check(ir_assignment_lvalue_load_before_store(
 			arena,
