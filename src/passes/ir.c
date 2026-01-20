@@ -127,58 +127,70 @@ ir_member_lookup(const struct ast *a, struct intermediate *ir)
 }
 
 static WARN_UNUSED result_t
-ir_assignment_lvalue(Arena *arena,
-                     const struct ast *src,
-                     struct intermediate *ir,
-                     struct ir_op **lvalue_indirect,
-                     struct ir_val *lvalue_direct,
-                     bool *do_indirect)
+ir_lvalue_map(Arena *arena,
+              const struct ast_symbol *got_symbol,
+              const struct ctype *got_type,
+              struct ir_val *lvalue_direct)
+{
+	check(ctype_copy(arena, got_type, &lvalue_direct->c89type));
+
+	if (got_symbol->stype == SYMBOL_STRING_LITERAL) {
+		lvalue_direct->subtype = IR_VAL_STRING_LITERAL;
+	} else if (some_linkage(got_symbol->ltype)) {
+		lvalue_direct->subtype = IR_VAL_VARIABLE_DATA;
+		lvalue_direct->varname = got_symbol->name;
+	} else {
+		lvalue_direct->subtype = IR_VAL_TEMPORARY_VARIABLE;
+	}
+
+	lvalue_direct->num = got_symbol->unique;
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_lvalue_eval(Arena *arena,
+               const struct ast *src,
+               struct intermediate *ir,
+               struct ir_op **lvalue_indirect,
+               struct ir_val *lvalue_direct,
+               bool *do_indirect)
 {
 	assert(lvalue_indirect != NULL && *lvalue_indirect == NULL);
 
-	const struct ast *candidate = NULL;
-	switch (src->node_type) {
-	case NODE_EXPRESSION_PREDECREMENT:
-	case NODE_EXPRESSION_POSTDECREMENT:
-	case NODE_EXPRESSION_PREINCREMENT:
-	case NODE_EXPRESSION_POSTINCREMENT:
-		candidate = ir_unpack_parens(src->u.op_unary.operand);
-		break;
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		candidate = ir_unpack_parens(src->u.op_binary.lhs);
-		break;
-	default:
-		candidate = src; // TODO: rm, narrow STRUCT_MEMBER check
-		break;
+	if (src->node_type == NODE_EXPRESSION_VARIABLE_USAGE) {
+		check(ir_lvalue_map(arena,
+		                    &src->u.var,
+		                    &src->expr_type,
+		                    lvalue_direct));
+		return RESULT_OK;
 	}
 
-	if (candidate != NULL &&
-	    candidate->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
-		struct type_member *m = ir_member_lookup(candidate, ir);
-		const struct ast *lhs = candidate->u.member_access.lhs;
-		check(ir_assignment_lvalue(arena,
-		                           lhs,
-		                           ir,
-		                           lvalue_indirect,
-		                           lvalue_direct,
-		                           do_indirect));
+	if (src->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
+		struct type_member *m = ir_member_lookup(src, ir);
+		const struct ast *lhs = src->u.member_access.lhs;
+		check(ir_lvalue_eval(arena,
+		                     lhs,
+		                     ir,
+		                     lvalue_indirect,
+		                     lvalue_direct,
+		                     do_indirect));
 		assert(lvalue_direct->subtype != IR_VAL_NONE);
 		lvalue_direct->offset += m->member_offset;
 		return RESULT_OK;
 	}
 
-	if (candidate != NULL &&
-	    candidate->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
+	if (src->node_type == NODE_EXPRESSION_UNARY_DEREFERENCE) {
 		const struct ast *inner =
-			ir_unpack_parens(candidate->u.op_unary.operand);
+			ir_unpack_parens(src->u.op_unary.operand);
 		if (inner->node_type == NODE_EXPRESSION_UNARY_ADDRESS_OF) {
+			const struct ast *operand = inner->u.op_unary.operand;
 			/* treat *& as no-op */
-			check(ir_assignment_lvalue(arena,
-			                           inner->u.op_unary.operand,
-			                           ir,
-			                           lvalue_indirect,
-			                           lvalue_direct,
-			                           do_indirect));
+			check(ir_lvalue_eval(arena,
+			                     operand,
+			                     ir,
+			                     lvalue_indirect,
+			                     lvalue_direct,
+			                     do_indirect));
 		} else {
 			*do_indirect = true;
 			check(ir_expr(arena,
@@ -190,44 +202,52 @@ ir_assignment_lvalue(Arena *arena,
 		return RESULT_OK;
 	}
 
-	const struct ast_symbol *direct = NULL;
+	assert(0); /* logic error in caller */
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+ir_assignment_lvalue(Arena *arena,
+                     const struct ast *src,
+                     struct intermediate *ir,
+                     struct ir_op **lvalue_indirect,
+                     struct ir_val *lvalue_direct,
+                     bool *do_indirect)
+{
+	assert(lvalue_indirect != NULL && *lvalue_indirect == NULL);
 
 	switch (src->node_type) {
 	case NODE_DECLARATION:
-		direct = &src->u.declare.identifier;
+		check(ir_lvalue_map(arena,
+		                    &src->u.declare.identifier,
+		                    &src->u.declare.var_type,
+		                    lvalue_direct));
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
 	case NODE_EXPRESSION_PREINCREMENT:
 	case NODE_EXPRESSION_POSTINCREMENT:
-	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
-		assert(candidate != NULL);
-		if (candidate->node_type == NODE_EXPRESSION_CAST) {
-			/* unpack nodes inserted by sema_conversion() */
-			candidate = candidate->u.cast.expr;
-		}
-		assert(candidate->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
-		direct = &candidate->u.var;
+		check(ir_lvalue_eval(arena,
+		                     ir_unpack_parens(src->u.op_unary.operand),
+		                     ir,
+		                     lvalue_indirect,
+		                     lvalue_direct,
+		                     do_indirect));
 		break;
-	case NODE_EXPRESSION_VARIABLE_USAGE:
-		direct = &src->u.var;
+	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
+		check(ir_lvalue_eval(arena,
+		                     ir_unpack_parens(src->u.op_binary.lhs),
+		                     ir,
+		                     lvalue_indirect,
+		                     lvalue_direct,
+		                     do_indirect));
 		break;
 	default:
 		assert(0); /* logic error in caller */
 		break;
 	}
 
-	if (direct->stype == SYMBOL_STRING_LITERAL) {
-		lvalue_direct->subtype = IR_VAL_STRING_LITERAL;
-	} else if (some_linkage(direct->ltype)) {
-		lvalue_direct->subtype = IR_VAL_VARIABLE_DATA;
-		lvalue_direct->varname = direct->name;
-	} else {
-		lvalue_direct->subtype = IR_VAL_TEMPORARY_VARIABLE;
-	}
-
-	lvalue_direct->num = direct->unique;
-	check(ctype_copy(arena, &src->expr_type, &lvalue_direct->c89type));
+	assert(lvalue_direct->subtype != IR_VAL_NONE);
 	return RESULT_OK;
 }
 
@@ -1729,18 +1749,10 @@ ir_expr(Arena *arena,
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		assert(return_value->subtype == IR_VAL_NONE);
-		{
-			struct ir_op *dummy_indirect = NULL;
-			bool do_indirect = false;
-			check(ir_assignment_lvalue(arena,
-			                           a,
-			                           ir,
-			                           &dummy_indirect,
-			                           return_value,
-			                           &do_indirect));
-			assert(dummy_indirect == NULL);
-			assert(do_indirect == false);
-		}
+		check(ir_lvalue_map(arena,
+		                    &a->u.var,
+		                    &a->expr_type,
+		                    return_value));
 		assert(return_value->subtype != IR_VAL_NONE);
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
