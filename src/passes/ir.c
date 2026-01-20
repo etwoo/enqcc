@@ -1603,6 +1603,55 @@ ir_member(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_expr_get_addr_implicit(Arena *arena,
+                          struct intermediate *ir,
+                          struct ir_op **dst,
+                          struct ir_val *return_value)
+{
+	if (!ctype_is_array(&return_value->c89type)) {
+		return RESULT_OK;
+	}
+
+	struct ir_op *prev = NULL;
+	struct ir_op *dst_last = *dst;
+	while (dst_last != NULL && dst_last->next != NULL) {
+		prev = dst_last;
+		dst_last = dst_last->next;
+	}
+
+	if (prev != NULL && dst_last->opcode == IR_OP_LOAD) {
+		assert(prev->next == dst_last);
+		assert(dst_last->next == NULL);
+		/*
+		 * IR_OP_LOAD + IR_OP_GET_ADDRESS == noop
+		 */
+		prev->next = NULL;
+		/*
+		 * Redirect <return_value> to dst ir_val of remaining <prev>.
+		 */
+		for (size_t i = 0; i < ARRAY_SIZE(prev->args); ++i) {
+			if (prev->args[i].subtype != IR_VAL_NONE) {
+				ir_val_copy(&prev->args[i], return_value);
+			}
+		}
+		return RESULT_OK;
+	}
+
+	struct ir_op *get_addr = NULL;
+	check(ir_alloc_op(arena, &get_addr));
+	get_addr->opcode = IR_OP_GET_ADDRESS;
+	ir_val_copy(return_value, &get_addr->args[0]);
+
+	const struct ctype *return_type = &return_value->c89type;
+	check(ir_val_tmpvar_gen(arena, ir, return_type, &get_addr->args[1]));
+	ctype_array_decay_to_pointer(&get_addr->args[1].c89type);
+	ir_val_copy(&get_addr->args[1], return_value);
+
+	*dst = ir_op_list_concat(*dst, get_addr);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_expr(Arena *arena,
         const struct ast *a,
         struct intermediate *ir,
@@ -1782,6 +1831,7 @@ ir_expr(Arena *arena,
 		                   (int)a->node_type);
 	}
 
+	check(ir_expr_get_addr_implicit(arena, ir, dst, return_value));
 	return RESULT_OK;
 }
 
