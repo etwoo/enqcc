@@ -210,16 +210,13 @@ ir_assignment_lvalue(Arena *arena,
 			direct = &candidate->u.var;
 			break;
 		case NODE_EXPRESSION_STRUCT_MEMBER: {
-			struct type_member *m = ir_member_lookup(candidate, ir);
-			const struct ast *lhs = candidate->u.member_access.lhs;
 			check(ir_assignment_lvalue(arena,
-			                           lhs,
+			                           candidate,
 			                           ir,
 			                           lvalue_indirect,
 			                           lvalue_direct,
 			                           do_indirect));
 			assert(lvalue_direct->subtype != IR_VAL_NONE);
-			lvalue_direct->offset += m->member_offset;
 			return RESULT_OK;
 		}
 		default:
