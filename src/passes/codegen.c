@@ -241,8 +241,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	dst->offset = src->offset;
 
-	if (ctype_is_array(&src->c89type) &&
+	if (ctype_is_array(&src->c89type) && // TODO: ctype_is_aggregate()
 	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
+		// TODO: map structs to ASM_OPERAND_PSEUDO_MEMORY as well
 		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
 		dst->u.pseudo_mem.num = src->num;
 		dst->u.pseudo_mem.total_bytes =
