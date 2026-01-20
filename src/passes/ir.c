@@ -148,13 +148,14 @@ ir_assignment_lvalue(Arena *arena,
 		candidate = ir_unpack_parens(src->u.op_binary.lhs);
 		break;
 	default:
+		candidate = src;
 		break;
 	}
 
-	const struct ast *maybe_member = candidate != NULL ? candidate : src;
-	if (maybe_member->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
-		struct type_member *m = ir_member_lookup(maybe_member, ir);
-		const struct ast *lhs = maybe_member->u.member_access.lhs;
+	if (candidate != NULL &&
+	    candidate->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
+		struct type_member *m = ir_member_lookup(candidate, ir);
+		const struct ast *lhs = candidate->u.member_access.lhs;
 		check(ir_assignment_lvalue(arena,
 		                           lhs,
 		                           ir,
