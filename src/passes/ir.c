@@ -1597,6 +1597,22 @@ ir_call(Arena *arena,
 }
 
 static WARN_UNUSED result_t
+ir_type_add_indirection(Arena *arena, struct ctype *c)
+{
+	if (ctype_is_array(c)) {
+		ctype_array_decay_to_pointer(c);
+	} else {
+		struct ctype *referent = NULL;
+		check(ctype_alloc(arena, &referent));
+		check(ctype_copy(arena, c, referent));
+		memset(c, 0, sizeof(*c));
+		c->t = CTYPE_POINTER_TO;
+		c->referent = referent;
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
 ir_member(Arena *arena,
           const struct ast *a,
           struct intermediate *ir,
@@ -1604,25 +1620,38 @@ ir_member(Arena *arena,
           struct ir_val *return_value)
 {
 	assert(a->node_type == NODE_EXPRESSION_STRUCT_MEMBER);
+	struct type_member *tm = ir_member_lookup(a, ir);
 
 	struct ir_op *left = NULL;
 	struct ir_val left_return = {0};
 	check(ir_expr(arena, a->u.member_access.lhs, ir, &left, &left_return));
 	assert(left_return.subtype != IR_VAL_NONE);
 
+	assert(ctype_is_pointer(&left_return.c89type));
+	/* ^^^ guaranteed by ir_expr_get_addr_implicit() */
+
+	struct ir_op *ptr_plus = NULL;
+	check(ir_alloc_op(arena, &ptr_plus));
+	ptr_plus->opcode = IR_OP_POINTER_ADD;
+	ir_val_copy(&left_return, &ptr_plus->args[0]);
+	ptr_plus->args[1].subtype = IR_VAL_CONSTANT;
+	ptr_plus->args[1].num = tm->member_offset;
+	ptr_plus->args[1].c89type = LIKE_PTRDIFF_T;
+	ptr_plus->args[2].subtype = IR_VAL_CONSTANT;
+	ptr_plus->args[2].num = 1;
+	ptr_plus->args[2].c89type = LIKE_SIZE_T;
+
+	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &ptr_plus->args[3]));
+	check(ir_type_add_indirection(arena, &ptr_plus->args[3].c89type));
+
 	struct ir_op *loader = NULL;
 	check(ir_alloc_op(arena, &loader));
 	loader->opcode = IR_OP_LOAD;
-	ir_val_copy(&left_return, &loader->args[0]);
-
-	struct type_member *tm = ir_member_lookup(a, ir);
-	loader->args[0].offset += tm->member_offset;
-
+	ir_val_copy(&ptr_plus->args[3], &loader->args[0]);
 	check(ir_val_tmpvar_gen(arena, ir, &a->expr_type, &loader->args[1]));
-	ctype_array_decay_to_pointer(&loader->args[1].c89type);
 	ir_val_copy(&loader->args[1], return_value);
 
-	*dst = ir_op_list_concat(left, loader);
+	*dst = ir_op_list_concat(left, ir_op_list_concat(ptr_plus, loader));
 	return RESULT_OK;
 }
 
@@ -1647,11 +1676,6 @@ ir_expr_get_addr_implicit(Arena *arena,
 		assert(prev->next == dst_last);
 		assert(dst_last->next == NULL);
 		/*
-		 * Remember offset of preceding IR_OP_LOAD, prior to noop-ing.
-		 */
-		const long long int total_offset =
-			return_value->offset + dst_last->args[0].offset;
-		/*
 		 * IR_OP_LOAD + IR_OP_GET_ADDRESS == noop
 		 */
 		prev->next = NULL;
@@ -1663,34 +1687,17 @@ ir_expr_get_addr_implicit(Arena *arena,
 				ir_val_copy(&prev->args[i], return_value);
 			}
 		}
-		/*
-		 * Preserve cumulative offset of fused operands.
-		 */
-		return_value->offset = total_offset;
 		return RESULT_OK;
 	}
 
 	struct ir_op *get_addr = NULL;
 	check(ir_alloc_op(arena, &get_addr));
 	get_addr->opcode = IR_OP_GET_ADDRESS;
-
 	ir_val_copy(return_value, &get_addr->args[0]);
-	check(ir_val_tmpvar_gen(arena,
-	                        ir,
-	                        &return_value->c89type,
-	                        &get_addr->args[1]));
 
-	if (ctype_is_struct(&get_addr->args[1].c89type)) {
-		struct ctype *referent = NULL;
-		check(ctype_alloc(arena, &referent));
-		struct ctype *c = &get_addr->args[1].c89type;
-		check(ctype_copy(arena, c, referent));
-		memset(c, 0, sizeof(*c));
-		c->t = CTYPE_POINTER_TO;
-		c->referent = referent;
-	} else {
-		ctype_array_decay_to_pointer(&get_addr->args[1].c89type);
-	}
+	const struct ctype *return_type = &return_value->c89type;
+	check(ir_val_tmpvar_gen(arena, ir, return_type, &get_addr->args[1]));
+	check(ir_type_add_indirection(arena, &get_addr->args[1].c89type));
 	ir_val_copy(&get_addr->args[1], return_value);
 
 	*dst = ir_op_list_concat(*dst, get_addr);
