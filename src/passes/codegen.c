@@ -1255,6 +1255,11 @@ codegen_statement_one(Arena *arena,
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
 		codegen_map_operands_all(src, *dst);
+		// TODO: IR_OP_COPY with struct src/dst -- not yet implemented
+		// IR for struct copy is probably broken; we might not even
+		// reach this assertion at present
+		assert(!ctype_is_struct(&src->args[0].c89type));
+		assert(!ctype_is_struct(&src->args[1].c89type));
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
 	case IR_OP_CTYPE_ZERO_EXTEND:
@@ -1302,6 +1307,9 @@ codegen_statement_one(Arena *arena,
 		                           0,
 		                           &(**dst).args[0]);
 		codegen_map_operand(&src->args[1], &(**dst).args[1]);
+		// TODO: IR_OP_LOAD with struct src/dst -- not yet implemented
+		assert(!ctype_is_struct(src->args[0].c89type.referent));
+		assert(!ctype_is_struct(&src->args[1].c89type));
 		break;
 	case IR_OP_STORE:
 		check(codegen_alloc_op(arena, dst));
