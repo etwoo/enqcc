@@ -130,20 +130,20 @@ static WARN_UNUSED result_t
 ir_lvalue_map(Arena *arena,
               const struct ast_symbol *got_symbol,
               const struct ctype *got_type,
-              struct ir_val *lvalue_direct)
+              struct ir_val *lvalue_result)
 {
-	check(ctype_copy(arena, got_type, &lvalue_direct->c89type));
+	check(ctype_copy(arena, got_type, &lvalue_result->c89type));
 
 	if (got_symbol->stype == SYMBOL_STRING_LITERAL) {
-		lvalue_direct->subtype = IR_VAL_STRING_LITERAL;
+		lvalue_result->subtype = IR_VAL_STRING_LITERAL;
 	} else if (some_linkage(got_symbol->ltype)) {
-		lvalue_direct->subtype = IR_VAL_VARIABLE_DATA;
-		lvalue_direct->varname = got_symbol->name;
+		lvalue_result->subtype = IR_VAL_VARIABLE_DATA;
+		lvalue_result->varname = got_symbol->name;
 	} else {
-		lvalue_direct->subtype = IR_VAL_TEMPORARY_VARIABLE;
+		lvalue_result->subtype = IR_VAL_TEMPORARY_VARIABLE;
 	}
 
-	lvalue_direct->num = got_symbol->unique;
+	lvalue_result->num = got_symbol->unique;
 	return RESULT_OK;
 }
 
@@ -151,8 +151,8 @@ static WARN_UNUSED result_t
 ir_lvalue_eval(Arena *arena,
                const struct ast *src,
                struct intermediate *ir,
-               struct ir_op **lvalue_indirect,
-               struct ir_val *lvalue_direct,
+               struct ir_op **lvalue_prepare,
+               struct ir_val *lvalue_result,
                bool *do_indirect)
 {
 	switch (src->node_type) {
@@ -160,17 +160,17 @@ ir_lvalue_eval(Arena *arena,
 		check(ir_lvalue_map(arena,
 		                    &src->u.var,
 		                    &src->expr_type,
-		                    lvalue_direct));
+		                    lvalue_result));
 		break;
 	case NODE_EXPRESSION_STRUCT_MEMBER:
 		check(ir_lvalue_eval(arena,
 		                     src->u.member_access.lhs,
 		                     ir,
-		                     lvalue_indirect,
-		                     lvalue_direct,
+		                     lvalue_prepare,
+		                     lvalue_result,
 		                     do_indirect));
-		assert(lvalue_direct->subtype != IR_VAL_NONE);
-		lvalue_direct->offset +=
+		assert(lvalue_result->subtype != IR_VAL_NONE);
+		lvalue_result->offset +=
 			ir_member_lookup(src, ir)->member_offset;
 		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
@@ -180,16 +180,16 @@ ir_lvalue_eval(Arena *arena,
 			check(ir_lvalue_eval(arena,
 			                     src->u.op_unary.operand,
 			                     ir,
-			                     lvalue_indirect,
-			                     lvalue_direct,
+			                     lvalue_prepare,
+			                     lvalue_result,
 			                     do_indirect));
 		} else {
 			*do_indirect = true;
 			check(ir_expr(arena,
 			              src,
 			              ir,
-			              lvalue_indirect,
-			              lvalue_direct));
+			              lvalue_prepare,
+			              lvalue_result));
 		}
 		break;
 	default:
@@ -203,18 +203,18 @@ static WARN_UNUSED result_t
 ir_assignment_lvalue(Arena *arena,
                      const struct ast *src,
                      struct intermediate *ir,
-                     struct ir_op **lvalue_indirect,
-                     struct ir_val *lvalue_direct,
+                     struct ir_op **lvalue_prepare,
+                     struct ir_val *lvalue_result,
                      bool *do_indirect)
 {
-	assert(lvalue_indirect != NULL && *lvalue_indirect == NULL);
+	assert(lvalue_prepare != NULL && *lvalue_prepare == NULL);
 
 	switch (src->node_type) {
 	case NODE_DECLARATION:
 		check(ir_lvalue_map(arena,
 		                    &src->u.declare.identifier,
 		                    &src->u.declare.var_type,
-		                    lvalue_direct));
+		                    lvalue_result));
 		break;
 	case NODE_EXPRESSION_PREDECREMENT:
 	case NODE_EXPRESSION_POSTDECREMENT:
@@ -223,16 +223,16 @@ ir_assignment_lvalue(Arena *arena,
 		check(ir_lvalue_eval(arena,
 		                     ir_unpack_parens(src->u.op_unary.operand),
 		                     ir,
-		                     lvalue_indirect,
-		                     lvalue_direct,
+		                     lvalue_prepare,
+		                     lvalue_result,
 		                     do_indirect));
 		break;
 	case NODE_EXPRESSION_VARIABLE_ASSIGNMENT:
 		check(ir_lvalue_eval(arena,
 		                     ir_unpack_parens(src->u.op_binary.lhs),
 		                     ir,
-		                     lvalue_indirect,
-		                     lvalue_direct,
+		                     lvalue_prepare,
+		                     lvalue_result,
 		                     do_indirect));
 		break;
 	default:
@@ -240,7 +240,7 @@ ir_assignment_lvalue(Arena *arena,
 		break;
 	}
 
-	assert(lvalue_direct->subtype != IR_VAL_NONE);
+	assert(lvalue_result->subtype != IR_VAL_NONE);
 	return RESULT_OK;
 }
 
@@ -419,17 +419,17 @@ ir_decl_init(Arena *arena,
 {
 	assert(a->node_type == NODE_DECLARATION);
 
-	struct ir_op *dummy_indirect = NULL;
-	struct ir_val lvalue_direct = {0};
+	struct ir_op *dummy_prepare = NULL;
+	struct ir_val lvalue_result = {0};
 	bool do_indirect = false;
 	check(ir_assignment_lvalue(arena,
 	                           a,
 	                           ir,
-	                           &dummy_indirect,
-	                           &lvalue_direct,
+	                           &dummy_prepare,
+	                           &lvalue_result,
 	                           &do_indirect));
-	assert(dummy_indirect == NULL);
-	assert(lvalue_direct.subtype != IR_VAL_NONE);
+	assert(dummy_prepare == NULL);
+	assert(lvalue_result.subtype != IR_VAL_NONE);
 	assert(do_indirect == false);
 
 	if (a->u.declare.init->u.init.single != NULL) {
@@ -445,7 +445,7 @@ ir_decl_init(Arena *arena,
 		check(ir_alloc_op(arena, &assigner));
 		assigner->opcode = IR_OP_COPY;
 		ir_val_copy(&inner_return, &assigner->args[0]);
-		ir_val_copy(&lvalue_direct, &assigner->args[1]);
+		ir_val_copy(&lvalue_result, &assigner->args[1]);
 
 		*dst = ir_op_list_concat(inner, assigner);
 		return RESULT_OK;
@@ -456,7 +456,7 @@ ir_decl_init(Arena *arena,
 	                         &a->u.declare.var_type,
 	                         a->u.declare.init,
 	                         ir,
-	                         &lvalue_direct,
+	                         &lvalue_result,
 	                         &pos,
 	                         dst));
 	return RESULT_OK;
@@ -836,16 +836,16 @@ ir_assignment(Arena *arena,
 	struct ir_op *assigner = NULL;
 	check(ir_alloc_op(arena, &assigner));
 
-	struct ir_op *lvalue_indirect = NULL;
-	struct ir_val lvalue_direct = {0};
+	struct ir_op *lvalue_prepare = NULL;
+	struct ir_val lvalue_result = {0};
 	bool do_indirect = false;
 	check(ir_assignment_lvalue(arena,
 	                           a,
 	                           ir,
-	                           &lvalue_indirect,
-	                           &lvalue_direct,
+	                           &lvalue_prepare,
+	                           &lvalue_result,
 	                           &do_indirect));
-	assert(lvalue_direct.subtype != IR_VAL_NONE);
+	assert(lvalue_result.subtype != IR_VAL_NONE);
 
 	struct ir_op *compound_assign_glue = NULL;
 
@@ -853,9 +853,9 @@ ir_assignment(Arena *arena,
 		// TODO: loosen assert below to accept struct+offset
 		// corresponding to member of type pointer, in addition to
 		// simple/direct pointer type
-		// assert(ctype_is_pointer(&lvalue_direct.c89type));
+		// assert(ctype_is_pointer(&lvalue_result.c89type));
 		assigner->opcode = IR_OP_STORE;
-		ir_val_copy(&lvalue_direct, &assigner->args[1]);
+		ir_val_copy(&lvalue_result, &assigner->args[1]);
 		if (a->u.op_binary.lhs->kludge.compound_assignment_twin) {
 			/*
 			 * Cache lvalue-to-rvalue conversion for ir_expr() on
@@ -867,7 +867,7 @@ ir_assignment(Arena *arena,
 			check(ir_assignment_lvalue_load_before_store(
 				arena,
 				ir,
-				&lvalue_direct,
+				&lvalue_result,
 				&a->expr_type,
 				&compound_assign_glue,
 				&compound_assign_glue_return));
@@ -882,7 +882,7 @@ ir_assignment(Arena *arena,
 		}
 	} else {
 		assigner->opcode = IR_OP_COPY;
-		ir_val_copy(&lvalue_direct, &assigner->args[1]);
+		ir_val_copy(&lvalue_result, &assigner->args[1]);
 	}
 
 	struct ir_op *rhs_expr = NULL;
@@ -894,7 +894,7 @@ ir_assignment(Arena *arena,
 	ir_val_copy(&rhs_return, return_value);
 
 	struct ir_op *collect[] = {
-		lvalue_indirect,
+		lvalue_prepare,
 		compound_assign_glue,
 		rhs_expr,
 		assigner,
@@ -912,16 +912,16 @@ ir_incr_decr(Arena *arena,
              struct ir_op **dst,
              struct ir_val *return_value)
 {
-	struct ir_op *lvalue_indirect = NULL;
-	struct ir_val lvalue_direct = {0};
+	struct ir_op *lvalue_prepare = NULL;
+	struct ir_val lvalue_result = {0};
 	bool do_indirect = false;
 	check(ir_assignment_lvalue(arena,
 	                           a,
 	                           ir,
-	                           &lvalue_indirect,
-	                           &lvalue_direct,
+	                           &lvalue_prepare,
+	                           &lvalue_result,
 	                           &do_indirect));
-	assert(lvalue_direct.subtype != IR_VAL_NONE);
+	assert(lvalue_result.subtype != IR_VAL_NONE);
 
 	struct ir_op *load_working_copy = NULL;
 	struct ir_val load_working_copy_return = {0};
@@ -930,11 +930,11 @@ ir_incr_decr(Arena *arena,
 		// TODO: loosen assert below to accept struct+offset
 		// corresponding to member of type pointer, in addition to
 		// simple/direct pointer type
-		// assert(ctype_is_pointer(&lvalue_direct.c89type));
+		// assert(ctype_is_pointer(&lvalue_result.c89type));
 		check(ir_assignment_lvalue_load_before_store(
 			arena,
 			ir,
-			&lvalue_direct,
+			&lvalue_result,
 			&a->expr_type,
 			&load_working_copy,
 			&load_working_copy_return));
@@ -977,9 +977,9 @@ ir_incr_decr(Arena *arena,
 		store_updated_value->opcode = IR_OP_STORE;
 		ir_val_copy(&load_working_copy_return,
 		            &store_updated_value->args[0]);
-		ir_val_copy(&lvalue_direct, &store_updated_value->args[1]);
+		ir_val_copy(&lvalue_result, &store_updated_value->args[1]);
 	} else {
-		ir_val_copy(&lvalue_direct, &incr->args[0]);
+		ir_val_copy(&lvalue_result, &incr->args[0]);
 	}
 
 	if (!ctype_is_pointer(&a->expr_type)) {
@@ -1002,7 +1002,7 @@ ir_incr_decr(Arena *arena,
 		} else {
 			stash_value_before_changes->opcode = IR_OP_COPY;
 		}
-		ir_val_copy(&lvalue_direct,
+		ir_val_copy(&lvalue_result,
 		            &stash_value_before_changes->args[0]);
 		check(ir_val_tmpvar_gen(arena,
 		                        ir,
@@ -1025,7 +1025,7 @@ ir_incr_decr(Arena *arena,
 	}
 
 	struct ir_op *collect[] = {
-		lvalue_indirect,
+		lvalue_prepare,
 		stash_value_before_changes,
 		load_working_copy,
 		incr,
