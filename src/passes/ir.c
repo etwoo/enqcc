@@ -1073,7 +1073,8 @@ ir_unary_op(Arena *arena,
 	if (unary->opcode == IR_OP_GET_ADDRESS &&
 	    ctype_is_array(&ast_inner->expr_type)) {
 		/*
-		 * Avoid duplicate IR_OP_GET_ADDRESS on &-op on array operand.
+		 * ir_expr_get_addr_implicit() already adds IR_OP_GET_ADDRESS
+		 * for arrays automatically. Avoid duplicate on explicit &-op.
 		 */
 		*dst = inner;
 		ir_val_copy(&inner_return, return_value);
