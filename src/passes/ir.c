@@ -136,20 +136,6 @@ ir_assignment_lvalue(Arena *arena,
 {
 	assert(lvalue_indirect != NULL && *lvalue_indirect == NULL);
 
-	if (src->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
-		struct type_member *m = ir_member_lookup(src, ir);
-		const struct ast *lhs = src->u.member_access.lhs;
-		check(ir_assignment_lvalue(arena,
-		                           lhs,
-		                           ir,
-		                           lvalue_indirect,
-		                           lvalue_direct,
-		                           do_indirect));
-		assert(lvalue_direct->subtype != IR_VAL_NONE);
-		lvalue_direct->offset += m->member_offset;
-		return RESULT_OK;
-	}
-
 	const struct ast *candidate = NULL;
 	switch (src->node_type) {
 	case NODE_EXPRESSION_PREDECREMENT:
@@ -162,8 +148,22 @@ ir_assignment_lvalue(Arena *arena,
 		candidate = ir_unpack_parens(src->u.op_binary.lhs);
 		break;
 	default:
-		candidate = src;
 		break;
+	}
+
+	const struct ast *maybe_member = candidate != NULL ? candidate : src;
+	if (maybe_member->node_type == NODE_EXPRESSION_STRUCT_MEMBER) {
+		struct type_member *m = ir_member_lookup(maybe_member, ir);
+		const struct ast *lhs = maybe_member->u.member_access.lhs;
+		check(ir_assignment_lvalue(arena,
+		                           lhs,
+		                           ir,
+		                           lvalue_indirect,
+		                           lvalue_direct,
+		                           do_indirect));
+		assert(lvalue_direct->subtype != IR_VAL_NONE);
+		lvalue_direct->offset += m->member_offset;
+		return RESULT_OK;
 	}
 
 	if (candidate != NULL &&
@@ -205,24 +205,8 @@ ir_assignment_lvalue(Arena *arena,
 			/* unpack nodes inserted by sema_conversion() */
 			candidate = candidate->u.cast.expr;
 		}
-		switch (candidate->node_type) {
-		case NODE_EXPRESSION_VARIABLE_USAGE:
-			direct = &candidate->u.var;
-			break;
-		case NODE_EXPRESSION_STRUCT_MEMBER: {
-			check(ir_assignment_lvalue(arena,
-			                           candidate,
-			                           ir,
-			                           lvalue_indirect,
-			                           lvalue_direct,
-			                           do_indirect));
-			assert(lvalue_direct->subtype != IR_VAL_NONE);
-			return RESULT_OK;
-		}
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
+		assert(candidate->node_type == NODE_EXPRESSION_VARIABLE_USAGE);
+		direct = &candidate->u.var;
 		break;
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		direct = &src->u.var;
