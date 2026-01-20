@@ -236,18 +236,21 @@ static const struct asm_operand OPERAND_XMM15 = {
 	.u.reg = ASM_REGISTER_XMM15,
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+struct type_table *gTypeTable = NULL; // TODO: refactor global state
+
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	dst->offset = src->offset;
 
-	if (ctype_is_array(&src->c89type) && // TODO: ctype_is_aggregate()
+	if (ctype_is_aggregate(&src->c89type) &&
 	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
-		// TODO: map structs to ASM_OPERAND_PSEUDO_MEMORY as well
 		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
 		dst->u.pseudo_mem.num = src->num;
 		dst->u.pseudo_mem.total_bytes =
-			ctype_to_size_bytes(&src->c89type);
+			ctype_to_size_bytes_with_types(&src->c89type,
+		                                       gTypeTable);
 		const struct ctype *innermost = &src->c89type;
 		while (ctype_is_array(innermost)) {
 			innermost = innermost->referent;
@@ -1479,6 +1482,7 @@ codegen_program(Arena *arena,
 result_t
 codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 {
+	gTypeTable = ir->env.types;
 	*cg = arena_alloc(arena, sizeof(**cg));
 	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);
 	memset(*cg, 0, sizeof(**cg));
@@ -2249,9 +2253,10 @@ codegen_debug_print_operand(const struct asm_operand *operand)
 		      REGISTER_NAMES[operand->u.reg]);
 		break;
 	case ASM_OPERAND_PSEUDO_MEMORY:
-		debug("  PSEUDOMEM %lld(%lld)",
+		debug("  PSEUDOMEM %lld(%lld) [from TOTAL_BYTES %lld]",
 		      operand->offset,
-		      (long long)operand->u.pseudo_mem.num);
+		      (long long)operand->u.pseudo_mem.num,
+		      operand->u.pseudo_mem.total_bytes);
 		break;
 	case ASM_OPERAND_INDEXED:
 		debug("  INDEXED (%s, %s, %lld)",

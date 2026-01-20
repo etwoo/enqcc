@@ -24,7 +24,7 @@ CheckOptions:
   - {key: readability-identifier-naming.FunctionCase, value: lower_case}
   - {key: readability-identifier-naming.FunctionIgnoredRegexp, value: "__llvm_profile_"}
   - {key: readability-identifier-naming.GlobalConstantCase, value: UPPER_CASE}
-  - {key: readability-identifier-naming.GlobalVariableCase, value: camelBack}
+  - {key: readability-identifier-naming.GlobalVariableCase, value: CamelCase}
   - {key: readability-identifier-naming.GlobalVariablePrefix, value: g}
   - {key: readability-identifier-naming.ParameterCase, value: lower_case}
   - {key: readability-identifier-naming.StructCase, value: lower_case}
