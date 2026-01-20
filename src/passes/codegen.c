@@ -248,6 +248,9 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
 		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
 		dst->u.pseudo_mem.num = src->num;
+		// TODO: special-case for incomplete structure types? see book
+		// note starting, "Some of the TACKY variables you encouter may
+		// have incomplete structure types"
 		dst->u.pseudo_mem.total_bytes =
 			ctype_to_size_bytes_with_types(&src->c89type,
 		                                       gTypeTable);
