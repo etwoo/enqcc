@@ -95,9 +95,9 @@ codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 	case CTYPE_DOUBLE:
 	case CTYPE_POINTER_TO:
 	case CTYPE_ARRAY_OF:
-	case CTYPE_STRUCT:
 		dst->word_type = ASM_WORD_64BIT;
 		break;
+	case CTYPE_STRUCT:
 	case CTYPE_VOID:
 		assert(0); /* logic error in caller */
 		break;
@@ -107,7 +107,25 @@ codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 static void
 codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
-	codegen_map_ctype_impl(&src->c89type, dst);
+	if (ctype_is_struct(&src->c89type)) {
+		assert(src->subsize <= 8);
+		switch (src->subsize) {
+		case 8:
+			dst->word_type = ASM_WORD_64BIT;
+			break;
+		case 4:
+			dst->word_type = ASM_WORD_32BIT;
+			break;
+		case 1:
+			dst->word_type = ASM_WORD_08BIT;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+	} else {
+		codegen_map_ctype_impl(&src->c89type, dst);
+	}
 }
 
 static void
@@ -239,9 +257,7 @@ static const struct asm_operand OPERAND_XMM15 = {
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
-	// dst->offset = src->offset; // TODO: remove completely?
-
-	assert(!ctype_is_struct(&src->c89type));
+	dst->offset = src->suboffset;
 
 	if (ctype_is_array(&src->c89type) &&
 	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
@@ -668,7 +684,8 @@ codegen_statement_copy_op(Arena *arena,
                           const struct ir_op *src,
                           struct asm_op **dst)
 {
-	if (ctype_is_struct(&src->args[0].c89type)) {
+	if (ctype_is_struct(&src->args[0].c89type) &&
+	    ctype_is_struct(&src->args[1].c89type)) {
 		check(codegen_statement_copy_bytes(arena, types, src, dst));
 		return RESULT_OK;
 	}
