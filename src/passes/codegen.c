@@ -108,7 +108,15 @@ static void
 codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
 	if (ctype_is_struct(&src->c89type)) {
+		/*
+		 * Handling struct chunk larger than 8 bytes should happen
+		 * elsewhere, like codegen_statement_copy_bytes().
+		 */
 		assert(src->subsize <= 8);
+		/*
+		 * Assuming ir_val.subsize corresponds to a primitive type like
+		 * char/int/long/double, map to a suitable word size.
+		 */
 		switch (src->subsize) {
 		case 8:
 			dst->word_type = ASM_WORD_64BIT;
