@@ -239,7 +239,7 @@ static const struct asm_operand OPERAND_XMM15 = {
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
-	dst->offset = src->offset;
+	// dst->offset = src->offset; // TODO: remove completely?
 
 	assert(!ctype_is_struct(&src->c89type));
 
@@ -584,6 +584,98 @@ codegen_statement_cmp_op(Arena *arena,
 	}
 
 	codegen_map_operand(&src->args[2], &(**dst).args[0]);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_copy_bytes(Arena *arena,
+                             struct type_table *types,
+                             const struct ir_op *src,
+                             struct asm_op **dst)
+{
+	long long int lhs_offset = src->args[0].suboffset;
+	long long int rhs_offset = src->args[1].suboffset;
+
+	const int128_t lhs_unique = src->args[0].num;
+	const int128_t rhs_unique = src->args[1].num;
+
+	const long long int lhs_total_bytes =
+		ctype_to_size_bytes_with_types(&src->args[0].c89type, types);
+	const long long int rhs_total_bytes =
+		ctype_to_size_bytes_with_types(&src->args[1].c89type, types);
+
+	long long int to_copy = src->args[0].subsize;
+	if (to_copy == 0) {
+		to_copy = lhs_total_bytes;
+	}
+	assert(to_copy > 0);
+
+	{
+		long long int capacity = src->args[1].subsize;
+		if (capacity == 0) {
+			capacity = rhs_total_bytes;
+		}
+		assert(to_copy == capacity);
+	}
+
+	while (to_copy > 0) {
+		check(codegen_alloc_op(arena, dst));
+		(**dst).opcode = ASM_OP_MOV;
+		(**dst).args[0].operand_type = ASM_OPERAND_PSEUDO_MEMORY;
+		(**dst).args[0].offset = lhs_offset;
+		(**dst).args[0].u.pseudo_mem.num = lhs_unique;
+		(**dst).args[0].u.pseudo_mem.total_bytes = lhs_total_bytes;
+		(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_MEMORY;
+		(**dst).args[1].offset = rhs_offset;
+		(**dst).args[1].u.pseudo_mem.num = rhs_unique;
+		(**dst).args[1].u.pseudo_mem.total_bytes = rhs_total_bytes;
+		long long int chunk = 0;
+		if (to_copy >= 8) {
+			chunk = 8;
+		} else if (to_copy >= 4) {
+			chunk = 4;
+		} else {
+			chunk = 1;
+		}
+		switch (chunk) {
+		case 8:
+			(**dst).args[0].word_type = ASM_WORD_64BIT;
+			(**dst).args[1].word_type = ASM_WORD_64BIT;
+			break;
+		case 4:
+			(**dst).args[0].word_type = ASM_WORD_32BIT;
+			(**dst).args[1].word_type = ASM_WORD_32BIT;
+			break;
+		case 1:
+			(**dst).args[0].word_type = ASM_WORD_08BIT;
+			(**dst).args[1].word_type = ASM_WORD_08BIT;
+			break;
+		default:
+			assert(0); /* logic error in caller */
+			break;
+		}
+		lhs_offset += chunk;
+		rhs_offset += chunk;
+		to_copy -= chunk;
+		dst = &(**dst).next;
+	}
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_copy_op(Arena *arena,
+                          struct type_table *types,
+                          const struct ir_op *src,
+                          struct asm_op **dst)
+{
+	if (ctype_is_struct(&src->args[0].c89type)) {
+		check(codegen_statement_copy_bytes(arena, types, src, dst));
+		return RESULT_OK;
+	}
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_map_operands_all(src, *dst);
 	return RESULT_OK;
 }
 
@@ -1195,6 +1287,7 @@ codegen_statement_fp(Arena *arena, const struct ir_op *src, struct asm_op **dst)
 
 static WARN_UNUSED result_t
 codegen_statement_one(Arena *arena,
+                      struct type_table *types,
                       const struct ir_op *src,
                       struct asm_op **dst)
 {
@@ -1250,14 +1343,7 @@ codegen_statement_one(Arena *arena,
 		check(codegen_statement_cmp_op(arena, src, dst));
 		break;
 	case IR_OP_COPY:
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operands_all(src, *dst);
-		// TODO: IR_OP_COPY with struct src/dst -- not yet implemented
-		// IR for struct copy is probably broken; we might not even
-		// reach this assertion at present
-		assert(!ctype_is_struct(&src->args[0].c89type));
-		assert(!ctype_is_struct(&src->args[1].c89type));
+		check(codegen_statement_copy_op(arena, types, src, dst));
 		break;
 	case IR_OP_CTYPE_SIGN_EXTEND:
 	case IR_OP_CTYPE_ZERO_EXTEND:
@@ -1359,10 +1445,13 @@ codegen_statement_one(Arena *arena,
 }
 
 static WARN_UNUSED result_t
-codegen_statement(Arena *arena, const struct ir_op *src, struct asm_op **dst)
+codegen_statement(Arena *arena,
+                  struct type_table *types,
+                  const struct ir_op *src,
+                  struct asm_op **dst)
 {
 	while (src != NULL) {
-		check(codegen_statement_one(arena, src, dst));
+		check(codegen_statement_one(arena, types, src, dst));
 		src = src->next;
 		while (*dst != NULL) {
 			dst = &(**dst).next;
@@ -1450,6 +1539,7 @@ codegen_function_params(Arena *arena,
 
 static WARN_UNUSED result_t
 codegen_function(Arena *arena,
+                 struct type_table *types,
                  const struct ir_function *ir,
                  struct asm_function **dst)
 {
@@ -1470,7 +1560,7 @@ codegen_function(Arena *arena,
 	}
 
 	assert(*dst_ops == NULL);
-	check(codegen_statement(arena, ir->ops, dst_ops));
+	check(codegen_statement(arena, types, ir->ops, dst_ops));
 	return RESULT_OK;
 }
 
@@ -1481,7 +1571,7 @@ codegen_program(Arena *arena,
 {
 	struct asm_function **dst_fun = &(**dst).functions;
 	for (struct ir_function *f = ir->functions; f != NULL; f = f->next) {
-		check(codegen_function(arena, f, dst_fun));
+		check(codegen_function(arena, ir->env.types, f, dst_fun));
 		assert(*dst_fun != NULL);
 		dst_fun = &(**dst_fun).next;
 	}

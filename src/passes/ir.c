@@ -155,6 +155,8 @@ ir_lvalue_eval(Arena *arena,
                struct ir_val *lvalue_result,
                bool *do_indirect)
 {
+	const struct type_member *type_entry = NULL;
+
 	switch (src->node_type) {
 	case NODE_EXPRESSION_VARIABLE_USAGE:
 		check(ir_lvalue_map(arena,
@@ -170,8 +172,12 @@ ir_lvalue_eval(Arena *arena,
 		                     lvalue_result,
 		                     do_indirect));
 		assert(lvalue_result->subtype != IR_VAL_NONE);
-		lvalue_result->offset +=
-			ir_member_lookup(src, ir)->member_offset;
+		type_entry = ir_member_lookup(src, ir);
+		assert(type_entry != NULL);
+		lvalue_result->suboffset += type_entry->member_offset;
+		lvalue_result->subsize =
+			ctype_to_size_bytes_with_types(&type_entry->member_type,
+		                                       ir->env.types);
 		break;
 	case NODE_EXPRESSION_UNARY_DEREFERENCE:
 		src = ir_unpack_parens(src->u.op_unary.operand);
@@ -196,6 +202,7 @@ ir_lvalue_eval(Arena *arena,
 		assert(0); /* logic error in caller */
 		break;
 	}
+
 	return RESULT_OK;
 }
 
@@ -378,8 +385,10 @@ visit_decl_init_multi(struct ast **init,
 	copier->opcode = IR_OP_COPY;
 	ir_val_copy(&element_return, &copier->args[0]);
 	ir_val_copy(state->lvalue_base, &copier->args[1]);
-	copier->args[1].offset = state->pos;
-	state->pos += ctype_to_size_bytes_with_types(declaration_type, types);
+	copier->args[1].suboffset = state->pos;
+	copier->args[1].subsize =
+		ctype_to_size_bytes_with_types(declaration_type, types);
+	state->pos += copier->args[1].subsize;
 
 	struct ir_op *to_append = ir_op_list_concat(element, copier);
 	state->dst = ir_op_list_concat(state->dst, to_append);
@@ -1603,7 +1612,9 @@ ir_member(Arena *arena,
 	assert(ctype_is_struct(&return_value->c89type));
 
 	struct type_member *tm = ir_member_lookup(a, ir);
-	return_value->offset += tm->member_offset;
+	return_value->suboffset += tm->member_offset;
+	return_value->subsize =
+		ctype_to_size_bytes_with_types(&tm->member_type, ir->env.types);
 
 	return RESULT_OK;
 }
@@ -2023,8 +2034,11 @@ ir_debug_print_one(const struct ir_op *op)
 		      ctype_to_str(&op->args[i].c89type, tmp, sizeof(tmp)));
 
 		if (ctype_is_aggregate(&op->args[i].c89type) ||
-		    op->args[i].offset > 0) {
-			debug("    OFFSET %lld", op->args[i].offset);
+		    op->args[i].suboffset > 0) {
+			debug("    SUBOFFSET %lld", op->args[i].suboffset);
+		}
+		if (op->args[i].subsize > 0) {
+			debug("    SUBSIZE %lld", op->args[i].subsize);
 		}
 	}
 }

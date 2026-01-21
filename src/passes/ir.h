@@ -18,7 +18,8 @@ struct ir_val {
 	} subtype;
 	int128_t num;               /* numeric value, variable ID, etc */
 	double dnum;                /* ... or numeric value as floating point */
-	long long int offset;       /* offset of value within aggregate type */
+	long long int suboffset;    /* offset of value within aggregate type */
+	long long int subsize;      /* size of value within aggregate type */
 	struct string_view varname; /* symbol name, if linkage */
 	struct ctype c89type;
 };
