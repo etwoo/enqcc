@@ -236,15 +236,14 @@ static const struct asm_operand OPERAND_XMM15 = {
 	.u.reg = ASM_REGISTER_XMM15,
 };
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-struct type_table *gTypeTable = NULL; // TODO: refactor global state
-
 static void
 codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 {
 	dst->offset = src->offset;
 
-	if (ctype_is_aggregate(&src->c89type) &&
+	assert(!ctype_is_struct(&src->c89type));
+
+	if (ctype_is_array(&src->c89type) &&
 	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
 		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
 		dst->u.pseudo_mem.num = src->num;
@@ -252,8 +251,7 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		// note starting, "Some of the TACKY variables you encouter may
 		// have incomplete structure types"
 		dst->u.pseudo_mem.total_bytes =
-			ctype_to_size_bytes_with_types(&src->c89type,
-		                                       gTypeTable);
+			ctype_to_size_bytes(&src->c89type);
 		const struct ctype *innermost = &src->c89type;
 		while (ctype_is_array(innermost)) {
 			innermost = innermost->referent;
@@ -1493,7 +1491,6 @@ codegen_program(Arena *arena,
 result_t
 codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 {
-	gTypeTable = ir->env.types;
 	*cg = arena_alloc(arena, sizeof(**cg));
 	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);
 	memset(*cg, 0, sizeof(**cg));
