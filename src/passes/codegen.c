@@ -661,6 +661,7 @@ codegen_statement_copy_bytes(Arena *arena,
 		} else {
 			chunk = 1;
 		}
+		// TODO: consolidate with 8/4/1 logic in codegen_map_ctype()
 		switch (chunk) {
 		case 8:
 			(**dst).args[0].word_type = ASM_WORD_64BIT;
