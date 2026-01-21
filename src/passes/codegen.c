@@ -611,6 +611,7 @@ codegen_statement_cmp_op(Arena *arena,
 	return RESULT_OK;
 }
 
+// TODO: extend *_copy_bytes() to handle LOAD and STORE as well
 static WARN_UNUSED result_t
 codegen_statement_copy_bytes(Arena *arena,
                              struct type_table *types,
