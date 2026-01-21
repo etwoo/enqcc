@@ -149,8 +149,12 @@ long long int
 ctype_to_alignment(const struct ctype *c, struct type_table *t)
 {
 	long long int align = 0;
-	if (ctype_is_array(c)) {
-		align = ctype_to_size_bytes_with_types(c->referent, t);
+	if (ctype_is_struct(c)) {
+		struct type_table *type_entry = types_find(t, c);
+		assert(type_entry != NULL);
+		align = type_entry->aggregate_alignment;
+	} else if (ctype_is_array(c)) {
+		align = ctype_to_alignment(c->referent, t);
 	} else {
 		align = ctype_to_size_bytes_with_types(c, t);
 	}
