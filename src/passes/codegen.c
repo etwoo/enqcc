@@ -621,6 +621,7 @@ codegen_statement_copy_bytes(Arena *arena,
 	long long int lhs_offset = src->args[0].suboffset;
 	long long int rhs_offset = src->args[1].suboffset;
 
+	// TODO: handle src->args[i].subtype == IR_VAL_VARIABLE_DATA?
 	const int128_t lhs_unique = src->args[0].num;
 	const int128_t rhs_unique = src->args[1].num;
 
