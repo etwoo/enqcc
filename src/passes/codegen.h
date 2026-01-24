@@ -59,6 +59,7 @@ struct asm_operand {
 		ASM_WORD_32BIT, /* DWORD */
 		ASM_WORD_64BIT, /* QWORD */
 	} word_type;
+	long long int offset;
 	union {
 		int128_t num;
 		enum asm_register reg;
@@ -77,7 +78,6 @@ struct asm_operand {
 		long unsigned longs[4];      /* CONSTANT_DATA_VEC_LONGS */
 		long long unsigned quads[2]; /* CONSTANT_DATA_VEC_QUADS */
 	} u;
-	long long int offset;
 };
 
 bool is_xmm_register(const struct asm_operand *o) WARN_UNUSED;

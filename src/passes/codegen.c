@@ -263,26 +263,9 @@ static const struct asm_operand OPERAND_XMM15 = {
 };
 
 static void
-codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
+codegen_map_operand_partial(const struct ir_val *src, struct asm_operand *dst)
 {
 	dst->offset = src->suboffset;
-
-	if (ctype_is_array(&src->c89type) &&
-	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
-		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
-		dst->u.pseudo_mem.num = src->num;
-		// TODO: special-case for incomplete structure types? see book
-		// note starting, "Some of the TACKY variables you encouter may
-		// have incomplete structure types"
-		dst->u.pseudo_mem.total_bytes =
-			ctype_to_size_bytes(&src->c89type);
-		const struct ctype *innermost = &src->c89type;
-		while (ctype_is_array(innermost)) {
-			innermost = innermost->referent;
-		}
-		codegen_map_ctype_impl(innermost, dst);
-		return;
-	}
 
 	switch (src->subtype) {
 	case IR_VAL_NONE:
@@ -332,7 +315,31 @@ codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
 		assert(0 && "sema/ir allowed void in unexpected location?");
 		break;
 	}
+}
 
+static void
+codegen_map_operand(const struct ir_val *src, struct asm_operand *dst)
+{
+	if (ctype_is_array(&src->c89type) &&
+	    src->subtype == IR_VAL_TEMPORARY_VARIABLE) {
+		dst->operand_type = ASM_OPERAND_PSEUDO_MEMORY;
+		dst->offset = src->suboffset;
+		dst->u.pseudo_mem.num = src->num;
+		// TODO: special-case for incomplete structure types? see book
+		// note starting, "Some of the TACKY variables you encouter may
+		// have incomplete structure types"
+		dst->u.pseudo_mem.total_bytes =
+			ctype_to_size_bytes(&src->c89type);
+		const struct ctype *innermost = &src->c89type;
+		while (ctype_is_array(innermost)) {
+			innermost = innermost->referent;
+		}
+		codegen_map_ctype_impl(innermost, dst);
+		return;
+	}
+
+	assert(!ctype_is_aggregate(&src->c89type));
+	codegen_map_operand_partial(src, dst);
 	codegen_map_ctype(src, dst);
 }
 
@@ -618,12 +625,9 @@ codegen_statement_copy_bytes(Arena *arena,
                              const struct ir_op *src,
                              struct asm_op **dst)
 {
-	long long int lhs_offset = src->args[0].suboffset;
-	long long int rhs_offset = src->args[1].suboffset;
-
-	// TODO: handle src->args[i].subtype == IR_VAL_VARIABLE_DATA?
-	const int128_t lhs_unique = src->args[0].num;
-	const int128_t rhs_unique = src->args[1].num;
+	struct asm_operand template[2] = {0};
+	codegen_map_operand_partial(&src->args[0], &template[0]);
+	codegen_map_operand_partial(&src->args[1], &template[1]);
 
 	const long long int lhs_total_bytes =
 		ctype_to_size_bytes_with_types(&src->args[0].c89type, types);
@@ -647,14 +651,9 @@ codegen_statement_copy_bytes(Arena *arena,
 	while (to_copy > 0) {
 		check(codegen_alloc_op(arena, dst));
 		(**dst).opcode = ASM_OP_MOV;
-		(**dst).args[0].operand_type = ASM_OPERAND_PSEUDO_MEMORY;
-		(**dst).args[0].offset = lhs_offset;
-		(**dst).args[0].u.pseudo_mem.num = lhs_unique;
-		(**dst).args[0].u.pseudo_mem.total_bytes = lhs_total_bytes;
-		(**dst).args[1].operand_type = ASM_OPERAND_PSEUDO_MEMORY;
-		(**dst).args[1].offset = rhs_offset;
-		(**dst).args[1].u.pseudo_mem.num = rhs_unique;
-		(**dst).args[1].u.pseudo_mem.total_bytes = rhs_total_bytes;
+		(**dst).args[0] = template[0];
+		(**dst).args[1] = template[1];
+
 		long long int chunk = 0;
 		if (to_copy >= 8) {
 			chunk = 8;
@@ -663,6 +662,7 @@ codegen_statement_copy_bytes(Arena *arena,
 		} else {
 			chunk = 1;
 		}
+
 		// TODO: consolidate with 8/4/1 logic in codegen_map_ctype()
 		switch (chunk) {
 		case 8:
@@ -681,11 +681,13 @@ codegen_statement_copy_bytes(Arena *arena,
 			assert(0); /* logic error in caller */
 			break;
 		}
-		lhs_offset += chunk;
-		rhs_offset += chunk;
+
+		template[0].offset += chunk;
+		template[1].offset += chunk;
 		to_copy -= chunk;
 		dst = &(**dst).next;
 	}
+
 	return RESULT_OK;
 }
 
