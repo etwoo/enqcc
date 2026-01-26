@@ -149,6 +149,13 @@ codegen_set_operand_memory(const struct ir_val *basis,
 }
 
 static void
+codegen_set_operand_memory_rax(const struct ir_val *basis,
+                               struct asm_operand *dst)
+{
+	codegen_set_operand_memory(basis, ASM_REGISTER_AX, 0, dst);
+}
+
+static void
 codegen_set_operand_stack(const struct ir_val *basis,
                           long long int offset,
                           struct asm_operand *dst)
@@ -625,37 +632,41 @@ codegen_statement_copy_bytes(Arena *arena,
                              struct asm_op **dst)
 {
 	struct asm_operand template[2] = {0};
-	long long int lhs_total_bytes = 0;
+	const struct ctype *lhs_type = NULL;
+	const struct ctype *rhs_type = NULL;
 
 	switch (src->opcode) {
 	case IR_OP_COPY:
 		codegen_map_operand_partial(&src->args[0], &template[0]);
-		lhs_total_bytes =
-			ctype_to_size_bytes_with_types(&src->args[0].c89type,
-		                                       types);
+		codegen_map_operand_partial(&src->args[1], &template[1]);
+		lhs_type = &src->args[0].c89type;
+		rhs_type = &src->args[1].c89type;
 		break;
 	case IR_OP_LOAD:
+		codegen_set_operand_memory_rax(&src->args[0], &template[0]);
+		template[0].offset = src->args[0].suboffset;
+		codegen_map_operand_partial(&src->args[1], &template[1]);
 		assert(ctype_is_pointer(&src->args[0].c89type));
-		codegen_set_operand_memory(&src->args[0],
-		                           ASM_REGISTER_AX,
-		                           0,
-		                           &template[0]);
-		lhs_total_bytes = ctype_to_size_bytes_with_types(
-			src->args[0].c89type.referent,
-			types);
+		lhs_type = src->args[0].c89type.referent;
+		rhs_type = &src->args[1].c89type;
 		break;
 	case IR_OP_STORE:
-		assert(0 && "TODO: IR_OP_STORE with struct src/dst");
+		codegen_map_operand_partial(&src->args[0], &template[0]);
+		codegen_set_operand_memory_rax(&src->args[1], &template[1]);
+		template[1].offset = src->args[1].suboffset;
+		lhs_type = &src->args[0].c89type;
+		assert(ctype_is_pointer(&src->args[1].c89type));
+		rhs_type = src->args[1].c89type.referent;
 		break;
 	default:
 		assert(0); /* logic error in caller */
 		break;
 	}
 
-	codegen_map_operand_partial(&src->args[1], &template[1]);
-
+	const long long int lhs_total_bytes =
+		ctype_to_size_bytes_with_types(lhs_type, types);
 	const long long int rhs_total_bytes =
-		ctype_to_size_bytes_with_types(&src->args[1].c89type, types);
+		ctype_to_size_bytes_with_types(rhs_type, types);
 
 	long long int to_copy = src->args[0].subsize;
 	if (to_copy == 0) {
@@ -756,10 +767,7 @@ codegen_statement_load_op(Arena *arena,
 
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
-	codegen_set_operand_memory(&src->args[0],
-	                           ASM_REGISTER_AX,
-	                           0,
-	                           &(**dst).args[0]);
+	codegen_set_operand_memory_rax(&src->args[0], &(**dst).args[0]);
 	codegen_map_operand(&src->args[1], &(**dst).args[1]);
 	return RESULT_OK;
 }
@@ -775,6 +783,7 @@ codegen_statement_store_op(Arena *arena,
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	codegen_map_operand(&src->args[1], &(**dst).args[0]);
+	(**dst).args[0].offset = 0; /* override codegen_map_operand_partial() */
 	codegen_set_operand_eax(&src->args[1], &(**dst).args[1]);
 	/* IR_OP_STORE should operate on a 64-bit pointer */
 	assert((**dst).args[0].word_type == ASM_WORD_64BIT);
@@ -789,10 +798,7 @@ codegen_statement_store_op(Arena *arena,
 	check(codegen_alloc_op(arena, dst));
 	(**dst).opcode = ASM_OP_MOV;
 	codegen_map_operand(&src->args[0], &(**dst).args[0]);
-	codegen_set_operand_memory(&src->args[0],
-	                           ASM_REGISTER_AX,
-	                           0,
-	                           &(**dst).args[1]);
+	codegen_set_operand_memory_rax(&src->args[0], &(**dst).args[1]);
 	return RESULT_OK;
 }
 
