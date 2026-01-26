@@ -618,7 +618,6 @@ codegen_statement_cmp_op(Arena *arena,
 	return RESULT_OK;
 }
 
-// TODO: extend *_copy_bytes() to handle LOAD and STORE as well
 static WARN_UNUSED result_t
 codegen_statement_copy_bytes(Arena *arena,
                              struct type_table *types,
@@ -638,15 +637,16 @@ codegen_statement_copy_bytes(Arena *arena,
 	case IR_OP_LOAD:
 		assert(ctype_is_pointer(&src->args[0].c89type));
 		codegen_set_operand_memory(&src->args[0],
-					   ASM_REGISTER_AX,
-					   0,
-					   &template[0]);
+		                           ASM_REGISTER_AX,
+		                           0,
+		                           &template[0]);
 		lhs_total_bytes = ctype_to_size_bytes_with_types(
 			src->args[0].c89type.referent,
 			types);
 		break;
 	case IR_OP_STORE:
-		break; // TODO
+		assert(0 && "TODO: IR_OP_STORE with struct src/dst");
+		break;
 	default:
 		assert(0); /* logic error in caller */
 		break;
@@ -761,6 +761,38 @@ codegen_statement_load_op(Arena *arena,
 	                           0,
 	                           &(**dst).args[0]);
 	codegen_map_operand(&src->args[1], &(**dst).args[1]);
+	return RESULT_OK;
+}
+
+static WARN_UNUSED result_t
+codegen_statement_store_op(Arena *arena,
+                           struct type_table *types,
+                           const struct ir_op *src,
+                           struct asm_op **dst)
+{
+	assert(ctype_is_pointer(&src->args[1].c89type));
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_map_operand(&src->args[1], &(**dst).args[0]);
+	codegen_set_operand_eax(&src->args[1], &(**dst).args[1]);
+	/* IR_OP_STORE should operate on a 64-bit pointer */
+	assert((**dst).args[0].word_type == ASM_WORD_64BIT);
+	dst = &(**dst).next;
+
+	if (ctype_is_struct(&src->args[0].c89type) &&
+	    ctype_is_struct(src->args[1].c89type.referent)) {
+		check(codegen_statement_copy_bytes(arena, types, src, dst));
+		return RESULT_OK;
+	}
+
+	check(codegen_alloc_op(arena, dst));
+	(**dst).opcode = ASM_OP_MOV;
+	codegen_map_operand(&src->args[0], &(**dst).args[0]);
+	codegen_set_operand_memory(&src->args[0],
+	                           ASM_REGISTER_AX,
+	                           0,
+	                           &(**dst).args[1]);
 	return RESULT_OK;
 }
 
@@ -1465,19 +1497,7 @@ codegen_statement_one(Arena *arena,
 		check(codegen_statement_load_op(arena, types, src, dst));
 		break;
 	case IR_OP_STORE:
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[1], &(**dst).args[0]);
-		codegen_set_operand_eax(&src->args[1], &(**dst).args[1]);
-		assert((**dst).args[0].word_type == ASM_WORD_64BIT);
-		dst = &(**dst).next;
-		check(codegen_alloc_op(arena, dst));
-		(**dst).opcode = ASM_OP_MOV;
-		codegen_map_operand(&src->args[0], &(**dst).args[0]);
-		codegen_set_operand_memory(&src->args[0],
-		                           ASM_REGISTER_AX,
-		                           0,
-		                           &(**dst).args[1]);
+		check(codegen_statement_store_op(arena, types, src, dst));
 		break;
 	case IR_OP_POINTER_ADD:
 		check(codegen_statement_ptr_add_op(arena, src, dst));
