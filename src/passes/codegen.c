@@ -105,6 +105,25 @@ codegen_map_ctype_impl(const struct ctype *c, struct asm_operand *dst)
 }
 
 static void
+codegen_map_chunk_size(long long int sz, struct asm_operand *dst)
+{
+	switch (sz) {
+	case 8:
+		dst->word_type = ASM_WORD_64BIT;
+		break;
+	case 4:
+		dst->word_type = ASM_WORD_32BIT;
+		break;
+	case 1:
+		dst->word_type = ASM_WORD_08BIT;
+		break;
+	default:
+		assert(0); /* logic error in caller */
+		break;
+	}
+}
+
+static void
 codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 {
 	if (ctype_is_struct(&src->c89type)) {
@@ -117,20 +136,7 @@ codegen_map_ctype(const struct ir_val *src, struct asm_operand *dst)
 		 * Assuming ir_val.subsize corresponds to a primitive type like
 		 * char/int/long/double, map to a suitable word size.
 		 */
-		switch (src->subsize) {
-		case 8:
-			dst->word_type = ASM_WORD_64BIT;
-			break;
-		case 4:
-			dst->word_type = ASM_WORD_32BIT;
-			break;
-		case 1:
-			dst->word_type = ASM_WORD_08BIT;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
+		codegen_map_chunk_size(src->subsize, dst);
 	} else {
 		codegen_map_ctype_impl(&src->c89type, dst);
 	}
@@ -696,25 +702,8 @@ codegen_statement_copy_bytes(Arena *arena,
 		} else {
 			chunk = 1;
 		}
-
-		// TODO: consolidate with 8/4/1 logic in codegen_map_ctype()
-		switch (chunk) {
-		case 8:
-			(**dst).args[0].word_type = ASM_WORD_64BIT;
-			(**dst).args[1].word_type = ASM_WORD_64BIT;
-			break;
-		case 4:
-			(**dst).args[0].word_type = ASM_WORD_32BIT;
-			(**dst).args[1].word_type = ASM_WORD_32BIT;
-			break;
-		case 1:
-			(**dst).args[0].word_type = ASM_WORD_08BIT;
-			(**dst).args[1].word_type = ASM_WORD_08BIT;
-			break;
-		default:
-			assert(0); /* logic error in caller */
-			break;
-		}
+		codegen_map_chunk_size(chunk, &(**dst).args[0]);
+		codegen_map_chunk_size(chunk, &(**dst).args[1]);
 
 		template[0].offset += chunk;
 		template[1].offset += chunk;
