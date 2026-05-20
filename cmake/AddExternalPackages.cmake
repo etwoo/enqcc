@@ -9,15 +9,6 @@ macro(add_external_packages)
 		GIT_TAG 5377b1636450a2ec077b9356532ead7422c71c20
 		DOWNLOAD_ONLY YES
 	)
-	if (BUILD_TESTING)
-		# Note: defines ${greatest_SOURCE_DIR}
-		CPMAddPackage(
-			NAME greatest
-			GITHUB_REPOSITORY silentbicycle/greatest
-			VERSION 1.5.0
-			DOWNLOAD_ONLY YES
-		)
-	endif (BUILD_TESTING)
 	if (BUILD_COVERAGE)
 		CPMAddPackage(
 			NAME lcov-to-cobertura-xml
