@@ -81,7 +81,7 @@ parse_debug_print_ast_spec(enum ast_specifier specifier, size_t indent)
 	}
 }
 
-void parse_debug_print_flat(const struct flat *a, size_t indent);
+static void parse_debug_print_flat(const struct flat *a, size_t indent);
 
 #define TO_STR(node_type, ...) #node_type,
 static const char *const NODETYPE_NAMES[] = {FOREACH_AST_NODE(TO_STR)};
@@ -363,7 +363,7 @@ parse_debug_print(const struct ast *a, size_t indent)
 	}
 }
 
-void
+static void
 parse_debug_print_flat(const struct flat *a, size_t indent)
 {
 	const struct flat *cursor = a;
