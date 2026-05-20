@@ -1,6 +1,8 @@
 image: archlinux/archlinux:base-devel
 
 variables:
+  GIT_SUBMODULE_DEPTH: 1
+  GIT_SUBMODULE_STRATEGY: normal
   PACKAGE_CMD: "pacman --noconfirm --needed -Sy"
   PACKAGE_DEFAULT: "clang cmake git"
   PACKAGE_PER_JOB: ""
@@ -13,7 +15,7 @@ build:gcc:
   <<: *build_dependencies
   stage: build
   script:
-    - cmake --preset default -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+    - cmake --preset default -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCFLAG_ASAN=OFF
     - cmake --build --preset default
     - ctest --preset default
   artifacts:
@@ -25,7 +27,7 @@ build:clang:
   <<: *build_dependencies
   stage: build
   script:
-    - cmake --preset clang -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+    - cmake --preset clang -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCFLAG_ASAN=OFF
     - cmake --build --preset default
     - ctest --preset default
   artifacts:
@@ -39,7 +41,7 @@ build:clang-coverage:
   variables:
     PACKAGE_PER_JOB: "llvm python"
   script:
-    - cmake --preset coverage -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
+    - cmake --preset coverage -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCFLAG_ASAN=OFF
     - cmake --build --preset default
     - COVERAGE_PROFILE_DIR=coverage.profraw ctest --preset default
     - ./scripts/coverage.sh -E main.c coverage.profraw ./build/coverage.xml

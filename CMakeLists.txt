@@ -41,7 +41,9 @@ find_program(FORMATTER clang-format)
 
 add_custom_target(fmt COMMAND
 	find ${PROJECT_SOURCE_DIR}
-	-name *.[ch] ! -path ${PROJECT_SOURCE_DIR}/build/*
+	-name *.[ch]
+	! -path ${PROJECT_SOURCE_DIR}/build/*
+	! -path ${PROJECT_SOURCE_DIR}/tests/nlsandler-book/*
 	-exec ${FORMATTER} -Werror --dry-run {} +
 	VERBATIM USES_TERMINAL
 )
