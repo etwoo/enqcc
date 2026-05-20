@@ -13,6 +13,7 @@ struct token;
 struct ast;
 
 extern const uint32_t PARSE_DECLARATOR_ABSTRACT;
+extern const uint32_t PARSE_DECLARATOR_ACCEPT_FUNCTION_PARAMS;
 
 result_t parse_type(Arena *arena,
                     uint32_t flags,
