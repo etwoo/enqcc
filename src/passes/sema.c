@@ -897,6 +897,7 @@ sema_compound_assignment(struct ast *a, void *userdata)
 
 	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
 	check_if(new_node == NULL, ERR_SEMA_ALLOC);
+	memset(new_node, 0, sizeof(*new_node));
 	new_node->node_type = new_type;
 	check(ctype_copy(arena, &a->expr_type, &new_node->expr_type));
 	new_node->u.op_binary = a->u.op_binary;
