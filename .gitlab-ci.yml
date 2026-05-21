@@ -15,7 +15,7 @@ build:gcc:
   <<: *build_dependencies
   stage: build
   script:
-    - cmake --preset default -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCFLAG_ASAN=OFF
+    - cmake --preset default -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
     - cmake --build --preset default
     - ctest --preset default
   artifacts:
@@ -27,7 +27,7 @@ build:clang:
   <<: *build_dependencies
   stage: build
   script:
-    - cmake --preset clang -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCFLAG_ASAN=OFF
+    - cmake --preset clang -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
     - cmake --build --preset default
     - ctest --preset default
   artifacts:
@@ -41,7 +41,7 @@ build:clang-coverage:
   variables:
     PACKAGE_PER_JOB: "llvm python"
   script:
-    - cmake --preset coverage -DCMAKE_COMPILE_WARNING_AS_ERROR=ON -DCFLAG_ASAN=OFF
+    - cmake --preset coverage -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
     - cmake --build --preset default
     - COVERAGE_PROFILE_DIR=coverage.profraw ctest --preset default
     - ./scripts/coverage.sh -E main.c coverage.profraw ./build/coverage.xml
