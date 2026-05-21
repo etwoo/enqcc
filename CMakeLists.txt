@@ -16,10 +16,6 @@ target_link_libraries(compiler PRIVATE my_cflags)
 add_subdirectory(src)
 
 if (BUILD_TESTING)
-	# allow test code to call internal C APIs through an INTERFACE
-	add_library(compiler-internals INTERFACE)
-	target_include_directories(compiler-internals INTERFACE src)
-
 	include(CTest)
 	add_subdirectory(tests)
 endif (BUILD_TESTING)
@@ -41,7 +37,9 @@ find_program(FORMATTER clang-format)
 
 add_custom_target(fmt COMMAND
 	find ${PROJECT_SOURCE_DIR}
-	-name *.[ch] ! -path ${PROJECT_SOURCE_DIR}/build/*
+	-name *.[ch]
+	! -path ${PROJECT_SOURCE_DIR}/build/*
+	! -path ${PROJECT_SOURCE_DIR}/tests/nlsandler-book/*
 	-exec ${FORMATTER} -Werror --dry-run {} +
 	VERBATIM USES_TERMINAL
 )

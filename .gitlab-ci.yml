@@ -1,6 +1,8 @@
 image: archlinux/archlinux:base-devel
 
 variables:
+  GIT_SUBMODULE_DEPTH: 1
+  GIT_SUBMODULE_STRATEGY: normal
   PACKAGE_CMD: "pacman --noconfirm --needed -Sy"
   PACKAGE_DEFAULT: "clang cmake git"
   PACKAGE_PER_JOB: ""

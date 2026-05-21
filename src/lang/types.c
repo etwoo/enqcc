@@ -1,0 +1,295 @@
+#include "lang/types.h"
+
+#include "sys/array.h"
+
+#include <assert.h>
+#include <stdio.h>     /* for snprintf() */
+#include <string.h>    /* for memset */
+#include <sys/param.h> /* for MIN() and MAX() */
+
+result_t
+ctype_alloc(Arena *arena, struct ctype **dst)
+{
+	assert(dst != NULL && *dst == NULL);
+	*dst = arena_alloc(arena, sizeof(**dst));
+	check_if(*dst == NULL, ERR_CTYPE_ALLOC);
+	memset(*dst, 0, sizeof(**dst));
+	return RESULT_OK;
+}
+
+result_t
+ctype_alloc_str_literal(Arena *arena,
+                        const struct string_view *src,
+                        struct ctype *dst)
+{
+	assert(dst != NULL);
+	dst->t = CTYPE_ARRAY_OF;
+	dst->sz = src->sz;
+	assert(dst->referent == NULL);
+	check(ctype_alloc(arena, &dst->referent));
+	dst->referent->t = CTYPE_CHAR;
+	return RESULT_OK;
+}
+
+result_t
+ctype_copy(Arena *arena, const struct ctype *src, struct ctype *dst)
+{
+	assert(src != NULL);
+	assert(dst != NULL);
+	dst->t = src->t;
+	dst->maybe_null_pointer_constant = src->maybe_null_pointer_constant;
+	dst->sz = src->sz;
+
+	if (src->referent != NULL) {
+		dst->referent = NULL;
+		check(ctype_alloc(arena, &dst->referent));
+		check(ctype_copy(arena, src->referent, dst->referent));
+	}
+
+	return RESULT_OK;
+}
+
+#define TO_STR(t) #t,
+static const char *const CTYPE_AS_STR[] = {FOREACH_CTYPE(TO_STR)};
+#undef TO_STR
+
+const char *
+ctype_to_str(const struct ctype *c, char *stor, size_t cap)
+{
+	assert(c != NULL);
+	assert(c->t < ARRAY_SIZE(CTYPE_AS_STR));
+
+	size_t copied = strlcpy(stor, CTYPE_AS_STR[c->t], cap);
+
+	if ((c->t == CTYPE_POINTER_TO || c->t == CTYPE_ARRAY_OF) &&
+	    cap > copied + 1) {
+		stor[copied++] = ' ';
+		if (c->t == CTYPE_ARRAY_OF) {
+			size_t remaining = cap - copied;
+			int required = snprintf(stor + copied,
+			                        remaining,
+			                        "%llu ",
+			                        c->sz);
+			if (required < 0 || (size_t)required + 1 > remaining) {
+				/* snprintf() indicates insuffient space */
+				return stor;
+			}
+			copied += required;
+		}
+		if (c->referent != NULL) {
+			ctype_to_str(c->referent, stor + copied, cap - copied);
+		} /* else: tolerate incomplete types */
+	}
+
+	return stor;
+}
+
+long long int
+ctype_to_size_bytes(const struct ctype *c)
+{
+	long long int b = 0;
+	switch (c->t) {
+	case CTYPE_VOID:
+		b = 0;
+		break;
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		b = 1;
+		break;
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+		b = 4;
+		break;
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+	case CTYPE_DOUBLE:
+	case CTYPE_POINTER_TO: /* assuming system with 64-bit pointers */
+		b = 8;
+		break;
+	case CTYPE_ARRAY_OF:
+		assert(c->sz > 0 && c->sz < LLONG_MAX);
+		b = (long long int)c->sz * ctype_to_size_bytes(c->referent);
+		break;
+	}
+	return b;
+}
+
+bool
+ctype_is_integer(const struct ctype *c)
+{
+	bool b = true;
+	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+	case CTYPE_INT:
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_LONG:
+	case CTYPE_UNSIGNED_LONG:
+		b = true;
+		break;
+	case CTYPE_VOID:
+	case CTYPE_DOUBLE:
+	case CTYPE_POINTER_TO:
+	case CTYPE_ARRAY_OF:
+		b = false;
+		break;
+	}
+	return b;
+}
+
+bool
+ctype_is_signed(const struct ctype *c)
+{
+	bool b = true;
+	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_INT:
+	case CTYPE_LONG:
+	case CTYPE_DOUBLE:
+		b = true;
+		break;
+	case CTYPE_VOID:
+	case CTYPE_UNSIGNED_CHAR:
+	case CTYPE_UNSIGNED_INT:
+	case CTYPE_UNSIGNED_LONG:
+	case CTYPE_POINTER_TO:
+	case CTYPE_ARRAY_OF:
+		b = false;
+		break;
+	}
+	return b;
+}
+
+bool
+ctype_is_floating_point(const struct ctype *c)
+{
+	return c->t == CTYPE_DOUBLE;
+}
+
+bool
+ctype_is_charlike(const struct ctype *c)
+{
+	switch (c->t) {
+	case CTYPE_CHAR:
+	case CTYPE_SIGNED_CHAR:
+	case CTYPE_UNSIGNED_CHAR:
+		return true;
+	default:
+		break;
+	}
+	return false;
+}
+
+bool
+ctype_is_pointer(const struct ctype *c)
+{
+	return c->t == CTYPE_POINTER_TO || ctype_is_array(c);
+}
+
+bool
+ctype_is_array(const struct ctype *c)
+{
+	return c->t == CTYPE_ARRAY_OF;
+}
+
+bool
+ctype_is_strlike_array(const struct ctype *c)
+{
+	/* consider array of any character type as str-like */
+	return c->t == CTYPE_ARRAY_OF && ctype_is_charlike(c->referent);
+}
+
+bool
+ctype_is_strlike_ptr(const struct ctype *c)
+{
+	/* consider pointer to char as str-like; exclude {,un}signed char */
+	return c->t == CTYPE_POINTER_TO && c->referent->t == CTYPE_CHAR;
+}
+
+bool
+ctype_is_void(const struct ctype *c)
+{
+	return c->t == CTYPE_VOID;
+}
+
+bool
+ctype_is_void_ptr(const struct ctype *c)
+{
+	return c->t == CTYPE_POINTER_TO && ctype_is_void(c->referent);
+}
+
+bool
+ctype_is_incomplete(const struct ctype *c)
+{
+	return ctype_is_void(c);
+}
+
+bool
+ctype_is_ptr_to_incomplete(const struct ctype *c)
+{
+	return ctype_is_void_ptr(c);
+}
+
+bool
+ctype_nullptr_ish(const struct ctype *c)
+{
+	return c->maybe_null_pointer_constant;
+}
+
+const struct ctype *
+get_common_ctype(const struct ctype *lhs, const struct ctype *rhs)
+{
+	assert(lhs != NULL && rhs != NULL);
+	if (lhs->t == CTYPE_POINTER_TO && rhs->t == CTYPE_POINTER_TO) {
+		const struct ctype *inner =
+			get_common_ctype(lhs->referent, rhs->referent);
+		return inner == lhs->referent ? lhs : rhs;
+		/* can be optimistic here; sema.c rejects pointer mismatches */
+	}
+	return lhs->t >= rhs->t ? lhs : rhs;
+}
+
+static WARN_UNUSED bool
+ctype_is_equal_impl(const struct ctype *lhs,
+                    const struct ctype *rhs,
+                    bool array_to_pointer_decay)
+{
+	if (ctype_is_array(lhs) && ctype_is_array(rhs) && lhs->sz != rhs->sz) {
+		return false;
+	}
+	if (((ctype_is_array(lhs) && ctype_is_pointer(rhs)) ||
+	     (ctype_is_pointer(lhs) && ctype_is_array(rhs))) &&
+	    array_to_pointer_decay) {
+		return ctype_is_equal(lhs->referent, rhs->referent);
+	}
+	if (lhs->t != rhs->t) {
+		return false;
+	}
+	if ((lhs->referent == NULL) != (rhs->referent == NULL)) {
+		return false;
+	}
+	return (lhs->referent == NULL && rhs->referent == NULL) ||
+	       /* array_to_pointer_decay==false for referent(s) */
+	       ctype_is_equal_impl(lhs->referent, rhs->referent, false);
+}
+
+bool
+ctype_is_equal(const struct ctype *lhs, const struct ctype *rhs)
+{
+	return ctype_is_equal_impl(lhs, rhs, true);
+}
+
+void
+ctype_array_decay_to_pointer(struct ctype *c)
+{
+	if (ctype_is_array(c)) {
+		c->t = CTYPE_POINTER_TO;
+		c->maybe_null_pointer_constant = false;
+		c->sz = 0;
+		/* leave referent as-is */
+	}
+	assert(!ctype_is_array(c));
+}

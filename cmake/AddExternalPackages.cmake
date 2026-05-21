@@ -3,15 +3,12 @@ include_guard(GLOBAL)
 include(get_cpm)
 
 macro(add_external_packages)
-	if (BUILD_TESTING)
-		# Note: defines ${greatest_SOURCE_DIR}
-		CPMAddPackage(
-			NAME greatest
-			GITHUB_REPOSITORY silentbicycle/greatest
-			VERSION 1.5.0
-			DOWNLOAD_ONLY YES
-		)
-	endif (BUILD_TESTING)
+	CPMAddPackage(
+		NAME arena
+		GITHUB_REPOSITORY ccgargantua/arena-allocator
+		GIT_TAG 5377b1636450a2ec077b9356532ead7422c71c20
+		DOWNLOAD_ONLY YES
+	)
 	if (BUILD_COVERAGE)
 		CPMAddPackage(
 			NAME lcov-to-cobertura-xml
