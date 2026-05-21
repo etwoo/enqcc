@@ -1,9 +1,7 @@
 #ifndef COVERAGE_H
 #define COVERAGE_H
 
-#include "sys/compiler_features.h"
-
-int coverage_open(void) WARN_UNUSED;
+int coverage_open(void) __attribute__((warn_unused_result));
 void coverage_write_and_close(int fd);
 
 /*

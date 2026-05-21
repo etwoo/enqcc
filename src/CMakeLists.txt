@@ -3,6 +3,7 @@ add_subdirectory(passes)
 add_subdirectory(sys)
 
 target_sources(compiler PRIVATE
+	coverage.c
 	result.c
 )
 target_include_directories(compiler SYSTEM PUBLIC ${arena_SOURCE_DIR})

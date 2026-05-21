@@ -6,6 +6,7 @@
 #undef ARENA_IMPLEMENTATION
 #undef ARENA_DEFAULT_ALIGNMENT
 
+#include "coverage.h"
 #include "passes.h"
 #include "result.h"
 
@@ -136,8 +137,9 @@ compile(Arena *arena,
 int
 main(int argc, char *argv[])
 {
-	enum compiler_action action = ACTION_ALL_PASSES;
+	int coverage = coverage_open();
 
+	enum compiler_action action = ACTION_ALL_PASSES;
 	int synonym = 0;
 	struct option lo[] = {
 		{"all", no_argument, &synonym, 'a'},
@@ -219,6 +221,7 @@ main(int argc, char *argv[])
 		break;
 	}
 
+	coverage_write_and_close(coverage);
 	return rc;
 }
 
