@@ -2,6 +2,8 @@
 
 #ifndef WITH_COVERAGE
 
+#include "sys/compiler_features.h"
+
 int
 coverage_open(void)
 {
