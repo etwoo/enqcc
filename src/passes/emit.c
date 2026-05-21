@@ -755,10 +755,15 @@ emit_asm_fp_vector_constants(const struct asm_function *f,
 		}
 	}
 
+	const char *section_fp_constants = get_section_fp_constants(plat);
 	const char *label_prefix = get_label_prefix(plat);
 
+	if (got_longs != NULL || got_quads != NULL) {
+		dprintf(fd, "\t%s\n", section_fp_constants);
+		dprintf(fd, "\t.balign 16\n");
+	}
+
 	if (got_longs != NULL) {
-		dprintf(fd, "\t.data\n");
 		dprintf(fd,
 		        "%s%s%lx%lx%lx%lx:\n",
 		        label_prefix,
@@ -773,7 +778,6 @@ emit_asm_fp_vector_constants(const struct asm_function *f,
 	}
 
 	if (got_quads != NULL) {
-		dprintf(fd, "\t.data\n");
 		dprintf(fd,
 		        "%s%s%llx%llx:\n",
 		        label_prefix,
