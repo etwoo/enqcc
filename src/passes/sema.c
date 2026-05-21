@@ -219,6 +219,7 @@ map_numeric_type(Arena *arena,
 	out->count = count_initializer_elements(dst_type, init);
 	assert(out->count > 0);
 	out->elements = arena_alloc(arena, out->count * sizeof(*out->elements));
+	memset(out->elements, 0, out->count * sizeof(*out->elements));
 	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
 	struct constant_bytes *cursor = out->elements;
 	populate_initializer_elements(init, dst_type, &cursor);
@@ -2143,7 +2144,8 @@ sema_fn_decl_collect(Arena *arena,
 	}
 
 	*n_args = count;
-	*param_types = arena_alloc(arena, sizeof(**param_types) * count);
+	*param_types = arena_alloc(arena, count * sizeof(**param_types));
+	memset(*param_types, 0, count * sizeof(**param_types));
 
 	count = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
@@ -2180,7 +2182,8 @@ sema_fn_call_collect(Arena *arena,
 	}
 
 	*n_args = count;
-	*param_types = arena_alloc(arena, sizeof(**param_types) * count);
+	*param_types = arena_alloc(arena, count * sizeof(**param_types));
+	memset(*param_types, 0, count * sizeof(**param_types));
 
 	count = 0;
 	for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {
