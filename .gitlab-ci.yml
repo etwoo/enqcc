@@ -17,7 +17,7 @@ build:gcc:
   script:
     - cmake --preset default -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
     - cmake --build --preset default
-    - ctest --preset default
+    - ctest --preset default --parallel
   artifacts:
     when: always
     reports:
@@ -29,7 +29,7 @@ build:clang:
   script:
     - cmake --preset clang -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
     - cmake --build --preset default
-    - ctest --preset default
+    - ctest --preset default --parallel
   artifacts:
     when: always
     reports:
@@ -43,7 +43,7 @@ build:clang-coverage:
   script:
     - cmake --preset coverage -DCMAKE_COMPILE_WARNING_AS_ERROR=ON
     - cmake --build --preset default
-    - COVERAGE_PROFILE_DIR=coverage.profraw ctest --preset default
+    - COVERAGE_PROFILE_DIR=coverage.profraw ctest --preset default --parallel
     - ./scripts/coverage.sh -E main.c coverage.profraw ./build/coverage.xml
   coverage: '/^TOTAL.*\s+([\d\.]+\%)$/'
   artifacts:
