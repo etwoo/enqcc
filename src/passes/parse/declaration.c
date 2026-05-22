@@ -8,12 +8,12 @@
 #include "passes/parse/constant.h"
 #include "passes/parse/expression.h"
 #include "passes/parse/token.h"
+#include "sys/alloc.h"
 #include "sys/array.h"
 #include "sys/debug.h"
 
 #include <assert.h>
 #include <limits.h> /* for ULLONG_MAX */
-#include <string.h> /* for memset() */
 
 struct parse_basic_type_state {
 	size_t n_void;
@@ -227,9 +227,8 @@ parse_function_params(Arena *arena,
 	}
 	if (count > 0) {
 		size_t bytes = sizeof(**dst) * (count + 1);
-		*dst = arena_alloc(arena, bytes);
+		*dst = zalloc(arena, bytes);
 		check_if(*dst == NULL, ERR_PARSE_ALLOC);
-		memset(*dst, 0, bytes);
 		check(parse_function_params_impl(arena, tok, dst, &count));
 	}
 
@@ -428,9 +427,8 @@ parse_declarator_group_split_impl(Arena *arena,
 			dst_token = &(**dst_token).next;
 		}
 
-		*dst_token = arena_alloc(arena, sizeof(**dst_token));
+		*dst_token = deepcopy(arena, *tok, sizeof(**dst_token));
 		check_if(*dst_token == NULL, ERR_PARSE_ALLOC);
-		memcpy(*dst_token, *tok, sizeof(**dst_token));
 		(**dst_token).next = NULL;
 
 		if (is_token_type(*tok, TOKEN_IDENTIFIER)) {
@@ -474,9 +472,8 @@ parse_declarator_group_split(Arena *arena,
 {
 	assert(dst != NULL && *dst == NULL);
 
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_PARSE_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 
 	bool done = false;
 	bool got_identifier = false;

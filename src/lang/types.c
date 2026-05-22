@@ -1,19 +1,19 @@
 #include "lang/types.h"
 
+#include "sys/alloc.h"
 #include "sys/array.h"
 
 #include <assert.h>
 #include <stdio.h>     /* for snprintf() */
-#include <string.h>    /* for memset */
+#include <string.h>    /* for strlcpy() */
 #include <sys/param.h> /* for MIN() and MAX() */
 
 result_t
 ctype_alloc(Arena *arena, struct ctype **dst)
 {
 	assert(dst != NULL && *dst == NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_CTYPE_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 	return RESULT_OK;
 }
 

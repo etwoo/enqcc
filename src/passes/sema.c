@@ -2,6 +2,7 @@
 #include "passes.h"
 #include "passes/parse.h"
 #include "passes/parse/alloc.h"
+#include "sys/alloc.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
 
@@ -218,8 +219,7 @@ map_numeric_type(Arena *arena,
 {
 	out->count = count_initializer_elements(dst_type, init);
 	assert(out->count > 0);
-	out->elements = arena_alloc(arena, out->count * sizeof(*out->elements));
-	memset(out->elements, 0, out->count * sizeof(*out->elements));
+	out->elements = zalloc(arena, out->count * sizeof(*out->elements));
 	check_if(out->elements == NULL, ERR_SEMA_ALLOC);
 	struct constant_bytes *cursor = out->elements;
 	populate_initializer_elements(init, dst_type, &cursor);
@@ -546,16 +546,14 @@ make_case(Arena *arena,
           struct ctype *control_type,
           int128_t new_value)
 {
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_SEMA_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).node_type = NODE_CASE;
 	(**dst).u.case_.unique = existing_unique;
 
-	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	struct ast *new_node = zalloc(arena, sizeof(*new_node));
 	check_if(new_node == NULL, ERR_SEMA_ALLOC);
-	memset(new_node, 0, sizeof(*new_node));
 
 	new_node->node_type = NODE_CONSTANT;
 	new_node->u.num = new_value;
@@ -588,9 +586,8 @@ case_prepend(Arena *arena,
 		}
 	}
 
-	struct flat *node = arena_alloc(arena, sizeof(*node));
+	struct flat *node = zalloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_SEMA_ALLOC);
-	memset(node, 0, sizeof(*node));
 
 	/*
 	 * Synthesize NODE_CASE equivalent to <new_case>, only with
@@ -772,9 +769,8 @@ labels_prepend(struct sema_label_gotos_state *state,
 		return RESULT_OK;
 	}
 
-	struct label *node = arena_alloc(state->arena, sizeof(*node));
+	struct label *node = zalloc(state->arena, sizeof(*node));
 	check_if(node == NULL, ERR_SEMA_ALLOC);
-	memset(node, 0, sizeof(*node));
 
 	node->name = *name;
 	node->id = ++state->generator;
@@ -896,9 +892,8 @@ sema_compound_assignment(struct ast *a, void *userdata)
 		return RESULT_OK;
 	}
 
-	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	struct ast *new_node = zalloc(arena, sizeof(*new_node));
 	check_if(new_node == NULL, ERR_SEMA_ALLOC);
-	memset(new_node, 0, sizeof(*new_node));
 	new_node->node_type = new_type;
 	check(ctype_copy(arena, &a->expr_type, &new_node->expr_type));
 	new_node->u.op_binary = a->u.op_binary;
@@ -928,9 +923,8 @@ sema_subscript(struct ast *a, void *userdata)
 		return RESULT_OK;
 	}
 
-	struct ast *new_node = arena_alloc(arena, sizeof(*new_node));
+	struct ast *new_node = zalloc(arena, sizeof(*new_node));
 	check_if(new_node == NULL, ERR_SEMA_ALLOC);
-	memset(new_node, 0, sizeof(*new_node));
 	new_node->node_type = NODE_EXPRESSION_BINARY_ADD;
 	check(ctype_copy(arena, &a->expr_type, &new_node->expr_type));
 	new_node->u.op_binary = a->u.op_binary;
@@ -2075,9 +2069,8 @@ sema_alloc_auxiliary(Arena *arena, void **out_as_void_pp)
 	struct sema_symbol_auxiliary **out =
 		(struct sema_symbol_auxiliary **)out_as_void_pp;
 	assert(*out == NULL);
-	*out = arena_alloc(arena, sizeof(**out));
+	*out = zalloc(arena, sizeof(**out));
 	check_if(*out == NULL, ERR_SYMBOL_ALLOC);
-	memset(*out, 0, sizeof(**out));
 	return RESULT_OK;
 }
 
@@ -2144,8 +2137,7 @@ sema_fn_decl_collect(Arena *arena,
 	}
 
 	*n_args = count;
-	*param_types = arena_alloc(arena, count * sizeof(**param_types));
-	memset(*param_types, 0, count * sizeof(**param_types));
+	*param_types = zalloc(arena, count * sizeof(**param_types));
 
 	count = 0;
 	FOREACH_FUNCTION_PARAMETER (cur, a->u.function.params) {
@@ -2182,8 +2174,7 @@ sema_fn_call_collect(Arena *arena,
 	}
 
 	*n_args = count;
-	*param_types = arena_alloc(arena, count * sizeof(**param_types));
-	memset(*param_types, 0, count * sizeof(**param_types));
+	*param_types = zalloc(arena, count * sizeof(**param_types));
 
 	count = 0;
 	for (struct flat *z = a->u.call.args; z != NULL; z = z->cdr) {

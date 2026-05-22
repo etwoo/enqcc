@@ -1,5 +1,6 @@
 #include "passes.h"
 #include "passes/codegen.h"
+#include "sys/alloc.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 
@@ -8,7 +9,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>    /* for free() */
-#include <string.h>    /* for memcpy() */
+#include <string.h>    /* for strlen() */
 #include <sys/param.h> /* for MIN() */
 
 static const char LINUX_NX[] = "\t.section .note.GNU-stack,\"\",@progbits\n";
@@ -813,7 +814,7 @@ emit_asm_fp_check(Arena *arena,
 		}
 	}
 
-	struct fp_constant *node = arena_alloc(arena, sizeof(*node));
+	struct fp_constant *node = zalloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_EMIT_ALLOC);
 	node->next = *emitted;
 	node->value = value;
