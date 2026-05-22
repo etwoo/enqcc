@@ -1,12 +1,12 @@
 #include "lang/symbol.h"
 
+#include "sys/alloc.h"
 #include "sys/array.h"
 #include "sys/debug.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/param.h> /* for MAX() */
 
 bool
@@ -61,9 +61,8 @@ constant_set_zero(Arena *arena,
                   struct constant_initializer *ci)
 {
 	ci->count = get_initializer_element_count(c89type);
-	ci->elements = arena_alloc(arena, ci->count * sizeof(*ci->elements));
+	ci->elements = zalloc(arena, ci->count * sizeof(*ci->elements));
 	check_if(ci->elements == NULL, ERR_SEMA_ALLOC);
-	memset(ci->elements, 0, ci->count * sizeof(*ci->elements));
 
 	const long long unsigned element_size_bytes =
 		get_initializer_element_size_bytes(c89type);
@@ -80,7 +79,7 @@ constant_make_zero(Arena *arena,
                    const struct ctype *c89type,
                    struct constant_initializer **dst)
 {
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_SYMBOL_ALLOC);
 	check(constant_set_zero(arena, c89type, *dst));
 	return RESULT_OK;
@@ -145,9 +144,8 @@ symbols_prepend(Arena *arena,
                 enum symbol_type stype,
                 struct ctype *c89type)
 {
-	struct symbol *node = arena_alloc(arena, sizeof(*node));
+	struct symbol *node = zalloc(arena, sizeof(*node));
 	check_if(node == NULL, ERR_SYMBOL_ALLOC);
-	memset(node, 0, sizeof(*node));
 	node->name = *name;
 	node->stype = stype;
 	check(ctype_copy(arena, c89type, &node->c89type));
@@ -234,16 +232,9 @@ mangle_name(Arena *arena, struct symbol *s)
 	check_if(rc < 0, ERR_SYMBOL_ALLOC);
 
 	s->name.sz = strlen(mangled_str);
-
-	char *arena_copy = arena_alloc(arena, strlen(mangled_str));
-	if (arena_copy == NULL) {
-		free(mangled_str);
-		return make_result(ERR_SYMBOL_ALLOC);
-	}
-
-	memcpy(arena_copy, mangled_str, s->name.sz); /* exclude NUL */
-	s->name.data = arena_copy;
-
+	s->name.data = deepcopy(arena, mangled_str, s->name.sz);
 	free(mangled_str);
+
+	check_if(s->name.data == NULL, ERR_SYMBOL_ALLOC);
 	return RESULT_OK;
 }

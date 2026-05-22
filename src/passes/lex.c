@@ -1,6 +1,7 @@
 #include "passes/lex.h"
 
 #include "passes.h"
+#include "sys/alloc.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
@@ -16,9 +17,8 @@
 static WARN_UNUSED result_t
 lex_alloc(Arena *arena, struct token **tok)
 {
-	*tok = arena_alloc(arena, sizeof(**tok));
+	*tok = zalloc(arena, sizeof(**tok));
 	check_if(*tok == NULL, ERR_LEX_ALLOC);
-	memset(*tok, 0, sizeof(**tok));
 	return RESULT_OK;
 }
 
@@ -330,7 +330,7 @@ map_span_to_strlike(Arena *arena,
                     const struct string_view *src,
                     struct string_view *dst)
 {
-	char *out = arena_alloc(arena, src->sz); /* source size -> capacity */
+	char *out = zalloc(arena, src->sz); /* source size -> capacity */
 	dst->data = out;
 	dst->sz = 0;
 

@@ -2,6 +2,7 @@
 
 #include "passes.h"
 #include "passes/ir.h"
+#include "sys/alloc.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
@@ -32,7 +33,7 @@ codegen_alloc_op(Arena *arena, struct asm_op **dst)
 {
 	static struct asm_op dummy_workaround_clang_analyzer_null_pointer = {0};
 
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	if (*dst == NULL) {
 		/*
 		 * See parse_init() for an explanation of this workaround.
@@ -41,7 +42,6 @@ codegen_alloc_op(Arena *arena, struct asm_op **dst)
 		return make_result(ERR_CODEGEN_ALLOC);
 	}
 
-	memset(*dst, 0, sizeof(**dst));
 	return RESULT_OK;
 }
 
@@ -1439,9 +1439,8 @@ codegen_function(Arena *arena,
                  struct asm_function **dst)
 {
 	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
@@ -1465,9 +1464,8 @@ codegen_variable(Arena *arena,
                  struct asm_variable **dst)
 {
 	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = ir->identifier;
 	(**dst).linkage = codegen_map_linkage(ir->linkage);
@@ -1481,9 +1479,8 @@ codegen_string_literal(Arena *arena,
                        struct asm_str **dst)
 {
 	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_CODEGEN_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).string_unique = ir->string_unique;
 	(**dst).initializer = ir->initializer;
@@ -1522,9 +1519,8 @@ codegen_program(Arena *arena,
 result_t
 codegen_init(Arena *arena, const struct intermediate *ir, struct assembly **cg)
 {
-	*cg = arena_alloc(arena, sizeof(**cg));
+	*cg = zalloc(arena, sizeof(**cg));
 	check_if(*cg == NULL, ERR_CODEGEN_ALLOC);
-	memset(*cg, 0, sizeof(**cg));
 	check(codegen_program(arena, ir, cg));
 	return RESULT_OK;
 }
@@ -1629,7 +1625,7 @@ codegen_replace_pseudo(Arena *arena, struct assembly *cg)
 		assert(size > 0);
 		assert(size <= 4096); /* if exceeded, refactor */
 
-		long long int *off = arena_alloc(arena, sizeof(*off) * size);
+		long long int *off = zalloc(arena, sizeof(*off) * size);
 		check(codegen_replace_pseudo_fn(f, range, off, false));
 
 		assert(f->stack_usage == 0);

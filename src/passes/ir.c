@@ -3,6 +3,7 @@
 #include "lang/symbol.h"
 #include "passes.h"
 #include "passes/parse.h"
+#include "sys/alloc.h"
 #include "sys/array.h"
 #include "sys/compiler_features.h"
 #include "sys/debug.h"
@@ -13,9 +14,8 @@
 static WARN_UNUSED result_t
 ir_alloc_op(Arena *arena, struct ir_op **dst)
 {
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_IR_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 	return RESULT_OK;
 }
 
@@ -795,9 +795,11 @@ ir_assignment(Arena *arena,
 			/*
 			 * Use opaque kludge.userdata pointer in AST node.
 			 */
-			struct ir_val *ud = arena_alloc(arena, sizeof(*ud));
+			struct ir_val *ud =
+				deepcopy(arena,
+			                 &compound_assign_glue_return,
+			                 sizeof(compound_assign_glue_return));
 			check_if(ud == NULL, ERR_IR_ALLOC);
-			memcpy(ud, &compound_assign_glue_return, sizeof(*ud));
 			assert(a->u.op_binary.lhs->kludge.userdata == NULL);
 			a->u.op_binary.lhs->kludge.userdata = ud;
 		}
@@ -1760,9 +1762,8 @@ ir_func(Arena *arena,
 	assert(a->node_type == NODE_FUNCTION);
 
 	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_IR_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 
 	struct ir_function *f = *dst;
 	f->identifier = a->u.function.identifier.name;
@@ -1819,9 +1820,8 @@ static WARN_UNUSED result_t
 ir_var(Arena *arena, struct symbol *s, struct ir_variable **dst)
 {
 	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_IR_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).identifier = s->name;
 	(**dst).linkage = ir_map_linkage(s->linkage.linkage);
@@ -1847,9 +1847,8 @@ static WARN_UNUSED result_t
 ir_string_literal(Arena *arena, struct symbol *s, struct ir_str **dst)
 {
 	assert(dst != NULL);
-	*dst = arena_alloc(arena, sizeof(**dst));
+	*dst = zalloc(arena, sizeof(**dst));
 	check_if(*dst == NULL, ERR_IR_ALLOC);
-	memset(*dst, 0, sizeof(**dst));
 
 	(**dst).string_unique = s->unique;
 	assert(s->linkage.initial == INITIAL_VALUE_CONSTANT);
@@ -1935,9 +1934,8 @@ ir_init(Arena *arena,
         struct symbol_table *sym,
         struct intermediate **ir)
 {
-	*ir = arena_alloc(arena, sizeof(**ir));
+	*ir = zalloc(arena, sizeof(**ir));
 	check_if(*ir == NULL, ERR_IR_ALLOC);
-	memset(*ir, 0, sizeof(**ir));
 	(**ir).env.generator = base_id;
 	(**ir).env.labels = base_label;
 	check(ir_program(arena, a, sym, *ir));
